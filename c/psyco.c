@@ -70,41 +70,49 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   defaults = PyFunction_GET_DEFAULTS(function);
   ncells = PyTuple_GET_SIZE(co->co_cellvars);
   nfrees = PyTuple_GET_SIZE(co->co_freevars);
-  if (co->co_flags & (CO_VARARGS | CO_VARKEYWORDS))
+  if (co->co_flags & CO_VARKEYWORDS)
     {
-      debug_printf(("psyco: unsupported: functions with * or ** arguments\n"));
+      debug_printf(("psyco: unsupported: %s has a ** argument\n",
+                    PyCodeObject_NAME(co)));
       goto unsupported;
     }
   if (ncells != 0 || nfrees != 0)
     {
-      debug_printf(("psyco: unsupported: functions with free or cell variables\n"));
+      debug_printf(("psyco: unsupported: %s has free or cell variables\n",
+                    PyCodeObject_NAME(co)));
       goto unsupported;
     }
   minargcnt = co->co_argcount - (defaults ? PyTuple_GET_SIZE(defaults) : 0);
   inputargs = arginfo->count;
   if (inputargs != co->co_argcount)
     {
-      if (inputargs < minargcnt || inputargs > co->co_argcount)
+      if (inputargs > co->co_argcount && (co->co_flags & CO_VARARGS))
+        /* ok, extra args will be collected below */ ;
+      else
         {
-          int n = co->co_argcount < minargcnt ? minargcnt : co->co_argcount;
-          PyErr_Format(PyExc_TypeError,
-                       "%.200s() takes %s %d %sargument%s (%d given)",
-                       PyCodeObject_NAME(co),
-                       minargcnt == co->co_argcount ? "exactly" :
-                         (inputargs < n ? "at least" : "at most"),
-                       n,
-                       /*kwcount ? "non-keyword " :*/ "",
-                       n == 1 ? "" : "s",
-                       inputargs);
-          goto error;
-        }
-
-      /* fill missing arguments with default values */
-      arginfo = array_grow1(arginfo, co->co_argcount);
-      for (i=inputargs; i<co->co_argcount; i++)
-        /* references borrowed from the code object */
-        arginfo->items[i] = vinfo_new(CompileTime_New((long) PyTuple_GET_ITEM
+          if (inputargs < minargcnt || inputargs > co->co_argcount)
+            {
+              int n = co->co_argcount < minargcnt ? minargcnt : co->co_argcount;
+              PyErr_Format(PyExc_TypeError,
+                           "%.200s() takes %s %d %sargument%s (%d given)",
+                           PyCodeObject_NAME(co),
+                           minargcnt == co->co_argcount ? "exactly" :
+                           (inputargs < n ? "at least" : "at most"),
+                           n,
+                           /*kwcount ? "non-keyword " :*/ "",
+                           n == 1 ? "" : "s",
+                           inputargs);
+              goto error;
+            }
+          
+          /* fill missing arguments with default values */
+          arginfo = array_grow1(arginfo, co->co_argcount);
+          for (i=inputargs; i<co->co_argcount; i++)
+            /* references borrowed from the code object */
+            arginfo->items[i] = vinfo_new(CompileTime_New((long) PyTuple_GET_ITEM
 						       (defaults, i-minargcnt)));
+        }
+      inputargs = co->co_argcount;
     }
   
   extras = co->co_stacksize + co->co_nlocals + ncells + nfrees;
@@ -150,9 +158,20 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
                                                 SkFlagFixed | SkFlagPyObj)));
   Py_INCREF(globals); /* reference in LOC_GLOBALS */
 
-  /* copy the arguments */
-  for (i=0; i<arraycopy->count; i++)
+  /* copy the arguments, excluding the ones that map to the '*' parameter */
+  for (i=0; i<inputargs; i++)
     LOC_LOCALS_PLUS[i] = arraycopy->items[i];
+  if (co->co_flags & CO_VARARGS)
+    {
+      /* store the extra args in a virtual-time tuple */
+      LOC_LOCALS_PLUS[i] = PsycoTuple_New(arraycopy->count - inputargs,
+                                          arraycopy->items + inputargs);
+      i++;
+      while (inputargs < arraycopy->count)
+        vinfo_decref(arraycopy->items[inputargs++], NULL);
+    }
+  else
+    extra_assert(arraycopy->count == inputargs);
   array_release(arraycopy);
 
   /* the rest of locals is uninitialized */
@@ -249,9 +268,15 @@ PsycoFunctionObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec)
 	PsycoFunctionObject* result = PyObject_GC_New(PsycoFunctionObject,
 						      &PsycoFunction_Type);
 	if (result != NULL) {
+		PyObject* d = PyDict_New();
+		if (d == NULL) {
+			Py_DECREF(result);
+			return NULL;
+		}
 		Py_INCREF(func);
 		result->psy_func = func;
 		result->psy_recursion = rec;
+		result->psy_fastcall = d;
 		PyObject_GC_Track(result);
 	}
 	return result;
@@ -260,6 +285,7 @@ PsycoFunctionObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec)
 static void psycofunction_dealloc(PsycoFunctionObject* self)
 {
 	PyObject_GC_UnTrack(self);
+	Py_DECREF(self->psy_fastcall);
 	Py_DECREF(self->psy_func);
 	PyObject_GC_Del(self);
 }
@@ -283,6 +309,7 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	PsycoObject* po;
 	long* initial_stack;
 	PyObject* result;
+	PyObject* key;
 	vinfo_array_t* arginfo;
 	int i;
 	
@@ -291,29 +318,45 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 		goto unsupported;
 	}
 
-	/* make an array of run-time values */
 	i = PyTuple_GET_SIZE(arg);
-	arginfo = array_new(i);
-	while (i--) {
-		/* arbitrary values for the source */
-		arginfo->items[i] = vinfo_new(SOURCE_DUMMY);
-	}
-	
-	/* make a "frame" */
-	po = psyco_build_frame(function, arginfo, self->psy_recursion, NULL);
-	if (po == BF_UNSUPPORTED)
-		goto unsupported;
-	if (po == NULL)
+	key = PyInt_FromLong(i);
+	if (key == NULL)
 		return NULL;
+	codebuf = (CodeBufferObject*) PyDict_GetItem(self->psy_fastcall, key);
 	
-	/* compile the function */
-	codebuf = psyco_compile_code(po,
-                           psyco_first_merge_point(po->pr.merge_points));
+	if (codebuf == NULL) {
+		/* not already seen with this number of arguments */
+		/* make an array of run-time values */
+		arginfo = array_new(i);
+		while (i--) {
+			/* arbitrary values for the source */
+			arginfo->items[i] = vinfo_new(SOURCE_DUMMY);
+		}
+		
+		/* make a "frame" */
+		po = psyco_build_frame(function, arginfo,
+				       self->psy_recursion, NULL);
+		if (po == BF_UNSUPPORTED)
+			goto unsupported;
+		if (po == NULL)
+			return NULL;
+		
+		/* compile the function */
+		codebuf = psyco_compile_code(po,
+				psyco_first_merge_point(po->pr.merge_points));
+
+		/* cache 'codebuf' (note that this is not necessary, as
+		   multiple calls to psyco_compile_code() will just return
+		   the same codebuf, but it makes things faster because we
+		   don't have to build a whole PsycoObject the next time. */
+		if (PyDict_SetItem(self->psy_fastcall, key, (PyObject*) codebuf))
+			PyErr_Clear(); /* not fatal, ignore error */
+	}
+	else
+		Py_INCREF(codebuf);
+	Py_DECREF(key);
 	
 	/* get the actual arguments */
-	/*extra_assert(get_arguments_count(codebuf->snapshot.fz_vlocals) ==
-	  PyTuple_GET_SIZE(arg));
-	  --- crashed if the codebuf has no snapshot, e.g. unify code bufs */
 	initial_stack = (long*) (&PyTuple_GET_ITEM(arg, 0));
 
 	/* run! */
@@ -556,6 +599,12 @@ void psyco_dump_code_buffers(void)
       PyErr_Restore(exc, val, tb);
     }
 }
+static PyObject* Psyco_dumpcodebuf(PyObject* self, PyObject* args)
+{
+  psyco_dump_code_buffers();
+  Py_INCREF(Py_None);
+  return Py_None;
+}
 #endif  /* CODE_DUMP */
 
 #if VERBOSE_LEVEL >= 4
@@ -600,6 +649,9 @@ static PyObject* Psyco_selective(PyObject* self, PyObject* args)
 static PyMethodDef PsycoMethods[] = {
 	{"proxy",	&Psyco_proxy,		METH_VARARGS},
 	{"selective",   &Psyco_selective,	METH_VARARGS},
+#if CODE_DUMP
+	{"dumpcodebuf",	&Psyco_dumpcodebuf,	METH_VARARGS},
+#endif
 	{NULL,		NULL}        /* Sentinel */
 };
 

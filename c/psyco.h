@@ -47,7 +47,7 @@
 #endif
 
  /* define to write produced blocks of code into a file; see 'xam.py'
-       0 = off, 1 = only manually (from a debugger),
+       0 = off, 1 = only manually (from a debugger or with _psyco.dumpcodebuf()),
        2 = only when returning from Psyco,
        3 = every time a new code block is built */
 #ifndef CODE_DUMP
@@ -137,9 +137,14 @@
 #endif
 
 #if VERBOSE_LEVEL
-# define debug_printf(args)   (printf args, fflush(stdout))
+# define debug_printf(args)     do {            \
+   FILE* __stdout_copy = stdout;                \
+   stdout = stderr;                             \
+   printf args;                                 \
+   stdout = __stdout_copy;                      \
+ } while (0)
 #else
-# define debug_printf(args)   (void)0  /* nothing */
+# define debug_printf(args)     do { } while (0) /* nothing */
 #endif
 #if VERBOSE_LEVEL >= 4
 # define TRACE_EXECUTION(msg)   do {                                    \
@@ -225,6 +230,7 @@ typedef struct {
   PyObject_HEAD
   PyFunctionObject* psy_func;   /* Python function object */
   int psy_recursion;    /* # levels to automatically compile called functions */
+  PyObject* psy_fastcall;       /* cache mapping arg count to code bufs */
 } PsycoFunctionObject;
 
 #define PsycoFunction_Check(v)	((v)->ob_type == &PsycoFunction_Type)
