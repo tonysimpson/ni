@@ -85,11 +85,11 @@ build_py:
 	gcc ${C_FLAGS} -DALL_STATIC=0 -c $< -o $@
 
 ${OUTDIR}/dyn-tag: ${O_FILES}
-	-rm ${BUILDDIR}/current
+#	-rm ${BUILDDIR}/current
 	gcc ${LD_FLAGS} $^ -o ${OUTPUT}
 	echo ${BUILD_VERSION} > ${OUTDIR}/build-version
 	echo dyn-tag >> ${OUTDIR}/build-version
-	ln -s ${LIBDIR} ${BUILDDIR}/current
+#	ln -s ${LIBDIR} ${BUILDDIR}/current
 	touch $@
 
 clean:

@@ -56,6 +56,11 @@
                               op == SETUP_EXCEPT ||   \
                               op == SETUP_FINALLY)
 
+/* instructions through which it is not safe to respawn:
+   LOAD_GLOBAL may produce a run-time or various compile-time values
+   each time it is respawned */
+#define IS_CTXDEP_INSTR(op)  (op == LOAD_GLOBAL)
+
 #define MAX_UNINTERRUPTED_RANGE   170  /* bytecode instructions */
 
 /* opcodes that never or seldom produce machine code are listed as
@@ -205,12 +210,14 @@
 #define MP_HAS_JABS        0x08
 #define MP_HAS_J_MULTIPLE  0x10
 #define MP_LIGHT           0x20
+#define MP_IS_CTXDEP       0x40
 
 #define F(op)      ((IS_JUMP_INSTR(op)    ? MP_IS_JUMP        : 0) |    \
                     (HAS_JREL_INSTR(op)   ? MP_HAS_JREL       : 0) |    \
                     (HAS_JABS_INSTR(op)   ? MP_HAS_JABS       : 0) |    \
                     (HAS_J_MULTIPLE(op)   ? MP_HAS_J_MULTIPLE : 0) |    \
                     (IS_LIGHT_INSTR(op)   ? MP_LIGHT          : 0) |    \
+                    (IS_CTXDEP_INSTR(op)  ? MP_IS_CTXDEP      : 0) |    \
                     (OTHER_OPCODE(op)     ? MP_OTHER          : 0))
 
 /* opcode table -- the preprocessor expands this into several hundreds KB
@@ -269,31 +276,7 @@ struct instrnode_s {
 #define MPSET_NEVER  ((global_entries_t*) NULL)
 #define MPSET_MAYBE  ((global_entries_t*) -1)
 #define MPSET_YES    ((global_entries_t*) -2)
-
-#if 0
- --- disabled ---
-inline int set_merge_point(struct instrnode_s* node)
-{
-  int runaway = 100;
-  struct instrnode_s* bestchoice = node;
-  while (node->mp == MPSET_NEVER && --runaway)
-    {
-      node = node->next1;
-      if (node == NULL)
-        return 0;    /* no need to set a merge point at the end of the code */
-      if (node->inpaths >= 2)
-        bestchoice = node;
-    }
-  if (node->mp == MPSET_YES)
-    return 0;        /* found an already-set merge point */
-  else
-    {
-      extra_assert(bestchoice->mp != MPSET_YES);
-      bestchoice->mp = MPSET_YES;  /* set merge point */
-      return 1;
-    }
-}
-#endif
+#define MPSET_FORCE  ((global_entries_t*) -3)
 
 
 /***************************************************************/
@@ -655,6 +638,11 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
                 instrnodes[i].mp = MPSET_MAYBE;
                 bytecodeweight++;
               }
+            if (flags & MP_IS_CTXDEP)
+              {
+                instrnodes[nextinstr].inpaths = 99;
+                instrnodes[nextinstr].mp = MPSET_FORCE;
+              }
             
             /* compact the next1-next2-next3 */
             if (instrnodes[i].next2 == NULL)
@@ -735,6 +723,9 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
           weight = 0;
           insertat = 0;
           mpnode = node = instrnodes + i;
+          if (mpnode->mp == MPSET_FORCE)
+            goto set_merge_point;
+          
           while (1)
             {
               if (node->next2 != NULL)

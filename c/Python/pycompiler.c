@@ -1129,6 +1129,10 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		mark_varying(po, key);
 		return NULL;
 	}
+	if (po->pr.changing_globals != NULL &&
+	    PyDict_GetItem(po->pr.changing_globals, key) != NULL)
+		return NULL;  /* we know the variable is changing */
+	
 	/* the compiler only puts interned strings in op_names */
 	extra_assert(PyString_CheckExact(key));
 	/*extra_assert(((PyStringObject*) key)->ob_sinterned != NULL);*/
@@ -1143,9 +1147,9 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		condition_code_t cc;
 		result = ep->me_value;
 
-                macrocode = dictitem_check_change(po, globals, ep);
+		macrocode = dictitem_check_change(po, globals, ep);
 		cc = DICT_ITEM_CHECK_CC;
-                cg = (changed_global_t*) psyco_prepare_respawn_ex(po, cc,
+		cg = (changed_global_t*) psyco_prepare_respawn_ex(po, cc,
 							&do_changed_global,
 							sizeof(*cg));
 		if (cg != NULL) {
@@ -2684,9 +2688,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	{
 		PyObject* namev = GETNAMEV(oparg);
                 PyObject* value;
-		if (is_compiletime(LOC_GLOBALS->source) &&
-		    (po->pr.changing_globals == NULL ||
-		     PyDict_GetItem(po->pr.changing_globals, namev) == NULL)) {
+		if (is_compiletime(LOC_GLOBALS->source)) {
 			/* Common case: fast global loading */
 			value = load_global(po, namev, next_instr);
 			if (value != NULL) {
