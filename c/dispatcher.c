@@ -3,15 +3,13 @@
 #include "mergepoints.h"
 #include "blockalloc.h"
 #include "Python/pycompiler.h"   /* for pyc_data_xxx() */
-#include "pycencoding.h"  /* for INC_OB_REFCNT() */
+#include <idispatcher.h>
 
 
  /***************************************************************/
 /***                       Snapshots                           ***/
  /***************************************************************/
 
-
-typedef void (*fz_find_fn) (vinfo_t* a, RunTimeSource bsource, void* extra);
 
 #if !VLOCALS_OPC
 
@@ -80,8 +78,8 @@ static void fz_find_rt1(vinfo_array_t* bb, fz_find_fn callback,
     }
 }
 
-inline void fz_find_runtimes(vinfo_array_t* aa, FrozenPsycoObject* fpo,
-                             fz_find_fn callback, void* extra, bool clear)
+DEFINEFN void fz_find_runtimes(vinfo_array_t* aa, FrozenPsycoObject* fpo,
+                               fz_find_fn callback, void* extra, bool clear)
 {
   fz_find_rt1(fpo->fz_vlocals, callback, extra, clear
 #if ALL_CHECKS
@@ -382,8 +380,8 @@ inline void fz_load_fpo(FrozenPsycoObject* fpo) {
   cmpinternal.buf_args =                fpo->fz_vlocals_opc;
 }
 
-inline void fz_find_runtimes(vinfo_array_t* aa, FrozenPsycoObject* fpo,
-                             fz_find_fn callback, void* extra, bool clear)
+DEFINEFN void fz_find_runtimes(vinfo_array_t* aa, FrozenPsycoObject* fpo,
+                               fz_find_fn callback, void* extra, bool clear)
 {
   fz_load_fpo(fpo);
   fz_find_rt1(aa, fz_getopc(), callback, extra);
@@ -481,25 +479,6 @@ void fpo_release(FrozenPsycoObject* fpo)
   fz_release(fpo);
 }
 
-static void find_regs_array(vinfo_array_t* source, PsycoObject* po)
-{
-  int i = source->count;
-  while (i--)
-    {
-      vinfo_t* a = source->items[i];
-      if (a != NULL)
-        {
-          Source src = a->source;
-          if (is_runtime(src) && !is_reg_none(src))
-            REG_NUMBER(po, getreg(src)) = a;
-          else if (psyco_vsource_cc(src) != CC_ALWAYS_FALSE)
-            po->ccreg = a;
-          if (a->array != NullArray)
-            find_regs_array(a->array, po);
-        }
-    }
-}
-
 DEFINEFN
 PsycoObject* fpo_unfreeze(FrozenPsycoObject* fpo)
 {
@@ -508,7 +487,7 @@ PsycoObject* fpo_unfreeze(FrozenPsycoObject* fpo)
   po->stack_depth = get_stack_depth(fpo);
   po->last_used_reg = (reg_t) fpo->fz_last_used_reg;
   fz_unfreeze(&po->vlocals, fpo);
-  find_regs_array(&po->vlocals, po);
+  fpo_find_regs_array(&po->vlocals, po);
   frozen_copy(&po->pr, fpo->fz_pyc_data);
   pyc_data_build(po, psyco_get_merge_points(po->pr.co));
   psyco_assert_coherent(po);
@@ -671,10 +650,8 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
       calling_limit = po->codelimit;
       po->code = (code_t*) codebuf->codestart;
       po->codelimit = limit;
-      BEGIN_CODE
-      TEMP_SAVE_REGS_FN_CALLS;
-      END_CODE
-      rs = (respawn_t*) psyco_jump_proxy(po, &do_respawn, 1, 1);
+      rs = (respawn_t*) psyco_call_code_builder(po, &do_respawn, true,
+                                                SOURCE_DUMMY);
       SHRINK_CODE_BUFFER(codebuf, (code_t*)(rs+1), "respawn");
       /* fill in the respawn_t structure */
       extra_assert(po->respawn_proxy != NULL);
@@ -687,12 +664,7 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
       /* write the jump to the proxy */
       po->code = calling_code;
       po->codelimit = calling_limit;
-      BEGIN_CODE
-      /*   if (jmpcondition == CC_ALWAYS_TRUE) */
-      /*     JUMP_TO(codebuf->codestart); */
-      /*   else */
-        FAR_COND_JUMP_TO((code_t*)codebuf->codestart, jmpcondition);
-      END_CODE
+      conditional_jump_to(po, (code_t*)codebuf->codestart, jmpcondition);
       dump_code_buffers();
     }
   else
@@ -1445,362 +1417,9 @@ void psyco_stabilize(vcompatible_t* lastmatch)
 /***                         Unification                       ***/
  /***************************************************************/
 
-struct dmove_s {
-  PsycoObject* po;
-  int original_stack_depth;
-  char* usages;   /* buffer: array of vinfo_t*, see ORIGINAL_VINFO() below */
-  int usages_size;
-  vinfo_t* copy_regs[REG_TOTAL];
-  code_t* code_origin;
-  code_t* code_limit;
-  code_t* code;   /* only used by data_update_stack() */
-  CodeBufferObject* private_codebuf;
-};
 
-static code_t* data_new_buffer(code_t* code, struct dmove_s* dm)
-{
-  /* creates a new buffer containing a copy of the already-written code */
-  CodeBufferObject* codebuf;
-  int codesize;
-  if (dm->private_codebuf != NULL)
-    {
-      /* overwriting the regular (large) code buffer */
-      psyco_emergency_enlarge_buffer(&code, &dm->code_limit);
-      return code;
-    }
-  else
-    {
-      /* overwriting the small buffer, start a new (regular) one */
-      codebuf = psyco_new_code_buffer(NULL, NULL, &dm->code_limit);
-      codebuf->snapshot.fz_stuff.fz_stack_depth = dm->original_stack_depth;
-      /* the new buffer should be at least as large as the old one */
-      codesize = code - dm->code_origin;
-      if ((code_t*) codebuf->codestart + codesize > dm->code_limit)
-        Py_FatalError("psyco: unexpected unify buffer overflow");
-      /* copy old code to new buffer */
-      memcpy(codebuf->codestart, dm->code_origin, codesize);
-      dm->private_codebuf = codebuf;
-#if PSYCO_DEBUG
-      dm->code_origin = (code_t*) 0xCDCDCDCD;
-#endif
-      return ((code_t*) codebuf->codestart) + codesize;
-    }
-}
+/* psyco_unify() is implemented in idispatcher.c */
 
-#define ORIGINAL_VINFO(spos)    (*(vinfo_t**)(dm->usages + (            \
-		extra_assert(0 <= (spos) && (spos) < dm->usages_size),  \
-                (spos))))
-
-static void data_original_table(vinfo_t* a, RunTimeSource bsource,
-                                struct dmove_s* dm)
-{
-  /* called on each run-time vinfo_t in the FrozenPsycoObject.
-     Record in the array dm->usages which vinfo_t is found at what position
-     in the stack. Ignore the ones after dm->usages_size: they correspond to
-     stack positions which will soon be deleted (because the stack will
-     shrink). Note: this uses the fact that RUNTIME_STACK_NONE is zero
-     and uses the 0th item of dm->usages_size as general trash. */
-  if (RUNTIME_STACK(a) < dm->usages_size)
-    ORIGINAL_VINFO(RUNTIME_STACK(a)) = a;
-}
-
-static void data_update_stack(vinfo_t* a, RunTimeSource bsource,
-                              struct dmove_s* dm)
-{
-  PsycoObject* po = dm->po;
-  code_t* code = dm->code;
-  long dststack = getstack(bsource);
-  long srcstack = getstack(a->source);
-  char rg, rgb;
-  vinfo_t* overridden;
-  
-  /* check for values passing from no-reference to reference */
-  if ((bsource & RunTime_NoRef) == 0) {  /* destination has ref */
-    if ((a->source & RunTime_NoRef) == 0)   /* source has ref too */
-      {
-        /* remove the reference from 'a' because it now belongs
-           to 'b' ('b->source' itself is in the frozen snapshot
-           and must not be modified!) */
-        a->source = remove_rtref(a->source);
-      }
-    else
-      {
-        /* create a new reference for 'b'. Note that if the same
-           'a' is copied to several 'b's during data_update_stack()
-           as is allowed by graph quotient detection in
-           psyco_compatible(), then only the first copy will get
-           the original reference owned by 'a' (if any) and for
-           the following copies the following increfing code is
-           executed as well. */
-        RTVINFO_IN_REG(a);
-        rg = RUNTIME_REG(a);
-        INC_OB_REFCNT_CC(rg);
-      }
-  }
-  /* 'a' must no longer own a reference at this point.
-     The case of 'b' wanting no reference but 'a' having one
-     is forbidden by psyco_compatible() because decrefing 'a'
-     would potentially leave a freed pointer in 'b'. */
-  extra_assert(!has_rtref(a->source));
-
-  /* The operation below is: copy the value currently held by 'a'
-     into the stack position 'dststack'. */
-  rgb = getreg(bsource);
-  if (rgb != REG_NONE)
-    dm->copy_regs[(int)rgb] = a;
-  if (dststack == RUNTIME_STACK_NONE || dststack == srcstack)
-    ;  /* nothing to do */
-  else
-    {
-      rg = RUNTIME_REG(a);
-      if (rg == REG_NONE)  /* load 'a' into a register before it can be */
-        {                  /* stored back in the stack                  */
-          NEED_FREE_REG(rg);
-          LOAD_REG_FROM_EBP_BASE(rg, srcstack);
-          REG_NUMBER(po, rg) = a;
-          /*SET_RUNTIME_REG_TO(a, rg); ignored*/
-        }
-      /* is there already a pending value at 'dststack'? */
-      overridden = ORIGINAL_VINFO(dststack);
-      if (overridden == NULL || RUNTIME_STACK(overridden) != dststack)
-        goto can_save_only; /* no -- just save the new value to 'dststack'.
-                               The case RUNTIME_STACK(overridden) != dststack
-                               corresponds to a vinfo_t which has been moved
-                               elsewhere in the mean time. */
-      
-      /* yes -- careful! We might have to save the current value of
-         'dststack' before we can overwrite it. */
-      SET_RUNTIME_STACK_TO_NONE(overridden);
-  
-      if (!RUNTIME_REG_IS_NONE(overridden))
-        {
-          /* no need to save the value, it is already in a register too */
-        can_save_only:
-          /* copy 'a' to 'dststack' */
-          SAVE_REG_TO_EBP_BASE(rg, dststack);
-          /*if (rgb == REG_NONE)
-             {
-              REG_NUMBER(po, rg) = NULL;
-              rg = REG_NONE;
-             }*/
-        }
-      else
-        {
-          /* save 'a' to 'dststack' and load the previous value of 'dststack'
-             back into the register 'rg' */
-          XCHG_REG_AND_EBP_BASE(rg, dststack);
-          SET_RUNTIME_REG_TO(overridden, rg);
-          REG_NUMBER(po, rg) = overridden;
-          rg = REG_NONE;
-        }
-      /* Now 'a' is at 'dststack', but might still be in 'rg' too */
-      a->source = RunTime_NewStack(dststack, rg, false, false);
-      ORIGINAL_VINFO(dststack) = a; /* 'a' is now there */
-      
-      if (code > dm->code_limit)
-        /* oops, buffer overflow. Start a new buffer */
-        code = data_new_buffer(code, dm);
-      
-    }
-  dm->code = code;
-}
-
-static code_t* data_free_unused(code_t* code, struct dmove_s* dm,
-                                vinfo_array_t* aa)
-{
-  /* decref any object that would be present in 'po' but not at all in
-     the snapshot. Note that it is uncommon that this function actually
-     finds any unused object at all. */
-  int i = aa->count;
-  while (i--)
-    {
-      vinfo_t* a = aa->items[i];
-      if (a != NULL)
-        {
-          if (has_rtref(a->source))
-            {
-              PsycoObject* po = dm->po;
-              code_t* saved_code;
-              a->source = remove_rtref(a->source);
-              
-              saved_code = po->code;
-              po->code = code;
-              psyco_decref_rt(po, a);
-              code = po->code;
-              po->code = saved_code;
-
-              if (code > dm->code_limit)
-                /* oops, buffer overflow. Start a new buffer */
-                code = data_new_buffer(code, dm);
-            }
-          if (a->array != NullArray)
-            code = data_free_unused(code, dm, a->array);
-        }
-    }
-  return code;
-}
-
-DEFINEFN
-code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
-                    CodeBufferObject** target)
-{
-  /* Update 'po' to match 'lastmatch', then jump to 'lastmatch'. */
-
-  int i;
-  struct dmove_s dm;
-  code_t* code = po->code;
-  code_t* backpointer;
-  CodeBufferObject* target_codebuf = lastmatch->matching;
-  int sdepth = get_stack_depth(&target_codebuf->snapshot);
-  int popsdepth;
-  char pops[REG_TOTAL+2];
-#if PSYCO_DEBUG
-  bool has_ccreg = (po->ccreg != NULL);
-#endif
-
-  extra_assert(lastmatch->diff == NullArray);  /* unify with exact match only */
-  psyco_assert_coherent(po);
-  dm.usages_size = sdepth + sizeof(vinfo_t**);
-  dm.usages = (char*) PyMem_MALLOC(dm.usages_size);
-  if (dm.usages == NULL)
-    OUT_OF_MEMORY();
-  memset(dm.usages, 0, dm.usages_size);   /* set to all NULL */
-  memset(dm.copy_regs, 0, sizeof(dm.copy_regs));
-  fz_find_runtimes(&po->vlocals, &target_codebuf->snapshot,
-                   (fz_find_fn) &data_original_table,
-                   &dm, false);
-
-  dm.po = po;
-  dm.original_stack_depth = po->stack_depth;
-  dm.code_origin = code;
-  dm.code_limit = po->codelimit == NULL ? code : po->codelimit;
-  dm.private_codebuf = NULL;
-
-  if (sdepth > po->stack_depth)
-    {
-      /* more items in the target stack (uncommon case).
-         Let the stack grow. */
-      STACK_CORRECTION(sdepth - po->stack_depth);
-      po->stack_depth = sdepth;
-    }
-
-  /* update the stack */
-  dm.code = code;
-  fz_find_runtimes(&po->vlocals, &target_codebuf->snapshot,
-                   (fz_find_fn) &data_update_stack,
-                   &dm, true);
-  code = dm.code;
-
-  /* decref any object that would be present in 'po' but not at all in
-     the snapshot (data_update_stack() has removed the 'ref' tag of all
-     vinfo_ts it actually used from 'po') */
-  code = data_free_unused(code, &dm, &po->vlocals);
-
-  /* update the registers (1): reg-to-reg moves and exchanges */
-  popsdepth = po->stack_depth;
-  memset(pops, -1, sizeof(pops));
-  for (i=0; i<REG_TOTAL; i++)
-    {
-      vinfo_t* a = dm.copy_regs[i];
-      if (a != NULL)
-        {
-          char rg = RUNTIME_REG(a);
-          if (rg != REG_NONE)
-            {
-              if (rg != i)
-                {
-                  /* the value of 'a' is currently in register 'rg' but
-                     should go into register 'i'. */
-                  NEED_REGISTER(i);
-                  LOAD_REG_FROM_REG(i, rg);
-                  /*SET_RUNTIME_REG_TO(a, i);
-                    REG_NUMBER(po, rg) = NULL;
-                    REG_NUMBER(po, i) = a;*/
-                }
-              dm.copy_regs[i] = NULL;
-            }
-          else
-            {  /* prepare the step (2) below by looking for registers
-                  whose source is near the top of the stack */
-              int from_tos = po->stack_depth - RUNTIME_STACK(a);
-              extra_assert(from_tos >= 0);
-              if (from_tos < REG_TOTAL*sizeof(void*))
-                {
-                  char* ptarget = pops + (from_tos / sizeof(void*));
-                  if (*ptarget == -1)
-                    *ptarget = i;
-                  else
-                    *ptarget = -2;
-                }
-            }
-        }
-    }
-  /* update the registers (2): stack-to-register POPs */
-  if (popsdepth == po->stack_depth) /* only if no PUSHes have messed things up */
-    for (i=0; pops[i]>=0 || pops[i+1]>=0; i++)
-      {
-        char reg = pops[i];
-        if (reg<0)
-          {/* If there is only one 'garbage' stack entry, POP it as well.
-              If there are more, give up and use regular MOVs to load the rest */
-            po->stack_depth -= 4;
-            reg = pops[++i];
-            POP_REG(reg);
-          }
-        POP_REG(reg);
-        dm.copy_regs[(int) reg] = NULL;
-        po->stack_depth -= 4;
-      }
-  if (code > dm.code_limit)  /* start a new buffer if we wrote past the end */
-    code = data_new_buffer(code, &dm);
-  
-  /* update the registers (3): stack-to-register loads */
-  for (i=0; i<REG_TOTAL; i++)
-    {
-      vinfo_t* a = dm.copy_regs[i];
-      if (a != NULL)
-        LOAD_REG_FROM_EBP_BASE(i, RUNTIME_STACK(a));
-    }
-
-  /* done */
-  STACK_CORRECTION(sdepth - po->stack_depth);
-  if (code > dm.code_limit)  /* start a new buffer if we wrote past the end */
-    code = data_new_buffer(code, &dm);
-#if PSYCO_DEBUG
-  extra_assert(has_ccreg == (po->ccreg != NULL));
-#endif
-  backpointer = code;
-  JUMP_TO((code_t*) target_codebuf->codestart);
-  
-  /* start a new buffer if the last JUMP_TO overflowed,
-     but not if we had no room at all in the first place. */
-  if (code > dm.code_limit && po->codelimit != NULL)
-    {
-      /* the JMP instruction emitted by JUMP_TO() is not position-
-         independent; we must emit it again at the new position */
-      code = data_new_buffer(backpointer, &dm);
-      JUMP_TO((code_t*) target_codebuf->codestart);
-      psyco_assert(code <= dm.code_limit);
-    }
-  
-  PyMem_FREE(dm.usages);
-  if (dm.private_codebuf == NULL)
-    {
-      Py_INCREF(target_codebuf);      /* no new buffer created */
-      *target = target_codebuf;
-    }
-  else
-    {
-      SHRINK_CODE_BUFFER(dm.private_codebuf, code, "unify");
-      *target = dm.private_codebuf;
-      /* add a jump from the original code buffer to the new one */
-      code = po->code;
-      JUMP_TO((code_t*) dm.private_codebuf->codestart);
-      dump_code_buffers();
-    }
-  PsycoObject_Delete(po);
-  return code;
-}
 
 DEFINEFN
 CodeBufferObject* psyco_unify_code(PsycoObject* po, vcompatible_t* lastmatch)
@@ -1944,10 +1563,6 @@ static void remove_non_compiletime(vinfo_t* v, PsycoObject* po)
 */
 #define PROMOTION_TACTIC             1
 
-/* Define to 1 to emit a "compare/jump-if-equal" pair of instructions
-   that checks for the most common case (actually the last seen one). */
-#define PROMOTION_FAST_COMMON_CASE   1
-
 
 #if PROMOTION_TACTIC == 1
 typedef struct rt_local_buf_s {
@@ -1960,11 +1575,10 @@ typedef struct rt_local_buf_s {
 #endif
 
 typedef struct { /* produced at compile time and read by the dispatcher */
+  INTERNAL_PROMOTION_FIELDS
+  
   PsycoObject* po;        /* state before promotion */
   vinfo_t* fix;           /* variable to promote */
-#if PROMOTION_FAST_COMMON_CASE
-  code_t* jump_if_equal_code;  /* for FIX_JUMP_IF_EQUAL() */
-#endif
   
 #if PROMOTION_TACTIC == 0
   PyObject* spec_dict;    /* local cache (promotions to already-seen values) */
@@ -1978,14 +1592,6 @@ typedef struct { /* produced at compile time and read by the dispatcher */
 #endif
 } rt_promotion_t;
 
-inline code_t* fix_fast_common_case(rt_promotion_t* fs, long value,
-                                    code_t* codeptr)
-{
-#if PROMOTION_FAST_COMMON_CASE
-  FIX_JUMP_IF_EQUAL(fs->jump_if_equal_code, value, codeptr);
-#endif
-  return codeptr;
-}
 
 #if PROMOTION_TACTIC == 0
 #define NEED_PYOBJ_KEY
@@ -2068,8 +1674,6 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
   
   /* fix the value of 'v' */
   CHKTIME(v->source, RunTime);   /* from run-time to compile-time */
-  extra_assert(RUNTIME_REG_IS_NONE(v));   /* taken care of in
-                                             finish_promotion() */
   v->source = CompileTime_NewSk(sk);
   /* compile from this new state, in which 'v' has been promoted to
      compile-time. */
@@ -2172,11 +1776,7 @@ static code_t* do_promotion_pyobj(rt_promotion_t* fs, PyObject* key)
 DEFINEFN
 code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
 {
-  long xsource;
   rt_promotion_t* fs;
-#if PROMOTION_FAST_COMMON_CASE
-  code_t* jeqcode;
-#endif
   void* do_promotion;
 
   /* we remove the non-compile-time array values from 'fix' */
@@ -2184,48 +1784,19 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
     remove_non_compiletime(fix, po);
   
   TRACE_EXECUTION("PROMOTION");
-  BEGIN_CODE
-#if PROMOTION_FAST_COMMON_CASE
-  NEED_CC();
-  RTVINFO_IN_REG(fix);
-#endif
-  xsource = fix->source;
-#if PROMOTION_FAST_COMMON_CASE
-  RESERVE_JUMP_IF_EQUAL(RSOURCE_REG(xsource));
-  jeqcode = code;
-#endif
-  if (PROMOTION_FAST_COMMON_CASE || !RSOURCE_REG_IS_NONE(xsource))
-    {
-      /* remove from 'po->regarray' this value which will soon no longer
-         be RUN_TIME */
-      REG_NUMBER(po, RSOURCE_REG(xsource)) = NULL;
-      SET_RUNTIME_REG_TO_NONE(fix);
-    }
-#if PROMOTION_FAST_COMMON_CASE
-  TEMP_SAVE_REGS_FN_CALLS;
-#else
-  SAVE_REGS_FN_CALLS;  /* save the registers EAX, ECX and EDX if needed
-                          and mark them invalid because of the CALL below */
-#endif
-  CALL_SET_ARG_FROM_RT(xsource, 1, 2);  /* argument index 1 out of total 2 */
-  END_CODE
 
   /* write the code that calls the proxy 'do_promotion' */
   if ((kflags & SkFlagPyObj) == 0)
     do_promotion = &do_promotion_long;
   else
     do_promotion = &do_promotion_pyobj;
-  fs = (rt_promotion_t*) psyco_jump_proxy(po, do_promotion,
-                                          PROMOTION_FAST_COMMON_CASE, 2);
+  fs = (rt_promotion_t*) ipromotion_finish(po, fix, do_promotion);
 
   /* fill in the constant structure that 'do_promotion' will get as parameter */
   clear_tmp_marks(&po->vlocals);
   psyco_assert_coherent(po);
   fs->po = po;    /* don't release 'po' */
   fs->fix = fix;
-#if PROMOTION_FAST_COMMON_CASE
-  fs->jump_if_equal_code = jeqcode;
-#endif
   
 #if PROMOTION_TACTIC == 0
   fs->spec_dict = PyDict_New();

@@ -10,7 +10,7 @@
 
 
 #define TIMING_WITH_TICK_COUNTER   1   /* requires Python 2.2.2 */
-#define TIMING_WITH_PENTIUM_TSC    2   /* requires a Pentium */
+#define TIMING_WITH_PROCESSOR_INSN 2   /* processor-specific timers */
 #define TIMING_WITH_CLOCK          3   /* requires the clock() function */
 
 
@@ -28,15 +28,20 @@
 # define TIMING_WITH   TIMING_WITH_TICK_COUNTER
 #elif defined(HAVE_CLOCK) && CLOCK_IS_PER_PROCESS
 # define TIMING_WITH   TIMING_WITH_CLOCK
-#elif PENTIUM_INSNS
-# define TIMING_WITH   TIMING_WITH_PENTIUM_TSC
-#elif defined(HAVE_CLOCK)
-# define TIMING_WITH   TIMING_WITH_CLOCK
 #else
-# error "no way to measure time!"
+# define TIMING_WITH   TIMING_WITH_PROCESSOR_INSN
 #endif
 
 #define measure_is_zero(m)  ((m) == (time_measure_t) 0)
+
+/* Check that the processor has dedicated timers */
+#if TIMING_WITH == TIMING_WITH_PROCESSOR_INSN
+# include <itiming.h>
+# ifndef CURRENT_TIME_READER
+#  undef TIMING_WITH   /* no processor support */
+#  define TIMING_WITH  TIMING_WITH_CLOCK
+# endif
+#endif
 
 
 /***************************************************************/
@@ -61,22 +66,13 @@ inline time_measure_t get_measure(PyThreadState* tstate)
 /* without tick_counter, it is hard to tell the threads apart. */
 #define MEASURE_ALL_THREADS    0
 
-#if TIMING_WITH == TIMING_WITH_PENTIUM_TSC
-#  include "processor.h"
-EXTERNVAR psyco_pentium_tsc_fn  psyco_pentium_tsc; /* in processor.c */
-#  define CURRENT_TIME_READER   psyco_pentium_tsc
-#  define time_measure_t        pentium_tsc_t
-#  undef  measure_is_zero
-#  define measure_is_zero(m)    0  /* never */
-#elif TIMING_WITH == TIMING_WITH_CLOCK
+#if TIMING_WITH == TIMING_WITH_CLOCK
 #  ifndef HAVE_CLOCK
-#    error "no clock() function, select another timing method in timing.h"
+#    error "no timing method available, sorry"
 #  endif
 #  include <time.h>
 #  define CURRENT_TIME_READER   clock
 #  define time_measure_t        clock_t
-#else
-#  error "no valid TIMING_WITH method selected in timing.h"
 #endif
 
 /* 'tstate' parameter ignored */

@@ -7,16 +7,21 @@
 
 
 #include "vcompiler.h"
-#include "Python/pyver.h"
 
 
-#define SIZE_OF_LONG_BITS   2
-#if (1<<SIZE_OF_LONG_BITS) != SIZEOF_LONG
-# error "fix SIZE_OF_LONG_BITS"
-#endif
 #if SIZEOF_LONG != SIZEOF_VOID_P
-# error "oops, Psyco cannot be compiled on such a platform"
+# error "sorry -- Psyco currently requires sizeof(long)==sizeof(void*)"
 #endif
+#if SIZEOF_LONG == 4
+# define SIZE_OF_LONG_BITS   2
+#elif SIZEOF_LONG == 8
+# define SIZE_OF_LONG_BITS   3
+# error "sorry -- I guess it won't work like that on 64-bits machines"
+#else
+# error "sorry -- you have an uncommon sizeof(long)"
+#endif
+
+#define INITIAL_STACK_DEPTH  4 /* anything >0 and a multiple of 4 */
 
 
 /***************************************************************/
@@ -46,11 +51,6 @@ EXTERNFN vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc);
 /* if 'source' comes from psyco_vinfo_condition(), return its <cc>;
    otherwise return CC_ALWAYS_FALSE. */
 EXTERNFN condition_code_t psyco_vsource_cc(Source source);
-
-/* returns the next register that should be used */
-inline reg_t next_free_reg(PsycoObject* po) {
-	return (po->last_used_reg = RegistersLoop[(int)(po->last_used_reg)]);
-}
 
 /* call a C function with a variable number of arguments
    (implemented as a pointer to assembler code) */
@@ -146,16 +146,6 @@ EXTERNFN vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 /* See also the Python-specific flags CfPyErrXxx defined in pycheader.h. */
 
 
-/* a faster variant for the commonly-used(?) form of psyco_generic_call()
-   with no argument and CfNoReturnValue */
-inline void psyco_call_void(PsycoObject* po, void* c_function) {
-	BEGIN_CODE
-	SAVE_REGS_FN_CALLS;
-	CALL_C_FUNCTION(c_function,  0);
-	END_CODE
-}
-
-
 /* To emit the call to other code blocks emitted by Psyco. 'argsources' gives
    the run-time sources for the arguments, as specified by
    psyco_build_frame(). */
@@ -238,15 +228,6 @@ EXTERNFN condition_code_t integer_cmp_i(PsycoObject* po, vinfo_t* v1,
 					long value2, int py_op);
 #define COMPARE_UNSIGNED  8
 
-/* For sequence indices: 'vn' is the length of the sequence, 'vi' an
-   index. Check that vi is in range(0,vn). Increase 'vi' by 'vn' if
-   needed to put it in the correct range. */
-#if 0
-                      (not used)
-EXTERNFN vinfo_t* integer_seqindex(PsycoObject* po, vinfo_t* vi,
-				   vinfo_t* vn, bool ovf);
-#endif
-
 /* Return one of two constants, depending on the condition code */
 EXTERNFN vinfo_t* integer_conditional(PsycoObject* po, condition_code_t cc,
                                       long immed_true, long immed_false);
@@ -276,16 +257,17 @@ EXTERNFN void psyco_emit_header(PsycoObject* po, int nframelocal);
 EXTERNFN code_t* psyco_finish_return(PsycoObject* po, Source retval);
 
 /* write codes that calls the C function 'fn' and jumps to its
-   return value. Save registers before calling psyco_finish_call_proxy().
-   Set 'restore' to 1 if you used TEMP_SAVE_REGS_FN_CALLS,
-   or 0 if you used SAVE_REGS_FN_CALLS.
-   The arguments passed to 'fn' will be a pointer to a constant structure
-   at the end of the code, plus any others previously specified by calls
-   to CALL_SET_ARG_xxx(). Set 'nb_args' to one plus your own arguments.
-   The constant structure is at the end of the code, and
-   psyco_finish_call_proxy() returns a pointer to it. */
+   return value.
+   Set 'restore' to 1 to save and restore all used registers across call,
+   or 0 to just unload the used registers into the stack.
+   This function returns a pointer to the end of the jumping code, where
+   you can store closure data for 'fn'.
+   The arguments that will be passed to 'fn' are:
+   1) the same pointer to the closure data
+   2) the run-time value described by 'extraarg' if != SOURCE_DUMMY. */
 EXTERNFN
-void* psyco_jump_proxy(PsycoObject* po, void* fn, int restore, int nb_args);
+void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
+                              RunTimeSource extraarg);
 
 #if 0   /* disabled */
 /* emergency code for out-of-memory conditions in which do not
@@ -359,18 +341,6 @@ EXTERNVAR c_promotion_t psyco_nonfixed_pyobj_promotion;
 
 /* Check if the given virtual source is a promotion exception */
 EXTERNFN bool psyco_vsource_is_promotion(VirtualTimeSource source);
-
-
-/*****************************************************************/
-/* Pentium timing (this function is only defined if TIMING_WITH ==
-                   TIMING_WITH_PENTIUM_TSC in timing.h) */
-#if HAVE_LONG_LONG
-typedef PY_LONG_LONG pentium_tsc_t;
-#else
-typedef long pentium_tsc_t;
-#endif
-typedef pentium_tsc_t (*psyco_pentium_tsc_fn) (void);
-/*EXTERNVAR psyco_pentium_tsc_fn psyco_pentium_tsc; see timing.h */
 
 
 #endif /* _PROCESSOR_H */

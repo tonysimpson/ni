@@ -24,7 +24,6 @@ class Module(Source):
 
 
 SRC = [
-    Source('processor.c',	'psyco_processor_init'),
     Source('dispatcher.c'),
     Source('vcompiler.c',	'psyco_compiler_init'),
     Source('psyco.c'),
@@ -35,7 +34,6 @@ SRC = [
     Source('alarm.c',		'psyco_alarm_init'),
     Source('codemanager.c'),
     Source('mergepoints.c'),
-    Source('pycencoding.c'),
     Source('linuxmemchk.c'),
     Source('Python/pycompiler.c',	'psyco_pycompiler_init'),
     Source('Python/frames.c',		'psyco_frames_init'),
@@ -63,10 +61,26 @@ SRC = [
     Module('math'),
     ]
 
+PROCESSOR_SRC = {
+    'i386': [
+        Source('iprocessor.c',	'psyco_processor_init'),
+        Source('idispatcher.c'),
+        Source('ipyencoding.c'),
+        ],
+    'ivm': [
+        ],
+    }
+
 MAINFILE = 'psyco.c'
 
 
-if __name__ == '__main__':
+def generate(processor=None):
+    if processor:
+        filename = '%s/iinitialize.h' % processor
+        src = PROCESSOR_SRC[processor]
+    else:
+        filename = 'initialize.h'
+        src = SRC
     header = """\
  /***************************************************************/
 /***          Automatically generated support file             ***/
@@ -76,42 +90,57 @@ if __name__ == '__main__':
     DO NOT MODIFY. Changes will be overwritten ! */
 
 """
-    print 'Rebuilding initialize.h...'
-    f = open('initialize.h', 'w')
+    print 'Rebuilding %s...' % filename
+    f = open(filename, 'w')
     print >> f, header
-    print >> f, ' /* Including this file results in all headers Objects/xxx.h'
-    print >> f, '    being included, so that it has roughly the same result'
-    print >> f, '    for Psyco as a "#include <Python.h>" has for Python:'
-    print >> f, '    including all headers extension modules generally need.'
-    print >> f
-    print >> f, '    This file is moreover used internally by psyco.c. */'
-    print >> f
-    print >> f, '#ifndef PSYCO_INITIALIZATION'
-    print >> f
-    for s in SRC:
-        if isinstance(s, Object):
-            assert s.filename.endswith(".c")
-            print >> f, '# include "%s"' % (s.filename[:-2] + ".h")
-    print >> f
-    print >> f, '#else /* if PSYCO_INITIALIZATION */'
-    print >> f, '# undef PSYCO_INITIALIZATION'
-    print >> f
+    if not processor:
+        print >> f, ' /* Including this file results in all headers Objects/xxx.h'
+        print >> f, '    being included, so that it has roughly the same result'
+        print >> f, '    for Psyco as a "#include <Python.h>" has for Python:'
+        print >> f, '    including all headers extension modules generally need.'
+        print >> f
+        print >> f, '    This file is moreover used internally by psyco.c. */'
+        print >> f
+        print >> f
+        print >> f, '#ifndef PSYCO_INITIALIZATION'
+        print >> f
+        for s in src:
+            if isinstance(s, Object):
+                assert s.filename.endswith(".c")
+                print >> f, '# include "%s"' % (s.filename[:-2] + ".h")
+        print >> f
+        print >> f, '#else /* if PSYCO_INITIALIZATION */'
+        print >> f, '# undef PSYCO_INITIALIZATION'
+        print >> f
+        print >> f, '#include <iinitialize.h>  /* processor-specific initialization */'
+        print >> f
     print >> f, '  /* internal part for psyco.c */'
     print >> f, '#if ALL_STATIC'
-    for s in SRC:
-        if s.filename != MAINFILE:
+    for s in src:
+        if processor or s.filename != MAINFILE:
             print >> f, '# include "%s"' % s.filename
     print >> f, '#else /* if !ALL_STATIC */'
-    for s in SRC:
+    for s in src:
         if s.initname:
             print >> f, '  EXTERNFN void %s(void);\t/* %s */' % (s.initname, s.filename)
     print >> f, '#endif /* !ALL_STATIC */'
     print >> f
-    print >> f, 'inline void initialize_all_files(void) {'
-    for s in SRC:
+    if processor:
+        print >> f, 'inline void initialize_processor_files(void) {'
+    else:
+        print >> f, 'inline void initialize_all_files(void) {'
+        print >> f, '  initialize_processor_files();'
+    for s in src:
         if s.initname:
             print >> f, '  %s();\t/* %s */' % (s.initname, s.filename)
     print >> f, '}'
-    print >> f
-    print >> f, '#endif /* PSYCO_INITIALIZATION */'
+    if not processor:
+        print >> f
+        print >> f, '#endif /* PSYCO_INITIALIZATION */'
     f.close()
+
+
+if __name__ == '__main__':
+    generate()
+    for processor in PROCESSOR_SRC.keys():
+        generate(processor)

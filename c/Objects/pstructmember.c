@@ -2,6 +2,7 @@
 #include "pstringobject.h"
 #include "pintobject.h"
 #include "pfloatobject.h"
+#include <ipyencoding.h>
 
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 

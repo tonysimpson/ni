@@ -1,11 +1,11 @@
-#include "processor.h"
-#include "vcompiler.h"
-#include "dispatcher.h"
-#include "codemanager.h"
-#include "pycencoding.h"
-#include "Python/pycompiler.h"  /* for exception handling stuff */
-#include "Python/frames.h"
-#include "timing.h"
+#include "../processor.h"
+#include "../vcompiler.h"
+#include "../dispatcher.h"
+#include "../codemanager.h"
+#include "../Python/pycompiler.h"  /* for exception handling stuff */
+#include "../Python/frames.h"
+#include "../timing.h"
+#include "ipyencoding.h"
 
 
 /* define to copy static machine code in the heap before running it.
@@ -124,15 +124,13 @@ static glue_int_mul_fn glue_int_mul_1;
 #endif
 
 
-#define DEFINE_TSC  (TIMING_WITH == TIMING_WITH_PENTIUM_TSC)
-
-#if DEFINE_TSC
+#ifdef PENTIUM_TSC  /* if itiming.h is included by timing.h */
 static code_t glue_pentium_tsc[] = {
   0x0F, 0x31,                   /*   RDTSC   */
   0xC3,                         /*   RET     */
 };
 DEFINEVAR psyco_pentium_tsc_fn psyco_pentium_tsc;
-#endif /* DEFINE_TSC */
+#endif /* PENTIUM_TSC */
 
 
 DEFINEFN
@@ -224,11 +222,21 @@ code_t* psyco_emergency_jump(PsycoObject* po, code_t* code)
 #endif
 
 DEFINEFN
-void* psyco_jump_proxy(PsycoObject* po, void* fn, int restore, int nb_args)
+void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
+                              RunTimeSource extraarg)
 {
   code_t* code = po->code;
   void* result;
   code_t* fixvalue;
+
+  if (restore)
+    TEMP_SAVE_REGS_FN_CALLS;
+  else
+    SAVE_REGS_FN_CALLS;
+
+  /* first pushed argument */
+  if (extraarg != SOURCE_DUMMY)
+    CALL_SET_ARG_FROM_RT(extraarg, 1, 2);  /* argument index 1 out of total 2 */
   
   /* last pushed argument (will be the first argument of 'fn') */
   code[0] = 0x68;     /* PUSH IMM32	*/
@@ -239,11 +247,12 @@ void* psyco_jump_proxy(PsycoObject* po, void* fn, int restore, int nb_args)
 
   if (restore)
     {
-      /* cancel the effect of any CALL_SET_ARG_xxx on po->stack_depth,
+      /* cancel the effect of CALL_SET_ARG_FROM_RT on po->stack_depth,
          to match the 'ADD ESP' instruction below */
+      int nb_args = 1 + (extraarg != SOURCE_DUMMY);
       po->stack_depth -= 4*(nb_args-1);
       
-      extra_assert(4*nb_args < 128);   /* a safe guess */
+      extra_assert(4*nb_args < 128);   /* trivially true */
       CODE_FOUR_BYTES(code,
                       0x83,       /* ADD		  */
                       0xC4,       /*     ESP,		  */
@@ -270,183 +279,13 @@ void* psyco_jump_proxy(PsycoObject* po, void* fn, int restore, int nb_args)
   return result;
 }
 
-/*DEFINEFN
-void psyco_stack_space_array(PsycoObject* po, vinfo_t** args,
-                             int cnt, bool with_reference)
-{
-  int i = cnt;
-  BEGIN_CODE
-  ......
-  END_CODE
-  while (i--)
-    args[i] = vinfo_new(RunTime_NewStack(po_stack_depth - 4*i,
-                                         REG_NONE, with_reference));
-					 }*/
 
-/* DEFINEFN */
-/* code_t* insert_push_from_rt(PsycoObject* po, code_t* code1, */
-/*                             long source, code_t* insert_at) */
-/* { */
-/*   code_t codebuffer[16]; */
-/*   code_t* code = codebuffer; */
-/*   int shiftby; */
-/*   PUSH_FROM_RT(source); */
-/*   shiftby = code - codebuffer; */
-/*   memmove(insert_at + shiftby, insert_at, code1-insert_at); */
-/*   return code1 + shiftby; */
-/* } */
-
-
-#if 0
-  -- XXX remove me --
-DEFINEFN
-vinfo_t* psyco_mem_read(PsycoObject* po, vinfo_t* ptr, long offset)
-{
-  reg_t src, rg;
-  if (!compute_vinfo(ptr, po)) return NULL;
-  
-  BEGIN_CODE
-  if (is_runtime(ptr->source))
-    {
-      RTVINFO_IN_REG(ptr);
-      src = RUNTIME_REG(ptr);
-      DELAY_USE_OF(src);
-      NEED_FREE_REG(rg);
-      code[0] = 0x8B;        /* MOV rg, [src + offset] */
-      code = write_modrm(code+1, rg<<3,
-                         src, true,
-                         REG_NONE, false, 0,
-                         offset);
-    }
-  else
-    {
-      offset += CompileTime_Get(ptr->source)->value;
-      NEED_FREE_REG(rg);
-      code[0] = 0x8B;        /* MOV rg, [offset] */
-      code = write_modrm(code+1, rg<<3,
-                         REG_NONE, false,
-                         REG_NONE, false, 0,
-                         offset);
-    }
-  END_CODE
-  return new_rtvinfo(po, rg, false, false);
+/* run-time vinfo_t creation */
+inline vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonneg) {
+	vinfo_t* vi = vinfo_new(RunTime_New(reg, ref, nonneg));
+	REG_NUMBER(po, reg) = vi;
+	return vi;
 }
-
-DEFINEFN
-vinfo_t* psyco_mem_read2(PsycoObject* po, vinfo_t* ptr, long offset1,
-                         vinfo_t* offset2, int scale)
-{
-  reg_t src, src2, rg;
-  int shift;
-  if (!compute_vinfo(offset2, po)) return NULL;
-
-  if (is_compiletime(offset2->source))
-    {
-      offset1 += CompileTime_Get(offset2->source)->value * scale;
-      return psyco_mem_read(po, ptr, offset1);
-    }
-  switch (scale) {
-  case 1: shift = 0; break;
-  case 2: shift = 1; break;
-  case 4: shift = 2; break;
-  case 8: shift = 3; break;
-  default:
-    {
-      vinfo_t* noffset2 = integer_mul_i(po, offset2, scale);
-      if (noffset2 == NULL)
-        return NULL;
-      return psyco_mem_read2(po, ptr, offset1, noffset2, 1);
-    }
-  }
-
-  if (!compute_vinfo(ptr, po)) return NULL;
-  
-  BEGIN_CODE
-  RTVINFO_IN_REG(offset2);
-  src2 = RunTIME_REG(offset2);
-  DELAY_USE_OF(src2);
-  if (is_runtime(ptr->source))
-    {
-      RTVINFO_IN_REG(ptr);
-      src = RUNTIME_REG(ptr);
-      DELAY_USE_OF_2(src2, src);
-      NEED_FREE_REG(rg);
-      code[0] = 0x8B;        /* MOV rg, [src + offset1 + src2*scale] */
-      code = write_modrm(code+1, rg<<3,
-                         src, true,
-                         src2, true, shift,
-                         offset1);
-    }
-  else
-    {
-      offset1 += CompileTime_Get(ptr->source)->value;
-      NEED_FREE_REG(rg);
-      code[0] = 0x8B;        /* MOV rg, [offset1 + src2*scale] */
-      code = write_modrm(code+1, rg<<3,
-                         REG_NONE, false,
-                         src2, true, shift,
-                         offset1);
-    }
-  END_CODE
-  return new_rtvinfo(po, rg, false, false);
-}
-
-DEFINEFN
-vinfo_t* psyco_mem_write(PsycoObject* po, vinfo_t* ptr, long offset,
-                         vinfo_t* value)
-{
-  reg_t src, rg;
-  if (!compute_vinfo(ptr, po) || !compute_vinfo(value, po)) return NULL;
-  
-  BEGIN_CODE
-  if (is_runtime(ptr->source))
-    {
-      RTVINFO_IN_REG(ptr);
-      src = RUNTIME_REG(ptr);
-    }
-  else
-    {
-      offset += CompileTime_Get(ptr->source)->value;
-      src = REG_NONE;
-    }
-  if (is_runtime(value->source))
-    {
-      DELAY_USE_OF(src);
-      NEED_FREE_REG(rg);
-      code[0] = 0x89;   /* MOV [...], rg */
-    }
-  else
-    {
-      rg = REG_NONE;
-      code[0] = 0xC7;   /* MOV [...], imm32 */
-    }
-  
-      code[0] = 0x8B;        /* MOV rg, [src + offset] */
-      code = write_modrm(code+1, rg<<3,
-                         src, true,
-                         REG_NONE, false, 0,
-                         offset);
-      //    }
-  else
-    {
-      offset += CompileTime_Get(ptr->source)->value;
-      NEED_FREE_REG(rg);
-      code[0] = 0x8B;        /* MOV rg, [offset] */
-      code = write_modrm(code+1, rg<<3,
-                         REG_NONE, false,
-                         REG_NONE, false, 0,
-                         offset);
-    }
-  END_CODE
-}
-
-DEFINEFN
-vinfo_t* psyco_mem_write2(PsycoObject* po, vinfo_t* ptr, long offset1,
-                          vinfo_t* offset2, int scale, vinfo_t* value)
-{
-}
-#endif /* 0 */
-
 
 inline code_t* write_modrm(code_t* code, code_t middle,
                            reg_t base, reg_t index, int shift,
@@ -798,7 +637,7 @@ void psyco_processor_init(void)
   COPY_CODE(glue_run_code_1,    glue_run_code,     glue_run_code_fn);
   COPY_CODE(glue_int_mul_1,     glue_int_mul,      glue_int_mul_fn);
 #endif
-#if DEFINE_TSC
+#ifdef PENTIUM_TSC
   COPY_CODE(psyco_pentium_tsc,  glue_pentium_tsc,  psyco_pentium_tsc_fn);
 #endif
   COPY_CODE(psyco_call_var, glue_call_var, long(*)(void*, int, long[]));

@@ -7,7 +7,6 @@
 
 
 #include "pobject.h"
-#include "../pycencoding.h"
 #include "../Python/pycinternal.h"
 
 

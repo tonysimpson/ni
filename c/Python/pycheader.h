@@ -8,7 +8,6 @@
 
 
 #include "../psyco.h"
-#include "../encoding.h"
 #include <compile.h>
 #include <frameobject.h>
 

@@ -13,6 +13,7 @@
 
     This file is moreover used internally by psyco.c. */
 
+
 #ifndef PSYCO_INITIALIZATION
 
 # include "Objects/pobject.h"
@@ -36,9 +37,10 @@
 #else /* if PSYCO_INITIALIZATION */
 # undef PSYCO_INITIALIZATION
 
+#include <iinitialize.h>  /* processor-specific initialization */
+
   /* internal part for psyco.c */
 #if ALL_STATIC
-# include "processor.c"
 # include "dispatcher.c"
 # include "vcompiler.c"
 # include "psyfunc.c"
@@ -48,7 +50,6 @@
 # include "alarm.c"
 # include "codemanager.c"
 # include "mergepoints.c"
-# include "pycencoding.c"
 # include "linuxmemchk.c"
 # include "Python/pycompiler.c"
 # include "Python/frames.c"
@@ -73,7 +74,6 @@
 # include "Modules/parray.c"
 # include "Modules/pmath.c"
 #else /* if !ALL_STATIC */
-  EXTERNFN void psyco_processor_init(void);	/* processor.c */
   EXTERNFN void psyco_compiler_init(void);	/* vcompiler.c */
   EXTERNFN void psyco_stats_init(void);	/* stats.c */
   EXTERNFN void psyco_profile_init(void);	/* profile.c */
@@ -102,7 +102,7 @@
 #endif /* !ALL_STATIC */
 
 inline void initialize_all_files(void) {
-  psyco_processor_init();	/* processor.c */
+  initialize_processor_files();
   psyco_compiler_init();	/* vcompiler.c */
   psyco_stats_init();	/* stats.c */
   psyco_profile_init();	/* profile.c */

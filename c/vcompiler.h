@@ -6,7 +6,7 @@
 #define _VCOMPILER_H
 
 #include "psyco.h"
-#include "encoding.h"
+#include <iencoding.h>
 #include "blockalloc.h"
 #include "Python/pycheader.h"
 
@@ -600,18 +600,13 @@ struct PsycoObject_s {
   code_t* code;                /* where the emitted code goes                */
   code_t* codelimit;           /* do not write code past this limit          */
 
-  /* processor state */
-  int stack_depth;         /* the size of data currently pushed in the stack */
-  vinfo_t* reg_array[REG_TOTAL];   /* the 'vinfo_t' currently stored in regs */
-  vinfo_t* ccreg;                  /* processor condition codes (aka flags)  */
-
   /* compiler private variables for producing and optimizing code */
-  reg_t last_used_reg;         /* the most recently used register            */
+  PROCESSOR_PSYCOOBJECT_FIELDS      /* processor state                       */
   int respawn_cnt;                  /* see psyco_prepare_respawn()           */
   CodeBufferObject* respawn_proxy;  /* see psyco_prepare_respawn()           */
-  pyc_data_t pr;               /* private language-dependent data            */
+  pyc_data_t pr;                    /* private language-dependent data       */
 
-  /* least, the description of variable stages. This is the data against
+  /* finally, the description of variable stages. This is the data against
      which state matches and synchronizations are performed. */
   vinfo_array_t vlocals;          /* all the 'vinfo_t' variables             */
   /* variable-sized array! */
@@ -620,13 +615,6 @@ struct PsycoObject_s {
 #define PSYCOOBJECT_SIZE(arraycnt)                                      \
 	(sizeof(PsycoObject)-sizeof(vinfo_array_t) + sizeof(int) +      \
          (arraycnt)*sizeof(vinfo_t*))
-
-/* run-time vinfo_t creation */
-inline vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonneg) {
-	vinfo_t* vi = vinfo_new(RunTime_New(reg, ref, nonneg));
-	REG_NUMBER(po, reg) = vi;
-	return vi;
-}
 
 /* move 'vsource->source' into 'vtarget->source'. Must be the last reference
    to 'vsource', which is freed. 'vsource' must have no array, and

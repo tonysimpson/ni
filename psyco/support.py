@@ -24,7 +24,7 @@ def warn(msg):
 #
 # Version checks
 #
-__version__ = 0x010000f0
+__version__ = 0x010100a0
 if _psyco.PSYVER != __version__:
     raise error, "version mismatch between Psyco parts, reinstall it"
 

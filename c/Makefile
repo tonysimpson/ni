@@ -30,8 +30,10 @@ OPTS_M    = -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=1 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=1 
 C_FLAGS_M = -g
 
 
+PROCESSOR = i386
+# PROCESSOR = ivm
 OPTS     = ${OPTS_${mode}}
-C_FLAGS  = -DNDEBUG ${C_FLAGS_${mode}} -Wall -Wstrict-prototypes -fPIC ${OPTS} ${incl}
+C_FLAGS  = -I${PROCESSOR} -DNDEBUG ${C_FLAGS_${mode}} -Wall -Wstrict-prototypes -fPIC ${OPTS} ${incl}
 LD_FLAGS = -shared
 BUILDDIR = ../build
 LIBDIR   = lib.linux-i686-${PY_VER}
@@ -86,4 +88,4 @@ clean:
 
 depend:
 	python files.py
-	python depend.py
+	python depend.py ${PROCESSOR}

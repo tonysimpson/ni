@@ -2,20 +2,29 @@
 /***       Processor-specific code-producing macros            ***/
  /***************************************************************/
 
-#ifndef _ENCODING_H
-#define _ENCODING_H
+#ifndef _IENCODING_H
+#define _IENCODING_H
 
 
-#include "psyco.h"
+#include "../psyco.h"
 
+
+ /* set to 0 to emit code that runs on 386 and 486 */
+#ifndef PENTIUM_INSNS
+# define PENTIUM_INSNS    1
+#endif
 
  /* Define to 1 to always write the most compact encoding of instructions.
     (a quite minor overhead). Set to 0 to disable. No effect on real
     optimizations. */
-#define COMPACT_ENCODING   1
+#ifndef COMPACT_ENCODING
+# define COMPACT_ENCODING   1
+#endif
 
 /* Define to 0 to use EBP as any other register, or to 1 to reserve it */
-#define EBP_IS_RESERVED    0
+#ifndef EBP_IS_RESERVED
+# define EBP_IS_RESERVED    0
+#endif
 
 
 typedef enum {
@@ -72,23 +81,23 @@ typedef enum {
 
 
 /* the registers we want Psyco to use in compiled code,
-   as a circular linked list (see processor.c) */
+   as a circular linked list (see iprocessor.c) */
 EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 
 /* the first register in RegistersLoop that Psyco will use.
    The best choice is probably the first callee-saved register */
 #define REG_LOOP_START      REG_386_EBX
 
-#define INITIAL_STACK_DEPTH  4 /* anything >0 and a multiple of 4 */
+/* returns the next register that should be used */
+#define next_free_reg(po)	\
+	((po)->last_used_reg = RegistersLoop[(int)((po)->last_used_reg)])
 
-
-/* like offsetof() but checks that the offset is a multiple of 4 */
-#define OffsetOf(struct, field)                         \
-    (extra_assert((offsetof(struct, field) & 3) == 0),  \
-     offsetof(struct, field))
-
-#define QUARTER(n)   (extra_assert(((n)&3)==0), (long)((n)/4))
-
+/* processor-depend part of PsycoObject */
+#define PROCESSOR_PSYCOOBJECT_FIELDS                                            \
+  int stack_depth;         /* the size of data currently pushed in the stack */ \
+  vinfo_t* reg_array[REG_TOTAL];   /* the 'vinfo_t' currently stored in regs */ \
+  vinfo_t* ccreg;                  /* processor condition codes (aka flags)  */ \
+  reg_t last_used_reg;             /* the most recently used register        */
 
 /*****************************************************************/
  /***   Production of code (common instruction encodings)       ***/
@@ -96,14 +105,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 /* Most of the following macros implicitely use and update the
  * local variable 'code'. Some also use 'po'. No macro outside the
  * present header file must implicitely use or modify 'code'.
- *
- * Convenience macros to start/end a code-emitting instruction block:
  */
-#define BEGIN_CODE         { code_t* code = po->code;
-#define END_CODE             po->code = code;                           \
-                             if (code >= po->codelimit)                 \
-                               PsycoObject_EmergencyCodeRoom(po);       \
-                           }
 
 
 /* Written as a large set of macro. */
@@ -133,6 +135,45 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define NEXT_FREE_REG()         next_free_reg(po)
 #define REG_NUMBER(po, rg)      ((po)->reg_array[(int)(rg)])
 
+/* release a run-time vinfo_t */
+#define RTVINFO_RELEASE(rtsource)         do {          \
+  if (!RSOURCE_REG_IS_NONE(rtsource))                   \
+    REG_NUMBER(po, RSOURCE_REG(rtsource)) = NULL;       \
+} while (0)
+
+/* move a run-time vinfo_t */
+#define RTVINFO_MOVE(rtsource, vtarget)   do {          \
+  if (!RSOURCE_REG_IS_NONE(rtsource))                   \
+    REG_NUMBER(po, RSOURCE_REG(rtsource)) = (vtarget);  \
+} while (0)
+
+/* for PsycoObject_Duplicate() */
+#define DUPLICATE_PROCESSOR(result, po)   do {          \
+  int i;                                                \
+  for (i=0; i<REG_TOTAL; i++)                           \
+    if (REG_NUMBER(po, i) != NULL)                      \
+      REG_NUMBER(result, i) = REG_NUMBER(po, i)->tmp;   \
+  if (po->ccreg != NULL)                                \
+    result->ccreg = po->ccreg->tmp;                     \
+                                                        \
+  result->stack_depth = po->stack_depth;                \
+  result->last_used_reg = po->last_used_reg;            \
+} while (0)
+
+#define RTVINFO_CHECK(po, vsource, found) do {                          \
+  RunTimeSource _src = (vsource)->source;                               \
+  if (!RSOURCE_REG_IS_NONE(_src))                                       \
+    {                                                                   \
+      extra_assert(REG_NUMBER(po, RSOURCE_REG(_src)) == (vsource));     \
+      found[(int) RSOURCE_REG(_src)] = 1;                               \
+    }                                                                   \
+} while (0)
+#define RTVINFO_CHECKED(po, found)        do {  \
+  int i;                                        \
+  for (i=0; i<REG_TOTAL; i++)                   \
+    if (!found[i])                              \
+      extra_assert(REG_NUMBER(po, i) == NULL);  \
+} while (0)
 
 /*****************************************************************/
 
@@ -944,4 +985,4 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 #endif
 
 
-#endif /* _ENCODING_H */
+#endif /* _IENCODING_H */

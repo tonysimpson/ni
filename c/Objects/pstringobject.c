@@ -1,6 +1,7 @@
 #include "pstringobject.h"
 #include "plistobject.h"
 #include "pstructmember.h"
+#include <ipyencoding.h>
 
 
 static PyObject* pempty_string;

@@ -3,6 +3,7 @@
 #include "plongobject.h"
 #include "piterobject.h"
 #include "../Python/pbltinmodule.h"
+#include <ipyencoding.h>
 
 
 /***************************************************************/

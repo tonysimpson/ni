@@ -3,7 +3,8 @@
 #include "codemanager.h"
 #include "mergepoints.h"
 #include "Python/pycompiler.h"
-#include "pycencoding.h"
+#include <ipyencoding.h>
+#include <idispatcher.h>
 
 
 DEFINEVAR const long psyco_zero = 0;
@@ -118,8 +119,7 @@ void vinfo_release(vinfo_t* vi, PsycoObject* po)
                a run-time vinfo_t holding a reference to a Python object */
             psyco_decref_rt(po, vi);
           }
-        if (!is_reg_none(vi->source))
-          REG_NUMBER(po, getreg(vi->source)) = NULL;
+        RTVINFO_RELEASE(vi->source);
       }
     break;
 
@@ -162,8 +162,8 @@ void vinfo_move(PsycoObject* po, vinfo_t* vtarget, vinfo_t* vsource)
   
   extra_assert(vsource->array == NullArray);
   vtarget->source = src;
-  if (is_runtime(src) && !is_reg_none(src))
-    REG_NUMBER(po, getreg(src)) = vtarget;
+  if (is_runtime(src))
+    RTVINFO_MOVE(src, vtarget);
   extra_assert(vsource->refcount == 1);
   psyco_llfree_vinfo(vsource);
   clear_tmp_marks(vtarget->array);
@@ -243,11 +243,7 @@ static void coherent_array(vinfo_array_t* source, PsycoObject* po, int found[],
           /* test that we don't have an unreasonably high value
              although it might still be correct in limit cases */
           extra_assert(getstack(src) < RunTime_StackMax/2);
-          if (!is_reg_none(src))
-            {
-              extra_assert(REG_NUMBER(po, getreg(src)) == source->items[i]);
-              found[(int) getreg(src)] = 1;
-            }
+          RTVINFO_CHECK(po, source->items[i], found);
           break;
         case CompileTime:
         case VirtualTime:
@@ -324,9 +320,7 @@ void psyco_assert_coherent1(PsycoObject* po, bool full)
   coherent_array(&debug_extra_refs, po, found, true);
   if (full)
     {
-      for (i=0; i<REG_TOTAL; i++)
-        if (!found[i])
-          extra_assert(REG_NUMBER(po, i) == NULL);
+      RTVINFO_CHECKED(po, found);
       if (!found[REG_TOTAL])
         extra_assert(po->ccreg == NULL);
       hack_refcounts(&po->vlocals, -1, 0);
@@ -383,22 +377,15 @@ PsycoObject* psyco_duplicate(PsycoObject* po)
   /* Requires that all 'tmp' marks in 'po' are cleared.
      In the new copy all 'tmp' marks will be cleared. */
   
-  int i;
   PsycoObject* result = PsycoObject_New(po->vlocals.count);
   psyco_assert_coherent(po);
   assert_cleared_tmp_marks(&po->vlocals);
   duplicate_array(&result->vlocals, &po->vlocals);
 
   /* set the register pointers of 'result' to the new vinfo_t's */
-  for (i=0; i<REG_TOTAL; i++)
-    if (REG_NUMBER(po, i) != NULL)
-      REG_NUMBER(result, i) = REG_NUMBER(po, i)->tmp;
-  if (po->ccreg != NULL)
-    result->ccreg = po->ccreg->tmp;
+  DUPLICATE_PROCESSOR(result, po);
 
   /* the rest of the data is copied with no change */
-  result->stack_depth = po->stack_depth;
-  result->last_used_reg = po->last_used_reg;
   result->respawn_cnt = po->respawn_cnt;
   result->respawn_proxy = po->respawn_proxy;
   result->code = po->code;
@@ -693,7 +680,7 @@ static code_t* do_resume_coding(coding_pause_t* cp)
 /* Prepare a 'coding pause', i.e. a short amount of code (proxy) that will be
    called only if the execution actually reaches it to go on with compilation.
    'po' is the PsycoObject corresponding to the proxy.
-   'condition' may not be CC_ALWAYS_FALSE.
+   'jmpcondition' should not be CC_ALWAYS_FALSE.
    The (possibly conditional) jump to the proxy is encoded in 'calling_code'.
    When the execution reaches the proxy, 'resume_fn' is called and the proxy
    destroys itself and replaces the original jump to it by a jump to the newly
@@ -707,8 +694,6 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
   code_t* calling_limit;
   code_t* limit;
   CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL, &limit);
-  
-  extra_assert(jmpcondition != CC_ALWAYS_FALSE);
 
   /* the proxy contains only a jump to do_resume_coding,
      followed by a coding_pause_t structure, itself followed by the
@@ -717,10 +702,8 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
   calling_limit = po->codelimit;
   po->code = (code_t*) codebuf->codestart;
   po->codelimit = limit;
-  BEGIN_CODE
-  TEMP_SAVE_REGS_FN_CALLS;
-  END_CODE
-  cp = (coding_pause_t*) psyco_jump_proxy(po, &do_resume_coding, 1, 1);
+  cp = (coding_pause_t*) psyco_call_code_builder(po, &do_resume_coding,
+                                                 true, SOURCE_DUMMY);
   SHRINK_CODE_BUFFER(codebuf,
                      (code_t*)(cp+1) + extrasize,
                      "coding_pause");
@@ -735,12 +718,7 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
   /* write the jump to the proxy */
   po->code = calling_code;
   po->codelimit = calling_limit;
-  BEGIN_CODE
-  if (jmpcondition == CC_ALWAYS_TRUE)
-    JUMP_TO((code_t*) codebuf->codestart);  /* jump always */
-  else
-    FAR_COND_JUMP_TO((code_t*) codebuf->codestart, jmpcondition);
-  END_CODE
+  conditional_jump_to(po, (code_t*) codebuf->codestart, jmpcondition);
   dump_code_buffers();
 }
 
@@ -845,23 +823,11 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
                            Jcond <unification-jump-target>
       */
       CodeBufferObject* oldcodebuf;
-      code_t* code2 = po->code + SIZE_OF_SHORT_CONDITIONAL_JUMP;
-      code_t* target;
       code_t* codeend;
-      
-      po2->code = code2;
-      po2->codelimit = code2 + RANGE_OF_SHORT_CONDITIONAL_JUMP;
+      setup_conditional_code_bounds(po, po2);
       codeend = psyco_unify(po2, cmp, &oldcodebuf);
+      make_code_conditional(po, codeend, condition);
       /* XXX store reference to oldcodebuf somewhere */
-      BEGIN_CODE
-      if (IS_A_SINGLE_JUMP(code2, codeend, target))
-        FAR_COND_JUMP_TO(target, condition);
-      else
-        {
-          SHORT_COND_JUMP_TO(codeend, INVERT_CC(condition));
-          code = codeend;
-        }
-      END_CODE
     }
   else
     {

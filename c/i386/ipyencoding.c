@@ -1,5 +1,5 @@
 
-#include "pycencoding.h"
+#include "ipyencoding.h"
 
 
 DEFINEFN

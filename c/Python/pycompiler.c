@@ -1,5 +1,4 @@
 #include "pycompiler.h"
-#include "../pycencoding.h"
 #include "../processor.h"
 #include "../dispatcher.h"
 #include "../mergepoints.h"
@@ -15,6 +14,7 @@
 
 #include <eval.h>
 #include "pycinternal.h"
+#include <ipyencoding.h>
 
 
 #define KNOWN_VAR(type, varname, loc)   \
@@ -608,7 +608,7 @@ void PycException_Clear(PsycoObject* po)
 {
 	if (PycException_Is(po, &ERtPython)) {
 		/* Clear the Python exception set at run-time */
-		psyco_call_void(po, PyErr_Clear);
+		psyco_generic_call(po, PyErr_Clear, CfNoReturnValue, "");
 	}
 	clear_pseudo_exception(po);
 }
@@ -1027,11 +1027,9 @@ static code_t* do_changed_global(changed_global_t* cg)
 				  ((PyStringObject*) key)->ob_shash);
 	
 	if (ep->me_value == cg->previousvalue) {
-		int index = ep - globals->ma_table;
 		/* no real change; update the original macro code
 		   and that's it */
-                code += SIZE_OF_LOAD_REG_FROM_IMMED;
-		DICT_ITEM_UPDCHANGED(code, index);
+		code = dictitem_update_nochange(code, globals, ep);
 		return code;  /* execution continues after the macro code */
 	}
 
@@ -1128,45 +1126,35 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 				  ((PyStringObject*) key)->ob_shash);
 	if (ep->me_value != NULL) {
 		/* found in the globals() */
-		int index = ep - globals->ma_table;
 		CodeBufferObject* onchangebuf;
 		PsycoObject* po1 = po;
 		changed_global_t* cg;
-		code_t* code;
-                reg_t mprg;
-		
+		code_t* macrocode;
+		code_t* newcodelimit;
 		result = ep->me_value;
-                BEGIN_CODE
-                NEED_CC();
-                NEED_FREE_REG(mprg);
-                END_CODE
-		
+
 		/* if the object is changed later we will jump to
 		   a proxy which we prepare now */
-		po = PsycoObject_Duplicate(po);
-		onchangebuf = psyco_new_code_buffer(NULL, NULL, &po->codelimit);
-		code = (code_t*) onchangebuf->codestart;
-		TEMP_SAVE_REGS_FN_CALLS;
-		po->code = code;
-		cg = (changed_global_t*) psyco_jump_proxy(po,
-						   &do_changed_global, 1, 1);
+		onchangebuf = psyco_new_code_buffer(NULL, NULL, &newcodelimit);
+		po = dictitem_check_change(po, (code_t*) onchangebuf->codestart,
+					   globals, ep);
+		macrocode = po->code;
+		/* make the new 'po' point to the proxy buffer */
+		po->code = (code_t*) onchangebuf->codestart;
+		po->codelimit = newcodelimit;
+		cg = (changed_global_t*) psyco_call_code_builder(po,
+						       &do_changed_global, true,
+								 SOURCE_DUMMY);
 		cg->self = onchangebuf;
 		cg->po = po;
 		cg->varname = key;             Py_INCREF(key);
-                cg->previousvalue = result;    Py_INCREF(result);
+		cg->previousvalue = result;    Py_INCREF(result);
+		cg->originalmacrocode = macrocode;
 		SHRINK_CODE_BUFFER(onchangebuf, (code_t*)(cg+1), "load_global");
 
-		/* go on in the main code sequence */
+		/* done with the proxy, go on in the main code sequence */
 		po = po1;
-		/* write code that quickly checks that the same
-		   object is still in place in the dictionary */
-                code = po->code;
-		cg->originalmacrocode = code;
-                LOAD_REG_FROM_IMMED(mprg, (long) globals);
-		DICT_ITEM_IFCHANGED(code, index, key, result,
-				    (code_t*) onchangebuf->codestart, mprg);
-		po->code = code;
-                dump_code_buffers();
+		dump_code_buffers();
 	}
 	else if (strcmp(PyString_AS_STRING(key), "__in_psyco__") == 0) {
 		/* special-case __in_psyco__ to always return 1, although
