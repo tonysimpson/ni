@@ -34,7 +34,12 @@ except IOError:
 PYTHON_VERSIONS = [s.strip() for s in f.readlines()]
 f.close()
 
-PSYCO_MODES = ['G', 'O']
+PSYCO_MODES = [
+    # debugging mode, static compiling
+    {'PSYCO_DEBUG': 1, 'VERBOSE_LEVEL': 1, 'CODE_DUMP': 1, 'ALL_STATIC': 1},
+    # optimized mode, static compiling
+    {'PSYCO_DEBUG': 0, 'VERBOSE_LEVEL': 0, 'CODE_DUMP': 0, 'ALL_STATIC': 1},
+    ]
 
 RUNNING_MODES = [
     ("basetests.py",  {}),
@@ -53,13 +58,33 @@ RUNNING_MODES = [
 compiled_version = None
 
 
-def run(cmd):
-    print '='*10, cmd
-    err = os.system(cmd)
+def run(path, *argv):
+    print '='*10, path, ' '.join(argv)
+    sys.stdout.flush()
+    err = os.spawnv(os.P_WAIT, path, [path]+list(argv))
     if err:
         print '='*60
         print '*** exited with error code', err
-        sys.exit(err>>256)
+        sys.exit(err)
+
+def do_compile(python_version, psyco_mode):
+    preffile = os.path.join(os.pardir, 'preferences.py')
+    try:
+        backup = open(preffile, 'r').read()
+    except IOError:
+        backup = ''
+    cwd = os.getcwd()
+    try:
+        os.chdir(os.pardir)
+        f = open(preffile, 'w')
+        for varvalue in psyco_mode.items():
+            f.write('%s = %s\n' % varvalue)
+        f.close()
+        run(python_version, 'setup.py', 'build', '-f')
+        run(python_version, 'setup.py', 'install')
+    finally:
+        os.chdir(cwd)
+        open(preffile, 'w').write(backup)
 
 def test_with(python_version, psyco_mode, running_mode):
     #
@@ -67,7 +92,7 @@ def test_with(python_version, psyco_mode, running_mode):
     #
     global compiled_version
     if (python_version, psyco_mode) != compiled_version:
-        run('cd ../c; make python=%s mode=%s' % (python_version, psyco_mode))
+        do_compile(python_version, psyco_mode)
         compiled_version = (python_version, psyco_mode)
     #
     # Prepare the running mode
@@ -80,8 +105,8 @@ def test_with(python_version, psyco_mode, running_mode):
     #
     # Run it
     #
-    print '='*10, 'Mode %s: %s' % (psyco_mode, running_mode)
-    run('%s %s' % (python_version, script))
+    print '='*10, 'Mode %.14s: %s' % (psyco_mode, running_mode)
+    run(python_version, *script.split())
     #
     # Passed
     #

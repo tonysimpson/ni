@@ -289,7 +289,7 @@ inline vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonneg) {
 
 inline code_t* write_modrm(code_t* code, code_t middle,
                            reg_t base, reg_t index, int shift,
-                           long offset)
+                           unsigned long offset)
 {
   /* write a mod/rm encoding. */
   extra_assert(index != REG_386_ESP);
@@ -299,14 +299,14 @@ inline code_t* write_modrm(code_t* code, code_t middle,
       if (index == REG_NONE)
         {
           code[0] = middle | 0x05;
-          *(long*)(code+1) = offset;
+          *(unsigned long*)(code+1) = offset;
           return code+5;
         }
       else
         {
           code[0] = middle | 0x04;
           code[1] = (shift<<6) | (index<<3) | 0x05;
-          *(long*)(code+2) = offset;
+          *(unsigned long*)(code+2) = offset;
           return code+6;
         }
     }
@@ -316,7 +316,7 @@ inline code_t* write_modrm(code_t* code, code_t middle,
         {
           code[0] = 0x84 | middle;
           code[1] = 0x24;
-          *(long*)(code+2) = offset;
+          *(unsigned long*)(code+2) = offset;
           return code+6;
         }
       else if (COMPACT_ENCODING && offset == 0 && base!=REG_386_EBP)
@@ -326,7 +326,6 @@ inline code_t* write_modrm(code_t* code, code_t middle,
         }
       else if (COMPACT_ENCODING && offset < 128)
         {
-          extra_assert(offset >= 0);
           code[0] = 0x40 | middle | base;
           code[1] = (code_t) offset;
           return code+2;
@@ -334,7 +333,7 @@ inline code_t* write_modrm(code_t* code, code_t middle,
       else
         {
           code[0] = 0x80 | middle | base;
-          *(long*)(code+1) = offset;
+          *(unsigned long*)(code+1) = offset;
           return code+5;
         }
     }
@@ -348,7 +347,6 @@ inline code_t* write_modrm(code_t* code, code_t middle,
         }
       else if (COMPACT_ENCODING && offset < 128)
         {
-          extra_assert(offset >= 0);
           code[0] = middle | 0x44;
           code[2] = (code_t) offset;
           return code+3;
@@ -410,7 +408,8 @@ static reg_t mem_access(PsycoObject* po, code_t opcodes[], vinfo_t* nv_ptr,
     }
   
   for (i = *opcodes++; i--; ) *code++ = *opcodes++;
-  code = write_modrm(code, (code_t)(extrareg<<3), basereg, indexreg, size2, offset);
+  code = write_modrm(code, (code_t)(extrareg<<3), basereg, indexreg, size2,
+                     (unsigned long) offset);
   for (i = *opcodes++; i--; ) *code++ = *opcodes++;
   END_CODE
   return extrareg;

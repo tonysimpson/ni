@@ -362,7 +362,7 @@ inline void vinfo_array_grow(vinfo_t* vi, int ncount) {
 }
 EXTERNFN void vinfo_array_shrink(PsycoObject* po, vinfo_t* vi, int ncount);
 inline vinfo_t* vinfo_getitem(vinfo_t* vi, int index) {
-	if (index < vi->array->count)
+	if (((unsigned int) index) < ((unsigned int) vi->array->count))
 		return vi->array->items[index];
 	else
 		return NULL;

@@ -88,7 +88,7 @@ MAINFILE = data['MAINFILE']
 macros = []
 for name in ['PSYCO_DEBUG', 'VERBOSE_LEVEL',
              'CODE_DUMP', 'HEAVY_MEM_CHECK', 'ALL_STATIC',
-			 'PSYCO_NO_LINKED_LISTS']:
+             'PSYCO_NO_LINKED_LISTS']:
     if globals().has_key(name):
         macros.append((name, str(globals()[name])))
 
@@ -107,6 +107,18 @@ if ALL_STATIC:
 else:
     sources = [SOURCEDIR + '/' + s.filename for s in SRC]
 
+extra_compile_args = []
+extra_link_args = []
+if sys.platform == 'win32':
+    if globals().get('PSYCO_DEBUG'):
+        # how do we know if distutils will use the MS compilers ???
+        # these are just hacks that I really need to compile psyco debug versions
+        # on Windows
+        extra_compile_args.append('/Od')   # no optimizations, override the default /Ox
+        extra_compile_args.append('/ZI')   # debugging info
+        extra_link_args.append('/debug')   # debugging info
+    macros.insert(0, ('NDEBUG', '1'))  # prevents from being linked against python2x_d.lib
+
 
 setup (	name="psyco",
       	version="1.1",
@@ -117,6 +129,8 @@ setup (	name="psyco",
         packages=['psyco'],
       	ext_modules=[Extension(name = 'psyco._psyco',
                                sources = sources,
+                               extra_compile_args = extra_compile_args,
+                               extra_link_args = extra_link_args,
                                define_macros = macros,
                                include_dirs = [processor_dir])]
         )
