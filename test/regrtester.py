@@ -1,9 +1,12 @@
-import sys, test.regrtest
+import sys, os, test.regrtest
 
 import psyco
 #import time; print "Break!"; time.sleep(0.5)
 psyco.log()
-execfile('regrtester.incl')
+if os.path.exists('regrtester.local'):
+    execfile('regrtester.local')
+else:
+    psyco.full()
 
 
 #################################################################################

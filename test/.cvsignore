@@ -6,3 +6,5 @@ psyco.dump
 buffer-basetests.txt
 expected-basetests.txt
 file2-basetests
+regrtester.local
+fulltester.local
