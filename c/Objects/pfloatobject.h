@@ -50,10 +50,10 @@ inline vinfo_t* PsycoFloat_AS_DOUBLE_2(PsycoObject* po, vinfo_t* v)
 }
 
 /* return a new ref */
-EXTERNFN bool PsycoFloat_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t* vd1, vinfo_t* vd2);
+EXTERNFN bool PsycoFloat_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd1, vinfo_t** vd2);
 
-EXTERNFN condition_code_t float_cmp(PsycoObject* po, vinfo_t* a1, vinfo_t* a2, 
-									                 vinfo_t* b1, vinfo_t* b2, int op);
+/*EXTERNFN condition_code_t float_cmp(PsycoObject* po, vinfo_t* a1, vinfo_t* a2, 
+  vinfo_t* b1, vinfo_t* b2, int op);*/
 
 EXTERNFN void psy_floatobject_init(void);
 

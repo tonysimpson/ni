@@ -65,10 +65,13 @@ DEFINEVAR source_virtual_t psyco_computed_int;
  /***************************************************************/
   /*** integer objects meta-implementation                     ***/
 
-static condition_code_t pint_nonzero(PsycoObject* po, vinfo_t* intobj)
+static vinfo_t* pint_nonzero(PsycoObject* po, vinfo_t* intobj)
 {
 	vinfo_t* ival = PsycoInt_AS_LONG(po, intobj);
-	return integer_non_null(po, ival);
+	condition_code_t cc = integer_non_null(po, ival);
+	if (cc == CC_ERROR)
+		return NULL;
+	return psyco_vinfo_condition(po, cc);
 }
 
 static vinfo_t* pint_pos(PsycoObject* po, vinfo_t* intobj)
@@ -144,8 +147,7 @@ static vinfo_t* pint_abs(PsycoObject* po, vinfo_t* intobj)
 	else {							\
 		if (PycException_Occurred(po))			\
 			return NULL;				\
-		vinfo_incref(psyco_viNotImplemented);		\
-		return psyco_viNotImplemented;			\
+		return psyco_vi_NotImplemented();		\
 	}
 
 static vinfo_t* pint_add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
