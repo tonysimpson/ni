@@ -215,6 +215,24 @@ def testslices(s):
     print `s[9999:9999]`
     print `s[9999:]`
 
+def testovf(x, y):
+    import sys; PY21 = sys.hexversion < 0x02020000
+    if PY21:
+        x = long(x)  # don't really test promotion with Python 2.1
+        y = long(y)
+    print x+y
+    print 2000000000+y
+    print x+2000000000
+    print x-y
+    print 2000000000-y
+    print x-2000000000
+    print x*y
+    print 2000000000*y
+    print x*2000000000
+    print x
+    print -x
+    print abs(x)
+
 if __name__ == '__main__':
     import time
     print "break!"

@@ -69,13 +69,12 @@ main: build_ext build_py
 dyn: ${OUTDIR}/dyn-tag build_py
 
 build_ext: build_py
-	rm -f ${BUILDDIR}/current
 	@echo -------------------------------------------
 	@echo ${BUILD_VERSION}
 	@echo -------------------------------------------
 	gcc ${LD_FLAGS} ${C_FLAGS} -DALL_STATIC=1 psyco.c -o ${OUTPUT}
 	echo ${BUILD_VERSION} > ${OUTDIR}/build-version
-	ln -s ${LIBDIR} ${BUILDDIR}/current
+	cd ..; $(python) setup.py install
 
 build_py:
 	cd ..; $(python) setup.py build_py

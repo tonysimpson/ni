@@ -688,8 +688,8 @@ vinfo_t* integer_mul(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
         long b = CompileTime_Get(v2->source)->value;
         return int_mul_i(po, v1, b, ovf);
       }
-  return BINARY_INSTR_MUL(false, ovf && is_rtnonneg(v1->source)
-                                     && is_rtnonneg(v2->source));
+  return BINARY_INSTR_MUL(ovf, ovf && is_rtnonneg(v1->source)
+                                   && is_rtnonneg(v2->source));
 }
 
 DEFINEFN
@@ -783,7 +783,7 @@ vinfo_t* integer_rshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
         }
       return integer_rshift_i(po, v1, LONG_BIT-1);
     }
-  return BINARY_INSTR_RSHIFT(false);
+  return BINARY_INSTR_RSHIFT(is_nonneg(v1->source));
 }
 
 DEFINEFN      /* signed */

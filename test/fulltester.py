@@ -68,7 +68,8 @@ def run(path, *argv):
         sys.exit(err)
 
 def do_compile(python_version, psyco_mode):
-    print '='*10, python_version, psyco_mode
+    print '~'*60
+    print psyco_mode
     preffile = os.path.join(os.pardir, 'preferences.py')
     try:
         f = open(preffile, 'r')
