@@ -1017,6 +1017,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 #else
 	va_start(vargs);
 #endif
+        extra_assert(c_function != NULL);
 
 	for (count=0; arguments[count]; count++) {
 		long arg;
