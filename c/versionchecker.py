@@ -1,6 +1,10 @@
 import re
 
 
+explicitnumber = {
+    '0x010100f0': '1.1.1',   # bugfix release, no change in hex version
+    }
+
 FILES = {
     'Python/pyver.h': re.compile(r'PSYCO_VERSION_HEX\s+(0x[0-9a-fA-F]+)'),
     '../psyco/support.py': re.compile(r'__version__\s*=\s*(0x[0-9a-fA-F]+)'),
@@ -20,8 +24,7 @@ for filename, regexp  in FILES.items():
     ver = match.group(1)
     print '%20s  %s' % (ver, filename)
     if ver.startswith('0x'):
-        ver = int(ver, 16)
-        ver = str(ver >> 24) + '.' + str((ver >> 16) & 0xFF)
+        ver = explicitnumber[ver]
     versions[ver] = filename
 
 if len(versions) != 1:

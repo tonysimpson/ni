@@ -31,6 +31,10 @@
 #ifndef Py_USING_UNICODE
 # define Py_USING_UNICODE          1   /* always true in Python 2.1 */
 #endif
+#define PSYCO_CAN_CALL_UNICODE     0   /* prevent references to PyUnicode_Xxx
+                                          functions causing potential linker
+                                          errors because of UCS2/UCS4 name
+                                          mangling */
 
 #define HAVE_struct_dictobject     (NEW_STYLE_TYPES)
 #define HAVE_PyEval_EvalCodeEx     (PYTHON_API_VERSION>=1011)

@@ -749,7 +749,12 @@ vinfo_t* PsycoNumber_Remainder(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 						  "vv", v, w);
 #ifdef Py_USING_UNICODE
 		else if (PsycoUnicode_Check(vtp))
-			return psyco_generic_call(po, PyUnicode_Format,
+			return psyco_generic_call(po,
+# if PSYCO_CAN_CALL_UNICODE
+						  PyUnicode_Format,
+# else
+						  PyNumber_Remainder,
+# endif
 						  CfReturnRef|CfPyErrIfNull,
 						  "vv", v, w);
 #endif
@@ -896,7 +901,12 @@ vinfo_t* PsycoNumber_InPlaceRemainder(PsycoObject* po, vinfo_t* v ,vinfo_t* w)
 						  "vv", v, w);
 #ifdef Py_USING_UNICODE
 		else if (PsycoUnicode_Check(vtp))
-			return psyco_generic_call(po, PyUnicode_Format,
+			return psyco_generic_call(po,
+# if PSYCO_CAN_CALL_UNICODE
+						  PyUnicode_Format,
+# else
+						  PyNumber_InPlaceRemainder,
+# endif
 						  CfReturnRef|CfPyErrIfNull,
 						  "vv", v, w);
 #endif

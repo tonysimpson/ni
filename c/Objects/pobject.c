@@ -237,29 +237,37 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 	   probably inside of a loop, with a lot of various
 	   attributes. Let's emit a call to PyObject_GenericGetAttr
 	   instead. */
-	if (!is_compiletime(vname->source))
+	if (!is_compiletime(vname->source)) {
+	   fallback:
 		return psyco_generic_call(po, PyObject_GenericGetAttr,
 					  CfReturnRef|CfPyErrIfNull,
 					  "vv", obj, vname);
+        }
 	name = (PyObject*) CompileTime_Get(vname->source)->value;
 
+	if (!PyString_Check(name)){
 #ifdef Py_USING_UNICODE
-	/* The Unicode to string conversion is done here because the
-	   existing tp_setattro slots expect a string object as name
-	   and we wouldn't want to break those. */
-	if (PyUnicode_Check(name)) {
-		name = PyUnicode_AsEncodedString(name, NULL, NULL);
-		if (name == NULL) {
-			psyco_virtualize_exception(po);
+		/* The Unicode to string conversion is done here because the
+		   existing tp_setattro slots expect a string object as name
+		   and we wouldn't want to break those. */
+		if (PyUnicode_Check(name)) {
+# if PSYCO_CAN_CALL_UNICODE
+			name = PyUnicode_AsEncodedString(name, NULL, NULL);
+			if (name == NULL) {
+				psyco_virtualize_exception(po);
+				return NULL;
+			}
+# else
+			goto fallback;
+# endif
+		}
+		else
+#endif
+		{
+			PycException_SetString(po, PyExc_TypeError,
+					"attribute name must be string");
 			return NULL;
 		}
-	}
-	else
-#endif
-	if (!PyString_Check(name)){
-		PycException_SetString(po, PyExc_TypeError,
-				"attribute name must be string");
-		return NULL;
 	}
 	else
 		Py_INCREF(name);

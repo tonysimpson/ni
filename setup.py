@@ -121,7 +121,7 @@ if sys.platform == 'win32':
 
 
 setup (	name="psyco",
-      	version="1.1",
+      	version="1.1.1",
       	description="Psyco, the Python specializing compiler",
       	author="Armin Rigo",
         author_email="arigo@users.sourceforge.net",
