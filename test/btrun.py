@@ -3,7 +3,8 @@
 
 >>> import sys, uu, psyco
 >>> psyco.full()
->>> import test1, test3, test5, compactobject
+>>> import test1, test3, test5
+>>> import compactobject
 
 >>> def prep():
 ...     uu.decode('file2-basetests.uu', 'file2-basetests')

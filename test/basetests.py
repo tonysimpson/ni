@@ -24,7 +24,15 @@ else:
     examples = doctest.DocTestParser().get_examples(TESTS)
     tests = [(example.source, example.want, example.lineno)
              for example in examples]
-    
+
+# --- some tests can't run with Python 2.1
+
+if sys.version_info < (2,2):
+    tests = [example for example in tests
+             if example[0].find('compactobject') < 0]
+
+# ---
+
 PRELUDE = ''
 for inp, outp, line in tests[:]:
     if not outp:

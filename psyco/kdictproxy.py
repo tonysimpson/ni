@@ -2,6 +2,8 @@
 #
 #  Support code for the 'psyco.compact' type.
 
+from __future__ import generators
+
 try:
     from UserDict import DictMixin
 except ImportError:

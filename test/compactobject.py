@@ -175,8 +175,9 @@ def test_inheritance():
     assert x.__class__ is Y
     assert Y.__bases__ == (psyco.compact,)
     assert Z.__bases__ == (X,)
-    Z.__bases__ = (Y,)
-    assert Z.__bases__ == (Y,)
+    if sys.version >= (2,3):   # can't assign to __bases__ in Python 2.2
+        Z.__bases__ = (Y,)
+        assert Z.__bases__ == (Y,)
 
 psyco.cannotcompile(test_inheritance)  # because of type mutation
 
