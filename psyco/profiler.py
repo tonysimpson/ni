@@ -12,7 +12,11 @@ See profile() and full() in core.py for the easy interface.
 
 import _psyco
 from support import *
-import math, time, types, thread, atexit
+import math, time, types, atexit
+try:
+    import thread
+except ImportError:
+    import dummy_thread as thread
 
 
 # current profiler instance
@@ -26,7 +30,6 @@ logger = None
 
 # a lock for a thread-safe go()
 go_lock = thread.allocate_lock()
-
 
 def go(stop=0):
     # run the highest-priority profiler in 'profilers'

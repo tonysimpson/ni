@@ -1,7 +1,7 @@
 
 # G = debug, O = optimized, V = verbose, X = all tests,
 # H = heavy mem check
-mode = O
+mode = OO
 
 processor = i386
 # processor = ivm
@@ -40,6 +40,9 @@ C_FLAGS_M = -g
 
 OPTS_T    = -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=1 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=1 '-DPSYCO_TRACE="psyco.trace"'
 C_FLAGS_T = -g
+
+OPTS_OO   = -DPSYCO_DEBUG=0 -DVERBOSE_LEVEL=0 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=0
+C_FLAGS_OO= -DNDEBUG -O3 -Wall -fomit-frame-pointer -mcpu=pentium4 -march=pentium4 -mmmx -msse -mfpmath=sse
 
 
 OPTS     = ${OPTS_${mode}}

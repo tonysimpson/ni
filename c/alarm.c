@@ -8,6 +8,10 @@
 # include "alarm.h"
 #endif
 
+/************************************************************/
+#ifdef WITH_THREAD
+/************************************************************/
+
 #include <pythread.h>
 
 
@@ -246,3 +250,31 @@ void psyco_alarm_init(void)
   PyAlarm_Type.ob_type = &PyType_Type;
 }
 #endif
+
+
+/************************************************************/
+#else   /* if !defined(WITH_THREAD) */
+/************************************************************/
+
+#ifdef STANDALONE
+# error "Thread support is required for the alarm module"
+#else
+
+DEFINEFN
+PyObject* psyco_new_alarm(PyObject* dummy, PyObject* args)
+{
+  PyErr_SetString(PyExc_PsycoError,
+                  "Python and Psyco must be compiled with thread support.");
+  return NULL;
+}
+
+INITIALIZATIONFN
+void psyco_alarm_init(void)
+{
+}
+#endif
+
+
+/************************************************************/
+#endif  /* WITH_THREAD */
+/************************************************************/
