@@ -110,17 +110,18 @@ def f9():
 
 
 def go(f, *args):
-    print '-'*60
-    v1, t = time(_psyco.proxy(f, 99), *args)
+    print '-'*80
+    v1, t1 = time(_psyco.proxy(f, 99), *args)
     print v1
-    print '^^^ computed by Psyco in %s seconds' % t
-    v2, t = time(f, *args)
+    print '^^^ computed by Psyco in %s seconds' % t1
+    v2, t2 = time(f, *args)
     if v1 == v2:
-        print 'Python got the same result in %s seconds' % t
+        print 'Python got the same result in %s seconds, Psyco is %.2f times faster' %\
+            (t2, (t2/float(t1)))
     else:
         print v2
         print '^^^ by Python in %s seconds' % t
-        print '*'*60
+        print '*'*80
         print '!!! different results !!!'
 
 def go1(arg=2117):
@@ -139,3 +140,11 @@ def go6(n=100000, p=100000000000001L):
 
 def go7(start=-2-1j, end=1+1j, step=0.04+0.08j):
     go(f7, start, end, step)
+
+
+if __name__ == "__main__":
+    go1()
+    go4()
+    go5()
+    go6()
+    go7()
