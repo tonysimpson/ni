@@ -317,6 +317,12 @@ static int psycofunction_traverse(PsycoFunctionObject *f,
 	return visit((PyObject*) f->psy_func, arg);
 }
 
+static PyObject *
+psy_descr_get(PsycoFunctionObject *self, PyObject *obj, PyObject *type)
+{
+	return PyMethod_New(self, obj, type);
+}
+
 DEFINEVAR
 PyTypeObject PsycoFunction_Type = {
 	PyObject_HEAD_INIT(NULL)
@@ -345,6 +351,16 @@ PyTypeObject PsycoFunction_Type = {
 	(traverseproc)psycofunction_traverse,	/* tp_traverse */
 	0,					/* tp_clear */
 	0,					/* tp_richcompare */
+	0,					/* tp_weaklistoffset */
+	0,					/* tp_iter */
+	0,					/* tp_iternext */
+	0,					/* tp_methods */
+	0,					/* tp_members */
+	0,					/* tp_getset */
+	0,					/* tp_base */
+	0,					/* tp_dict */
+	psy_descr_get,				/* tp_descr_get */
+	0,					/* tp_descr_set */
 };
 
 
