@@ -832,6 +832,22 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
   code += 2;                                            \
 } while (0)
 
+/* reverse room for a CMP/JE pair of instructions */
+#define RESERVE_JUMP_IF_EQUAL(rg)   do {                        \
+  code[0] = 0x81;                                               \
+  code[1] = 0xC0 | (7<<3) | (rg);   /* CMP rg, imm32 */         \
+  code[6] = 0x0F;                                               \
+  code[7] = 0x80 | (char)(CC_E);    /* JE rel32 */              \
+  code += 12;                                                   \
+  *(long*)(code-4) = 0;  /* by default, go nowhere else */      \
+} while (0)
+#define FIX_JUMP_IF_EQUAL(codeend, value, targetaddr)   do {    \
+  code_t* _codeend = (codeend);                                 \
+  *(long*)(_codeend-10) = (value);                              \
+  *(long*)(_codeend-4) = (targetaddr) - _codeend;               \
+} while (0)
+
+
 /* CMOV instruction: this instruction does not exist on the i486,
    should we avoid it? Or should be test for Pentium-ness at start-up?
    We currently avoid it. */

@@ -805,23 +805,132 @@ int psyco_simplify_array(vinfo_array_t* array)
  /***   Promotion of a run-time variable into a fixed           ***/
   /***   compile-time one                                        ***/
 
+
+/* Implementation tactics */
+
+/* 0 -- use a plain Python dictionary whose keys
+        are the value to promote and values the code objects.
+   1 -- put code buffers in a chained list,
+        with the most used items moving forward in the list.
+   2 -- order the code buffers as a binary search tree,
+        with the most used nodes moving up in the tree (not implemented)
+
+   (1) seems slower than (0) even if the structure is never actually used
+   (i.e. PROMOTION_FAST_COMMON_CASE catches 100% of the cases). Is it
+   related to the fact that (1) mixes data at the beginning of
+   each code buffer? */
+#define PROMOTION_TACTIC             1
+
+/* Define to 1 to emit a "compare/jump-if-equal" pair of instructions
+   that checks for the most common case (actually the last seen one). */
+#define PROMOTION_FAST_COMMON_CASE   1
+
+
+#if PROMOTION_TACTIC == 1
+typedef struct rt_local_buf_s {
+# ifdef CODE_DUMP_FILE
+  long signature;
+# endif
+  struct rt_local_buf_s* next;
+  long key;
+} rt_local_buf_t;
+#endif
+
 typedef struct { /* produced at compile time and read by the dispatcher */
   PsycoObject* po;        /* state before promotion */
   vinfo_t* fix;           /* variable to promote */
+#if PROMOTION_FAST_COMMON_CASE
+  code_t* jump_if_equal_code;  /* for FIX_JUMP_IF_EQUAL() */
+#endif
+  
+#if PROMOTION_TACTIC == 0
   PyObject* spec_dict;    /* local cache (promotions to already-seen values) */
-#ifdef CODE_DUMP_FILE
+# ifdef CODE_DUMP_FILE
   void** chained_list;    /* must be last, with spec_dict just before */
+# endif
+#endif
+
+#if PROMOTION_TACTIC == 1
+  rt_local_buf_t* local_chained_list;
 #endif
 } rt_promotion_t;
 
-static CodeBufferObject* do_promotion_internal(rt_promotion_t* fs,
-                                               PyObject* key,
-                                               source_known_t* sk)
+inline code_t* fix_fast_common_case(rt_promotion_t* fs, long value,
+                                    code_t* codeptr)
+{
+#if PROMOTION_FAST_COMMON_CASE
+  FIX_JUMP_IF_EQUAL(fs->jump_if_equal_code, value, codeptr);
+#endif
+  return codeptr;
+}
+
+#if PROMOTION_TACTIC == 0
+#define NEED_PYOBJ_KEY
+inline code_t* lookup_old_promotion_values(rt_promotion_t* fs,
+                                           PyObject* key)
+{
+  /* have we already seen this value? */
+  CodeBufferObject* codebuf;
+  codebuf = (CodeBufferObject*) PyDict_GetItem(fs->spec_dict, key);
+  if (codebuf != NULL)   /* yes */
+    return codebuf->codeptr;
+  return NULL;  /* no */
+}
+#endif  /* PROMOTION_TACTIC == 0 */
+
+#if PROMOTION_TACTIC == 1
+inline code_t* lookup_old_promotion_values(rt_promotion_t* fs,
+                                           long value)
+{
+  rt_local_buf_t** ppbuf;
+  if (fs->local_chained_list == NULL)
+    return NULL;  /* not found (list is empty) */
+
+#if PROMOTION_FAST_COMMON_CASE
+  /* 'fs->local_chained_list' points to the current head
+     of the list, which we know is not what we are looking
+     for because otherwise the CMP/JE instructions
+     would have found it and we would not be here */
+  extra_assert(fs->local_chained_list->key != value);
+#else
+  if (fs->local_chained_list->key == value)
+    return (code_t*)(fs->local_chained_list+1);  /* it is the head of the list */
+#endif
+
+  ppbuf = &fs->local_chained_list->next;
+  while (1)
+    {
+      rt_local_buf_t* buf = *ppbuf;
+      if (buf == NULL)
+        return NULL;  /* not found (list exhausted) */
+      if (buf->key == value)
+        {
+          /* found inside the list, put it at the head */
+          *ppbuf = buf->next;
+          buf->next = fs->local_chained_list;
+          fs->local_chained_list = buf;
+          return (code_t*)(buf+1);
+        }
+      ppbuf = &buf->next;
+    }
+}
+#endif  /* PROMOTION_TACTIC == 1 */
+
+
+static code_t* do_promotion_internal(rt_promotion_t* fs,
+#ifdef NEED_PYOBJ_KEY
+                                     PyObject* key,
+#else
+                                     long key,
+#endif
+                                     source_known_t* sk)
 {
   CodeBufferObject* codebuf;
+  code_t* result;
   vinfo_t* v;
   PsycoObject* newpo;
   PsycoObject* po = fs->po;
+  mergepoint_t* mp;
 
   /* get a copy of the compiler state */
   newpo = PsycoObject_Duplicate(po);
@@ -839,20 +948,48 @@ static CodeBufferObject* do_promotion_internal(rt_promotion_t* fs,
   extra_assert(RUNTIME_REG_IS_NONE(v));   /* taken care of in
                                              finish_promotion() */
   v->source = CompileTime_NewSk(sk);
-
   /* compile from this new state, in which 'v' has been promoted to
      compile-time. */
-  codebuf = psyco_compile_code(po, psyco_exact_merge_point(po->pr.merge_points,
-                                                           po->pr.next_instr));
+  mp = psyco_exact_merge_point(po->pr.merge_points, po->pr.next_instr);
+
+#if PROMOTION_TACTIC == 0
+  codebuf = psyco_compile_code(po, mp);
 
   /* store the new code buffer into the local cache */
   if (PyDict_SetItem(fs->spec_dict, key, (PyObject*) codebuf))
     OUT_OF_MEMORY();
   Py_DECREF(codebuf);  /* there is a reference left
                           in the dictionary */
+  result = codebuf->codeptr;
+#endif
+
+#if PROMOTION_TACTIC == 1
+  codebuf = psyco_new_code_buffer(NULL, NULL);
+  if (codebuf == NULL)
+    OUT_OF_MEMORY();
+  {
+    code_t* codeend;
+    rt_local_buf_t* buf = (rt_local_buf_t*) codebuf->codeptr;
+# ifdef CODE_DUMP_FILE
+    buf->signature = 0x66666666;
+# endif
+    buf->next = fs->local_chained_list;
+    buf->key = key;
+    fs->local_chained_list = buf;
+    result = (code_t*)(buf+1);
+    
+    po->code = result;
+    po->codelimit = codebuf->codeptr + BIG_BUFFER_SIZE - GUARANTEED_MINIMUM;
+    codeend = psyco_compile(po, mp, false);
+    psyco_shrink_code_buffer(codebuf, codeend - codebuf->codeptr);
+    /* XXX don't know what to do with reference to 'codebuf' */
+  }
+#endif
+
   psyco_dump_code_buffers();
-  return codebuf;
+  return result;
 }
+
 
 /* NOTE: the following two functions must be as fast as possible, because
    they are called from the run-time code even during normal (non-compiling)
@@ -860,53 +997,85 @@ static CodeBufferObject* do_promotion_internal(rt_promotion_t* fs,
 static code_t* do_promotion_long(rt_promotion_t* fs, long value)
 {
   /* need a PyObject* key for the local cache dictionary */
-  CodeBufferObject* codebuf;
-  PyObject* key = PyInt_FromLong(value);
-  if (key == NULL)
+  code_t* result;
+
+#ifdef NEED_PYOBJ_KEY
+  PyObject* key1 = PyInt_FromLong(value);
+  if (key1 == NULL)
     OUT_OF_MEMORY();
+#else
+  long key1 = value;
+#endif
 
   /* have we already seen this value? */
-  codebuf = (CodeBufferObject*) PyDict_GetItem(fs->spec_dict, key);
-  if (codebuf == NULL)   /* no -> we must build new code */
-    codebuf = do_promotion_internal(fs, key, sk_new(value, SkFlagFixed));
-  Py_DECREF(key);
-  return codebuf->codeptr;   /* done -> jump to codebuf */
+  result = lookup_old_promotion_values(fs, key1);
+  if (result == NULL)
+    {
+      /* no -> we must build new code */
+      result = do_promotion_internal(fs, key1, sk_new(value, SkFlagFixed));
+    }
+#ifdef NEED_PYOBJ_KEY
+  Py_DECREF(key1);
+#endif
+  /* done -> jump to the codebuf */
+  return fix_fast_common_case(fs, value, result);
 }
 
 static code_t* do_promotion_pyobj(rt_promotion_t* fs, PyObject* key)
 {
-  CodeBufferObject* codebuf;
+  code_t* result;
+
+#ifdef NEED_PYOBJ_KEY
+  PyObject* key1 = key;
+#else
+  long key1 = (long) key;
+#endif
 
   /* have we already seen this value? */
-  codebuf = (CodeBufferObject*) PyDict_GetItem(fs->spec_dict, key);
-  if (codebuf == NULL)   /* no -> we must build new code */
+  result = lookup_old_promotion_values(fs, key1);
+  if (result == NULL)
     {
+      /* no -> we must build new code */
       Py_INCREF(key);
-      codebuf = do_promotion_internal(fs, key, sk_new((long) key,
+      result = do_promotion_internal(fs, key1, sk_new((long) key,
                                                       SkFlagFixed|SkFlagPyObj));
     }
-  return codebuf->codeptr;   /* done -> jump to codebuf */
+  /* done -> jump to the codebuf */
+  return fix_fast_common_case(fs, (long) key, result);
 }
 
 DEFINEFN
 code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
 {
-  int xsource;
+  long xsource;
   rt_promotion_t* fs;
+#if PROMOTION_FAST_COMMON_CASE
+  code_t* jeqcode;
+#endif
   void* do_promotion;
-  PyObject* d = PyDict_New();
-  if (d == NULL)
-    OUT_OF_MEMORY();
 
-  xsource = fix->source;
   BEGIN_CODE
-  if (!RSOURCE_REG_IS_NONE(xsource))  /* will soon no longer be RUN_TIME */
+#if PROMOTION_FAST_COMMON_CASE
+  RTVINFO_IN_REG(fix);
+#endif
+  xsource = fix->source;
+#if PROMOTION_FAST_COMMON_CASE
+  RESERVE_JUMP_IF_EQUAL(RSOURCE_REG(xsource));
+  jeqcode = code;
+#endif
+  if (PROMOTION_FAST_COMMON_CASE || !RSOURCE_REG_IS_NONE(xsource))
     {
+      /* remove from 'po->regarray' this value which will soon no longer
+         be RUN_TIME */
       REG_NUMBER(po, RSOURCE_REG(xsource)) = NULL;
       SET_RUNTIME_REG_TO_NONE(fix);
     }
+#if PROMOTION_FAST_COMMON_CASE
+  TEMP_SAVE_REGS_FN_CALLS;
+#else
   SAVE_REGS_FN_CALLS;  /* save the registers EAX, ECX and EDX if needed
                           and mark them invalid because of the CALL below */
+#endif
   CALL_SET_ARG_FROM_RT(xsource, 1, 2);  /* argument index 1 out of total 2 */
   END_CODE
 
@@ -915,18 +1084,32 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
     do_promotion = &do_promotion_long;
   else
     do_promotion = &do_promotion_pyobj;
-  fs = (rt_promotion_t*) psyco_jump_proxy(po, do_promotion, 0, 2);
+  fs = (rt_promotion_t*) psyco_jump_proxy(po, do_promotion,
+                                          PROMOTION_FAST_COMMON_CASE, 2);
 
   /* fill in the constant structure that 'do_promotion' will get as parameter */
   clear_tmp_marks(&po->vlocals);
   psyco_assert_coherent(po);
   fs->po = po;    /* don't release 'po' */
   fs->fix = fix;
-  fs->spec_dict = d;
-#ifdef CODE_DUMP_FILE
+#if PROMOTION_FAST_COMMON_CASE
+  fs->jump_if_equal_code = jeqcode;
+#endif
+  
+#if PROMOTION_TACTIC == 0
+  fs->spec_dict = PyDict_New();
+  if (fs->spec_dict == NULL)
+    OUT_OF_MEMORY();
+# ifdef CODE_DUMP_FILE
   fs->chained_list = psyco_codebuf_spec_dict_list;
   psyco_codebuf_spec_dict_list = (void**)&fs->chained_list;
+# endif
 #endif
+
+#if PROMOTION_TACTIC == 1
+  fs->local_chained_list = NULL;
+#endif
+  
   return (code_t*)(fs+1);  /* end of code == end of 'fs' structure */
 }
 

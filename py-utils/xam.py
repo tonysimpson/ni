@@ -92,13 +92,26 @@ class CodeBuf:
     def __getattr__(self, attr):
         if attr == 'cache_text':
             # produce the disassembly listing
+            data = self.data
+            addr = self.addr
+            if data[:4] == '\x66\x66\x66\x66':
+                # detected a rt_local_buf_t structure
+                next, key = struct.unpack('ll', data[4:12])
+                data = data[12:]
+                addr += 12
+                self.cache_text = [
+                    'Created by promotion of the value 0x%x\n' % key,
+                    'Next promoted value at buffer 0x%x\n' % next,
+                    ]
+            else:
+                self.cache_text = []
             f = open(tmpfile, 'wb')
-            f.write(self.data)
+            f.write(data)
             f.close()
             try:
-                g = os.popen(objdump % {'file': tmpfile, 'origin': self.addr},
+                g = os.popen(objdump % {'file': tmpfile, 'origin': addr},
                              'r')
-                self.cache_text = g.readlines()
+                self.cache_text += g.readlines()
                 g.close()
             finally:
                 os.unlink(tmpfile)
