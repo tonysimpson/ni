@@ -13,6 +13,7 @@ See profile() and full() in core.py for the easy interface.
 import _psyco
 from support import *
 import math, time, types, atexit
+now = time.time
 try:
     import thread
 except ImportError:
@@ -152,7 +153,7 @@ class Profiler:
         if timemax is None:
             self.endtime = None
         else:
-            self.endtime = time.time() + timemax
+            self.endtime = now() + timemax
         self.alarms = []
         profilers.append(self)
         go()
@@ -174,7 +175,7 @@ class Profiler:
             memlimits.append(curmem + self.memory)
             self.memory_at_start = curmem
 
-        curtime = time.time()
+        curtime = now()
         timelimits = []
         if self.endtime is not None:
             if curtime >= self.endtime:
@@ -211,7 +212,7 @@ class Profiler:
             alarm.stop(1)   # wait for parallel threads to stop
         del self.alarms[:]
         if self.time is not None:
-            self.time -= time.time() - self.time_at_start
+            self.time -= now() - self.time_at_start
         if self.memory is not None:
             self.memory -= _psyco.memory() - self.memory_at_start
 
