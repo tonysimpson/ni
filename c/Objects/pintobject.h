@@ -8,6 +8,7 @@
 
 #include "pobject.h"
 #include "pabstract.h"
+#include "pboolobject.h"
 
 
 #define INT_ob_ival    DEF_FIELD(PyIntObject, long, ob_ival, OB_type)
@@ -61,8 +62,13 @@ inline vinfo_t* PsycoIntInt_RichCompare(PsycoObject* po, vinfo_t* v,
 	if (b == NULL) return NULL;
 	cc = integer_cmp(po, a, b, op);
 	if (cc == CC_ERROR) return NULL;
-	return PsycoInt_FROM_LONG(psyco_vinfo_condition(po, cc));
+	return PsycoBool_FromCondition(po, cc);
 }
+
+
+EXTERNFN  /* internal, for pboolobject.c */
+vinfo_t* pint_base2op(PsycoObject* po, vinfo_t* v, vinfo_t* w,
+                      vinfo_t*(*op)(PsycoObject*,vinfo_t*,vinfo_t*));
 
 
 #endif /* _PSY_INTOBJECT_H */

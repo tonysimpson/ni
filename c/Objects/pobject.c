@@ -1,5 +1,6 @@
 #include "pobject.h"
 #include "pintobject.h"
+#include "pboolobject.h"
 #include "pstringobject.h"
 
 
@@ -425,7 +426,7 @@ inline vinfo_t* convert_3way_to_object(PsycoObject* po, int op, vinfo_t* c)
 	condition_code_t cc = integer_cmp_i(po, c, 0, op);
 	if (cc == CC_ERROR)
 		return NULL;
-	return PsycoInt_FROM_LONG(psyco_vinfo_condition(po, cc));
+	return PsycoBool_FromCondition(po, cc);
 }
 
 inline vinfo_t* try_3way_to_rich_compare(PsycoObject* po, vinfo_t* v,

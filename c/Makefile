@@ -65,7 +65,7 @@ build_ext: build_py
 build_py:
 	cd ..; $(python) setup.py build_py
 
-include dyn-Makefile
+-include dyn-Makefile
 
 %.o: %.c
 	gcc ${C_FLAGS} -DALL_STATIC=0 -c $< -o $@

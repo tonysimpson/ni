@@ -43,6 +43,7 @@ SRC = [
 
     Object('object'),
     Object('abstract', 0),
+    Object('boolobject'),
     Object('classobject'),
     Object('descrobject'),
     Object('dictobject'),

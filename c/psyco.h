@@ -14,6 +14,11 @@
  /***   Various customizable parameters (use your compilers'    ***/
   /***   option to override them, e.g. -DXXX=value in gcc)       ***/
 
+ /* set to 0 to emit code that runs on 386 and 486 */
+#ifndef PENTIUM_INSNS
+# define PENTIUM_INSNS    1
+#endif
+
  /* set to 0 to disable all debugging checks and output */
 #ifndef PSYCO_DEBUG
 # define PSYCO_DEBUG   0

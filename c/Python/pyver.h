@@ -61,4 +61,15 @@ PyString_FromFormatV(const char *format, va_list vargs);
 #endif
 
 
+#if HAVE_LONG_LONG && !defined(PY_LONG_LONG)
+# define PY_LONG_LONG   LONG_LONG   /* Python < 2.3 */
+#endif
+
+#ifdef PyBool_Check
+# define BOOLEAN_TYPE              1    /* Python >=2.3 */
+#else
+# define BOOLEAN_TYPE              0
+#endif
+
+
 #endif /* _PYVER_H */

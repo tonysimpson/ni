@@ -2182,8 +2182,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			break;
 		
                 cc = INVERT_CC(cc);
-		/* turns 'cc' into a Python integer object, 0 or 1 */
-		x = PsycoInt_FROM_LONG(psyco_vinfo_condition(po, cc));
+		/* turns 'cc' into a virtual Python boolean object */
+		x = PsycoBool_FromCondition(po, cc);
 		POP_DECREF();
 		PUSH(x);  /* consumes ref on 'x' */
 		goto fine;
@@ -2817,8 +2817,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		if (cc == CC_ERROR)
 			break;
 		
-		/* turns 'cc' into a virtual Python integer object, 0 or 1 */
-		x = PsycoInt_FROM_LONG(psyco_vinfo_condition(po, cc));
+		/* turns 'cc' into a virtual Python boolean object */
+		x = PsycoBool_FromCondition(po, cc);
 		
 	compare_done:
 		if (x == NULL)

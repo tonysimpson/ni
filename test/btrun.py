@@ -34,17 +34,23 @@
                              ####   TEST1   ####
                              ###################
 
->>> assert_equal(str('abcdefghijklmnop'=='abcdefghijklMNop'), str(False))
-Ok
+>>> print 'abcdefghijklmnop'=='abcdefghijklMNop'
+${False}
 
->>> assert_equal(str('abcdefghijklmnop'=='abcdefghijklmnop'), str(True))
-Ok
+>>> print 'abcdefghijklmnop'=='abcdefghijklmnop'
+${True}
 
->>> assert_equal(str((lambda x: x==1)(0)), str(False))
-Ok
+>>> print str('abcdefghijklmnop'=='abcdefghijklMNop')
+${False}
 
->>> assert_equal(str((lambda x: x==1)(1)), str(True))
-Ok
+>>> print str('abcdefghijklmnop'=='abcdefghijklmnop')
+${True}
+
+>>> print (lambda x: x==1)(0)
+${False}
+
+>>> print (lambda x: x==1)(1)
+${True}
 
 >>> print test1.f1(217)
 1115467
@@ -175,10 +181,10 @@ None hello
 (34, 12)
 
 >>> test3.f14(5)
-1
+${True}
 
 >>> test3.f14(-2)
-0
+${False}
 
 >>> print test3.f16(123)
 -124
@@ -191,7 +197,7 @@ None hello
 
 >>> print test3.f19([1,2,3,4])
 hello
-([1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4], 1, 0)
+${([1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4], True, 0)}
 
 >>> print test3.f20('l', 12)
 [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110]
@@ -303,7 +309,7 @@ None
  [5 5 5]]
 
 >>> test3.f37(None)
-1
+${True}
 1
 
 >>> print test3.f38(12)

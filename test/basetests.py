@@ -34,13 +34,19 @@ expected = open(EXPECTEDFILE, 'w')
 print >> childin, 'import sys'
 print >> childin, PRELUDE
 
+def filterline(line):
+    if line.startswith('${') and line.endswith('}'):
+        line = str(eval(line[2:-1]))
+    return line
+
 for inp, outp, line in all_tests:
     sep = SEPARATOR % inp
     print >> childin, 'print %r' % sep
     print >> childin, 'print >> sys.stderr, %r' % inp
     print >> expected, sep
     print >> childin, inp
-    expected.write(outp)
+    outplines = [filterline(line) for line in outp.split('\n')]
+    expected.write('\n'.join(outplines))
 
 print >> childin, 'print %r' % LASTLINE
 print >> expected, LASTLINE

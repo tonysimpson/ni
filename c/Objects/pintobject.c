@@ -186,8 +186,9 @@ static vinfo_t* pint_sub(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 				  "vv", v, w);
 }
 
-static vinfo_t* pint_base2op(PsycoObject* po, vinfo_t* v, vinfo_t* w,
-			     vinfo_t*(*op)(PsycoObject*,vinfo_t*,vinfo_t*))
+DEFINEFN
+vinfo_t* pint_base2op(PsycoObject* po, vinfo_t* v, vinfo_t* w,
+                      vinfo_t*(*op)(PsycoObject*,vinfo_t*,vinfo_t*))
 {
 	vinfo_t* a;
 	vinfo_t* b;

@@ -7,6 +7,7 @@
 
 
 #include "vcompiler.h"
+#include "Python/pyver.h"
 
 
 #define SIZE_OF_LONG_BITS   2
@@ -246,6 +247,10 @@ EXTERNFN vinfo_t* integer_seqindex(PsycoObject* po, vinfo_t* vi,
 				   vinfo_t* vn, bool ovf);
 #endif
 
+/* Return one of two constants, depending on the condition code */
+EXTERNFN vinfo_t* integer_conditional(PsycoObject* po, condition_code_t cc,
+                                      long immed_true, long immed_false);
+
 /* make a run-time copy of a vinfo_t */
 EXTERNFN vinfo_t* make_runtime_copy(PsycoObject* po, vinfo_t* v);
 
@@ -360,7 +365,7 @@ EXTERNFN bool psyco_vsource_is_promotion(VirtualTimeSource source);
 /* Pentium timing (this function is only defined if TIMING_WITH ==
                    TIMING_WITH_PENTIUM_TSC in timing.h) */
 #if HAVE_LONG_LONG
-typedef LONG_LONG pentium_tsc_t;
+typedef PY_LONG_LONG pentium_tsc_t;
 #else
 typedef long pentium_tsc_t;
 #endif

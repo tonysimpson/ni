@@ -28,8 +28,12 @@
 # define TIMING_WITH   TIMING_WITH_TICK_COUNTER
 #elif defined(HAVE_CLOCK) && CLOCK_IS_PER_PROCESS
 # define TIMING_WITH   TIMING_WITH_CLOCK
-#else
+#elif PENTIUM_INSNS
 # define TIMING_WITH   TIMING_WITH_PENTIUM_TSC
+#elif defined(HAVE_CLOCK)
+# define TIMING_WITH   TIMING_WITH_CLOCK
+#else
+# error "no way to measure time!"
 #endif
 
 #define measure_is_zero(m)  ((m) == (time_measure_t) 0)

@@ -2250,6 +2250,32 @@ vinfo_t* integer_seqindex(PsycoObject* po, vinfo_t* vi, vinfo_t* vn, bool ovf)
 #endif  /* 0 */
 
 DEFINEFN
+vinfo_t* integer_conditional(PsycoObject* po, condition_code_t cc,
+                             long immed_true, long immed_false)
+{
+  reg_t rg;
+  
+  switch (cc) {
+  case CC_ALWAYS_FALSE:
+    return vinfo_new(CompileTime_New(immed_false));
+
+  case CC_ALWAYS_TRUE:
+    return vinfo_new(CompileTime_New(immed_true));
+
+  default:
+    BEGIN_CODE
+    NEED_FREE_REG(rg);
+    LOAD_REG_FROM_IMMED(rg, immed_true);
+    SHORT_COND_JUMP_TO(code + SIZE_OF_SHORT_CONDITIONAL_JUMP
+                            + SIZE_OF_LOAD_REG_FROM_IMMED, cc);
+    LOAD_REG_FROM_IMMED(rg, immed_false);
+    END_CODE
+      
+    return new_rtvinfo(po, rg, false, false);
+  }
+}
+
+DEFINEFN
 vinfo_t* make_runtime_copy(PsycoObject* po, vinfo_t* v)
 {
 	reg_t rg;

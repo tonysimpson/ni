@@ -865,13 +865,12 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 } while (0)
 
 
-/* CMOV instruction: this instruction does not exist on the i486,
-   should we avoid it? Or should be test for Pentium-ness at start-up?
-   We currently avoid it. */
+#if PENTIUM_INSNS
 /* #define CONDITIONAL_LOAD_REG_FROM_RT(source, dst, condition)  do {      \ */
 /*   *code++ = 0x0F;        * CMOVxx dst, (...) *                          \ */
 /*   INSTR_MODRM_FROM_RT(source, 0x40 | (condition), (dst)<<3);            \ */
 /* } while (0) */
+#endif
 
 
 /* correct the stack pointer */
