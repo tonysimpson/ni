@@ -202,12 +202,26 @@ static PyObject* cimpl_call_pyfunc(PyCodeObject* co, PyObject* globals,
 {
   /* simple wrapper around PyEval_EvalCodeEx, for the fail_to_default
      case of psyco_call_pyfunc() */
+  
+#if HAVE_PyEval_EvalCodeEx
   int defcount = (defaults ? PyTuple_GET_SIZE(defaults) : 0);
   PyObject** defs = (defcount ? &PyTuple_GET_ITEM(defaults, 0) : NULL);
   return PyEval_EvalCodeEx(co, globals, (PyObject*)NULL,
                            &PyTuple_GET_ITEM(arg, 0), PyTuple_GET_SIZE(arg),
                            (PyObject**)NULL, 0,
                            defs, defcount, NULL);
+#else
+  /* No PyEval_EvalCodeEx()! Dummy work-around. */
+  PyObject* result = NULL;
+  PyObject* hack = PyFunction_New((PyObject*) co, globals);
+  if (hack != NULL)
+    {
+      if (defaults == NULL || !PyFunction_SetDefaults(hack, defaults))
+        result = PyEval_CallObject(hack, arg);
+      Py_DECREF(hack);
+    }
+  return result;
+#endif
 }
 
 DEFINEFN
@@ -219,14 +233,20 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   PsycoObject* mypo;
   Source* sources;
   vinfo_t* result;
-  int argcount, defcount;
+  int tuple_size, argcount, defcount;
   condition_code_t cc;
 
-  int tuple_size = PsycoTuple_Load(arg_tuple);
+  if (is_proxycode(co))
+    co = ((PsycoFunctionObject*) PyTuple_GET_ITEM(co->co_consts, 1))->psy_code;
+  
+  tuple_size = PsycoTuple_Load(arg_tuple);
+#if HAVE_PyEval_EvalCodeEx
+  /* The following two lines are moved a bit further for Python < 2.2 */
   if (tuple_size == -1)
     goto fail_to_default;
       /* XXX calling with an unknown-at-compile-time number of arguments
          is not implemented, revert to the default behaviour */
+#endif
 
   /* is vdefaults!=NULL at run-time ? */
   cc = object_non_null(po, vdefaults);
@@ -244,6 +264,11 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   else
     defcount = 0;
 
+#if !HAVE_PyEval_EvalCodeEx
+  if (tuple_size == -1)
+    goto fail_to_default;
+#endif
+
   /* the processor condition codes will be messed up soon */
   BEGIN_CODE
   NEED_CC();
@@ -257,10 +282,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   if (mypo == BF_UNSUPPORTED)
     goto fail_to_default;
   if (mypo == NULL)
-    {
-      psyco_virtualize_exception(po);
-      return NULL;
-    }
+    goto pyerr;
   argcount = get_arguments_count(&mypo->vlocals);
 
   /* compile the function (this frees mypo) */
@@ -274,9 +296,57 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   return result;
 
  fail_to_default:
+  
+#if !HAVE_PyEval_EvalCodeEx
+  /* Big hack. Without PyEval_EvalCodeEx(), there is no way I am aware
+     of to call an arbitrary code object with arguments apart from
+     building a temporary function object around it. So we try to build
+     it now if we have enough information to do so. */
+  if (is_compiletime(vglobals->source))
+    {
+      int i;
+      for (i=0; i<defcount; i++)
+        if (!is_compiletime(PsycoTuple_GET_ITEM(vdefaults, i)->source))
+          defcount = -1;
+      
+      if (defcount != -1)
+        {
+          PyObject* hack = PyFunction_New((PyObject*) co,
+                         (PyObject*) CompileTime_Get(vglobals->source)->value);
+          if (hack == NULL)
+            goto pyerr;
+          if (defcount > 0)
+            {
+              PyObject* defaults = PyTuple_New(defcount);
+              if (defaults == NULL) {
+                Py_DECREF(hack);
+                goto pyerr;
+              }
+              for (i=0; i<defcount; i++)
+                PyTuple_SET_ITEM(defaults, i, (PyObject*) CompileTime_Get(
+                            PsycoTuple_GET_ITEM(vdefaults, i)->source)->value);
+              i = PyFunction_SetDefaults(hack, defaults);
+              Py_DECREF(defaults);
+              if (i) {
+                Py_DECREF(hack);
+                goto pyerr;
+              }
+            }
+          /* XXX lost ref to hack */
+          return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
+                                    CfReturnRef|CfPyErrIfNull,
+                                    "lvl", hack, arg_tuple, NULL);
+        }
+    }
+#endif /* !HAVE_PyEval_EvalCodeEx */
+    
   return psyco_generic_call(po, cimpl_call_pyfunc,
                             CfReturnRef|CfPyErrIfNull,
                             "lvvv", co, vglobals, vdefaults, arg_tuple);
+
+ pyerr:
+  psyco_virtualize_exception(po);
+  return NULL;
 }
 
 
@@ -293,21 +363,31 @@ PsycoFunctionObject* psyco_PsycoFunction_NewEx(PyCodeObject* code,
 	PsycoFunctionObject* result = PyObject_GC_New(PsycoFunctionObject,
 						      &PsycoFunction_Type);
 	if (result != NULL) {
-		PyObject* d = PyDict_New();
-		if (d == NULL) {
+		result->psy_code = code;         Py_INCREF(code);
+		result->psy_globals = globals;   Py_INCREF(globals);
+		result->psy_defaults = NULL;
+		result->psy_recursion = rec;
+		result->psy_fastcall = PyDict_New();
+		PyObject_GC_Track(result);
+
+		if (result->psy_fastcall == NULL) {
 			Py_DECREF(result);
 			return NULL;
 		}
-                Py_INCREF(code);
-		result->psy_code = code;
-                Py_INCREF(globals);
-		result->psy_globals = globals;
-                Py_XINCREF(defaults);
-		result->psy_defaults = defaults;
-                
-		result->psy_recursion = rec;
-		result->psy_fastcall = d;
-		PyObject_GC_Track(result);
+
+		if (defaults != NULL) {
+			if (!PyTuple_Check(defaults)) {
+				Py_DECREF(result);
+				PyErr_SetString(PyExc_PsycoError,
+						"Psyco proxies need a tuple "
+						"for default arguments");
+				return NULL;
+			}
+			if (PyTuple_GET_SIZE(defaults) > 0) {
+				result->psy_defaults = defaults;
+				Py_INCREF(defaults);
+			}
+		}
 	}
 	return result;
 }
@@ -322,12 +402,13 @@ PsycoFunctionObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec)
 }
 
 DEFINEFN
-PyObject* psyco_PsycoFunction_New2(PyFunctionObject* func, int rec)
+PyObject* psyco_proxycode(PyFunctionObject* func, int rec)
 {
   PsycoFunctionObject *psyco_fun;
   PyCodeObject *code, *newcode;
-  PyObject *consts, *varnames, *proxy_cobj, *tmp;
-  int size, i;
+  PyObject *consts, *proxy_cobj;
+  static PyObject *varnames = NULL;
+  static PyObject *free_cell_vars = NULL;
   unsigned char proxy_bytecode[] = {
     LOAD_CONST, 1, 0,
     LOAD_FAST, 0, 0,
@@ -335,58 +416,76 @@ PyObject* psyco_PsycoFunction_New2(PyFunctionObject* func, int rec)
     CALL_FUNCTION_VAR_KW, 0, 0,
     RETURN_VALUE
   };
+  code = (PyCodeObject *)func->func_code;
+  if (is_proxycode(code))
+    {
+      /* already a proxy code object */
+      Py_INCREF(code);
+      return (PyObject*) code;
+    }
+  if (PyTuple_Size(code->co_freevars) > 0)
+    {
+      /* it would be dangerous to continue in this case: the calling
+         convention changes when a function has free variables */
+      PyErr_SetString(PyExc_PsycoError, "function has free variables");
+      return NULL;
+    }
 
-  psyco_fun = psyco_PsycoFunction_NewEx((PyCodeObject*) func->func_code,
+  newcode = NULL;
+  consts = NULL;
+  proxy_cobj = NULL;
+  psyco_fun = psyco_PsycoFunction_NewEx(code,
 					func->func_globals,
 					func->func_defaults,
 					rec);
-  assert(psyco_fun != NULL);
-  Py_INCREF(psyco_fun);
+  if (psyco_fun == NULL)
+    goto error;
 
-  code = (PyCodeObject *)func->func_code;
-  assert(code != NULL);
+  consts = PyTuple_New(2);
+  if (consts == NULL)
+    goto error;
+  Py_INCREF(Py_None);
+  PyTuple_SET_ITEM(consts, 0, Py_None);  /* if a __doc__ is expected there */
+  PyTuple_SET_ITEM(consts, 1, (PyObject *)psyco_fun);  /* consumes reference */
+  psyco_fun = NULL;
 
-  size = PyTuple_Size(code->co_consts) + 1;
-  assert(size >= 1 && size <= 255);
-
-  consts = PyTuple_New(size);
-  assert(consts != NULL);
-  for (i = 0; i < size-1; i++) {
-    tmp = PyTuple_GetItem(code->co_consts, i);
-    Py_INCREF(tmp);
-    PyTuple_SetItem(consts, i, tmp);
-  }
-  PyTuple_SetItem(consts, size-1, (PyObject *)psyco_fun);
-  proxy_bytecode[1] = (unsigned char) size-1;
-  
-  varnames = PyTuple_New(2);
-  assert(varnames != NULL);
-  PyTuple_SetItem(varnames, 0, PyString_FromString("args"));
-  PyTuple_SetItem(varnames, 1, PyString_FromString("kwargs"));
+  if (varnames == NULL)
+    {
+      if (free_cell_vars == NULL)
+        {
+          free_cell_vars = PyTuple_New(0);
+          if (free_cell_vars == NULL)
+            goto error;
+        }
+      varnames = Py_BuildValue("ss", "args", "kwargs");
+      if (varnames == NULL)
+        goto error;
+    }
 
   proxy_cobj = PyString_FromStringAndSize(proxy_bytecode,
 					  sizeof(proxy_bytecode));
-  assert(proxy_cobj != NULL);
+  if (proxy_cobj == NULL)
+    goto error;
 
-  newcode = PyCode_New(0, 2, 1, 15, proxy_cobj, consts,
-		       code->co_names, varnames, code->co_freevars,
-		       code->co_cellvars, code->co_filename,
+  newcode = PyCode_New(0, 2, 3,
+                       CO_OPTIMIZED|CO_NEWLOCALS|CO_VARARGS|CO_VARKEYWORDS,
+                       proxy_cobj, consts,
+		       varnames, varnames, free_cell_vars,
+		       free_cell_vars, code->co_filename,
 		       code->co_name, code->co_firstlineno,
 		       code->co_lnotab);
-  assert(newcode != NULL);
-
-  Py_DECREF(code);
-  Py_INCREF(newcode);
-  func->func_code = (PyObject *)newcode;
-
-  Py_INCREF(Py_None);
-  return Py_None;
+  /* fall through */
+ error:
+  Py_XDECREF(psyco_fun);
+  Py_XDECREF(proxy_cobj);
+  Py_XDECREF(consts);
+  return (PyObject*) newcode;
 }
 
 static void psycofunction_dealloc(PsycoFunctionObject* self)
 {
 	PyObject_GC_UnTrack(self);
-	Py_DECREF(self->psy_fastcall);
+	Py_XDECREF(self->psy_fastcall);
 	Py_XDECREF(self->psy_defaults);
 	Py_DECREF(self->psy_globals);
 	Py_DECREF(self->psy_code);
@@ -522,12 +621,14 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	return result;
 
    unsupported:
+
+#if HAVE_PyEval_EvalCodeEx   /* Python >= 2.2b1 */
 	{	/* Code copied from function_call() in funcobject.c */
 		PyObject **d, **k;
 		int nk, nd;
 
 		PyObject* argdefs = self->psy_defaults;
-		if (argdefs != NULL && PyTuple_Check(argdefs)) {
+		if (argdefs != NULL) {
 			d = &PyTuple_GET_ITEM((PyTupleObject *)argdefs, 0);
 			nd = PyTuple_Size(argdefs);
 		}
@@ -565,8 +666,24 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 
 		return result;
 	}
+#else /* !HAVE_PyEval_EvalCodeEx */
+	{	/* Work-around for the missing PyEval_EvalCodeEx() */
+		PyObject* result = NULL;
+		PyObject* hack = PyFunction_New((PyObject*) self->psy_code,
+						self->psy_globals);
+		if (hack != NULL) {
+			if (self->psy_defaults == NULL ||
+			    !PyFunction_SetDefaults(hack, self->psy_defaults))
+				result = PyEval_CallObjectWithKeywords(hack,
+								       arg, kw);
+			Py_DECREF(hack);
+		}
+		return result;
+	}
+#endif /* HAVE_PyEval_EvalCodeEx */
 }
 
+#ifdef Py_TPFLAGS_HAVE_GC
 static int psycofunction_traverse(PsycoFunctionObject *f,
 				  visitproc visit, void *arg)
 {
@@ -588,7 +705,12 @@ static int psycofunction_traverse(PsycoFunctionObject *f,
 	}
 	return 0;
 }
+#endif /* Py_TPFLAGS_HAVE_GC */
 
+#if 0
+/* Disabled. This used to wrap a Psyco proxy around a method object when
+   loaded from a class. Now Psyco proxies are only supposed to appear in
+   special code objects. */
 static PyObject *
 psy_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
@@ -597,6 +719,7 @@ psy_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 		obj = NULL;
 	return PyMethod_New(self, obj, type);
 }
+#endif
 
 DEFINEVAR
 PyTypeObject PsycoFunction_Type = {
@@ -620,6 +743,7 @@ PyTypeObject PsycoFunction_Type = {
 	0,					/* tp_str */
 	0,					/* tp_getattro */
 	0,					/* tp_setattro */
+#ifdef Py_TPFLAGS_HAVE_GC
 	0,					/* tp_as_buffer */
 	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,/* tp_flags */
 	0,					/* tp_doc */
@@ -634,46 +758,15 @@ PyTypeObject PsycoFunction_Type = {
 	0,					/* tp_getset */
 	0,					/* tp_base */
 	0,					/* tp_dict */
-	psy_descr_get,				/* tp_descr_get */
+	0,					/* tp_descr_get */
 	0,					/* tp_descr_set */
+#endif /* Py_TPFLAGS_HAVE_GC */
 };
 
 
  /***************************************************************/
 /***   Implementation of the '_psyco' built-in module          ***/
  /***************************************************************/
-
-/* NB: it would be nice to set _psyco.proxy to the PsycoFunction_Type
-   as the following function is nothing more than a constructor,
-   but this is incompatible with Python versions <2.2b1
-*/
-static PyObject* Psyco_proxy(PyObject* self, PyObject* args)
-{
-	int recursion = 0;
-	PyFunctionObject* function;
-	
-	if (!PyArg_ParseTuple(args, "O!|i",
-			      &PyFunction_Type, &function,
-			      &recursion))
-		return NULL;
-
-	return (PyObject*) psyco_PsycoFunction_New(function, recursion);
-}
-
-
-static PyObject* Psyco_proxy2(PyObject* self, PyObject* args)
-{
-	int recursion = 0;
-	PyFunctionObject* function;
-	
-	if (!PyArg_ParseTuple(args, "O!|i",
-			      &PyFunction_Type, &function,
-			      &recursion))
-		return NULL;
-
-	return (PyObject*) psyco_PsycoFunction_New2(function, recursion);
-}
-
 
 #if CODE_DUMP
 static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
@@ -718,6 +811,8 @@ void psyco_dump_code_buffers(void)
       CodeBufferObject* obj;
       PyObject *exc, *val, *tb;
       void** chain;
+      int bufcount = 0;
+      long* buftable;
 #ifdef CODE_DUMP_SYMBOLS
       int i1;
       PyObject* global_addrs = PyDict_New();
@@ -726,15 +821,20 @@ void psyco_dump_code_buffers(void)
       PyErr_Fetch(&exc, &val, &tb);
       debug_printf(("psyco: writing " CODE_DUMP_FILE "\n"));
 
+      for (obj=psyco_codebuf_chained_list; obj != NULL; obj=obj->chained_list)
+        bufcount++;
+      buftable = (long*) PyCore_MALLOC(bufcount*sizeof(long));
+      fwrite(&bufcount, sizeof(bufcount), 1, f);
+      fwrite(buftable, sizeof(long), bufcount, f);
+
       /* give the address of an arbitrary symbol from the Python interpreter
          and from the Psyco module */
       fprintf(f, "PyInt_FromLong: 0x%lx\n", (long) &PyInt_FromLong);
       fprintf(f, "psyco_dump_code_buffers: 0x%lx\n",
               (long) &psyco_dump_code_buffers);
-      
+
       for (obj=psyco_codebuf_chained_list; obj != NULL; obj=obj->chained_list)
         {
-          PyObject* d;
           int nsize = obj->codeend - obj->codeptr;
           PyCodeObject* co = obj->snapshot.fz_pyc_data ?
 		  obj->snapshot.fz_pyc_data->co : NULL;
@@ -744,10 +844,6 @@ void psyco_dump_code_buffers(void)
                   co?PyCodeObject_NAME(co):"",
                   co?obj->snapshot.fz_pyc_data->next_instr:-1,
                   obj->codemode);
-          d = PyDict_New();
-          assert(d);
-          vinfo_array_dump(obj->snapshot.fz_vlocals, f, d);
-          Py_DECREF(d);
           fwrite(obj->codeptr, 1, nsize, f);
 #ifdef CODE_DUMP_SYMBOLS
           /* look-up all potential 'void*' pointers appearing in the code */
@@ -813,6 +909,23 @@ void psyco_dump_code_buffers(void)
         Py_DECREF(global_addrs);
       }
 #endif
+      {
+        int i;
+        fprintf(f, "vinfo_array\n");
+        i = 0;
+        for (obj=psyco_codebuf_chained_list; obj != NULL; obj=obj->chained_list)
+          {
+            PyObject* d = PyDict_New();
+            assert(d);
+            buftable[i++] = ftell(f);
+            vinfo_array_dump(obj->snapshot.fz_vlocals, f, d);
+            Py_DECREF(d);
+          }
+        assert(i==bufcount);
+        fseek(f, sizeof(bufcount), 0);
+        fwrite(buftable, sizeof(long), bufcount, f);
+      }
+      PyCore_FREE(buftable);
       assert(!PyErr_Occurred());
       fclose(f);
       PyErr_Restore(exc, val, tb);
@@ -836,6 +949,19 @@ DEFINEFN void psyco_trace_execution(char* msg, void* code_position)
 
 /*****************************************************************/
 
+static PyObject* Psyco_proxycode(PyObject* self, PyObject* args)
+{
+	int recursion = DEFAULT_RECURSION;
+	PyFunctionObject* function;
+	
+	if (!PyArg_ParseTuple(args, "O!|i",
+			      &PyFunction_Type, &function,
+			      &recursion))
+		return NULL;
+
+	return psyco_proxycode(function, recursion);
+}
+
 /* Initialize selective compilation */
 static PyObject* Psyco_selective(PyObject* self, PyObject* args)
 {
@@ -849,54 +975,29 @@ static PyObject* Psyco_selective(PyObject* self, PyObject* args)
     return NULL;
   }
 
-  /* Allocate a dict to hold counters and statistics in */
-  if (funcs == NULL) {
-    funcs = PyDict_New();
-    if (funcs == NULL)
-      return NULL;
-  }
-
-  /* Set Python profile function to our selective compilation function */
-  PyEval_SetProfile((Py_tracefunc)do_selective, NULL);
-  Py_INCREF(Py_None);
-
-  return Py_None;
-}
-
-/* Initialize selective compilation */
-static PyObject* Psyco_selective2(PyObject* self, PyObject* args)
-{
-  if (!PyArg_ParseTuple(args, "i", &ticks)) {
+  /* Enable our selective compilation function */
+  if (psyco_start_selective())
     return NULL;
-  }
-
-  /* Sanity check argument */
-  if (ticks < 0) {
-    PyErr_SetString(PyExc_ValueError, "negative ticks");
-    return NULL;
-  }
-
-  /* Allocate a dict to hold counters and statistics in */
-  if (funcs == NULL) {
-    funcs = PyDict_New();
-    if (funcs == NULL)
-      return NULL;
-  }
-
-  /* Set Python profile function to our selective compilation function */
-  PyEval_SetProfile((Py_tracefunc)do_selective2, NULL);
+  
   Py_INCREF(Py_None);
-
   return Py_None;
 }
 
 /*****************************************************************/
 
+static char proxycode_doc[] =
+"proxycode(func[, rec]) -> code object\n\
+\n\
+Return a proxy code object that invokes Psyco on the argument. The code\n\
+object can be used to replace func.func_code. Raise psyco.error if func\n\
+uses unsupported features. Return func.func_code itself if it is already\n\
+a proxy code object. The optional second argument specifies the number of\n\
+recursive compilation levels: all functions called by func are compiled\n\
+up to the given depth of indirection.";
+
 static PyMethodDef PsycoMethods[] = {
-	{"proxy",	&Psyco_proxy,		METH_VARARGS},
-	{"proxy2",	&Psyco_proxy2,          METH_VARARGS},
+	{"proxycode",	&Psyco_proxycode,	METH_VARARGS,	proxycode_doc},
 	{"selective",   &Psyco_selective,	METH_VARARGS},
-	{"selective2",   &Psyco_selective2,	METH_VARARGS},
 #if CODE_DUMP
 	{"dumpcodebuf",	&Psyco_dumpcodebuf,	METH_VARARGS},
 #endif
@@ -922,6 +1023,8 @@ void init_psyco(void)
   Py_INCREF(&PsycoFunction_Type);
   if (PyModule_AddObject(CPsycoModule, "PsycoFunctionType",
 			 (PyObject*) &PsycoFunction_Type))
+    return;
+  if (PyModule_AddIntConstant(CPsycoModule, "DEFAULT_RECURSION", DEFAULT_RECURSION))
     return;
 #if ALL_CHECKS
   if (PyModule_AddIntConstant(CPsycoModule, "ALL_CHECKS", ALL_CHECKS))

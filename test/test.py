@@ -1,5 +1,5 @@
 import os
-from psyco import _psyco
+import psyco
 
 def time(fn, *args):
     "Measure the execution time of fn(*args)."
@@ -122,7 +122,7 @@ def f11(n):
 
 def go(f, *args):
     print '-'*80
-    v1, t1 = time(_psyco.proxy(f, 99), *args)
+    v1, t1 = time(psyco.proxy(f), *args)
     print v1
     print '^^^ computed by Psyco in %s seconds' % t1
     v2, t2 = time(f, *args)

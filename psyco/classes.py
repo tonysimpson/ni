@@ -10,7 +10,8 @@
 
 'psyco.classes.psyobj' is an alternate Psyco-optimized root for classes.
 Any class inheriting from it or using the metaclass '__metaclass__' might
-get optimized specifically for Psyco.
+get optimized specifically for Psyco. It is equivalent to call instead
+psyco.bind() on the class object after its creation.
 
 Note that this is not compatible with multiple inheritance and it does
 not work on Python version 2.1 or earlier.
@@ -24,7 +25,7 @@ will automatically use the Psyco-optimized metaclass.
 """
 ###########################################################################
 
-import _psyco
+import psyco
 
 __all__ = ['psyobj', 'psymetaclass', '__metaclass__']
 
@@ -38,8 +39,7 @@ except NameError:
     psymetaclass = None
 else:
     # version >= 2.2 only
-    
-    FunctionType = type(lambda x: None)
+    from types import FunctionType
     recursivity = 5
     
     class psymetaclass(type):
@@ -47,9 +47,12 @@ else:
     
         def __init__(self, name, bases, dict):
             type.__init__(self, name, bases, dict)
-            for key, value in self.__dict__.items():
-                if isinstance(value, FunctionType):
-                    setattr(self, key, _psyco.proxy(value, recursivity))
+            bindlist = self.__dict__.get('__psyco__bind__')
+            if bindlist is None:
+                psyco.bind(self)
+            else:
+                for attr in bindlist:
+                    psyco.bind(self.__dict__.get(attr))
     
     psyobj = psymetaclass("psyobj", (), {})
-    __metaclass__ = psymetaclass
+__metaclass__ = psymetaclass

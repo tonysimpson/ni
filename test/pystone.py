@@ -112,14 +112,14 @@ def main():
         print "and taking the mean value for the cut-off point."
 
 def pystones_psycho(*loopslist):
-    from psyco import _psyco
+    import psyco
     old_dict = Record.__dict__.copy()
     try:
         # replace all methods of Record by proxies
         #for key, value in old_dict.items():
         #    if type(value) is type(main):
         #        Record.__dict__[key] = _psyco.proxy(value, 99)
-        f = _psyco.proxy(Proc0, 99)
+        f = psyco.proxy(Proc0)
         return map(f, loopslist)
     finally:
         Record.__dict__.update(old_dict)

@@ -256,3 +256,4 @@ if __name__ == '__main__':
     import psyco
     psyco.jit(1)
     main()
+    psyco.dumpcodebuf()

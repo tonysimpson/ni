@@ -9,8 +9,8 @@ import math
 import random
 import operator
 import string
-from psyco import _psyco
-psyobj = object
+import psyco
+from psyco.classes import *
 
 random.seed(0)
 
@@ -38,7 +38,10 @@ def makeMatrix(I, J, fill=0.0):
         m.append([fill]*J)
     return m
 
-class NN(psyobj):
+class NN:
+    __psyco_bind__ = []   # disable automatic rebinding, so that we
+                          # can do it manually and compare the timings
+    
     def __init__(self, ni, nh, no):
         # number of input, hidden, and output nodes
         self.ni = ni + 1 # +1 for bias node
@@ -179,9 +182,8 @@ def demo():
 if __name__ == '__main__':
     v, t1 = time(demo)
     v, t2 = time(demo)
-    demo = _psyco.proxy(demo, 99)
+    psyco.bind(NN)
     v, t3 = time(demo)
     v, t4 = time(demo)
     v, t5 = time(demo)
     print t1, t2, t3, t4, t5
-

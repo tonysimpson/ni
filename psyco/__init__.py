@@ -8,39 +8,88 @@
 
 """Psyco, the Python Specializing Compiler
 
-Step 1.  import psyco; psyco.jit()
+Compile all global functions:
+  import psyco; psyco.jit()
 
-This enables transparent just-in-time compilation of the most
-used functions of your programs. Just execute 'psyco.jit()' once.
-Currently only works on global functions, but will be fixed.
+  This enables transparent just-in-time compilation of the most
+  used functions of your programs. Just execute 'psyco.jit()' once.
+  Note that this only works on global functions.
 
-Step 2.  from psyco.classes import *
+Compile all class methods:
+  from psyco.classes import *
 
-If you use classes (but not multiple inheritance), the above line
-to put at the beginning of each file defining classes instructs
-Psyco to compile all the methods. Alternatively, you can manually
-select the classes to optimize by having them inherit from
-'psyco.classes.psyobj'. (Only works on Python >= 2.2; incompatible
-with multiple inheritance.)
+  If you use classes (but not multiple inheritance), the above line
+  to put at the beginning of each file defining classes instructs
+  Psyco to compile all the methods. Alternatively, you can manually
+  select the classes to optimize by having them inherit from
+  'psyco.classes.psyobj'. (Only works on Python >= 2.2; incompatible
+  with multiple inheritance.)
+
+Detailled choice of functions to compile:
+  psyco.bind(f)
+
+  For larger programs, the above solutions are too heavy, as Psyco
+  currently does not automatically identify the performance
+  bottlenecks. You can trigger the compilation of only the most
+  algorithmically intensive functions or classes with psyco.bind().
 """
 ###########################################################################
 
-import _psyco, sys, __builtin__
+import _psyco, sys, new, __builtin__
+from types import FunctionType, MethodType
 
 
-__all__ = ['jit']
+__all__ = ['error', 'jit', 'bind', 'proxy', 'dumpcodebuf']
 
+error = _psyco.error
 
 def jit(tick=5):
     """Enable just-in-time compilation.
 Argument is number of invocations before rebinding."""
     _psyco.selective(tick)
 
-def jit2(tick=5):
-    """Enable just-in-time compilation.
-Argument is number of invocations before rebinding."""
-    print '** Warning: jit2 is not working yet'
-    _psyco.selective2(tick)
+def bind(func, rec=_psyco.DEFAULT_RECURSION):
+    """Enable compilation of the given function, method or class.
+In the latter case all methods defined in the class are rebound.
+
+The optional second argument specifies the number of recursive
+compilation levels: all functions called by func are compiled
+up to the given depth of indirection."""
+    if isinstance(func, FunctionType):
+        func.func_code = _psyco.proxycode(func)
+    elif isinstance(func, MethodType):
+        bind(func.im_func, rec)
+    elif hasattr(func, '__dict__'):  # for classes
+        for object in func.__dict__.values():
+            try:
+                bind(object, rec)
+            except error:
+                pass
+
+def proxy(func, rec=_psyco.DEFAULT_RECURSION):
+    """Return a Psyco-enabled copy of the function.
+
+The original function is still available for non-compiled calls.
+The optional second argument specifies the number of recursive
+compilation levels: all functions called by func are compiled
+up to the given depth of indirection."""
+    if isinstance(func, FunctionType):
+        code = _psyco.proxycode(func)
+        return new.function(code, func.func_globals, func.func_name)
+    if isinstance(func, MethodType):
+        p = proxy(func.im_func, rec)
+        return new.instancemethod(p, func.im_self, func.im_class)
+    else:
+        raise TypeError, 'function or method required'
+
+
+def dumpcodebuf():
+    """Write in file psyco.dump a copy of the emitted machine code,
+provided Psyco was compiled with a non-zero CODE_DUMP.
+See py-utils/httpxam.py to examine psyco.dump."""
+    if hasattr(_psyco, 'dumpcodebuf'):
+        _psyco.dumpcodebuf()
+
 
 # Psyco mode check
 if hasattr(_psyco, 'ALL_CHECKS'):

@@ -68,6 +68,8 @@
   # define CODE_DUMP_SYMBOLS*/
 #endif
 
+#define DEFAULT_RECURSION    10   /* default value for the 'rec' argument */
+
 
 /*****************************************************************/
 
@@ -240,8 +242,12 @@ EXTERNFN PsycoFunctionObject* psyco_PsycoFunction_NewEx(PyCodeObject* code,
                                                 PyObject* globals,
                                                 PyObject* defaults, /* or NULL */
                                                 int rec);
-EXTERNFN PyObject* psyco_PsycoFunction_New2(PyFunctionObject* func, 
-					    int rec);
+EXTERNFN PyObject* psyco_proxycode(PyFunctionObject* func, int rec);
+
+inline bool is_proxycode(PyCodeObject* code) {
+  return PyTuple_Size(code->co_consts) > 1 &&
+    PsycoFunction_Check(PyTuple_GET_ITEM(code->co_consts, 1));
+}
 
 
 #if CODE_DUMP

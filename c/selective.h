@@ -2,14 +2,8 @@
 #define _SELECTIVE_H
 
 #include "psyco.h"
-#include "codemanager.h"
 
-#define FUN_BOUND -1
-#define MAX_RECURSION 99
-
-EXTERNVAR PyObject* funcs;
 EXTERNVAR int ticks;
-EXTERNFN int do_selective(void *, PyFrameObject *, int, PyObject *);
-EXTERNFN int do_selective2(void *, PyFrameObject *, int, PyObject *);
+EXTERNFN int psyco_start_selective(void);
 
-#endif
+#endif /* _SELECTIVE_H */
