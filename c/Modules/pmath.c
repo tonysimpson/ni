@@ -51,16 +51,16 @@ extern double modf (double, double *);
  * version in pfloatobject.c. The error handling 
  * on invalid args is different
  */
-#define PMATH_CONVERT_TO_DOUBLE(vobj, v1, v2)			\
+#define PMATH_CONVERT_TO_DOUBLE(vobj, v1, v2, ERRORACTION)	\
     switch (psyco_convert_to_double(po, vobj, &v1, &v2)) {	\
     case true:							\
         break;   /* fine */					\
     case false:							\
-        return NULL;  /* error or promotion */			\
+        ERRORACTION;  /* error or promotion */			\
     default:							\
         PycException_SetString(po, PyExc_TypeError,		\
             "bad argument type for built-in operation");	\
-        return NULL;						\
+        ERRORACTION;						\
     }
 
 #define PMATH_RELEASE_DOUBLE(v1, v2) \
@@ -80,7 +80,7 @@ extern double modf (double, double *);
             return NULL; \
         } \
         v = PsycoTuple_GET_ITEM(varg, 0); \
-        PMATH_CONVERT_TO_DOUBLE(v,a1,a2); \
+        PMATH_CONVERT_TO_DOUBLE(v,a1,a2,return NULL);      \
         result = array_new(2); \
         x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfNoReturnValue|CfPyErrIfNonNull, \
                                   "vva",a1,a2,result); \
@@ -106,8 +106,8 @@ extern double modf (double, double *);
         } \
         v1 = PsycoTuple_GET_ITEM(varg, 0); \
         v2 = PsycoTuple_GET_ITEM(varg, 1); \
-        PMATH_CONVERT_TO_DOUBLE(v1,a1,a2); \
-        PMATH_CONVERT_TO_DOUBLE(v2,b1,b2); \
+        PMATH_CONVERT_TO_DOUBLE(v1,a1,a2,return NULL);     \
+        PMATH_CONVERT_TO_DOUBLE(v2,b1,b2,goto cleanup);                \
         result = array_new(2); \
         x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfNoReturnValue|CfPyErrIfNonNull, \
                                "vvvva",a1,a2,b1,b2,result); \
@@ -117,6 +117,9 @@ extern double modf (double, double *);
             x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]); \
         array_release(result); \
         return x; \
+    cleanup:\
+        PMATH_RELEASE_DOUBLE(a1,a2); \
+        return NULL; \
     }
 
 /* the functions cimpl_math_sin() etc */
