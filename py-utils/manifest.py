@@ -14,7 +14,9 @@ def generate():
     filename = os.path.join('..', 'MANIFEST')
     print 'Rebuilding %s...' % filename
     f = open(filename, 'w')
-    for filename in psycofiles():
+    lst = list(psycofiles())
+    lst.sort()
+    for filename in lst:
         print >> f, filename
     f.close()
 
