@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 
-"""List of sources file of Psyco, the Python specializing compiler
+"""List of source files of Psyco, the Python specializing compiler
 
-This script can be used to rebuild various headers."""
+This script can be used to rebuild various headers and the MANIFEST."""
 
 
 class Source:
@@ -152,3 +152,7 @@ if __name__ == '__main__':
     generate()
     for processor in PROCESSOR_SRC.keys():
         generate(processor)
+    
+    import os, sys; sys.path.insert(0, os.path.join(os.pardir, 'py-utils'))
+    import manifest
+    manifest.generate()
