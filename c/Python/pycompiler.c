@@ -1123,9 +1123,34 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 	   deleted from the globals in the meantime. This is why we
 	   cannot just do that in the "found in globals()" branch
 	   below. */
-	if (detect_respawn(po)) {
+	extra_assert(po->respawn_cnt >= -1); /* this is the last respawn
+						pt before the merge pt */
+	if (po->respawn_cnt == -1) {
 		/* respawning was triggered by the call to
 		   psyco_prepare_respawn_ex() below */
+		/* dictitem_check_change can use NEED_CC and
+		   NEED_FREE_REG, further updating the state of po before
+		   the actual jump to the respawn buffer.  We emulate this
+		   effect by calling dictitem_check_change() again here. */
+		static PyDictObject* dummy_dict = NULL;
+		static PyDictEntry* dummy_entry = NULL;
+		if (dummy_entry == NULL) {
+			dummy_dict = (PyDictObject*) PyDict_New(); /* immortal */
+			if (!dummy_dict || PyDict_SetItem(
+			     (PyObject*) dummy_dict, Py_None, Py_None))
+				OUT_OF_MEMORY();
+			dummy_entry = (dummy_dict->ma_lookup)(
+				dummy_dict, Py_None, PyObject_Hash(Py_None));
+			extra_assert(dummy_entry != NULL);
+		}
+		dictitem_check_change(po, dummy_dict, dummy_entry);
+		/* end of respawning -- this dummy code will now be trashed */
+#if PSYCO_DEBUG
+		if (!detect_respawn(po))
+			Py_FatalError("invalid respawn_cnt in load_global()");
+#else
+		detect_respawn(po);
+#endif
 		mark_varying(po, key);
 		return NULL;
 	}
@@ -2722,10 +2747,10 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 				PUSH(v);
 				goto fine;
 			}
-			/* else { variable not found at all } */
+			/* else { variable not found at all,
+			   or the global has been marked as varying } */
 		}
-		/* else { Globals dict is unknown at compile-time,
-		   	  or the global has been marked as varying } */
+		/* else { Globals dict is unknown at compile-time } */
 		v = psyco_generic_call(po, cimpl_load_global,
 				       CfReturnRef|CfPyErrIfNull,
 				       "vl", LOC_GLOBALS, namev);
