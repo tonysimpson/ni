@@ -635,7 +635,8 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
               }
             if (!(flags & MP_LIGHT))
               {
-                instrnodes[i].mp = MPSET_MAYBE;
+                if (instrnodes[i].mp == MPSET_NEVER)
+                  instrnodes[i].mp = MPSET_MAYBE;
                 bytecodeweight++;
               }
             if (flags & MP_IS_CTXDEP)
