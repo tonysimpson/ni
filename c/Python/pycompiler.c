@@ -815,7 +815,6 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		cg->po = po;
 		cg->varname = key;
                 cg->previousvalue = result;    Py_INCREF(result);
-		cg->originalmacrocode = po1->code;
 		SHRINK_CODE_BUFFER(onchangebuf,
                                    (code_t*)(cg+1) - onchangebuf->codeptr,
                                    "load_global");
@@ -825,6 +824,8 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		/* write code that quickly checks that the same
 		   object is still in place in the dictionary */
 		code = po->code;
+		NEED_CC();
+		cg->originalmacrocode = code;
 		DICT_ITEM_IFCHANGED(code, globals, index, key, result,
 				    onchangebuf->codeptr);
 		po->code = code;
