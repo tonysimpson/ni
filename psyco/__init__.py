@@ -134,7 +134,7 @@ See py-utils/httpxam.py to examine psyco.dump."""
 
 
 # Psyco mode check
-if hasattr(_psyco, 'ALL_CHECKS'):
+if hasattr(_psyco, 'ALL_CHECKS') and hasattr(_psyco, 'VERBOSE_LEVEL'):
     print >> sys.stderr, 'psyco: running in debugging mode'
 
 
