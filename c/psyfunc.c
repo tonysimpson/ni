@@ -366,11 +366,28 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   struct fncall_arg_s fncall;
 
   if (is_proxycode(co))
-    co = ((PsycoFunctionObject*) PyTuple_GET_ITEM(co->co_consts, 1))->psy_code;
-  else
-    if (--recursion < 0)  /* the recursion limit only applies to non-proxified
-                             functions */
-      goto fail_to_default;
+    {
+      PsycoFunctionObject* pf;
+      pf = (PsycoFunctionObject*) PyTuple_GET_ITEM(co->co_consts, 1);
+      co = pf->psy_code;
+      if (pf->psy_defaults == NULL)
+        vdefaults = PsycoTuple_New(0, NULL);
+      else
+        {
+          Py_INCREF(pf->psy_defaults);  /* XXX looses a ref */
+          vdefaults = vinfo_new(
+              CompileTime_NewSk(sk_new((long) pf->psy_defaults,
+                                       SkFlagPyObj)));
+        }
+      /* the recursion limit only applies to non-proxified functions */
+      recursion++;
+      result = psyco_call_pyfunc(po, co, vglobals, vdefaults,
+                                 arg_tuple, recursion);
+      vinfo_decref(vdefaults, po);
+      return result;
+    }
+  if (--recursion < 0)
+    goto fail_to_default;
   extra_assert(PyCode_GetNumFree(co) == 0);
   
   tuple_size = PsycoTuple_Load(arg_tuple);
