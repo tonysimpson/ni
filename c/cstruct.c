@@ -1,7 +1,7 @@
 #include "cstruct.h"
 
 
-EXTERNFN
+DEFINEFN
 PyObject* PyCStruct_New(size_t size, destructor d)
 {
 	cstruct_header_t* cs;

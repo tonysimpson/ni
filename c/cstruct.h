@@ -23,7 +23,7 @@ EXTERNVAR PyTypeObject PyCStruct_Type;
 
 #define PyCStruct_Check(op)	PyObject_TypeCheck(op, &PyCStruct_Type)
 
-DEFINEFN PyObject* PyCStruct_New(size_t size, destructor d);
+EXTERNFN PyObject* PyCStruct_New(size_t size, destructor d);
 #define PyCStruct_NEW(TYPE, d)                          \
   ((TYPE*) PyCStruct_New(sizeof(TYPE), (destructor)(d)))
 
