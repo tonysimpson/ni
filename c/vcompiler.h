@@ -7,6 +7,7 @@
 
 #include "psyco.h"
 #include "encoding.h"
+#include "blockalloc.h"
 #include "Python/pycheader.h"
 
 
@@ -126,23 +127,16 @@ inline void sk_decref(source_known_t *sk) {
 }
 
 /* construction */
-EXTERNVAR void** sk_linked_list;
-EXTERNFN void* sk_malloc_block(void);
+BLOCKALLOC_INTERFACE(sk, source_known_t)
+
 inline source_known_t* sk_new(long v, long flags) {
-	source_known_t* sk;
-	if (sk_linked_list == NULL)
-		sk = (source_known_t*) sk_malloc_block();
-	else {
-		sk = (source_known_t*) sk_linked_list;
-		sk_linked_list = *(void**) sk;
-	}
+	source_known_t* sk = psyco_llalloc_sk();
 	sk->refcount1_flags = flags;
 	sk->value = v;
 	return sk;
 }
 inline void sk_delete(source_known_t* sk) {
-	*(void**) sk = sk_linked_list;
-	sk_linked_list = (void**) sk;
+	psyco_llfree_sk(sk);
 }
 
 
@@ -250,27 +244,11 @@ struct vinfo_s {
 	vinfo_t* tmp;           /* internal use of the dispatcher */
 };
 
-/* allocation */
-EXTERNVAR void** vinfo_linked_list;
-EXTERNFN void* vinfo_malloc_block(void);
-/* private! Do not use */
-#ifdef PSYCO_NO_LINKED_LISTS
-# define VINFO_FREE_1(vi)   PyCore_FREE(vi)
-#else
-# define VINFO_FREE_1(vi)   (*(void**) vi = vinfo_linked_list,  \
-                             vinfo_linked_list = (void**) vi)
-#endif
-
-
 /* construction */
+BLOCKALLOC_INTERFACE(vinfo, vinfo_t)
+
 inline vinfo_t* vinfo_new(Source src) {
-	vinfo_t* vi;
-	if (vinfo_linked_list == NULL)
-		vi = (vinfo_t*) vinfo_malloc_block();
-	else {
-		vi = (vinfo_t*) vinfo_linked_list;
-		vinfo_linked_list = *(void**) vi;
-	}
+	vinfo_t* vi = psyco_llalloc_vinfo();
 	vi->refcount = 1;
 	vi->source = src;
 	vi->array = NullArray;
@@ -391,7 +369,7 @@ inline void vinfo_move(PsycoObject* po, vinfo_t* vtarget, vinfo_t* vsource)
 	Source src = vtarget->source = vsource->source;
 	if (is_runtime(src) && !is_reg_none(src))
 		REG_NUMBER(po, getreg(src)) = vtarget;
-	VINFO_FREE_1(vsource);
+	psyco_llfree_vinfo(vsource);
 }
 
 

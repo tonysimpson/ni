@@ -987,16 +987,23 @@ void psyco_dump_code_buffers(void)
       }
 #endif
       {
-        int i;
+        int i = 0;
         fprintf(f, "vinfo_array\n");
-        i = 0;
         for (obj=psyco_codebuf_chained_list; obj != NULL; obj=obj->chained_list)
           {
-            PyObject* d = PyDict_New();
+            PsycoObject* live_po;
+            PyObject* d;
+            if (fz_top_array_count(&obj->snapshot) > 0)
+              live_po = fpo_unfreeze(&obj->snapshot);
+            else
+              live_po = NULL;
+            d = PyDict_New();
             assert(d);
             buftable[i++] = ftell(f);
-            vinfo_array_dump(obj->snapshot.fz_vlocals, f, d);
+            vinfo_array_dump(live_po ? &live_po->vlocals : NullArray, f, d);
             Py_DECREF(d);
+            if (live_po)
+              PsycoObject_Delete(live_po);
           }
         assert(i==bufcount);
         fseek(f, sizeof(bufcount), 0);

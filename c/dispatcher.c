@@ -1,6 +1,7 @@
 #include "dispatcher.h"
 #include "codemanager.h"
 #include "mergepoints.h"
+#include "blockalloc.h"
 #include "Python/pycompiler.h"   /* for pyc_data_xxx() */
 #include "pycencoding.h"  /* for INC_OB_REFCNT() */
 
@@ -10,12 +11,394 @@
  /***************************************************************/
 
 
+typedef void (*fz_find_fn) (vinfo_t* a, RunTimeSource bsource, void* extra);
+
+#if !VLOCALS_OPC
+
+/* Store-by-copy: this implementation is kept around for reference.
+   See the "!VLOCALS_OPC" version of compatible_array().
+*/
+
+inline void fz_build(FrozenPsycoObject* fpo, vinfo_array_t* aa) {
+  fpo->fz_vlocals = array_new(aa->count);
+  duplicate_array(fpo->fz_vlocals, aa);
+}
+
+inline void fz_unfreeze(vinfo_array_t* aa, FrozenPsycoObject* fpo) {
+  assert_cleared_tmp_marks(fpo->fz_vlocals);
+  duplicate_array(aa, fpo->fz_vlocals);
+  clear_tmp_marks(fpo->fz_vlocals);
+}
+
+inline void fz_release(FrozenPsycoObject* fpo) {
+  array_delete(fpo->fz_vlocals, NULL);
+}
+
+      /* invariant: all snapshot.fz_vlocals in the fatlist have
+         all their 'tmp' fields set to NULL. */
+inline void fz_check_invariant(FrozenPsycoObject* fpo) {
+  assert_cleared_tmp_marks(fpo->fz_vlocals);
+}
+
+inline void fz_restore_invariant(FrozenPsycoObject* fpo) {
+  clear_tmp_marks(fpo->fz_vlocals);
+}
+
+inline int fz_top_array_count(FrozenPsycoObject* fpo) {
+  return fpo->fz_vlocals->count;
+}
+
+static void fz_find_rt1(vinfo_array_t* bb, fz_find_fn callback,
+                        void* extra, bool clear
+#if ALL_CHECKS
+                        , vinfo_array_t* aa
+#endif
+                        )
+{
+  int i = bb->count;
+  while (i--)
+    {
+      vinfo_t* b = bb->items[i];
+      if (b != NULL && b->tmp != NULL)
+        {
+#if ALL_CHECKS
+          extra_assert(i < aa->count);
+	  if (is_runtime(b->source))
+            extra_assert(aa->items[i] == b->tmp);
+#endif
+	  if (is_runtime(b->source))
+            (*callback)(b->tmp, b->source, extra);
+          if (clear)
+            b->tmp = NULL;  /* don't consider the same 'b' more than once */
+          if (b->array != NullArray)
+	    fz_find_rt1(b->array, callback, extra, clear
+#if ALL_CHECKS
+                        , aa->items[i]->array
+#endif
+                        );
+        }
+    }
+}
+
+inline void fz_find_runtimes(vinfo_array_t* aa, FrozenPsycoObject* fpo,
+                             fz_find_fn callback, void* extra, bool clear)
+{
+  fz_find_rt1(fpo->fz_vlocals, callback, extra, clear
+#if ALL_CHECKS
+              , aa
+#endif
+              );
+}
+
+
+#else /* if VLOCALS_OPC */
+
+
+struct vcilink_s {
+  int time;
+  union {
+    vinfo_t* preva;
+    vinfo_t** fix;
+    void* data;
+  } v;
+  struct vcilink_s* next;
+};
+
+BLOCKALLOC_STATIC(vci, struct vcilink_s, 128)
+
+typedef struct {
+  /* pointers to an internal buffer for the creation of the pseudo-code
+     copies, as well as for lookups */
+  signed char* buf_begin;
+  signed char* buf_end;
+  signed char* buf_opc;     /* current opcode position */
+  Source* buf_args;          /* current opargs position */
+  int tmp_counter;            /* for links */
+  struct vcilink_s* vcilink;   /* pending links during decompression */
+  struct vcilink_s sentinel;
+} vcompat_internal_t;
+
+/* XXX Argh, a global variable -- this is (just) tolerable because the
+   algorithms depending on it are not re-entrent anyway. This lets us
+   share a global all-purpose buffer between the pseudo-code creation
+   and the lookups. */
+static vcompat_internal_t cmpinternal = { NULL, NULL };
+
+static signed char* fz_internal_copy(vcompat_internal_t* current, int nsize)
+{
+  int opc_size = current->buf_end - current->buf_opc;
+  signed char* buf = (signed char*) PyCore_MALLOC(nsize);
+  if (buf == NULL)
+    OUT_OF_MEMORY();
+  memcpy(buf, current->buf_begin,
+         ((signed char*) current->buf_args) - current->buf_begin);
+  memcpy(buf + nsize - opc_size, current->buf_opc, opc_size);
+  return buf;
+}
+
+static void fz_internal_expand(void)
+{
+  signed char* nbuf;
+  int opc_size = cmpinternal.buf_end - cmpinternal.buf_opc;
+  int arg_size = ((signed char*) cmpinternal.buf_args) - cmpinternal.buf_begin;
+  int nsize = (cmpinternal.buf_end - cmpinternal.buf_begin) * 3 / 2;
+  if (nsize < 64) nsize = 64;
+  nbuf = fz_internal_copy(&cmpinternal, nsize);
+  if (cmpinternal.buf_begin != cmpinternal.buf_end)
+    PyCore_FREE((char*) cmpinternal.buf_begin);
+  cmpinternal.buf_begin = nbuf;
+  cmpinternal.buf_end = nbuf + nsize;
+  cmpinternal.buf_opc = cmpinternal.buf_end - opc_size;
+  cmpinternal.buf_args = (Source*)(nbuf + arg_size);
+}
+
+#define FZ_OPC_EXT      (-1)
+#define FZ_OPC_NULL     (-2)
+#define FZ_OPC_LINK     (-3)   /* and the following negative numbers */
+
+/* Note: the pseudo-code is built in left-to-right array order,
+   but it is intended to be read backwards, thus uncompression creates
+   the arrays right-to-left. */
+inline void fz_putarg(Source arg)
+{
+  if (cmpinternal.buf_opc < (signed char*) (cmpinternal.buf_args+1))
+    fz_internal_expand();
+  *cmpinternal.buf_args++ = arg;
+}
+
+inline void fz_putopc(int opc)
+{
+  if (!(-128 <= opc && opc < 128))
+    {
+      fz_putarg((Source) opc);
+      opc = FZ_OPC_EXT;
+    }
+  if (cmpinternal.buf_opc == (signed char*) cmpinternal.buf_args)
+    fz_internal_expand();
+  *--cmpinternal.buf_opc = opc;
+}
+
+static void fz_compress(vinfo_array_t* aa)
+{
+  int i;
+  int length = aa->count;
+  /*while (length > 0 && aa->items[length-1] == NULL)
+    length--;  ---- invalid optimization ---- */
+  for (i=0; i<length; i++)
+    {
+      vinfo_t* a = aa->items[i];
+      if (a == NULL) {
+        fz_putopc(FZ_OPC_NULL);   /* emit FZ_OPC_NULL */
+      }
+      else if (a->tmp != NULL) {
+        int prevcounter = (int) a->tmp;   /* already seen, emit a link */
+        fz_putopc(FZ_OPC_LINK - (cmpinternal.tmp_counter-prevcounter));
+      }
+      else {
+        int length;
+        Source arg = a->source;
+        if (is_compiletime(arg))
+          sk_incref(CompileTime_Get(arg));
+        a->tmp = (vinfo_t*) (++cmpinternal.tmp_counter);
+        length = a->array->count;
+        if (length)    /* avoid recursive call if unneeded */
+          fz_compress(a->array);  /* store the subarray */
+        fz_putarg(a->source);    /* store the 'source' field */
+        fz_putopc(length);      /* store the length of the subarray */
+      }
+    }
+}
+/* Compression note: if we implement sharing of common initial segments
+   (which could save another 50% memory) we get better results by storing
+   the 'source' field *before* its sub-array. This will complicate
+   compatible_array() a bit. */
+
+inline Source fz_getarg(void)
+{
+  return *--cmpinternal.buf_args;
+}
+
+inline int fz_getopc(void)
+{
+  int result = *cmpinternal.buf_opc++;
+  if (result == FZ_OPC_EXT)
+    result = (int) fz_getarg();
+  return result;
+}
+
+static void fz_pushstack(int opc, void* ndata)
+{
+  int ntime = cmpinternal.tmp_counter + (FZ_OPC_LINK-opc);
+  struct vcilink_s** q;
+  struct vcilink_s* p = psyco_llalloc_vci();
+  p->time = ntime;
+  p->v.data = ndata;
+  
+  /* Record the pending link by inserting it inon the vcilink linked list.
+     'ntime' is the value that tmp_counter will have when the pending
+     item is found, so currently 'ntime >= tmp_counter'.
+     This linked list is sorted against the time, smallest time first. */
+  q = &cmpinternal.vcilink;
+  while ((*q)->time < ntime)
+    q = &(*q)->next;
+  p->next = *q;   /* insert new item at the correct position */
+  *q = p;
+}
+
+static void fz_uncompress(vinfo_array_t* result)
+{
+  int i = result->count;
+  while (i--)
+    {
+      vinfo_t* a;
+      int opc = fz_getopc();
+      if (opc == 0) {        /* new item with no sub-array (optimized path) */
+        a = vinfo_new(fz_getarg());
+      }
+      else if (opc == FZ_OPC_NULL) {   /* NULL */
+        continue;  /* there is already NULL in result->items[i] */
+      }
+      else if (opc > 0) {        /* new item with its sub-array */
+        a = vinfo_new(fz_getarg());
+        a->array = array_new(opc);
+        fz_uncompress(a->array);
+      }
+      else {       /* link to an item not built yet */
+        fz_pushstack(opc, &result->items[i]);
+        continue;
+      }
+
+      /* At this point we have a real item to store into the array */
+      while (cmpinternal.tmp_counter == cmpinternal.vcilink->time)
+        {
+          struct vcilink_s* p = cmpinternal.vcilink;
+          cmpinternal.vcilink = p->next;
+          /* resolve link */
+          vinfo_incref(a);
+          *p->v.fix = a;
+          psyco_llfree_vci(p);
+        }
+      cmpinternal.tmp_counter++;
+      result->items[i] = a;
+    }
+}
+
+static void fz_parse(int length, bool clear)
+{ /* highly simplified version of fz_uncompress() that does nothing */
+  extra_assert(length >= 0);
+  while (length--)
+    {
+      int opc = fz_getopc();
+      if (opc >= 0)
+        {
+          Source arg = fz_getarg();
+          fz_parse(opc, clear);
+          if (clear && is_compiletime(arg))
+            sk_decref(CompileTime_Get(arg));
+        }
+    }
+}
+
+static void fz_find_rt1(vinfo_array_t* aa, int length,
+                        fz_find_fn callback, void* extra)
+{ /* simplified version of fz_uncompress() that does not build anything */
+  extra_assert(length >= 0);
+  while (length--)
+    {
+      int opc = fz_getopc();
+      if (opc >= 0)
+        {
+          vinfo_t* a;
+          Source source = fz_getarg();
+          extra_assert(length < aa->count);
+          a = aa->items[length];
+          if (is_runtime(source))
+            (*callback)(aa->items[length], source, extra);
+          if (opc > 0)
+            fz_find_rt1(a->array, opc, callback, extra);
+        }
+    }
+}
+
+inline void fz_load_fpo(FrozenPsycoObject* fpo) {
+  cmpinternal.buf_opc  = (signed char*) fpo->fz_vlocals_opc;
+  cmpinternal.buf_args =                fpo->fz_vlocals_opc;
+}
+
+inline void fz_find_runtimes(vinfo_array_t* aa, FrozenPsycoObject* fpo,
+                             fz_find_fn callback, void* extra, bool clear)
+{
+  fz_load_fpo(fpo);
+  fz_find_rt1(aa, fz_getopc(), callback, extra);
+}
+
+inline void fz_build(FrozenPsycoObject* fpo, vinfo_array_t* aa)
+{
+  int opc_size, arg_size;
+  signed char* nbuf;
+  cmpinternal.buf_opc = cmpinternal.buf_end;
+  cmpinternal.buf_args = (Source*) cmpinternal.buf_begin;
+  cmpinternal.tmp_counter = 0;
+  clear_tmp_marks(aa);
+  fz_compress(aa);
+  fz_putopc(aa->count);
+  opc_size = cmpinternal.buf_end - cmpinternal.buf_opc;
+  arg_size = ((signed char*) cmpinternal.buf_args) - cmpinternal.buf_begin;
+  nbuf = fz_internal_copy(&cmpinternal, arg_size + opc_size);
+  fpo->fz_vlocals_opc = (Source*) (nbuf + arg_size);
+}
+
+inline void fz_load_fpo_stack(FrozenPsycoObject* fpo) {
+  fz_load_fpo(fpo);
+  cmpinternal.tmp_counter = 0;
+  cmpinternal.vcilink = &cmpinternal.sentinel;
+  cmpinternal.sentinel.time = INT_MAX;   /* sentinel */
+}
+
+inline int fz_top_array_count(FrozenPsycoObject* fpo) {
+  int result;
+  if (fpo->fz_vlocals_opc == NULL)
+    return 0;
+  fz_load_fpo(fpo);
+  result = fz_getopc();
+  extra_assert(result >= 0);
+  return result;
+}
+
+inline void fz_unfreeze(vinfo_array_t* aa, FrozenPsycoObject* fpo) {
+  fz_load_fpo_stack(fpo);
+  aa->count = fz_getopc();
+  fz_uncompress(aa);
+  /* no more pending link should be left */
+  extra_assert(cmpinternal.vcilink == &cmpinternal.sentinel);
+}
+
+inline void fz_release(FrozenPsycoObject* fpo) {
+  if (fpo->fz_vlocals_opc != NULL)
+    {
+      fz_load_fpo(fpo);
+      fz_parse(fz_getopc(), true);  /* find the beginning of the pseudo-code */
+      PyCore_FREE((char*) cmpinternal.buf_args);
+    }
+}
+
+inline void fz_check_invariant(FrozenPsycoObject* fpo) {
+}
+
+inline void fz_restore_invariant(FrozenPsycoObject* fpo) {
+}
+
+
+#endif /* VLOCALS_OPC */
+
+
+ /***************************************************************/
+
 DEFINEFN
 void fpo_build(FrozenPsycoObject* fpo, PsycoObject* po)
 {
   clear_tmp_marks(&po->vlocals);
-  fpo->fz_vlocals = array_new(po->vlocals.count);
-  duplicate_array(fpo->fz_vlocals, &po->vlocals);
+  fz_build(fpo, &po->vlocals);
   fpo->fz_stuff.fz_stack_depth = po->stack_depth;
   fpo->fz_last_used_reg = (int) po->last_used_reg;
   fpo->fz_pyc_data = pyc_data_new(&po->pr);
@@ -26,7 +409,7 @@ void fpo_release(FrozenPsycoObject* fpo)
 {
   if (fpo->fz_pyc_data != NULL)
     pyc_data_delete(fpo->fz_pyc_data);
-  array_delete(fpo->fz_vlocals, NULL);
+  fz_release(fpo);
 }
 
 static void find_regs_array(vinfo_array_t* source, PsycoObject* po)
@@ -52,15 +435,14 @@ DEFINEFN
 PsycoObject* fpo_unfreeze(FrozenPsycoObject* fpo)
 {
   /* rebuild a PsycoObject from 'this' */
-  PsycoObject* po = PsycoObject_New(fpo->fz_vlocals->count);
+  PsycoObject* po = PsycoObject_New(fz_top_array_count(fpo));
   po->stack_depth = get_stack_depth(fpo);
   po->last_used_reg = (reg_t) fpo->fz_last_used_reg;
-  assert_cleared_tmp_marks(fpo->fz_vlocals);
-  duplicate_array(&po->vlocals, fpo->fz_vlocals);
-  clear_tmp_marks(fpo->fz_vlocals);
+  fz_unfreeze(&po->vlocals, fpo);
   find_regs_array(&po->vlocals, po);
   frozen_copy(&po->pr, fpo->fz_pyc_data);
   pyc_data_build(po, psyco_get_merge_points(po->pr.co));
+  psyco_assert_coherent(po);
   return po;
 }
 
@@ -181,7 +563,7 @@ void psyco_respawn_detected(PsycoObject* po)
   if (current == rs->respawn_from)
     {
       /* respawn finished */
-      extra_assert(codebuf->snapshot.fz_vlocals == NullArray);
+      extra_assert(fz_top_array_count(&codebuf->snapshot) == 0);
       fpo_build(&codebuf->snapshot, po);
     }
   else
@@ -270,6 +652,12 @@ int runtime_NON_NULL_t(PsycoObject* po, vinfo_t* vi)
 
 /*****************************************************************/
 
+#if !VLOCALS_OPC
+
+/* This implementation should probably not be used any more, but it
+   is kept around for reference. Once you understand the comparison
+   algorithm below you can read its more obscure implementation above.
+*/
 static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
                              vinfo_array_t** result)
 {
@@ -301,11 +689,29 @@ static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
 	      return false;   /* differs */
 	  count = aa->count;
 	}
-      else      /* array too long; fail unless all the extra items are NULL */
-	{
+      else  /* array too long */
+        {
+#if 0
+          /* the extra items in 'aa' must pass the test (b == NULL) below. */
+          for (i=aa->count; i>count; )
+            {
+              vinfo_t* a = aa->items[--i];
+              if (a != NULL && is_compiletime(a->source) &&
+                  ((KNOWN_SOURCE(a)->refcount1_flags & SkFlagFixed) != 0))
+                return false;  /* incompatible */
+            }
+#else
+          /* the extra items in 'aa' must all be NULL. This is not strictly
+             necessary for a compatibility (the above condition is more
+             precise) but I guess that you get better results this way,
+             because you have more information for a recompilation.
+             XXX This assumption should be tested.
+             XXX What about requiring that no NULL goes non-NULL in the
+                 rest of the array as well? */
 	  for (i=aa->count; i>count; )
 	    if (aa->items[--i] != NULL)
 	      return false;   /* differs */
+#endif
 	}
     }
   for (i=0; i<count; i++)
@@ -338,9 +744,9 @@ static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
 	      if (b->tmp == a)
                 continue;  /* quotient graph */
 
-              /* at this point, the graph 'bb' is not a quotient of the
-                 graph 'aa', i.e. two nodes are shared in 'aa' but not
-                 in 'bb'. This is not acceptable if it is a run-time
+              /* at this point, the graph 'aa' is not a quotient of the
+                 graph 'bb', i.e. two nodes are shared in 'bb' but not
+                 in 'aa'. This is not acceptable if it is a run-time
                  value. */
               if (is_runtime(b->source))
 		goto incompatible;
@@ -414,60 +820,336 @@ static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
   return false;
 }
 
-DEFINEFN
-vinfo_array_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns,
-                                CodeBufferObject** matching)
+inline bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
+                                vcompatible_t* result) {
+  return compatible_array(aa, fpo->fz_vlocals, &result->diff);
+}
+
+
+#else /* if VLOCALS_OPC */
+
+/* forward */
+static bool compatible_array(vinfo_array_t* aa, int count,
+                             vinfo_array_t** result, vinfo_array_t* reference);
+
+static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
+                             vinfo_array_t** result, vinfo_t* aref)
 {
+  /* Check if 'a' matches 'bsource'. */
+  long diff;
+
+  /* If 'aref!=a' then 'aref' is a vinfo_t* that already passed the test
+     against the same 'bsource'. In this case there is an extra test:
+     as the two nodes 'a' and 'aref' are not shared in 'aa', but shared
+     in 'bb', then they must not be run-time sources, because the
+     compiler could have used this fact when compiling from 'bb'
+     (typically, this single value was in a single register). */
+  if (a != aref && is_runtime(bsource))
+    return false;
+
+  /* invariant */
+  extra_assert(cmpinternal.tmp_counter <= cmpinternal.vcilink->time);
+
+  if (a == NULL)
+    return false;  /* NULL not compatible with non-NULL */
+  diff = ((long)a->source) ^ ((long)bsource);
+  if (diff != 0)
+    {
+      if ((diff & TimeMask) != 0)
+        return false;  /* not the same TIME_MASK */
+      if (is_runtime(a->source))
+        {
+          if ((diff & RunTime_NoRef) != 0)
+            {
+              /* from 'with ref' to 'without ref' or vice-versa:
+                 a source in 'a' with reference cannot pass for
+                 a source in 'b' without reference */
+              if ((a->source & RunTime_NoRef) == 0)
+                return false;
+            }
+        }
+      else
+        {
+          if (is_virtualtime(a->source))
+            return false;  /* different virtual sources */
+          if (KNOWN_SOURCE(a)->value != CompileTime_Get(bsource)->value)
+            {
+              if ((CompileTime_Get(bsource)->refcount1_flags &
+                   SkFlagFixed) != 0)
+                return false;  /* b's value is fixed */
+              else {
+                /* approximative match, might un-promote 'a' from
+                   compile-time to run-time. */
+                int i, ocount = (*result)->count;
+                /* do not add several time the same value to the array */
+                for (i=0; i<ocount; i++)
+                  if ((*result)->items[i] == a)
+                    break;
+                if (i==ocount)
+                  {
+                    *result = array_grow1(*result, ocount+1);
+                    (*result)->items[ocount] = a;
+                  }
+              }
+            }
+        }
+    }
+
+  if (bcount == 0 && a->array == NullArray)
+    return true;    /* shortcut */
+  
+  return compatible_array(a->array, bcount, result, aref->array);
+}
+
+/* The following function is the composition of fz_uncompress() and
+   the above compatible_array(), optimized so that we need not build
+   a whole uncompressed copy of the pseudo-code. */
+static bool compatible_array(vinfo_array_t* aa, int count,
+                             vinfo_array_t** result, vinfo_array_t* reference)
+{
+  /* In the following comments, 'bb' refers to the implicit intermediate
+     array that would be created by fz_uncompress(). */
+  /* 'reference' is a either 'aa', or another array of items that already
+     passed the test against the same pseudo-code. This lets us check
+     shared structures. */
+  
   int i;
-  vinfo_array_t* bestresult = NULL;
+  /* count = bb->count; */
+  extra_assert(count >= 0);
+  if (aa->count != count)
+    {
+      if (aa->count < count)   /* array too short; ok only if the extra items */
+	{                      /*   in 'bb' are all NULL.                     */
+	  do {
+            if (fz_getopc() != FZ_OPC_NULL)
+              return false;   /* differs */
+          } while (aa->count < --count);
+        }
+      else  /* array too long */
+        {
+          /* the extra items in 'aa' must all be NULL. This is not strictly
+             necessary for a compatibility (the above condition is more
+             precise) but I guess that you get better results this way,
+             because you have more information for a recompilation.
+             XXX This assumption should be tested.
+             XXX What about requiring that no NULL goes non-NULL in the
+                 rest of the array as well? */
+	  for (i=aa->count; i>count; )
+	    if (aa->items[--i] != NULL)
+	      return false;   /* differs */
+        }
+    }
+  for (i=count; i--; )
+    {
+      int opc = fz_getopc();
+      vinfo_t* a = aa->items[i];
+
+      /* invariant */
+      extra_assert(cmpinternal.tmp_counter <= cmpinternal.vcilink->time);
+
+      if (opc == FZ_OPC_NULL)  /* 'b' is NULL */
+        {
+          /* if b == NULL, any value in 'a' is ok --
+             with the exception of a fixed compile-time value, as
+             created by a promotion. Without the following test,
+             Psyco sometimes emits an infinite loop because the
+             PsycoObject after promotion is found to be compatible
+             with itself just before promotion. */
+          if (a != NULL && is_compiletime(a->source) &&
+              ((KNOWN_SOURCE(a)->refcount1_flags & SkFlagFixed) != 0))
+            return false;
+        }
+      else if (opc < 0)  /* 'b' is a link to another 'b'. */
+        {
+          /* We cannot compare right now the 'a' with the corresponding 'b'
+             because we do not know it yet. We record the comparison as
+             "to be done later" in the linked list. */
+          if (a == NULL)
+            return false;   /* shortcut: cannot match later */
+          fz_pushstack(opc, a);
+        }
+      else      /* 'b' is a vinfo_t */
+        {
+          Source bsource = fz_getarg();
+
+          /* Save the current position (resolving links require backtracking) */
+          signed char* saved_buf_opc = cmpinternal.buf_opc;
+          Source* saved_buf_args     = cmpinternal.buf_args;
+          int saved_tmp_counter      = cmpinternal.tmp_counter;
+
+          /* Compare 'a' and 'bsource'. */
+          extra_assert(i < reference->count);
+          if (!compatible_vinfo(a, bsource, opc, result, reference->items[i]))
+            return false;
+
+          /* Only after the above call we know if any link is resolved
+             to the current 'b'. */
+          if (cmpinternal.tmp_counter == cmpinternal.vcilink->time)
+            {
+              bool ok = true;
+              struct vcilink_s* pending = NULL;  /* links that resolve to 'b' */
+              struct vcilink_s* p;
+              vinfo_t* preva;
+              
+              while (1) {
+                /* Move all links with the current time to 'pending' */
+                while (cmpinternal.tmp_counter == cmpinternal.vcilink->time)
+                  {
+                    p = cmpinternal.vcilink;
+                    cmpinternal.vcilink = p->next;
+                    p->next = pending;
+                    pending = p;
+                  }
+                extra_assert(cmpinternal.tmp_counter<cmpinternal.vcilink->time);
+                if (!pending)
+                  break;   /* done */
+
+                /* Resolve the next link */
+              shortcut1:
+                p = pending;
+                pending = p->next;
+                preva = p->v.preva;
+                psyco_llfree_vci(p);
+
+                /* First check if the same link is found later in the
+                   linked list, and ignore it if so (optimization). */
+                for (p = pending; p; p=p->next)
+                  if (p->v.preva == preva)
+                    goto shortcut1;
+
+                if (ok && preva != a)
+                  {
+                    /* the two vinfo_ts shared in 'bb' are not shared in 'aa',
+                       i.e. two nodes are shared in 'bb' but not in 'aa'.
+                       We must compare the second node in 'aa' again with the
+                       same single node of 'bb'. */
+                    /* Backtracking */
+#if ALL_CHECKS
+                    signed char* buf_opc1 = cmpinternal.buf_opc;
+                    Source* buf_args1     = cmpinternal.buf_args;
+                    int tmp_counter1      = cmpinternal.tmp_counter;
+#endif
+                    cmpinternal.tmp_counter = saved_tmp_counter;
+                    cmpinternal.buf_args    = saved_buf_args;
+                    cmpinternal.buf_opc     = saved_buf_opc;
+                    ok = compatible_vinfo(preva, bsource, opc, result, a);
+#if ALL_CHECKS
+                    if (ok) {
+                      extra_assert(buf_opc1     == cmpinternal.buf_opc);
+                      extra_assert(buf_args1    == cmpinternal.buf_args);
+                      extra_assert(tmp_counter1 == cmpinternal.tmp_counter);
+                    }
+#endif
+                  }
+
+                /* go on with the loop even if !ok, to free all items left
+                   in [pbegin, pend[. They must be freed now because they are
+                   no longer members of the main linked list --
+                   the members of the linked list are freed automatically by
+                   fz_compatible_array() */
+              }
+
+              if (!ok)
+                return false;
+            }
+          
+          cmpinternal.tmp_counter++;
+          extra_assert(cmpinternal.tmp_counter <= cmpinternal.vcilink->time);
+        }
+    }
+  return true;
+}
+
+inline bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
+                                vcompatible_t* result) {
+  bool ok;
+  fz_load_fpo_stack(fpo);
+  ok = compatible_array(aa, fz_getopc(), &result->diff, aa);
+  
+  /* free the linked list (it should already be free if 'ok') */
+  while (cmpinternal.vcilink != &cmpinternal.sentinel)
+    {
+      struct vcilink_s* p = cmpinternal.vcilink;
+      cmpinternal.vcilink = p->next;
+      psyco_llfree_vci(p);
+    }
+  
+  return ok;
+}
+
+
+#endif /* VLOCALS_OPC */
+
+
+DEFINEFN
+vcompatible_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns)
+{
+  static vcompatible_t result;  /* argh, a global variable -- well, the rest of
+                                   the implementation is not re-entrent anyway */
+  vinfo_array_t* bestresult = NULL;   /* best result so far */
+  CodeBufferObject* bestbuf = NULL;
+  int i;
   PyObject* plist = patterns->fatlist;
   extra_assert(PyList_Check(plist));
   i = PyList_GET_SIZE(plist);
   while (i--)    /* the most dummy algorithm: step by step in the list, */
     {            /* checking for a match at each step.                  */
-      vinfo_array_t* differences = NullArray;
       CodeBufferObject* codebuf = (CodeBufferObject*) PyList_GET_ITEM(plist, i);
+      result.matching = codebuf;
+      result.diff = NullArray;
       extra_assert(CodeBuffer_Check(codebuf));
-      /* invariant: all snapshot.fz_vlocals in the fatlist have
-         all their 'tmp' fields set to NULL. */
-      assert_cleared_tmp_marks(codebuf->snapshot.fz_vlocals);
-      if (compatible_array(&po->vlocals, codebuf->snapshot.fz_vlocals,
-                           &differences))
+      fz_check_invariant(&codebuf->snapshot);
+      if (fz_compatible_array(&po->vlocals, &codebuf->snapshot, &result))
 	{
           /* compatible_array() leaves data in the 'tmp' fields.
              It must be cleared unless it is the final result of
              psyco_compatible() itself. */
-	  if (differences == NullArray)
+	  if (result.diff == NullArray)
 	    {
               /* Total match */
-	      *matching = codebuf;
-	      return NullArray;
+              if (bestresult != NULL)
+                array_release(bestresult);
+              return &result;
 	    }
           else
             {
               /* Partial match, clear 'tmp' fields */
-              clear_tmp_marks(codebuf->snapshot.fz_vlocals);
+              fz_restore_invariant(&codebuf->snapshot);
               if (bestresult != NULL)
                 {
-                  if (bestresult->count <= differences->count)
-                    continue;  /* not better than the previous partial match */
+                  if (bestresult->count <= result.diff->count)
+                    {
+                      array_release(result.diff);
+                      continue;  /* not better than the previous partial match */
+                    }
                   array_release(bestresult);
                 }
-              /* Record the first partial match we found */
-              bestresult = differences;
-              *matching = codebuf;
+              /* Record the best partial match we found so far */
+              bestresult = result.diff;
+              bestbuf    = codebuf;
             }
 	}
       else   /* compatible_array() should have reset all 'tmp' fields */
-	assert_cleared_tmp_marks(codebuf->snapshot.fz_vlocals);
+        fz_check_invariant(&codebuf->snapshot);
     }
-  return bestresult;
+  if (bestresult == NULL)
+    return NULL;
+  else
+    {
+      result.matching = bestbuf;
+      result.diff     = bestresult;
+      return &result;
+    }
 }
 
 DEFINEFN
-void psyco_stabilize(CodeBufferObject* lastmatch)
+void psyco_stabilize(vcompatible_t* lastmatch)
 {
-  clear_tmp_marks(lastmatch->snapshot.fz_vlocals);
+  if (lastmatch->diff == NullArray)
+    fz_restore_invariant(&lastmatch->matching->snapshot);
+  else
+    fz_check_invariant(&lastmatch->matching->snapshot);
+  array_release(lastmatch->diff);
 }
 
 
@@ -482,6 +1164,7 @@ struct dmove_s {
   vinfo_t* copy_regs[REG_TOTAL];
   code_t* code_origin;
   code_t* code_limit;
+  code_t* code;   /* only used by data_update_stack() */
   CodeBufferObject* private_codebuf;
 };
 
@@ -506,122 +1189,102 @@ static code_t* data_new_buffer(code_t* code, struct dmove_s* dm)
 
 #define ORIGINAL_VINFO(spos)   (*(vinfo_t**)(dm->usages + (spos)))
 
-static void data_original_table(struct dmove_s* dm, vinfo_array_t* bb)
+static void data_original_table(vinfo_t* a, RunTimeSource bsource,
+                                struct dmove_s* dm)
 {
-  int i = bb->count;
-  while (i--)
-    {
-      vinfo_t* b = bb->items[i];
-      if (b != NULL)
-        {
-	  if (is_runtime(b->source) && RUNTIME_STACK(b->tmp) < dm->usages_size)
-            ORIGINAL_VINFO(RUNTIME_STACK(b->tmp)) = b->tmp;
-          if (b->array != NullArray)
-	    data_original_table(dm, b->array);
-        }
-    }
+  /* called on each run-time vinfo_t in the FrozenPsycoObject */
+  if (RUNTIME_STACK(a) < dm->usages_size)
+    ORIGINAL_VINFO(RUNTIME_STACK(a)) = a;
 }
 
-static code_t* data_update_stack(code_t* code, struct dmove_s* dm,
-                                 vinfo_array_t* bb)
+static void data_update_stack(vinfo_t* a, RunTimeSource bsource,
+                              struct dmove_s* dm)
 {
   PsycoObject* po = dm->po;
-  int i = bb->count;
-  while (i--)
+  code_t* code = dm->code;
+  long dststack = getstack(bsource);
+  long srcstack = getstack(a->source);
+  char rg, rgb;
+  vinfo_t* overridden;
+  
+  /* check for values passing from no-reference to reference */
+  if ((bsource & RunTime_NoRef) == 0) {  /* destination has ref */
+    if ((a->source & RunTime_NoRef) == 0)   /* source has ref too */
+      {
+        /* remove the reference from 'a' because it now belongs
+           to 'b' ('b->source' itself is in the frozen snapshot
+           and must not be modified!) */
+        a->source = remove_rtref(a->source);
+      }
+    else
+      {
+        /* create a new reference for 'b'. Note that if the same
+           'a' is copied to several 'b's during data_update_stack()
+           as is allowed by graph quotient detection in
+           psyco_compatible(), then only the first copy will get
+           the original reference owned by 'a' (if any) and for
+           the following copies the following increfing code is
+           executed as well. */
+        RTVINFO_IN_REG(a);
+        rg = RUNTIME_REG(a);
+        INC_OB_REFCNT(rg);
+      }
+  }
+  /* 'a' must no longer own a reference at this point.
+     The case of 'b' wanting no reference but 'a' having one
+     is forbidden by psyco_compatible() because decrefing 'a'
+     would potentially leave a freed pointer in 'b'. */
+  extra_assert(!has_rtref(a->source));
+  
+  rgb = getreg(bsource);
+  if (rgb != REG_NONE)
+    dm->copy_regs[(int)rgb] = a;
+  if (dststack == RUNTIME_STACK_NONE || dststack == srcstack)
+    ;  /* nothing to do */
+  else
     {
-      vinfo_t* b = bb->items[i];
-      if (b != NULL && b->tmp != NULL)
+      rg = RUNTIME_REG(a);
+      if (rg == REG_NONE)
         {
-          vinfo_t* a = b->tmp;   /* source value */
-          b->tmp = NULL;  /* don't consider the same 'b' more than once */
-          
-          if (is_runtime(b->source))
-            {
-              char rg, rgb;
-              vinfo_t* overridden;
-              long dststack = RUNTIME_STACK(b);
-              long srcstack = RUNTIME_STACK(a);
-
-              /* check for values passing from no-reference to reference */
-              if ((b->source & RunTime_NoRef) == 0) {  /* destination has ref */
-                if ((a->source & RunTime_NoRef) == 0)   /* source has ref too */
-                  {
-                    /* remove the reference from 'a' because it now belongs
-                       to 'b' ('b->source' itself is in the frozen snapshot
-                       and must not be modified!) */
-                    a->source = remove_rtref(a->source);
-                  }
-                else
-                  {
-                    /* create a new reference for 'b'. Note that if the same
-                       'a' is copied to several 'b's during data_update_stack()
-                       as is allowed by graph quotient detection in
-                       psyco_compatible(), then only the first copy will get
-                       the original reference owned by 'a' (if any) and for
-                       the following copies the following increfing code is
-                       executed as well. */
-                    RTVINFO_IN_REG(a);
-                    rg = RUNTIME_REG(a);
-                    INC_OB_REFCNT(rg);
-                  }
-              }
-              /* 'a' must no longer own a reference at this point.
-                 The case of 'b' wanting no reference but 'a' having one
-                 is forbidden by psyco_compatible() because decrefing 'a'
-                 would potentially leave a freed pointer in 'b'. */
-              extra_assert(!has_rtref(a->source));
-              
-              rgb = RUNTIME_REG(b);
-              if (rgb != REG_NONE)
-                dm->copy_regs[(int)rgb] = a;
-              if (dststack == RUNTIME_STACK_NONE || dststack == srcstack)
-                goto done;
-              rg = RUNTIME_REG(a);
-              if (rg == REG_NONE)
-                {
-                  NEED_FREE_REG(rg);
-                  LOAD_REG_FROM_EBP_BASE(rg, srcstack);
-                  REG_NUMBER(po, rg) = a;
-                  SET_RUNTIME_REG_TO(a, rg);
-                }
-              a->source = RunTime_NewStack(dststack, rg, false);
-              overridden = ORIGINAL_VINFO(dststack);
-              if (overridden == NULL)
-                goto can_save_only;
-              ORIGINAL_VINFO(dststack) = NULL;
-              
-              if (!RUNTIME_REG_IS_NONE(overridden))
-                {
-                  SET_RUNTIME_STACK_TO_NONE(overridden);
-                can_save_only:
-                  SAVE_REG_TO_EBP_BASE(rg, dststack);
-                  if (rgb == REG_NONE)
-                    {
-                      /* value has been stored in the stack
-                         and it is no longer needed in a register */
-                      REG_NUMBER(po, rg) = NULL;
-                      SET_RUNTIME_REG_TO_NONE(a);
-                    }
-                }
-              else
-                {
-                  XCHG_REG_AND_EBP_BASE(rg, dststack);
-                  REG_NUMBER(po, rg) = overridden;
-                  SET_RUNTIME_REG_TO(overridden, rg);
-                  SET_RUNTIME_STACK_TO_NONE(overridden);
-                  SET_RUNTIME_REG_TO_NONE(a);
-                }
-              
-              if (code > dm->code_limit)
-                /* oops, buffer overflow. Start a new buffer */
-                code = data_new_buffer(code, dm);
-            }
-        done:
-          if (b->array != NullArray)
-            code = data_update_stack(code, dm, b->array);
+          NEED_FREE_REG(rg);
+          LOAD_REG_FROM_EBP_BASE(rg, srcstack);
+          REG_NUMBER(po, rg) = a;
+          SET_RUNTIME_REG_TO(a, rg);
         }
+      a->source = RunTime_NewStack(dststack, rg, false);
+      overridden = ORIGINAL_VINFO(dststack);
+      if (overridden == NULL)
+        goto can_save_only;
+      ORIGINAL_VINFO(dststack) = NULL;
+  
+      if (!RUNTIME_REG_IS_NONE(overridden))
+        {
+          SET_RUNTIME_STACK_TO_NONE(overridden);
+        can_save_only:
+          SAVE_REG_TO_EBP_BASE(rg, dststack);
+          if (rgb == REG_NONE)
+            {
+              /* value has been stored in the stack
+                 and it is no longer needed in a register */
+              REG_NUMBER(po, rg) = NULL;
+              SET_RUNTIME_REG_TO_NONE(a);
+            }
+        }
+      else
+        {
+          XCHG_REG_AND_EBP_BASE(rg, dststack);
+          REG_NUMBER(po, rg) = overridden;
+          SET_RUNTIME_REG_TO(overridden, rg);
+          SET_RUNTIME_STACK_TO_NONE(overridden);
+          SET_RUNTIME_REG_TO_NONE(a);
+        }
+      
+      if (code > dm->code_limit)
+        /* oops, buffer overflow. Start a new buffer */
+        code = data_new_buffer(code, dm);
+      
     }
-  return code;
+  dm->code = code;
 }
 
 static code_t* data_free_unused(code_t* code, struct dmove_s* dm,
@@ -660,18 +1323,20 @@ static code_t* data_free_unused(code_t* code, struct dmove_s* dm,
 }
 
 DEFINEFN
-code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
+code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
+                    CodeBufferObject** target)
 {
-  /* Update 'po' to match 'target', then jump to 'target'. */
+  /* Update 'po' to match 'lastmatch', then jump to 'lastmatch'. */
 
   int i;
   struct dmove_s dm;
   code_t* code = po->code;
-  CodeBufferObject* target_codebuf = *target;
+  CodeBufferObject* target_codebuf = lastmatch->matching;
   int sdepth = get_stack_depth(&target_codebuf->snapshot);
   int popsdepth;
   char pops[REG_TOTAL+2];
 
+  extra_assert(lastmatch->diff == NullArray);  /* unify with exact match only */
   psyco_assert_coherent(po);
   dm.usages_size = sdepth + sizeof(vinfo_t**);
   dm.usages = (char*) PyCore_MALLOC(dm.usages_size);
@@ -679,7 +1344,9 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
     OUT_OF_MEMORY();
   memset(dm.usages, 0, dm.usages_size);   /* set to all NULL */
   memset(dm.copy_regs, 0, sizeof(dm.copy_regs));
-  data_original_table(&dm, target_codebuf->snapshot.fz_vlocals);
+  fz_find_runtimes(&po->vlocals, &target_codebuf->snapshot,
+                   (fz_find_fn) &data_original_table,
+                   &dm, false);
 
   dm.po = po;
   dm.code_origin = code;
@@ -695,7 +1362,11 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
     }
 
   /* update the stack */
-  code = data_update_stack(code, &dm, target_codebuf->snapshot.fz_vlocals);
+  dm.code = code;
+  fz_find_runtimes(&po->vlocals, &target_codebuf->snapshot,
+                   (fz_find_fn) &data_update_stack,
+                   &dm, true);
+  code = dm.code;
 
   /* decref any object that would be present in 'po' but not at all in
      the snapshot (data_update_stack() has removed the 'ref' tag of all
@@ -779,7 +1450,10 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
   
   PyCore_FREE(dm.usages);
   if (dm.private_codebuf == NULL)
-    Py_INCREF(target_codebuf);      /* no new buffer created */
+    {
+      Py_INCREF(target_codebuf);      /* no new buffer created */
+      *target = target_codebuf;
+    }
   else
     {
       SHRINK_CODE_BUFFER(dm.private_codebuf, code - dm.code_origin,
@@ -795,18 +1469,19 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
 }
 
 DEFINEFN
-CodeBufferObject* psyco_unify_code(PsycoObject* po, CodeBufferObject* target)
+CodeBufferObject* psyco_unify_code(PsycoObject* po, vcompatible_t* lastmatch)
 {
   /* simplified interface to psyco_unify() without using a previously
      existing code buffer. */
 
+  CodeBufferObject* target;
   code_t localbuf[GUARANTEED_MINIMUM];
   /* relies on the fact that psyco_unify() has no room at all in localbuf.
      Anything but the final JMP will trigger the creation of a new code
      buffer. */
   po->code = localbuf;
   po->codelimit = NULL;
-  psyco_unify(po, &target);
+  psyco_unify(po, lastmatch, &target);
   return target;
 }
 

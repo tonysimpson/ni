@@ -13,21 +13,30 @@
 
 /* a frozen PsycoObject is a snapshot of an actual PsycoObject,
    capturing the state of the compiler in a form that can be used
-   later to compare live states to it. Currently implemented as a
-   copy of the PsycoObject vlocals and stack_depth.
-   XXX should be optimized very differently
-   the FrozenPsycoObject's secondary goal is to capture enough
+   later to compare live states to it.
+   The FrozenPsycoObject's secondary goal is to capture enough
    information to rebuild a "live" PsycoObject, close enough to
    the original to let the next few Python instructions produce
    exactly the same machine code as the original. See
    psyco_prepare_respawn(). Be careful, there are a lot of such
-   snapshots around in memory; keep them as small as possible. */
+   snapshots around in memory; keep them as small as possible.
+
+   The first implementation (with VLOCALS_OPC=0) stores a copy
+   of the PsycoObject vlocals. So does the second implementation
+   (VLOCALS_OPC=1), but it compresses the copy into a very compact
+   pseudo-code. */
+#define VLOCALS_OPC  1
+
 struct FrozenPsycoObject_s {
   union {
     int fz_stack_depth;
     struct respawn_s* respawning;
   } fz_stuff;
-  vinfo_array_t* fz_vlocals;
+#if VLOCALS_OPC
+  Source* fz_vlocals_opc;     /* compact pseudo-code copy */
+#else
+  vinfo_array_t* fz_vlocals;       /* verbatim copy */
+#endif
   short fz_last_used_reg;
   short fz_respawned_cnt;
   CodeBufferObject* fz_respawned_from;
@@ -39,7 +48,11 @@ inline void fpo_mark_new(FrozenPsycoObject* fpo) {
 	fpo->fz_respawned_from = NULL;
 }
 inline void fpo_mark_unused(FrozenPsycoObject* fpo) {
+#if VLOCALS_OPC
+	fpo->fz_vlocals_opc = NULL;
+#else
 	fpo->fz_vlocals = NullArray;
+#endif
 	fpo->fz_pyc_data = NULL;
 }
 EXTERNFN void fpo_build(FrozenPsycoObject* fpo, PsycoObject* po);
@@ -53,24 +66,25 @@ inline int get_stack_depth(FrozenPsycoObject* fpo) {
 	return fpo->fz_stuff.fz_stack_depth;
 }
 
-
 /* psyco_compatible():
    search in the given global_entries_t for a match to the live PsycoObject.
-   The best match is returned in *matching. The function result is NULL if no
-   match is found; otherwise, it is an array of the 'vinfo_t*' of 'po' which
-   are compile-time but should be un-promoted to run-time. In particular, the
-   array is empty (==NullArray) if an exact match is found. A non-empty
-   returned array must be released by 'array_release()'.
-   
-   If the result is NullArray, this call leaves the dispatcher in a
-   unstable state; it must be fixed by calling one of the psyco_unify()
-   functions below, or by psyco_stabilize().
-*/
-EXTERNFN vinfo_array_t* psyco_compatible(PsycoObject* po,
-                                         global_entries_t* pattern,
-                                         CodeBufferObject** matching);
+   Return NULL if no match is found, or a vcompatible_t structure otherwise.
+   The returned 'diff' is an array of the 'vinfo_t*' of 'po' which are
+   compile-time but should be un-promoted to run-time. In particular, the
+   array is empty (==NullArray) if an exact match is found.
 
-EXTERNFN void psyco_stabilize(CodeBufferObject* lastmatch);
+   The current implementation is not re-entrent. The returned vcompatible_t
+   structure must be released by psyco_stabilize() or one of the psyco_unify
+   functions below, before another call to psyco_compatible() can be made.
+*/
+typedef struct {
+  CodeBufferObject* matching;   /* best match */
+  vinfo_array_t* diff;          /* array of differences */
+} vcompatible_t;
+EXTERNFN vcompatible_t* psyco_compatible(PsycoObject* po,
+                                         global_entries_t* pattern);
+
+EXTERNFN void psyco_stabilize(vcompatible_t* lastmatch);
 
 
 /*****************************************************************/
@@ -113,27 +127,27 @@ inline int register_codebuf(global_entries_t* ge, CodeBufferObject* codebuf) {
 /*****************************************************************/
  /***   Unification                                             ***/
 
-/* Update 'po' to match 'target', then jump to 'target'.
+/* Update 'po' to match 'lastmatch', then jump to 'lastmatch'.
    For the conversion we might have to emit some code.
-   If this->code == NULL or there is not enough room between code and
-   this->codelimit, a new code buffer is created and returned in 'target';
-   otherwise, Py_INCREF(*target). If this->code != NULL, the return
-   value points at the end of the code that has been written there;
-   otherwise, the return value is undefined (but not NULL).
-   
-   Note: this function only works right after a successful call
-   to compare_array. It needs the data left in the 'tmp' fields.
-   It releases 'po'.
+   If po->code == NULL or there is not enough room between code and
+   po->codelimit, a new code buffer is created. A new reference to
+   the new or target code buffer is returned in 'target'.
+   If po->code != NULL, the return value points at the end of the
+   code that has been written there; otherwise, the return value is
+   undefined (but not NULL).
+   'po' and 'lastmatch' are released.
 */
-EXTERNFN code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target);
+EXTERNFN code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
+                             CodeBufferObject** target);
 
 /* Simplified interface to psyco_unify() without using a previously
    existing code buffer (i.e. 'po->code' is uninitialized). If needed,
    return a new buffer with the necessary code followed by a JMP to
-   'target'. If no code is needed, just return a new reference to 'target'.
+   'lastmatch'. If no code is needed, just return a new reference to
+   'lastmatch->matching'.
 */
 EXTERNFN CodeBufferObject* psyco_unify_code(PsycoObject* po,
-                                            CodeBufferObject* target);
+                                            vcompatible_t* lastmatch);
 
 /* To "simplify" recursively a vinfo_array_t. The simplification done
    is to replace run-time values inside a sub-array of a non-virtual

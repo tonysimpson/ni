@@ -12,70 +12,8 @@ DEFINEVAR source_virtual_t psyco_vsource_not_important;
 
 /*****************************************************************/
 
-#define VI_BLOCK_COUNT   (4096 / sizeof(vinfo_t))
-
-DEFINEVAR void** vinfo_linked_list = NULL;
-
-DEFINEFN
-void* vinfo_malloc_block()
-#ifdef PSYCO_NO_LINKED_LISTS
-{
-  vinfo_t* p = (vinfo_t*) PyCore_MALLOC(sizeof(vinfo_t));
-  if (p == NULL)
-    OUT_OF_MEMORY();
-  return p;
-}
-#else
-{
-  vinfo_t* p;
-  vinfo_t* prev = (vinfo_t*) vinfo_linked_list;
-  vinfo_t* block = (vinfo_t*) PyCore_MALLOC(VI_BLOCK_COUNT*sizeof(vinfo_t));
-  if (block == NULL)
-    /*return NULL;*/ OUT_OF_MEMORY();
-  
-  for (p=block+VI_BLOCK_COUNT; --p!=block; )
-    {
-      *(vinfo_t**)p = prev;
-      prev = p;
-    }
-  vinfo_linked_list = *(void***) prev;
-  return prev;
-}
-#endif
-
-
-#define SK_BLOCK_COUNT   (1024 / sizeof(source_known_t))
-
-DEFINEVAR void** sk_linked_list = NULL;
-
-DEFINEFN
-void* sk_malloc_block()
-#ifdef PSYCO_NO_LINKED_LISTS
-{
-  source_known_t* p = (source_known_t*) PyCore_MALLOC(sizeof(source_known_t));
-  if (p == NULL)
-    OUT_OF_MEMORY();
-  return p;
-}
-#else
-{
-  source_known_t* p;
-  source_known_t* prev = (source_known_t*) sk_linked_list;
-  source_known_t* block = (source_known_t*)
-    PyCore_MALLOC(SK_BLOCK_COUNT*sizeof(source_known_t));
-  if (block == NULL)
-    /*return NULL;*/ OUT_OF_MEMORY();
-  
-  for (p=block+SK_BLOCK_COUNT; --p!=block; )
-    {
-      *(source_known_t**)p = prev;
-      prev = p;
-    }
-  sk_linked_list = *(void***) prev;
-  return prev;
-}
-#endif
-
+BLOCKALLOC_IMPLEMENTATION(vinfo, vinfo_t, 8192)
+BLOCKALLOC_IMPLEMENTATION(sk, source_known_t, 4096)
 
 /*****************************************************************/
 
@@ -175,7 +113,7 @@ void vinfo_release(vinfo_t* vi, PsycoObject* po)
 
   /* only virtual-time vinfos are allowed in po->ccreg */
   extra_assert(po == NULL || vi != po->ccreg);
-  VINFO_FREE_1(vi);
+  psyco_llfree_vinfo(vi);
 }
 
 
@@ -501,21 +439,20 @@ DEFINEFN
 code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
                       bool continue_compilation)
 {
-  CodeBufferObject* oldcodebuf;
-  vinfo_array_t* diff = mp==NULL ? NULL :
-                     psyco_compatible(po, &mp->entries, &oldcodebuf);
+  vcompatible_t* cmp = mp==NULL ? NULL : psyco_compatible(po, &mp->entries);
 
   /*psyco_assert_cleared_tmp_marks(&po->vlocals);  -- not needed -- */
   
-  if (diff == NullArray)  /* exact match, jump there */
+  if (cmp != NULL && cmp->diff == NullArray)  /* exact match, jump there */
     {
-      code_t* code2 = psyco_unify(po, &oldcodebuf);
+      CodeBufferObject* oldcodebuf;
+      code_t* code2 = psyco_unify(po, cmp, &oldcodebuf);
       /* XXX store reference to oldcodebuf somewhere */
       return code2;
     }
   else
     {
-      if (po->codelimit - po->code <= BUFFER_MARGIN && diff == NULL)
+      if (po->codelimit - po->code <= BUFFER_MARGIN && cmp == NULL)
         {
           /* Running out of space in this buffer. */
           
@@ -544,13 +481,13 @@ code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
         /*Py_DECREF(codebuf); XXX cannot loose reference if mp == NULL*/
       }
       
-      if (diff != NULL)   /* partial match */
+      if (cmp != NULL)   /* partial match */
         {
-          /* diff points to an array of vinfo_ts: make them run-time */
+          /* cmp->diff points to an array of vinfo_ts: make them run-time */
           int i;
-          for (i=diff->count; i--; )
-            psyco_unfix(po, diff->items[i]);
-          array_release(diff);
+          for (i=cmp->diff->count; i--; )
+            psyco_unfix(po, cmp->diff->items[i]);
+          psyco_stabilize(cmp);
           /* start over (maybe we have already seen this new state) */
           return psyco_compile(po, mp, continue_compilation);
         }
@@ -567,14 +504,12 @@ DEFINEFN
 void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
                         condition_code_t condition)
 {
-  CodeBufferObject* oldcodebuf;
   PsycoObject* po2 = PsycoObject_Duplicate(po);
-  vinfo_array_t* diff = mp==NULL ? NULL :
-                     psyco_compatible(po2, &mp->entries, &oldcodebuf);
+  vcompatible_t* cmp = mp==NULL ? NULL : psyco_compatible(po2, &mp->entries);
 
   extra_assert(condition < CC_TOTAL);
 
-  if (diff == NullArray)  /* exact match */
+  if (cmp != NULL && cmp->diff == NullArray)  /* exact match */
     {
       /* try to emit:
                            JNcond Label
@@ -584,13 +519,14 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
          if <unification-and-jump> is only a JMP, recode the whole as a single
                            Jcond <unification-jump-target>
       */
+      CodeBufferObject* oldcodebuf;
       code_t* code2 = po->code + SIZE_OF_SHORT_CONDITIONAL_JUMP;
       code_t* target;
       code_t* codeend;
       
       po2->code = code2;
       po2->codelimit = code2 + RANGE_OF_SHORT_CONDITIONAL_JUMP;
-      codeend = psyco_unify(po2, &oldcodebuf);
+      codeend = psyco_unify(po2, cmp, &oldcodebuf);
       /* XXX store reference to oldcodebuf somewhere */
       BEGIN_CODE
       if (IS_A_SINGLE_JUMP(code2, codeend, target))
@@ -608,8 +544,8 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
          coding_pause(); it will write a Jcond to a proxy
          which will perform the actual compilation later.
       */
-      if (diff != NULL)
-        array_release(diff);
+      if (cmp != NULL)
+        psyco_stabilize(cmp);
       psyco_coding_pause(po2, condition, &psyco_resume_compile, NULL, 0);
       po->code = po2->code;
     }
@@ -622,20 +558,18 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
 {
   code_t* code1;
   CodeBufferObject* codebuf;
-  CodeBufferObject* oldcodebuf;
   bool compile_now;
-  vinfo_array_t* diff = mp==NULL ? NULL :
-                     psyco_compatible(po, &mp->entries, &oldcodebuf);
+  vcompatible_t* cmp = mp==NULL ? NULL : psyco_compatible(po, &mp->entries);
 
   /*psyco_assert_cleared_tmp_marks(&po->vlocals);  -- not needed -- */
 
-  if (diff == NullArray)  /* exact match */
-    return psyco_unify_code(po, oldcodebuf);
+  if (cmp != NULL && cmp->diff == NullArray)  /* exact match */
+    return psyco_unify_code(po, cmp);
 
   /* We compile the new code right now if we have a full mismatch and if
      there are not too many locked big buffers in codemanager.c */
-  compile_now = diff==NULL && psyco_locked_buffers() < WARN_TOO_MANY_BUFFERS-1;
-  if (diff==NULL && !compile_now)
+  compile_now = cmp==NULL && psyco_locked_buffers() < WARN_TOO_MANY_BUFFERS-1;
+  if (cmp==NULL && !compile_now)
     mp = NULL;  /* we are about to write a coding pause,
                    don't register it in mp->entries */
   
@@ -651,12 +585,12 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
          (this is the usual case) */
       code1 = GLOBAL_ENTRY_POINT(po);
     }
-  else if (diff != NULL)   /* partial match */
+  else if (cmp != NULL)   /* partial match */
     {
       int i;
-      for (i=diff->count; i--; )
-        psyco_unfix(po, diff->items[i]);
-      array_release(diff);
+      for (i=cmp->diff->count; i--; )
+        psyco_unfix(po, cmp->diff->items[i]);
+      psyco_stabilize(cmp);
       /* start over (maybe we have already seen this new state) */
       code1 = psyco_compile(po, mp, false);
     }
