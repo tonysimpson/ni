@@ -1,4 +1,4 @@
-import os, sys, re, htmlentitydefs
+import os, sys, re, htmlentitydefs, struct
 import _psyco
 
 tmpfile = '~tmpfile.tmp'
@@ -23,6 +23,7 @@ re_lineaddr = re.compile(r'\s*0?x?([0-9a-fA-F]+)')
 
 
 symbols = {}
+rawtargets = {}
 
 def load_symbol_file(filename, symb1, addr1):
     d = {}
@@ -69,7 +70,6 @@ def htmlquote(text):
 LOC_LOCALS_PLUS = 1
 
 class CodeBuf:
-    has_spec_dict = 0
     
     def __init__(self, mode, co_filename, co_name, nextinstr,
                  addr, data, vlocals):
@@ -80,33 +80,72 @@ class CodeBuf:
         self.addr = addr
         self.data = data
         self.vlocals = vlocals
-        self.reverse_lookup = []  # list of (offset, codebuf pointing there)
+        #self.reverse_lookup = []  # list of (offset, codebuf pointing there)
+        self.specdict = []
         for i in range(len(data)):
             symbols[self.addr+i] = self
-        #
-        # produce the disassembly listing
-        #
-        f = open(tmpfile, 'wb')
-        f.write(self.data)
-        f.close()
-        try:
-            g = os.popen(objdump % {'file': tmpfile, 'origin': self.addr}, 'r')
-            self.disass_text = g.readlines()
-            g.close()
-        finally:
-            os.unlink(tmpfile)
+        sz = struct.calcsize('l')
+        for i in range(sz, len(data)+1):
+            offset, = struct.unpack('l', data[i-sz:i])
+            rawtargets.setdefault(addr+i+offset, {})[self] = 1
+
+    def __getattr__(self, attr):
+        if attr == 'cache_text':
+            # produce the disassembly listing
+            f = open(tmpfile, 'wb')
+            f.write(self.data)
+            f.close()
+            try:
+                g = os.popen(objdump % {'file': tmpfile, 'origin': self.addr},
+                             'r')
+                self.cache_text = g.readlines()
+                g.close()
+            finally:
+                os.unlink(tmpfile)
+            return self.cache_text
+        if attr == 'disass_text':
+            txt = self.cache_text
+            if self.specdict:
+                txt.append('\n')
+                txt.append("'do_promotion' dictionary:\n")
+                for key, value in self.specdict:
+                    txt.append('.\t%s:\t\t\n' % htmlquote(key))
+                    txt.append('.\t\t0x%x\t\t\n' % value)
+            self.disass_text = txt
+            return txt
+        if attr == 'reverse_lookup':
+            # 'reverse_lookup' is a list of (offset, codebuf pointing there)
+            maybe = {self: 1}
+            self.reverse_lookup = []
+            start = self.addr
+            end = start + len(self.data)
+            for addr in range(start, end):
+                if addr in rawtargets:
+                    for codebuf in rawtargets[addr]:
+                        maybe[codebuf] = 1
+            for codebuf in maybe.keys():
+                for line in codebuf.disass_text:
+                    for addr in codebuf.addresses(line):
+                        if start <= addr < end:
+                            self.reverse_lookup.append((addr-start, codebuf))
+            return self.reverse_lookup
+        raise AttributeError, attr
 
     def get_next_instr(self):
         if self.nextinstr >= 0:
             return self.nextinstr
 
     def spec_dict(self, key, value):
-        if not self.has_spec_dict:
-            self.has_spec_dict = 1
-            self.disass_text.append('\n')
-            self.disass_text.append("'do_promotion' dictionary:\n")
-        self.disass_text.append('.\t%s:\t\t\n' % htmlquote(key))
-        self.disass_text.append('.\t\t0x%x\t\t\n' % value)
+        self.specdict.append((key, value))
+        rawtargets.setdefault(value, {})[self] = 1
+        try:
+            del self.disass_text
+        except:
+            pass
+        try:
+            del self.reverse_lookup
+        except:
+            pass
 
     def addresses(self, line):
         result = []
@@ -120,17 +159,12 @@ class CodeBuf:
             result.append(addr)
         return result
     
-    def findsymbols(self, d):
-        for line in self.disass_text:
-            for addr in self.addresses(line):
-                d[addr] = 1
-
-    def build_reverse_lookup(self):
-        for line in self.disass_text:
-            for addr in self.addresses(line):
-                sym = symbols.get(addr)
-                if isinstance(sym, CodeBuf):
-                    sym.reverse_lookup.append((addr-sym.addr, self))
+##    def build_reverse_lookup(self):
+##        for line in self.disass_text:
+##            for addr in self.addresses(line):
+##                sym = symbols.get(addr)
+##                if isinstance(sym, CodeBuf):
+##                    sym.reverse_lookup.append((addr-sym.addr, self))
     
     def disassemble(self, symtext=symtext, linetext=None, snapshot=None):
         seen = {}
@@ -205,7 +239,7 @@ class VirtualTimeVInfo(VInfo):
 def readdump(filename = 'psyco.dump'):
     re_symb1 = re.compile(r"(\w+?)[:]\s0x([0-9a-fA-F]+)")
     re_codebuf = re.compile(r"CodeBufferObject 0x([0-9a-fA-F]+) (\d+) (\-?\d+) \'(.*?)\' \'(.*?)\' (\-?\d+) \'(.*?)\'$")
-    re_specdict = re.compile(r"spec_dict")
+    re_specdict = re.compile(r"spec_dict 0x([0-9a-fA-F]+)")
     re_spec1 = re.compile(r"0x([0-9a-fA-F]+)\s(.*)$")
     re_int = re.compile(r"(\-?\d+)$")
     re_ctvinfo = re.compile(r"ct (\d+) (\-?\d+)$")
@@ -247,6 +281,10 @@ def readdump(filename = 'psyco.dump'):
     
     codebufs = []
     dumpfile = open(filename, 'rb')
+    dumpfile.seek(0,2)
+    filesize = float(dumpfile.tell())
+    nextp = 0.1
+    dumpfile.seek(0,0)
     for filename in symbolfiles:
         line = dumpfile.readline()
         match = re_symb1.match(line)
@@ -259,6 +297,10 @@ def readdump(filename = 'psyco.dump'):
         #print line.strip()
         match = re_codebuf.match(line)
         if match:
+            percent = dumpfile.tell() / filesize
+            if percent >= nextp:
+                sys.stderr.write('%d%%...' % int(100*percent))
+                nextp += 0.1
             size = int(match.group(2))
             stackdepth = int(match.group(3))
             vlocals = load_vi_array({0: None})
@@ -267,23 +309,33 @@ def readdump(filename = 'psyco.dump'):
             codebuf = CodeBuf(match.group(7), match.group(4), match.group(5),
                               int(match.group(6)), long(match.group(1), 16),
                               data, vlocals)
+            codebuf.complete_list = codebufs
             codebufs.insert(0, codebuf)
-        elif re_specdict.match(line):
-            while 1:
-                line = dumpfile.readline()
-                if len(line)<=1:
-                    break
-                match = re_spec1.match(line)
-                assert match
-                codebuf.spec_dict(match.group(2), long(match.group(1), 16))
         else:
-            raise "invalid line", line
+            match = re_specdict.match(line)
+            if match:
+                addr = long(match.group(1), 16)
+                for codebuf in codebufs:
+                    if codebuf.addr < addr <= codebuf.addr+len(codebuf.data):
+                        break
+                else:
+                    raise "spec_dict with no matching code buffer", line
+                while 1:
+                    line = dumpfile.readline()
+                    if len(line)<=1:
+                        break
+                    match = re_spec1.match(line)
+                    assert match
+                    codebuf.spec_dict(match.group(2), long(match.group(1), 16))
+            else:
+                raise "invalid line", line
     dumpfile.close()
     codemap = {}
     for codebuf in codebufs:
-        codebuf.build_reverse_lookup()
+        #codebuf.build_reverse_lookup()
         codebuf.codemap = codemap
         codemap.setdefault(codebuf.addr, []).insert(0, codebuf)
+    sys.stderr.write('100%\n')
     return codebufs
 
 if __name__ == '__main__':
