@@ -226,9 +226,13 @@ static vinfo_t* pint_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	    tp->tp_as_sequence->sq_repeat) {
 		/* sequence * int */
 		a = PsycoInt_AsLong(po, w);
-		return Psyco_META2(po, tp->tp_as_sequence->sq_repeat,
-				   CfReturnRef|CfPyErrIfNull,
-				   "vv", v, a);
+		if (a == NULL)
+			return NULL;
+		x = Psyco_META2(po, tp->tp_as_sequence->sq_repeat,
+				CfReturnRef|CfPyErrIfNull,
+				"vv", v, a);
+		vinfo_decref(a, po);
+		return x;
 	}
 	
 	tp = Psyco_NeedType(po, w);
@@ -240,9 +244,13 @@ static vinfo_t* pint_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	    tp->tp_as_sequence->sq_repeat) {
 		/* int * sequence */
 		a = PsycoInt_AsLong(po, v);
-		return Psyco_META2(po, tp->tp_as_sequence->sq_repeat,
-				   CfReturnRef|CfPyErrIfNull,
-				   "vv", w, a);
+		if (a == NULL)
+			return NULL;
+		x = Psyco_META2(po, tp->tp_as_sequence->sq_repeat,
+				CfReturnRef|CfPyErrIfNull,
+				"vv", w, a);
+		vinfo_decref(a, po);
+		return x;
 	}
 	
 	CONVERT_TO_LONG(v, a);
