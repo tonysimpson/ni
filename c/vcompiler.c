@@ -168,8 +168,8 @@ void vinfo_release(vinfo_t* vi, PsycoObject* po)
     break;
   }
 
-  /* must be after the switch because psyco_decref_rt() will use the
-     array to extract any available time information to speed up Py_DECREF(). */
+  /* must be after the switch because psyco_decref_rt() did use the
+     array to extract any available type information to speed up Py_DECREF(). */
   if (vi->array != NullArray)
     array_delete(vi->array, po);
 
