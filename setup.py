@@ -148,7 +148,7 @@ else:
 
 
 setup (	name             = "psyco",
-      	version          = "1.3",
+      	version          = "1.4",
       	description      = "Psyco, the Python specializing compiler",
       	author           = "Armin Rigo",
         author_email     = "arigo@users.sourceforge.net",
