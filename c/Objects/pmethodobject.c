@@ -100,7 +100,7 @@ vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 		case METH_VARARGS:
 			carg = tuple;
 			break;
-#if HAVE_METH_O
+#if HAVE_METH_NOARGS
 		case METH_NOARGS:
 			tuplesize = PsycoTuple_Load(tuple);
 			if (tuplesize != 0)
@@ -109,6 +109,8 @@ vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 			carg = NULL;
                         argumentlist = "vl";
 			break;
+#endif
+#if HAVE_METH_O
 		case METH_O:
 			tuplesize = PsycoTuple_Load(tuple);
 			if (tuplesize != 1)

@@ -780,7 +780,7 @@ Apart from speed, functions are supposed to run identically under Psyco and unde
 %
 \begin{itemize}
 
-\item \strong{No locals dictionary} is available.  The \function{locals} function always return an empty dictionary (and issues a warning).  This also affects \function{eval}, \function{execfile}, \function{vars}, \function{dir} and \function{input} unless you supply an explicit dictionary for the locals.  See section \ref{patchedfunctions}.
+\item The functions \function{locals}, \function{eval}, \function{execfile}, \function{vars}, \function{dir} and \function{input} should work as expected starting from Psyco 1.3, but see section \ref{patchedfunctions}.
   
 \item \strong{Frame objects} are emulated.  The \function{sys._getframe} function returns an instance of a custom class which emulates the standard frame objects' behavior as much as possible.  The frames corresponding to a Psyco-accelerated frame have some placeholder attributes, notably \member{f_locals}.  \emph{There is no way to read the local variables of a Psyco-accelerated frame.}  Actually, only the \member{f_code}, \member{f_globals}, \member{f_back} and \member{f_lineno} fields are well-tested.  Also keep in mind that if you obtain a real frame object (which you can do with some other mean than \function{sys._getframe}, e.g.\ via a traceback object), the \member{f_back} chained list will not include the Psyco-accelerated frames.
 
@@ -857,9 +857,9 @@ When Psyco starts, it replaces a few functions from the \module{__builtin__} and
   \lineii{ locals        }{(1)}
   \lineii{ vars          }{(1) when called with no argument}
   \lineii{ dir           }{(1) when called with no argument}
-  \lineii{ eval          }{(2) when called with a single argument}
-  \lineii{ execfile      }{(2) when called with a single argument}
-  \lineii{ input         }{(2)}
+  \lineii{ eval          }{(1)(2) when called with a single argument}
+  \lineii{ execfile      }{(1) when called with a single argument}
+  \lineii{ input         }{(1)}
   \lineii{ sys._getframe }{(3)}
 \end{tableii}
 
@@ -868,10 +868,8 @@ Notes:
 %
 \begin{description}
 \item[(1)]
-  A function run by Psyco has no \function{locals} dictionary.  Trying to access it returns an empty dictionary and issues a \exception{psyco.warning}.
+  A function run by Psyco has no native \function{locals} dictionary.  Psyco 1.3 and above can emulate it properly if a certain optimization (early dead variable deletion) is disabled.  Psyco should turn off this optimization automatically for functions where it detects a call to one of the above built-in functions, but this detection is a guess over the function's bytecode.  It means that certain indirect calls can be missed.  If this occurs at run-time, a \exception{psyco.warning} is issued and the emulated \function{locals} dictionary is empty.
 \item[(2)]
-  Functions performing dynamic evaluations cannot see the current locals.  You should explicitely supply a globals and/or locals dictionary to these functions.  They issue a \exception{psyco.warning} if you don't.  Use \function{raw_input} and the three-arguments form of \function{eval} instead of \function{input}.
-
   Note that it is common to find Python programs that use dynamic code evaluation for an effect that can be obtained by calling an ad-hoc built-in function instead.  For example, \code{eval('self.'+attr)} is better written as \code{getattr(self, attr)} and \code{exec 'import '+module} is better written as \code{__import__(module, globals(), locals(), [])}.
 \item[(3)]
   Frames corresponding to Psyco-evaluated functions are incomplete, as described in section \ref{bugs}.

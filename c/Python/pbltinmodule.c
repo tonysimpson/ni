@@ -28,6 +28,16 @@ static PyCFunction cimpl_divmod;
 } while (0)
 #endif
 
+#if HAVE_METH_NOARGS
+# define METH_NOARGS_WRAPPER(name, self, arg)  do { } while (0)  /* nothing */
+#else
+# define METH_NOARGS_WRAPPER(name, self, arg)  do {                             \
+    if (PsycoTuple_Load(arg) != 0)                                              \
+      return psyco_generic_call(po, cimpl_ ## name, CfReturnRef|CfPyErrIfNull,  \
+                                "vv", self, arg);                               \
+} while (0)
+#endif
+
 
 static vinfo_t* get_len_of_range(PsycoObject* po, vinfo_t* lo, vinfo_t* hi
 				 /*, vinfo_t* step == 1 currently*/)
@@ -291,6 +301,6 @@ void psyco_bltinmodule_init(void)
 	DEFMETA( divmod,	METH_VARARGS );
 	cimpl_xrange = Psyco_DefineModuleC(md, "xrange", METH_VARARGS,
                                            &pbuiltin_xrange, prange_new);
-#undef META
+#undef DEFMETA
 	Py_XDECREF(md);
 }

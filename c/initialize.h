@@ -79,6 +79,7 @@
 # include "Objects/pcompactobject.c"
 # include "Modules/parray.c"
 # include "Modules/pmath.c"
+# include "Modules/ppsyco.c"
 #else /* if !ALL_STATIC */
   EXTERNFN void psyco_compiler_init(void);	/* vcompiler.c */
   EXTERNFN void psyco_stats_init(void);	/* stats.c */
@@ -109,6 +110,7 @@
   EXTERNFN void psy_compactobject_init(void);	/* Objects/pcompactobject.c */
   EXTERNFN void psyco_initarray(void);	/* Modules/parray.c */
   EXTERNFN void psyco_initmath(void);	/* Modules/pmath.c */
+  EXTERNFN void psyco_initpsyco(void);	/* Modules/ppsyco.c */
 #endif /* !ALL_STATIC */
 
 inline void initialize_all_files(void) {
@@ -142,6 +144,7 @@ inline void initialize_all_files(void) {
   psy_compactobject_init();	/* Objects/pcompactobject.c */
   psyco_initarray();	/* Modules/parray.c */
   psyco_initmath();	/* Modules/pmath.c */
+  psyco_initpsyco();	/* Modules/ppsyco.c */
 }
 
 #endif /* PSYCO_INITIALIZATION */

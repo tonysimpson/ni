@@ -55,6 +55,13 @@
 # define METH_O                    0x0008
 #endif
 
+#ifdef METH_NOARGS
+# define HAVE_METH_NOARGS          1
+#else
+# define HAVE_METH_NOARGS          0
+# define METH_NOARGS               0x0004
+#endif
+
 #ifndef PyCode_GetNumFree
 # define PyCode_GetNumFree(op)     (PyTuple_GET_SIZE((op)->co_freevars))
 #endif

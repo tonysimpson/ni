@@ -8,6 +8,13 @@
 #define FULL_CONTROL_FLOW    1
 #define DUMP_CONTROL_FLOW    0
 
+/* the list of builtins whose usage should disable control flow
+   because they use the current frame's locals */
+static char* NoControlFlowIfBuiltin[] = {
+  "eval", "execfile", "locals", "vars", "dir", "input",
+  NULL
+};
+
 #define CONFLUENCE_TOTAL_DELAY   3   /* see comments in the code */
 #define INLINE_MAXIMUM_WEIGHT    6   /* see comments in the code */
 
@@ -626,6 +633,17 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
               valid_controlflow = false;
             }
           break;
+
+        case LOAD_GLOBAL:
+        case LOAD_NAME:
+          {
+            PyObject* namev = PyTuple_GET_ITEM(co->co_names, oparg);
+            char** p;
+            for (p = NoControlFlowIfBuiltin; *p; p++)
+              if (strcmp(PyString_AS_STRING(namev), *p) == 0)
+                valid_controlflow = false;
+          }
+          break;
         }
     }
   if (iblock != 0)
@@ -875,7 +893,10 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
   mp->bytecode_position = mp_flags;
 #if FULL_CONTROL_FLOW
   if (valid_controlflow)
-    analyse_variables(instrnodes, instrnodes+length, co);
+    {
+      mp->bytecode_position |= MP_FLAGS_CONTROLFLOW;
+      analyse_variables(instrnodes, instrnodes+length, co);
+    }
 #endif
   PyMem_FREE(instrnodes);
   return s;

@@ -32,6 +32,15 @@ vinfo_t* PsycoDict_Copy(PsycoObject* po, vinfo_t* orig)
 	return v;
 }
 
+DEFINEFN
+bool PsycoDict_SetItem(PsycoObject* po, vinfo_t* vdict,
+			   PyObject* key, vinfo_t* vvalue)
+{
+	return psyco_generic_call(po, PyDict_SetItem,
+				  CfNoReturnValue|CfPyErrIfNeg,
+				  "vlv", vdict, (long) key, vvalue) != NULL;
+}
+
 static vinfo_t* psyco_dict_length(PsycoObject* po, vinfo_t* vi)
 {
 	return psyco_get_field(po, vi, DICT_ma_used);

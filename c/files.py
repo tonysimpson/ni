@@ -63,6 +63,7 @@ SRC = [
 
     Module('array'),
     Module('math'),
+    Module('psyco'),
     ]
 
 PROCESSOR_SRC = {
