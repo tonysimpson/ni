@@ -764,7 +764,7 @@ vinfo_t* PsycoObject_GetIter(PsycoObject* po, vinfo_t* vi)
 		f = NULL;
 	if (f == NULL) {
 		if (PsycoSequence_Check(t))
-			return PsycoSeqIter_New(vi);
+			return PsycoSeqIter_New(po, vi);
 		PycException_SetString(po, PyExc_TypeError,
 				       "iteration over non-sequence");
 		return NULL;

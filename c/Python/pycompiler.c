@@ -20,6 +20,12 @@
 #define KNOWN_VAR(type, varname, loc)   \
     type varname = (type)(KNOWN_SOURCE(loc)->value)
 
+#ifdef FOR_ITER
+# define OLD_STYLE_LOOP   0
+#else
+# define OLD_STYLE_LOOP   1
+#endif
+
 
 /*****************************************************************/
  /***   Meta functions                                          ***/
@@ -1395,6 +1401,7 @@ static bool psyco_assign_slice(PsycoObject* po, vinfo_t* u,
 	}
 }
 
+#if OLD_STYLE_LOOP
 static vinfo_t* psyco_loop_subscript(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
 	PySequenceMethods* sq;
@@ -1415,6 +1422,7 @@ static vinfo_t* psyco_loop_subscript(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	return Psyco_META2(po, sq->sq_item, CfReturnRef|CfPyErrIfNull,
                            "vv", v, vi);
 }
+#endif
 
 
 /***************************************************************/
@@ -2770,6 +2778,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 #endif
 
+#if OLD_STYLE_LOOP
 	case FOR_LOOP:
 		w = TOP();
 		v = NTOP(2);
@@ -2799,6 +2808,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 					    runtime_NON_NULL_t() */
 		}
 		goto fine;
+#endif
 
 	case SETUP_LOOP:
 	case SETUP_EXCEPT:
@@ -2914,6 +2924,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	/* mark merge points via a call to psyco_compile() */
 	if (mp->bytecode_position == next_instr) {
 		extra_assert(!is_respawning(po));
+#if OLD_STYLE_LOOP
+		/* hack to un-promote the loop index from compile-time
+		   (loaded by "LOAD_CONST 0") to run-time. This is not
+		   theoretically needed but it is a huge win. */
+		if (bytecode[next_instr] == FOR_LOOP &&
+		    is_compiletime(TOP()->source)) {
+			psyco_unfix(po, TOP());
+		}
+#endif
 		SAVE_NEXT_INSTR(next_instr);
 		code1 = psyco_compile(po, mp, true);
 		if (code1 != NULL)

@@ -2,6 +2,25 @@
 #if HAVE_GENERATORS
 
 
+DEFINEFN vinfo_t* PsycoSeqIter_NEW(PsycoObject* po, vinfo_t* seq)
+{
+	vinfo_t* zero;
+	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_seqiter));
+	result->array = array_new(SEQITER_IT_MAX+1);
+	result->array->items[OB_TYPE] =
+		vinfo_new(CompileTime_New((long)(&PySeqIter_Type)));
+	/* the iterator index is immediately run-time because it is
+	   very likely to be unpromoted to run-time anyway */
+	zero = psyco_vi_Zero();
+	result->array->items[SEQITER_IT_INDEX] = make_runtime_copy(po, zero);
+	vinfo_decref(zero, po);
+	/*result->array->items[SEQITER_IT_INDEX] =
+		vinfo_new(CompileTime_New(0));*/
+	result->array->items[SEQITER_IT_SEQ] = seq;
+	return result;
+}
+
+
 static vinfo_t* piter_getiter(PsycoObject* po, vinfo_t* v)
 {
 	vinfo_incref(v);

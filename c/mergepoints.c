@@ -29,21 +29,21 @@
                               (op) == RAISE_VARARGS ||  \
                               0)
 
+#ifdef FOR_ITER
+# define COMMON_FOR_OPCODE    FOR_ITER
+#else
+# define COMMON_FOR_OPCODE    FOR_LOOP
+#endif
+
 /* instructions with a target: */
-#define HAS_JREL_INSTR_1(op) ((op) == JUMP_FORWARD ||   \
+#define HAS_JREL_INSTR(op)   ((op) == JUMP_FORWARD ||   \
                               (op) == JUMP_IF_FALSE ||  \
                               (op) == JUMP_IF_TRUE ||   \
-                              (op) == FOR_LOOP ||       \
+                              (op) == COMMON_FOR_OPCODE || \
                               (op) == SETUP_LOOP ||     \
                               (op) == SETUP_EXCEPT ||   \
                               (op) == SETUP_FINALLY ||  \
                               0)
-#ifdef FOR_ITER
-# define HAS_JREL_INSTR(op)  ((op) == FOR_ITER ||       \
-                              HAS_JREL_INSTR_1(op))
-#else
-# define HAS_JREL_INSTR(op)  (HAS_JREL_INSTR_1(op))
-#endif
 
 #define HAS_JABS_INSTR(op)   ((op) == JUMP_ABSOLUTE ||  \
                               (op) == CONTINUE_LOOP ||  \
@@ -220,6 +220,7 @@ inline PyObject* build_merge_points(PyCodeObject* co)
       int i0 = i;
 #endif
       char flags;
+      int jtarget;
       unsigned char op = source[i++];
       if (HAS_ARG(op))
 	{
@@ -249,24 +250,28 @@ inline PyObject* build_merge_points(PyCodeObject* co)
 	    Py_INCREF(Py_None);
 	    return Py_None;
 	  }
-      if ((flags & MP_HAS_JREL) && paths[i+oparg] < 2)
-	{
-	  if (flags & MP_HAS_J_MULTIPLE)
-	    paths[i+oparg] = 2;
-	  else
-	    paths[i+oparg]++;
-	}
-      if ((flags & MP_HAS_JABS) && paths[oparg] < 2)
-	{
-	  if (flags & MP_HAS_J_MULTIPLE)
-	    paths[oparg] = 2;
-	  else
-	    paths[oparg]++;
-	}
       if (flags & MP_IS_CTXDEP)
 	paths[i] = 2;
       else if (!(flags & MP_IS_JUMP))
 	paths[i]++;
+      if (flags & MP_HAS_JREL)
+        jtarget = i+oparg;
+      else if (flags & MP_HAS_JABS)
+        jtarget = oparg;
+      else
+        continue;  /* not a jump */
+      /* always ignore SET_LINENO opcodes.
+         This could better group merge points, and
+         it also ensures that there is a merge point right
+         over a FOR_LOOP opcode (see FOR_LOOP in pycompiler.c). */
+      while (source[jtarget] == SET_LINENO ||
+             (source[jtarget] == EXTENDED_ARG &&
+              source[jtarget+3] == SET_LINENO))
+        jtarget += 3;
+      if (flags & MP_HAS_J_MULTIPLE)
+        paths[jtarget] = 2;
+      else
+        paths[jtarget]++;
     }
 
   /* count the merge points */
