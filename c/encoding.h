@@ -825,7 +825,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
 #define RANGE_OF_SHORT_CONDITIONAL_JUMP  127    /* max. positive offset */
 
 #define SHORT_COND_JUMP_TO(addr, condition)  do {       \
-  long _ofs = (addr) - code;                            \
+  long _ofs = (addr) - (code+2);                        \
   extra_assert(-128 <= _ofs && _ofs < 128);             \
   code[0] = 0x70 | (char)(condition);                   \
   code[1] = _ofs;                                       \

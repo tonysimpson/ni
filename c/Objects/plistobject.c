@@ -29,11 +29,12 @@ static vinfo_t* plist_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 	vinfo_t* ob_item;
 	vinfo_t* result;
 
-	vlen = get_array_item(po, a, VAR_OB_SIZE);
+	vlen = read_array_item(po, a, VAR_OB_SIZE);
 	if (vlen == NULL)
 		return NULL;
 	
 	cc = integer_cmp(po, i, vlen, Py_GE|COMPARE_UNSIGNED);
+        vinfo_decref(vlen, po);
 	if (cc == CC_ERROR)
 		return NULL;
 
