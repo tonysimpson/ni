@@ -2,6 +2,9 @@
 /***       Processor-specific code-producing macros            ***/
  /***************************************************************/
 
+
+#error "ivm is still buggy -- sorry, Psyco requires a PC at the moment."
+
 #ifndef _IENCODING_H
 #define _IENCODING_H
 
