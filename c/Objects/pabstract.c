@@ -626,8 +626,8 @@ static vinfo_t* binary_iop(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 	
 	mv = vtp->tp_as_number;
 	if (mv != NULL && HASINPLACE(vtp)) {
-		binaryfunc *slot = NB_BINOP(mv, iop_slot);
-		if (*slot) {
+		binaryfunc slot = *NB_BINOP(mv, iop_slot);
+		if (slot) {
 			vinfo_t* x = Psyco_META2(po, slot,
 					CfReturnRef|CfPyErrNotImplemented,
 					"vv", v, w);
