@@ -119,6 +119,7 @@ static vinfo_t* cname(PsycoObject* po, vinfo_t* v1,				\
    'int' means '&PyInt_Type' etc. */
 EXTERNVAR fixed_switch_t psyfs_int;
 EXTERNVAR fixed_switch_t psyfs_int_long;
+EXTERNVAR fixed_switch_t psyfs_int_long_float;
 EXTERNVAR fixed_switch_t psyfs_tuple_list;
 EXTERNVAR fixed_switch_t psyfs_string_unicode;
 EXTERNVAR fixed_switch_t psyfs_tuple;
@@ -136,15 +137,17 @@ inline int Psyco_IsNone(PsycoObject* po, vinfo_t* vi) {
 
 inline void psy_object_init(void)
 {
-	long values[2];
+	long values[3];
         int cnt;
 
 	values[0] = (long)(&PyInt_Type);
 	psyco_build_run_time_switch(&psyfs_int, SkFlagFixed, values, 1);
 
-        values[0] = (long)(&PyInt_Type);
+	values[0] = (long)(&PyInt_Type);
 	values[1] = (long)(&PyLong_Type);
+	values[2] = (long)(&PyFloat_Type);
         psyco_build_run_time_switch(&psyfs_int_long, SkFlagFixed, values, 2);
+	psyco_build_run_time_switch(&psyfs_int_long_float, SkFlagFixed, values, 3);
 
 	values[0] = (long)(&PyTuple_Type);
 	values[1] = (long)(&PyList_Type);

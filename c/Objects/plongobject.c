@@ -11,6 +11,31 @@ vinfo_t* PsycoLong_AsLong(PsycoObject* po, vinfo_t* v)
 }
 
 
+static int cimpl_lng_as_double(PyObject* o, double* result)
+{
+	*result = PyLong_AsDouble(o);
+	return (*result == -1.0) ? -1 : 0;
+}
+
+DEFINEFN
+bool PsycoLong_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd1, vinfo_t** vd2)
+{
+	/* XXX implement me */
+	vinfo_array_t* result;
+	result = array_new(2);
+	if (psyco_generic_call(po, cimpl_lng_as_double,
+				  CfPyErrCheckMinus1,
+				  "va", v, result) == NULL) {
+		array_delete(result, po);
+		return false;
+	}
+        *vd1 = result->items[0];
+        *vd2 = result->items[1]; 
+	array_release(result);
+	return true;
+}
+
+
 DEF_KNOWN_RET_TYPE_1(plong_pos, PyLong_Type.tp_as_number->nb_positive,
 		     CfReturnRef|CfPyErrIfNull, PyLong_Type)
 DEF_KNOWN_RET_TYPE_1(plong_neg, PyLong_Type.tp_as_number->nb_negative,

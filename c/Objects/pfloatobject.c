@@ -1,4 +1,5 @@
 #include "pfloatobject.h"
+#include "plongobject.h"
 
 static int
 cimpl_fp_cmp(double a, double b) {
@@ -39,6 +40,41 @@ cimpl_fp_div(double a, double b, double* result) {
     PyFPE_START_PROTECT("divide", return -1)
     *result = a / b;
     PyFPE_END_PROTECT(*result)
+    return 0;
+}
+
+/* Pow isn't ready yet, so this hasn't been tested */
+static int
+cimpl_fp_pow(double iv, double iw, double* result) {
+    /* Sort out special cases here instead of relying on pow() */
+    if (iw == 0) {          /* v**0 is 1, even 0**0 */
+        *result = 1.0;
+        return 0;
+    }
+    if (iv == 0.0) {  /* 0**w is error if w<0, else 0 */
+        if (iw < 0.0) {
+            PyErr_SetString(PyExc_ZeroDivisionError,
+                "0.0 cannot be raised to a negative power");
+            return -1;
+        }
+        *result = 0.0;
+        return 0;
+    }
+    if (iv < 0.0 && iw != floor(iw)) {
+        PyErr_SetString(PyExc_ValueError,
+            "negative number cannot be raised to a fractional power");
+        return -1;
+    }
+    errno = 0;
+    PyFPE_START_PROTECT("pow", return NULL)
+        *result = pow(iv, iw);
+    PyFPE_END_PROTECT(*result)
+        Py_SET_ERANGE_IF_OVERFLOW(*result);
+    if (errno != 0) {
+        /* XXX could it be another type of error? */
+        PyErr_SetFromErrno(PyExc_OverflowError);
+        return -1;
+    }
     return 0;
 }
 
@@ -138,43 +174,48 @@ DEFINEVAR source_virtual_t psyco_computed_float;
 
 
 #define CONVERT_TO_DOUBLE(vobj, v1, v2) \
-    tp = Psyco_NeedType(po, vobj); \
-    if (tp == NULL) \
-        return NULL; \
-    if (PsycoFloat_Check(tp)) { \
-        v1 = PsycoFloat_AS_DOUBLE_1(po, vobj);       \
-        v2 = PsycoFloat_AS_DOUBLE_2(po, vobj);       \
-        if (v1 == NULL || v2 == NULL)             \
-            return NULL;                \
-        vinfo_incref(v1);          \
-        vinfo_incref(v2);          \
-    }                           \
-    else if (PsycoInt_Check(tp)) { \
-		vinfo_array_t* result = array_new(2); \
-		psyco_generic_call(po, cimpl_fp_from_long, CfPure|CfNoReturnValue, "va", PsycoInt_AS_LONG(po, vobj), result); \
-		v1 = result->items[0]; \
-		v2 = result->items[1]; \
-		array_release(result); \
-	} \
-    else {                          \
-        if (PycException_Occurred(po))          \
-            return NULL;                \
-        return psyco_vi_NotImplemented();          \
+    switch (Psyco_TypeSwitch(po, vobj, &psyfs_int_long_float)) { \
+        case 0: \
+            result = array_new(2); \
+            psyco_generic_call(po, cimpl_fp_from_long, CfNoReturnValue|CfPure, \
+                               "va", PsycoInt_AS_LONG(po, vobj), result); \
+            v1 = result->items[0]; \
+            v2 = result->items[1]; \
+            array_release(result); \
+            break; \
+        case 1: \
+            if (!PsycoLong_AsDouble(po, vobj, &v1, &v2)) \
+                return NULL; \
+            break; \
+        case 2: \
+            v1 = PsycoFloat_AS_DOUBLE_1(po, vobj); \
+            v2 = PsycoFloat_AS_DOUBLE_2(po, vobj); \
+            if (v1 == NULL || v2 == NULL) \
+                return NULL; \
+            vinfo_incref(v1); \
+            vinfo_incref(v2); \
+            break; \
+        default: \
+            if (PycException_Occurred(po)) \
+                return NULL; \
+            return psyco_vi_NotImplemented(); \
     }
+
+#define RELEASE_DOUBLE(v1, v2) \
+    vinfo_decref(v2, po); \
+    vinfo_decref(v1, po);
 
 
 static vinfo_t* pfloat_cmp(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
-    PyTypeObject* tp;
+    vinfo_array_t* result;
     /* We could probably assume that these are floats, but using CONVERT is easier */
     CONVERT_TO_DOUBLE(v, a1, a2);
     CONVERT_TO_DOUBLE(w, b1, b2);
     x = psyco_generic_call(po, cimpl_fp_cmp, CfPure|CfReturnNormal, "vvvv", a1, a2, b1, b2);
-    vinfo_decref(b2, po);
-    vinfo_decref(b1, po);
-    vinfo_decref(a2, po);
-    vinfo_decref(a1, po);
+    RELEASE_DOUBLE(a1, a2);
+    RELEASE_DOUBLE(b1, b2);
     return x;
 }
 
@@ -192,11 +233,10 @@ static vinfo_t* pfloat_nonzero(PsycoObject* po, vinfo_t* v)
 static vinfo_t* pfloat_pos(PsycoObject* po, vinfo_t* v)
 {
     vinfo_t *a1, *a2, *x;
-    PyTypeObject* tp;
+    vinfo_array_t* result;
     CONVERT_TO_DOUBLE(v, a1, a2);
     x = PsycoFloat_FromDouble(a1, a2);
-    vinfo_decref(a2, po);
-    vinfo_decref(a1, po);
+    RELEASE_DOUBLE(a1, a2);
     return x;
 }
 
@@ -205,13 +245,11 @@ static vinfo_t* pfloat_neg(PsycoObject* po, vinfo_t* v)
 {
     vinfo_t *a1, *a2, *x;
     vinfo_array_t* result;
-    PyTypeObject* tp;
     CONVERT_TO_DOUBLE(v, a1, a2);
     result = array_new(2);
     x = psyco_generic_call(po, cimpl_fp_neg, CfPure|CfNoReturnValue,
                            "vva", a1, a2, result);
-    vinfo_decref(a2, po);
-    vinfo_decref(a1, po);
+    RELEASE_DOUBLE(a1, a2);
     if (x == NULL) {
            array_delete(result, po);
            return NULL;
@@ -225,13 +263,11 @@ static vinfo_t* pfloat_abs(PsycoObject* po, vinfo_t* v)
 {
     vinfo_t *a1, *a2, *x;
     vinfo_array_t* result;
-    PyTypeObject* tp;
     CONVERT_TO_DOUBLE(v, a1, a2);
     result = array_new(2);
     x = psyco_generic_call(po, cimpl_fp_abs, CfPure|CfNoReturnValue,
                            "vva", a1, a2, result);
-    vinfo_decref(a2, po);
-    vinfo_decref(a1, po);
+    RELEASE_DOUBLE(a1, a2);
     if (x == NULL) {
            array_delete(result, po);
            return NULL;
@@ -245,16 +281,13 @@ static vinfo_t* pfloat_add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
     vinfo_array_t* result;
-    PyTypeObject* tp;
     CONVERT_TO_DOUBLE(v, a1, a2);
     CONVERT_TO_DOUBLE(w, b1, b2);
     result = array_new(2);
     x = psyco_generic_call(po, cimpl_fp_add, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
-    vinfo_decref(b2, po);
-    vinfo_decref(b1, po);
-    vinfo_decref(a2, po);
-    vinfo_decref(a1, po);
+    RELEASE_DOUBLE(b1, b2);
+    RELEASE_DOUBLE(a1, a2);
     if (x == NULL) {
            array_delete(result, po);
            return NULL;
@@ -268,16 +301,13 @@ static vinfo_t* pfloat_sub(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
     vinfo_array_t* result;
-    PyTypeObject* tp;
     CONVERT_TO_DOUBLE(v, a1, a2);
     CONVERT_TO_DOUBLE(w, b1, b2);
     result = array_new(2);
     x = psyco_generic_call(po, cimpl_fp_sub, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
-    vinfo_decref(b2, po);
-    vinfo_decref(b1, po);
-    vinfo_decref(a2, po);
-    vinfo_decref(a1, po);
+    RELEASE_DOUBLE(b1, b2);
+    RELEASE_DOUBLE(a1, a2);
     if (x == NULL) {
            array_delete(result, po);
            return NULL;
@@ -291,16 +321,13 @@ static vinfo_t* pfloat_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
     vinfo_array_t* result;
-    PyTypeObject* tp;
     CONVERT_TO_DOUBLE(v, a1, a2);
     CONVERT_TO_DOUBLE(w, b1, b2);
     result = array_new(2);
     x = psyco_generic_call(po, cimpl_fp_mul, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
-    vinfo_decref(b2, po);
-    vinfo_decref(b1, po);
-    vinfo_decref(a2, po);
-    vinfo_decref(a1, po);
+    RELEASE_DOUBLE(b1, b2);
+    RELEASE_DOUBLE(a1, a2);
     if (x == NULL) {
            array_delete(result, po);
            return NULL;
@@ -314,16 +341,13 @@ static vinfo_t* pfloat_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
     vinfo_array_t* result;
-    PyTypeObject* tp;
     CONVERT_TO_DOUBLE(v, a1, a2);
     CONVERT_TO_DOUBLE(w, b1, b2);
     result = array_new(2);
     x = psyco_generic_call(po, cimpl_fp_div, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
-    vinfo_decref(b2, po);
-    vinfo_decref(b1, po);
-    vinfo_decref(a2, po);
-    vinfo_decref(a1, po);
+    RELEASE_DOUBLE(b1, b2);
+    RELEASE_DOUBLE(a1, a2);
     if (x == NULL) {
            array_delete(result, po);
            return NULL;

@@ -5,6 +5,7 @@
 
 DEFINEVAR fixed_switch_t psyfs_int;
 DEFINEVAR fixed_switch_t psyfs_int_long;
+DEFINEVAR fixed_switch_t psyfs_int_long_float;
 DEFINEVAR fixed_switch_t psyfs_tuple_list;
 DEFINEVAR fixed_switch_t psyfs_string_unicode;
 DEFINEVAR fixed_switch_t psyfs_tuple;
