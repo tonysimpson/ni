@@ -37,12 +37,14 @@ def go(stop=0):
         if stop:
             del profilers[:]
         if prev:
+            if profilers and profilers[0] is prev:
+                return    # best profiler already running
             prev.stop()
             current = None
         for p in profilers[:]:
             if p.start():
                 current = p
-                if logger and p is not prev:
+                if logger: # and p is not prev:
                     logger.write("%s: starting" % p.__class__.__name__, 5)
                 return
     finally:

@@ -54,17 +54,46 @@ re_codebuf = re.compile(r'[/]0x([0-9A-Fa-f]+)$')
 re_proxy = re.compile(r'[/]proxy(\d+)$')
 re_summary = re.compile(r'[/]summary(\d+)$')
 
-def cache_load(filename, cache={}):
+##def cache_load(filename, cache={}):
+##    try:
+##        return cache[filename]
+##    except KeyError:
+##        data = {}
+##        try:
+##            f = execfile(filename, data)
+##        except:
+##            data = None
+##        cache[filename] = data
+##        return data
+
+def cache_load(filename, codename, cache={}):
     try:
-        return cache[filename]
+        modulecode = cache[filename]
     except KeyError:
-        data = {}
         try:
-            f = execfile(filename, data)
+            f = open(filename, 'r')
+            source = f.read()
+            f.close()
+        except IOError:
+            return None
+        try:
+            modulecode = compile(source, filename, 'exec')
         except:
-            data = None
-        cache[filename] = data
-        return data
+            return None
+
+    return recfindcode(modulecode, codename)
+
+def recfindcode(code, codename):
+    if code.co_name == codename:
+        return code
+    else:
+        for c in co.co_consts:
+            if type(c) is type(code):
+                result = recfindcode(c, codename)
+                if result:
+                    return result
+    return ''
+
 
 class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
 
@@ -185,19 +214,19 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
                     else:
                         pnext = None
                     filename = os.path.join(DIRECTORY, proxy.co_filename)
-                    moduledata = cache_load(filename)
-                    if moduledata is None:
-                        co = None
-                    else:
-                        co = moduledata.get(proxy.co_name)
-                        try:
-                            co = psyco.unproxy(co)
-                        except psyco.error:
-                            pass
-                        except TypeError:
-                            pass
-                        if hasattr(co, 'func_code'):
-                            co = co.func_code
+                    co = cache_load(filename, proxy.co_name)
+##                    if moduledata is None:
+##                        co = None
+##                    else:
+##                        co = moduledata.get(proxy.co_name)
+##                        try:
+##                            co = psyco.unproxy(co)
+##                        except psyco.error:
+##                            pass
+##                        except TypeError:
+##                            pass
+##                        if hasattr(co, 'func_code'):
+##                            co = co.func_code
                     data = '<p>PsycoObject structure at this point:'
                     data += '&nbsp;' * 20
                     data += '['
@@ -212,7 +241,7 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
                     data += show_vinfos(proxy.vlocals, {}, co)
                     data += '<hr><p>Disassembly of %s:%s:%s:</p>\n' % (
                         proxy.co_filename, proxy.co_name, proxy.get_next_instr())
-                    if moduledata is None:
+                    if co is None: #moduledata is None:
                         txt = "(exception while loading the file '%s')\n" % (
                             filename)
                     else:
