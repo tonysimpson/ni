@@ -1785,8 +1785,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	case UNPACK_SEQUENCE:
 	{
 		int i;
-		vinfo_array_t* array;
-		void* cimpl_unpack = cimpl_unpack_iterable;
+		void* cimpl_unpack;
 		
 		v = TOP();
 		u = get_array_item(po, TOP(), OB_TYPE);
@@ -1795,6 +1794,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		switch (psyco_switch_index(po, u, &psyfs_tuple_list)) {
 			
 		case 0:   /* PyTuple_Type */
+			cimpl_unpack = NULL;
 
 			/* shortcut: is this a virtual tuple?
 			             of the correct length? */
@@ -1827,8 +1827,11 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 					if (w == NULL)
 						break;
 				}
+				if (i >= 0)
+					break;
 			}
 			/* copy the tuple items into the stack */
+			POP(v);
 			for (i=oparg; i--; ) {
 				w = v->array->items[TUPLE_OB_ITEM + i];
                                 vinfo_incref(w);
@@ -1837,14 +1840,20 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
                                    are still in use: */
                                 need_reference(po, w);
                         }
-                        break;
+			vinfo_decref(v, po);
+                        goto fine;
 
 		case 1:   /* PyList_Type */
 			cimpl_unpack = cimpl_unpack_list;
-			/* fall through */
+			break;
 
 		default:
-			array = array_new(oparg);
+			cimpl_unpack = cimpl_unpack_iterable;
+			break;
+		}
+			
+		if (cimpl_unpack != NULL) {
+			vinfo_array_t* array = array_new(oparg);
 			if (psyco_flag_call(po, cimpl_unpack,
 					    CfReturnFlag|CfPyErrIfNonNull,
 					    "vlA", v, oparg, array) == CC_ERROR){
