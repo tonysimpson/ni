@@ -53,6 +53,7 @@ SRC = [
     Object('tupleobject'),
 
     Module('array'),
+    Module('math'),
     ]
 
 MAINFILE = 'psyco.c'
