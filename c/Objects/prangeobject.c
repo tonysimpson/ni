@@ -1,6 +1,7 @@
 #include "prangeobject.h"
 #include "pintobject.h"
 #include "piterobject.h"
+#include "../Python/pycinternal.h"
 
 
  /***************************************************************/
@@ -198,11 +199,12 @@ void psy_rangeobject_init(void)
 	PySequenceMethods *m = PyRange_Type.tp_as_sequence;
 	Psyco_DefineMeta(m->sq_length, prange_length);
 	Psyco_DefineMeta(m->sq_item, prange_item);
+#if HAVE_GENERATORS
 	if (PyRange_Type.tp_iter != NULL)  /* Python >= 2.3 */
 		Psyco_DefineMeta(PyRange_Type.tp_iter, PsycoSeqIter_New);
-
-        INIT_SVIRTUAL(psyco_computed_xrange, compute_xrange, 0, 0);
-        INIT_SVIRTUAL(psyco_computed_listrange, compute_listrange, 0, NW_FORCE);
+#endif
+	INIT_SVIRTUAL(psyco_computed_xrange, compute_xrange, 0, 0);
+	INIT_SVIRTUAL(psyco_computed_listrange, compute_listrange, 0, NW_FORCE);
 	/* ranges, unlike xranges, are mutable;
-           they must be forced out of virtual-time across function calls */
+	   they must be forced out of virtual-time across function calls */
 }
