@@ -128,6 +128,14 @@ class PsycoFrame(Frame):
     def __setattr__(self, attr, value):
         raise AttributeError, "Psyco frame objects are read-only"
 
+    def __delattr__(self, attr):
+        if attr == 'f_trace':
+            # for bdb which relies on CPython frames exhibiting a slightly
+            # buggy behavior: you can 'del f.f_trace' as often as you like
+            # even without having set it previously.
+            return
+        raise AttributeError, "Psyco frame objects are read-only"
+
 
 def embedframe(result):
     if type(result) is type(()):
