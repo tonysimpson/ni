@@ -122,7 +122,7 @@ def go(f, *args):
             (t2, (t2/float(t1)))
     else:
         print v2
-        print '^^^ by Python in %s seconds' % t
+        print '^^^ by Python in %s seconds' % t2
         print '*'*80
         print '!!! different results !!!'
 
