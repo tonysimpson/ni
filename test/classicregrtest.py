@@ -29,6 +29,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_builtin': 'vars() and locals() not supported',
         'test_inspect': 'does not run even in Python (when called the way classicregrtest.py calls it) and leaves buggy temp files around',
         'test_trace': 'no line tracing with Psyco',
+        'test_threaded_import': 'Python hang-ups',
         }
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'
