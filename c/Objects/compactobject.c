@@ -79,12 +79,6 @@ compact_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 	return (PyObject*) ko;
 }
 
-static void
-compact_del(void *op)
-{
-	PyObject_GC_Del(op);
-}
-
 #if 0
 DEFINEFN
 PyObject* PyCompact_New(void)
@@ -1025,9 +1019,8 @@ DEFINEVAR PyTypeObject PyCompact_Type = {
 	0,                                      /* tp_descr_set */
 	0,                                      /* tp_dictoffset */
 	compact_init,                           /* tp_init */
-	/*PyType_GenericAlloc set below*/ 0,    /* tp_alloc */
+	0,                                      /* tp_alloc */
 	compact_new,                            /* tp_new */
-	compact_del,                            /* tp_free */
 };
 
 INITIALIZATIONFN
@@ -1035,7 +1028,7 @@ void psyco_compact_init(void)
 {
 	PyCompact_EmptyImpl = &k_empty_impl;
 	PyCompactType_Type.tp_base = &PyType_Type;
-	PyCompact_Type.tp_alloc = &PyType_GenericAlloc;
+	PyCompact_Type.tp_free = _PyObject_GC_Del;
 	PyType_Ready(&PyCompactType_Type);
 	PyType_Ready(&PyCompact_Type);
 
