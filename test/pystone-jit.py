@@ -1,7 +1,5 @@
 #! /usr/bin/env python
 
-import psyco
-
 """
 "PYSTONE" Benchmark Program
 
@@ -61,25 +59,17 @@ TRUE = 1
 FALSE = 0
 
 def main():
-    benchtime, s1 = pystones_reg()
+    benchtime, s1 = Proc0(LOOPS)
     print "Pystone(%s) (first time) time for %d passes = %g" % \
               (__version__, LOOPS, benchtime)
     print "This machine benchmarks at %g pystones/second" % s1
-    benchtime, s2 = pystones_reg()
+    benchtime, s2 = Proc0(LOOPS)
     print "Pystone(%s) (second time) time for %d passes = %g" % \
               (__version__, LOOPS, benchtime)
     print "This machine benchmarks at %g pystones/second" % s2
     print
     print "Pystone executed %g times faster the second time" % (s2/float(s1))
 
-
-def pystones_psycho(loops=LOOPS):
-    import _psyco
-    f = _psyco.proxy(Proc0, 99)
-    return f(loops)
-
-def pystones_reg(loops=LOOPS):
-    return Proc0(loops)
 
 IntGlob = 0
 BoolGlob = FALSE
@@ -104,7 +94,7 @@ def Proc0(loops=LOOPS):
     for i in range(loops):
         pass
     nulltime = clock() - starttime
-
+    
     PtrGlbNext = Record()
     PtrGlb = Record()
     PtrGlb.PtrComp = PtrGlbNext
@@ -263,4 +253,5 @@ def Func3(EnumParIn):
     return FALSE
 
 if __name__ == '__main__':
+    import psyco
     main()
