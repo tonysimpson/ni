@@ -108,14 +108,15 @@ DEFINEVAR psyco_pentium_tsc_fn psyco_pentium_tsc;
 
 
 #ifdef COPY_CODE_IN_HEAP
-#  define COPY_CODE(target, source, type)   do {	\
-	char* c = PyMem_MALLOC(sizeof(source));		\
-	if (c == NULL) {				\
-		PyErr_NoMemory();			\
-		return;					\
-	}						\
-	memcpy(c, source, sizeof(source));		\
-	target = (type) c;				\
+static code_t* internal_copy_code(void* source, int size) {
+	CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL, NULL);
+	code_t* code = codebuf->codestart;
+	memcpy(code, source, size);
+	SHRINK_CODE_BUFFER(codebuf, code+size, "glue");
+	return code;
+}
+#  define COPY_CODE(target, source, type)   do {			\
+	target = (type) internal_copy_code(source, sizeof(source));	\
 } while (0)
 #else
 #  define COPY_CODE(target, source, type)   (target = (type) source)
