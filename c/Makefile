@@ -41,6 +41,8 @@ C_FLAGS_M = -g
 OPTS_T    = -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=1 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=1 '-DPSYCO_TRACE="psyco.trace"'
 C_FLAGS_T = -g
 
+OPTS_TT   = -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=1 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=3 '-DPSYCO_TRACE="psyco.trace"'
+
 OPTS_OO   = -DPSYCO_DEBUG=0 -DVERBOSE_LEVEL=0 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=0
 C_FLAGS_OO= -DNDEBUG -O3 -Wall -fomit-frame-pointer -mcpu=pentium4 -march=pentium4 -mmmx -msse -mfpmath=sse
 
