@@ -602,10 +602,24 @@ static vinfo_t* binary_op1(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 		vinfo_decref(x, po); /* can't do it */
 	}
 	if (!NEW_STYLE_NUMBER(vtp) || !NEW_STYLE_NUMBER(wtp)) {
-		/* could PyNumber_CoerceEx possibly succeed? */
-		if ((vtp->tp_as_number && vtp->tp_as_number->nb_coerce) ||
-		    (wtp->tp_as_number && wtp->tp_as_number->nb_coerce)) {
-			/* yes -- but we don't try to optimize
+		/* inline a bit of PyNumber_CoerceEx */
+		if (vtp == wtp) {
+			/* PyNumber_CoerceEx returns 0 in this case */
+			PyNumberMethods *mv = vtp->tp_as_number;
+			if (mv) {
+				binaryfunc slot;
+				slot = *NB_BINOP(mv, op_slot);
+				if (slot) {
+					x = Psyco_META2(po, slot,
+						CfReturnRef|CfPyErrIfNull,
+							"vv", v, w);
+					return x;
+				}
+			}
+		}
+		else if ((vtp->tp_as_number && vtp->tp_as_number->nb_coerce) ||
+			 (wtp->tp_as_number && wtp->tp_as_number->nb_coerce)) {
+			/* stop inlining now, we don't try to optimize
 			   old-style numbers any further here */
 			return psyco_generic_call(po, cimpl_oldstyle_binary_op1,
 					CfReturnRef|CfPyErrNotImplemented,
