@@ -613,7 +613,8 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
          coding_pause(); it will write a Jcond to a proxy
          which will perform the actual compilation later.
       */
-      array_release(diff);
+      if (diff != NULL)
+        array_release(diff);
       psyco_coding_pause(po2, condition, &psyco_resume_compile, NULL, 0);
       po->code = po2->code;
     }
