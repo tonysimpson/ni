@@ -37,7 +37,9 @@ EXTERNVAR PyTypeObject PsycoFunction_Type;
 #define PsycoFunction_Check(op)	PyObject_TypeCheck(op, &PsycoFunction_Type)
 
 
+#if 0  /* unneeded */
 EXTERNFN PyObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec);
+#endif
 EXTERNFN PsycoFunctionObject* psyco_PsycoFunction_NewEx(PyCodeObject* code,
                                                 PyObject* globals,
                                                 PyObject* defaults, /* or NULL */

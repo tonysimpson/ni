@@ -93,6 +93,17 @@ void psyco_flog(char* msg, ...)
 }
 
 
+#if ALL_CHECKS
+DEFINEFN
+int psyco_assert_failed(char* msg, char* filename, int lineno)
+{
+  fprintf(stderr, "%s:%d: %s\n", filename, lineno, msg);
+  Py_FatalError("assertion failed in Psyco");
+  return 0;
+}
+#endif
+
+
 #if CODE_DUMP
 static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
 {

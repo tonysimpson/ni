@@ -433,7 +433,7 @@ vinfo_t* psyco_internal_getfld(PsycoObject* po, int findex, defield_t df,
 		vf = vinfo_getitem(vi, findex);
 		if (vf != NULL)
 			goto done;
-		if (vinfo_compute(vi, po) == SOURCE_ERROR)
+		if (!compute_vinfo(vi, po))
 			return NULL;
 	}
 	if ((long)df & FIELD_MUTABLE) {
@@ -492,17 +492,16 @@ vinfo_t* psyco_get_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
                                vinfo_t* vindex)
 {
 	long offset = FIELD_OFFSET(df);
-	NonVirtualSource sindex = vinfo_compute(vindex, po);
-	if (sindex == SOURCE_ERROR)
+	if (!compute_vinfo(vindex, po))
 		return NULL;
 	
 	extra_assert((long)df & FIELD_ARRAY);
-	if (is_compiletime(sindex)) {
+	if (is_compiletime(vindex->source)) {
 		return psyco_get_nth_field(po, vi, df,
-					   CompileTime_Get(sindex)->value);
+					   CompileTime_Get(vindex->source)->value);
 	}
 	else {
-		if (vinfo_compute(vi, po) == SOURCE_ERROR)
+		if (!compute_vinfo(vi, po))
 			return NULL;
 		return field_read(po, vi, offset, vindex, df, true);
 	}
@@ -521,7 +520,7 @@ bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
 			vinfo_setitem(po, vi, findex, value);
 			return true;
 		}
-		if (vinfo_compute(vi, po) == SOURCE_ERROR)
+		if (!compute_vinfo(vi, po))
 			return false;
 	}
 	extra_assert((long)df & FIELD_MUTABLE);
@@ -562,18 +561,17 @@ bool psyco_put_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
 			   vinfo_t* vindex, vinfo_t* value)
 {
 	long offset = FIELD_OFFSET(df);
-	NonVirtualSource sindex = vinfo_compute(vindex, po);
-	if (sindex == SOURCE_ERROR)
+	if (!compute_vinfo(vindex, po))
 		return false;
 	
 	extra_assert((long)df & FIELD_ARRAY);
-	if (is_compiletime(sindex)) {
+	if (is_compiletime(vindex->source)) {
 		return psyco_put_nth_field(po, vi, df,
-					   CompileTime_Get(sindex)->value,
+					   CompileTime_Get(vindex->source)->value,
 					   value);
 	}
 	else {
-		if (vinfo_compute(vi, po) == SOURCE_ERROR)
+		if (!compute_vinfo(vi, po))
 			return false;
 		if (!psyco_memory_write(po, vi, offset, vindex,
 					FIELD_SIZE2(df), value))

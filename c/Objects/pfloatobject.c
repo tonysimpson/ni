@@ -43,6 +43,7 @@ cimpl_fp_div(double a, double b, double* result) {
     return 0;
 }
 
+#if 0
 /* Pow isn't ready yet, so this hasn't been tested */
 static int
 cimpl_fp_pow(double iv, double iw, double* result) {
@@ -79,6 +80,7 @@ cimpl_fp_pow(double iv, double iw, double* result) {
     }
     return 0;
 }
+#endif  /* 0 */
 
 static int
 cimpl_fp_nonzero(double a) {

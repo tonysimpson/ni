@@ -471,7 +471,7 @@ static vinfo_t* pstring_slice(PsycoObject* po, vinfo_t* a,
 		vinfo_t* start = vinfo_getitem(a, STRSLICE_START);
 		if (source!=NULL && start!=NULL) {
 			/* optimize slicing of a slice */
-			vinfo_t* k = integer_add(po, start, i, false);
+			vinfo_t* k = integer_add(po, start, slicestart, false);
 			if (k == NULL)
 				goto fail;
 			vinfo_decref(slicestart, po);

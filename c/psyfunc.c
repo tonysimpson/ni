@@ -390,6 +390,7 @@ PsycoFunctionObject* psyco_PsycoFunction_NewEx(PyCodeObject* code,
 	return result;
 }
 
+#if 0  /* unneeded */
 DEFINEFN
 PyObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec)
 {
@@ -404,6 +405,7 @@ PyObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec)
 					  func->func_defaults,
 					  rec);
 }
+#endif  /* 0 */
 
 DEFINEFN
 PyObject* psyco_proxycode(PyFunctionObject* func, int rec)

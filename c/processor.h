@@ -31,10 +31,10 @@ EXTERNFN PyObject* psyco_processor_run(CodeBufferObject* codebuf,
                                        long initial_stack[],
                                        struct stack_frame_info_s*** finfo);
 
-#define RUN_ARGC(codebuf)                                       \
-   (extra_assert(CodeBuffer_Check((codebuf))),                  \
-    (get_stack_depth(&((CodeBufferObject*)(codebuf))->snapshot) \
-     - INITIAL_STACK_DEPTH - sizeof(long)) / sizeof(long))
+#define RUN_ARGC(codebuf)                                             \
+   (extra_assert(CodeBuffer_Check((codebuf))),                        \
+    (int)((get_stack_depth(&((CodeBufferObject*)(codebuf))->snapshot) \
+     - INITIAL_STACK_DEPTH - sizeof(long)) / sizeof(long)))
 
 /* return a new vinfo_t* meaning `in the processor flags, true if <cc>',
    as an integer 0 or 1. The source of the vinfo_t* is compile-time
@@ -266,8 +266,9 @@ inline int intlog2(long value) {
    needed (so far) in this case. */
 EXTERNFN void psyco_emit_header(PsycoObject* po, int nframelocal);
 
-/* write a return, clearing the stack as necessary, and releases 'po'. */
-EXTERNFN code_t* psyco_finish_return(PsycoObject* po, NonVirtualSource retval);
+/* write a return, clearing the stack as necessary, and releases 'po'.
+   'retval' may not be virtual-time in the current implementation. */
+EXTERNFN code_t* psyco_finish_return(PsycoObject* po, Source retval);
 
 /* write codes that calls the C function 'fn' and jumps to its
    return value. Save registers before calling psyco_finish_call_proxy().

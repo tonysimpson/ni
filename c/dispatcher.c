@@ -1242,8 +1242,12 @@ static void skip_compatible_array(int count)
         ;
       else
         {
+#if PSYCO_DEBUG
           Source bsource = fz_getarg();
           extra_assert(is_compiletime(bsource));
+#else
+          fz_getarg();
+#endif
           skip_compatible_array(opc);
 
           if (cmpinternal.tmp_counter == cmpinternal.vcilink->time)

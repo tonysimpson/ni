@@ -140,14 +140,15 @@
 
 #if ALL_CHECKS
 # define MALLOC_CHECK_    2  /* GCC malloc() checks */
-# undef NDEBUG
-# include <assert.h>
-# if CODE_DUMP
-#  define extra_assert(x) ((x) ? (void)0 : (psyco_dump_code_buffers(),       \
-                                  assert(x), assert(!"volatile assertion")))
+# ifndef WIN32
+#  define extra_assert(x) ((void)((x) || psyco_assert_failed(#x, __FILE__, __LINE__)))
 # else
-#  define extra_assert(x) assert(x)
+/* The VC++ preprocessor is not even able to produce from #x a C string that
+   is correctly escape for the VC++ compiler !! */
+#  define extra_assert(x) ((void)((x) || \
+                         psyco_assert_failed("assertion failed", __FILE__, __LINE__)))
 # endif
+EXTERNFN int psyco_assert_failed(char* msg, char* filename, int lineno);
 #else
 # define extra_assert(x)  (void)0  /* nothing */
 #endif

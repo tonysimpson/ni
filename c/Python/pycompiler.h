@@ -135,15 +135,14 @@ EXTERNFN void PycException_Promote(PsycoObject* po,
    this case; use PycException_Occurred() to know if it is really
    an exception or a plain normal -1. */
 inline long psyco_atcompiletime(PsycoObject* po, vinfo_t *vi) {
-	NonVirtualSource src = vinfo_compute(vi, po);
-	if (src == SOURCE_ERROR)
+	if (!compute_vinfo(vi, po))
 		return -1;
-	if (is_runtime(src)) {
+	if (is_runtime(vi->source)) {
 		PycException_Promote(po, vi, &psyco_nonfixed_promotion);
 		return -1;
 	}
 	else {
-		source_known_t* sk = CompileTime_Get(src);
+		source_known_t* sk = CompileTime_Get(vi->source);
 		sk->refcount1_flags |= SkFlagFixed;
 		return sk->value;
 	}
@@ -151,15 +150,14 @@ inline long psyco_atcompiletime(PsycoObject* po, vinfo_t *vi) {
 /* the same if the value to promote is itself a PyObject* which can be
    used as key in the look-up dictionary */
 inline PyObject* psyco_pyobj_atcompiletime(PsycoObject* po, vinfo_t *vi) {
-	NonVirtualSource src = vinfo_compute(vi, po);
-	if (src == SOURCE_ERROR)
+	if (!compute_vinfo(vi, po))
 		return NULL;
-	if (is_runtime(src)) {
+	if (is_runtime(vi->source)) {
 		PycException_Promote(po, vi, &psyco_nonfixed_pyobj_promotion);
 		return NULL;
 	}
 	else {
-		source_known_t* sk = CompileTime_Get(src);
+		source_known_t* sk = CompileTime_Get(vi->source);
 		sk->refcount1_flags |= SkFlagFixed;
 		return (PyObject*) sk->value;
 	}
@@ -171,16 +169,15 @@ inline PyObject* psyco_pyobj_atcompiletime(PsycoObject* po, vinfo_t *vi) {
    of writing 'switch (psyco_atcompiletime(po, vi))' you
    must write 'switch (psyco_switch_index(po, vi, fs))' */
 inline int psyco_switch_index(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) {
-	NonVirtualSource src = vinfo_compute(vi, po);
-	if (src == SOURCE_ERROR)
+	if (!compute_vinfo(vi, po))
 		return -1;
-	if (is_runtime(src)) {
+	if (is_runtime(vi->source)) {
 		if (!known_to_be_default(vi, fs))
 			PycException_Promote(po, vi, &fs->fixed_promotion);
 		return -1;
 	}
 	else
-		return psyco_switch_lookup(fs, CompileTime_Get(src)->value);
+		return psyco_switch_lookup(fs, CompileTime_Get(vi->source)->value);
 }
 #endif
 
@@ -297,14 +294,10 @@ EXTERNFN PyCFunction Psyco_DefineModuleC(PyObject* module, char* meth_name,
 #define Psyco_META3(po, c_function, flags, arguments, a1, a2, a3)	\
 		Psyco_Meta3x(po, c_function, flags, arguments,		\
 			     (long)(a1), (long)(a2), (long)(a3))
-#define Psyco_META4(po, c_function, flags, arguments, a1, a2, a3, a4)	\
-		Psyco_Meta4x(po, c_function, flags, arguments,		\
-			     (long)(a1), (long)(a2), (long)(a3), (long)(a4))
 
 #define Psyco_flag_META1	(condition_code_t) Psyco_META1
 #define Psyco_flag_META2	(condition_code_t) Psyco_META2
 #define Psyco_flag_META3	(condition_code_t) Psyco_META3
-#define Psyco_flag_META4	(condition_code_t) Psyco_META4
 
 EXTERNFN vinfo_t* Psyco_Meta1x(PsycoObject* po, void* c_function, int flags,
                                const char* arguments, long a1);
@@ -312,9 +305,6 @@ EXTERNFN vinfo_t* Psyco_Meta2x(PsycoObject* po, void* c_function, int flags,
                                const char* arguments, long a1, long a2);
 EXTERNFN vinfo_t* Psyco_Meta3x(PsycoObject* po, void* c_function, int flags,
                                const char* arguments, long a1, long a2, long a3);
-EXTERNFN vinfo_t* Psyco_Meta4x(PsycoObject* po, void* c_function, int flags,
-                               const char* arguments,
-                               long a1, long a2, long a3, long a4);
 
 
 /******************************************************************/

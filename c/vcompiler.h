@@ -22,7 +22,6 @@ typedef long Source;   /* Implemented as a bitfield 32-bit integer. */
 
 /* the next typedefs are for documentation purposes only, as the C compiler
    will not make any difference between them all */
-typedef long NonVirtualSource;
 typedef long RunTimeSource;
 typedef long CompileTimeSource;
 typedef long VirtualTimeSource;
@@ -295,13 +294,13 @@ inline void vinfo_xdecref(vinfo_t* vi, PsycoObject* po) {
 }
 
 /* promoting out of virtual-time */
-inline NonVirtualSource vinfo_compute(vinfo_t* vi, PsycoObject* po) {
+inline bool compute_vinfo(vinfo_t* vi, PsycoObject* po) {
 	if (is_virtualtime(vi->source)) {
 		if (!VirtualTime_Get(vi->source)->compute_fn(po, vi, true))
-			return SOURCE_ERROR;
+			return false;
 		extra_assert(!is_virtualtime(vi->source));
 	}
-	return (NonVirtualSource) vi->source;
+	return true;
 }
 
 /* sub-array (see also processor.h, psyco_get_field()&co.) */

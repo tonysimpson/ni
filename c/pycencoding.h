@@ -190,10 +190,8 @@ inline void psyco_incref_rt(PsycoObject* po, vinfo_t* v)
 /* emit Py_INCREF(v) */
 inline bool psyco_incref_v(PsycoObject* po, vinfo_t* v)
 {
-  NonVirtualSource src = vinfo_compute(v, po);
-  if (src == SOURCE_ERROR)
-    return false;
-  if (!is_compiletime(src))
+  if (!compute_vinfo(v, po)) return false;
+  if (!is_compiletime(v->source))
     psyco_incref_rt(po, v);
   else
     {

@@ -73,8 +73,8 @@ inline vinfo_t* list_maybe_compute(PsycoObject* po, vinfo_t* v)
 	/* force a list out of virtual-time if it is too long.
 	   decref v in case of error. */
 	if (vlist_length(v) > VLIST_LENGTH_MAX) {
-		NonVirtualSource source = vinfo_compute(v, po);
-		if (source == SOURCE_ERROR) {
+		if (!compute_vinfo(v, po)) {
+			/* error */
 			vinfo_decref(v, po);
 			v = NULL;
 		}

@@ -17,10 +17,7 @@ static bool compute_tuple(PsycoObject* po, vinfo_t* v, bool force)
 	/* check whether all tuple objects are constant */
 	for (i=iTUPLE_OB_ITEM; i<tuple_end; i++) {
 		vinfo_t* vi = v->array->items[i];
-		NonVirtualSource src = vinfo_compute(vi, po);
-		if (src == SOURCE_ERROR)
-			return false;
-		if (!is_compiletime(src))
+		if (!is_compiletime(vi->source))
 			break;  /* no */
 	}
 	if (i == tuple_end) {
@@ -54,7 +51,7 @@ static bool compute_tuple(PsycoObject* po, vinfo_t* v, bool force)
 		for (i=0; i<tuple_len; i++) {
 			vinfo_t* vi = PsycoTuple_GET_ITEM(v, i);
 			if (!psyco_put_nth_field(po, tuple,
-                                                 FMUT(FPYREF(TUPLE_ob_item)),
+						 FMUT(FPYREF(TUPLE_ob_item)),
 						 i, vi)) {
 				vinfo_decref(tuple, po);
 				return false;

@@ -3,6 +3,7 @@
 #include "cstruct.h"
 #include "Python/pyver.h"
 #include "Python/frames.h"
+#include "codemanager.h"
 
 
 /* There are three profilers you can choose from:
@@ -139,9 +140,17 @@ static void set_ceval_hook(ceval_events_t* cev, int when,
 	cev->events_total++;
 }
 
+static PyObject* deleted_ceval_hook(PyFrameObject* frame, PyObject* arg)
+{
+	return NULL;
+}
+
 static void unset_ceval_hook(ceval_events_t* cev, int when,
 			     ceval_event_fn fn, PyObject* arg)
 {
+	/* warning: do not shuffle values in the events->items array to
+	   compact it, because this might be called while the array is 
+	   being enumerated by call_ceval_hooks() */
 	int n;
 	struct cevents_s* events;
 	extra_assert(0 <= when && when < PyTrace_TOTAL);
@@ -149,8 +158,7 @@ static void unset_ceval_hook(ceval_events_t* cev, int when,
 	n = events->count;
 	while (n--) {
 		if (events->items[n].fn == fn && events->items[n].arg == arg) {
-			events->items[n] = events->items[--events->count];
-			Py_XDECREF(arg);
+			events->items[n].fn = &deleted_ceval_hook;
 			cev->events_total--;
 		}
 	}
@@ -164,6 +172,7 @@ inline bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
 #if HAVE_DYN_COMPILE
 	PyObject* codebuf;
 #endif
+	PyObject* harg;
 	PyObject* obj;
 	extra_assert(0 <= what && what < PyTrace_TOTAL);
 #if VERBOSE_LEVEL >= 3
@@ -176,15 +185,29 @@ inline bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
 		if (n == 0)
 			return true;  /* done */
 		n--;
-		codebuf = events->items[n].fn(f, events->items[n].arg);
+		extra_assert(n < events->count);
+		harg = events->items[n].arg;
+		codebuf = events->items[n].fn(f, harg);
+		if (events->items[n].fn == &deleted_ceval_hook) {
+			extra_assert(harg == events->items[n].arg);
+			events->items[n] = events->items[--events->count];
+			Py_XDECREF(harg);
+		}
 	} while (codebuf == NULL);
 #endif
 
 	/* call the other hooks, if any */
 	while (n != 0) {
 		n--;
-		obj = events->items[n].fn(f, events->items[n].arg);
+		extra_assert(n < events->count);
+		harg = events->items[n].arg;
+		obj = events->items[n].fn(f, harg);
 		Py_XDECREF(obj);
+		if (events->items[n].fn == &deleted_ceval_hook) {
+			extra_assert(harg == events->items[n].arg);
+			events->items[n] = events->items[--events->count];
+			Py_XDECREF(harg);
+		}
 	}
 #if HAVE_DYN_COMPILE
 	/* enable recursive calls to call_ceval_hooks() */
@@ -483,13 +506,17 @@ static PyObject* profile_call(PyFrameObject* frame, PyObject* arg)
 								g, rec);
 				if (cs->st_codebuf == Py_None)
 					g = NULL;  /* failed */
-				else
+				else {
 					Py_INCREF(g);
+					extra_assert
+					    (CodeBuffer_Check(cs->st_codebuf));
+				}
 				Py_DECREF(cs->st_globals);
 				cs->st_globals = g;
 			}
 			/* already compiled a Psyco version, run it
 			   if the globals match */
+			extra_assert(frame->f_globals != NULL);
 			if (cs->st_globals == frame->f_globals) {
 				Py_INCREF(cs->st_codebuf);
 				return cs->st_codebuf;
@@ -544,12 +571,15 @@ static PyObject* do_fullcompile(PyFrameObject* frame, PyObject* arg)
 						       g, rec);
 		if (cs->st_codebuf == Py_None)
 			g = NULL;  /* failed */
-		else
+		else {
 			Py_INCREF(g);
+			extra_assert(CodeBuffer_Check(cs->st_codebuf));
+		}
 		Py_XDECREF(cs->st_globals);
 		cs->st_globals = g;
 	}
 	/* already compiled a Psyco version, run it if the globals match */
+	extra_assert(frame->f_globals != NULL);
 	if (cs->st_globals == frame->f_globals) {
 		Py_INCREF(cs->st_codebuf);
 		return cs->st_codebuf;
@@ -584,6 +614,7 @@ static PyObject* do_nocompile(PyFrameObject* frame, PyObject* arg)
 	/* if already compiled a Psyco version, run it if the globals match */
 	if (cs != NULL && cs->st_codebuf != NULL &&
 	    cs->st_globals == frame->f_globals) {
+		extra_assert(frame->f_globals != NULL);
 		Py_INCREF(cs->st_codebuf);
 		return cs->st_codebuf;
 	}
@@ -625,7 +656,6 @@ static PyObject* turbo_go(PyFrameObject* frame, PyObject* target_frame)
 	ceval_events_t* cev = get_cevents(frame->f_tstate);
 	
 	/* single-shooting callback */
-	Py_INCREF(target_frame);
 	unset_ceval_hook(cev, PyTrace_LINE, &turbo_go, target_frame);
 	
 	if ((PyObject*) frame == target_frame) {
@@ -633,6 +663,10 @@ static PyObject* turbo_go(PyFrameObject* frame, PyObject* target_frame)
 		stats_printf(("stats: compile frame: %s\n",
 			      PyCodeObject_NAME(frame->f_code)));
 		result = PsycoCode_CompileFrame(frame, DEFAULT_RECURSION);
+		if (result == Py_None) {
+			Py_DECREF(result);
+			result = NULL;
+		}
 	}
 	else {
 		/* hey, where is my frame? */
@@ -653,7 +687,6 @@ static PyObject* turbo_go(PyFrameObject* frame, PyObject* target_frame)
 	}
 	if (!update_ceval_hooks(cev))
 		unset_ceval_hook(cev, PyTrace_RETURN, &turbo_wait, target_frame);
-	Py_DECREF(target_frame);
 	return result;
 }
 

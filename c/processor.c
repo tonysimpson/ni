@@ -154,7 +154,7 @@ void psyco_emit_header(PsycoObject* po, int nframelocal)
 }
 
 DEFINEFN
-code_t* psyco_finish_return(PsycoObject* po, NonVirtualSource retval)
+code_t* psyco_finish_return(PsycoObject* po, Source retval)
 {
   code_t* code = po->code;
   int retpos;
@@ -303,11 +303,10 @@ DEFINEFN
 vinfo_t* psyco_mem_read(PsycoObject* po, vinfo_t* ptr, long offset)
 {
   reg_t src, rg;
-  NonVirtualSource source = vinfo_compute(ptr, po);
-  if (source == SOURCE_ERROR) return NULL;
+  if (!compute_vinfo(ptr, po)) return NULL;
   
   BEGIN_CODE
-  if (is_runtime(source))
+  if (is_runtime(ptr->source))
     {
       RTVINFO_IN_REG(ptr);
       src = RUNTIME_REG(ptr);
@@ -321,7 +320,7 @@ vinfo_t* psyco_mem_read(PsycoObject* po, vinfo_t* ptr, long offset)
     }
   else
     {
-      offset += CompileTime_Get(source)->value;
+      offset += CompileTime_Get(ptr->source)->value;
       NEED_FREE_REG(rg);
       code[0] = 0x8B;        /* MOV rg, [offset] */
       code = write_modrm(code+1, rg<<3,
@@ -339,12 +338,11 @@ vinfo_t* psyco_mem_read2(PsycoObject* po, vinfo_t* ptr, long offset1,
 {
   reg_t src, src2, rg;
   int shift;
-  NonVirtualSource source = vinfo_compute(offset2, po);
-  if (source == SOURCE_ERROR) return NULL;
+  if (!compute_vinfo(offset2, po)) return NULL;
 
-  if (is_compiletime(source))
+  if (is_compiletime(offset2->source))
     {
-      offset1 += CompileTime_Get(source)->value * scale;
+      offset1 += CompileTime_Get(offset2->source)->value * scale;
       return psyco_mem_read(po, ptr, offset1);
     }
   switch (scale) {
@@ -361,14 +359,13 @@ vinfo_t* psyco_mem_read2(PsycoObject* po, vinfo_t* ptr, long offset1,
     }
   }
 
-  source = vinfo_compute(ptr, po);
-  if (source == SOURCE_ERROR) return NULL;
+  if (!compute_vinfo(ptr, po)) return NULL;
   
   BEGIN_CODE
   RTVINFO_IN_REG(offset2);
   src2 = RunTIME_REG(offset2);
   DELAY_USE_OF(src2);
-  if (is_runtime(source))
+  if (is_runtime(ptr->source))
     {
       RTVINFO_IN_REG(ptr);
       src = RUNTIME_REG(ptr);
@@ -382,7 +379,7 @@ vinfo_t* psyco_mem_read2(PsycoObject* po, vinfo_t* ptr, long offset1,
     }
   else
     {
-      offset1 += CompileTime_Get(source)->value;
+      offset1 += CompileTime_Get(ptr->source)->value;
       NEED_FREE_REG(rg);
       code[0] = 0x8B;        /* MOV rg, [offset1 + src2*scale] */
       code = write_modrm(code+1, rg<<3,
@@ -399,25 +396,20 @@ vinfo_t* psyco_mem_write(PsycoObject* po, vinfo_t* ptr, long offset,
                          vinfo_t* value)
 {
   reg_t src, rg;
-  NonVirtualSource svalue;
-  NonVirtualSource source = vinfo_compute(ptr, po);
-  if (source == SOURCE_ERROR) return NULL;
-
-  svalue = vinfo_compute(value, po);
-  if (svalue == SOURCE_ERROR) return NULL;
+  if (!compute_vinfo(ptr, po) || !compute_vinfo(value, po)) return NULL;
   
   BEGIN_CODE
-  if (is_runtime(source))
+  if (is_runtime(ptr->source))
     {
       RTVINFO_IN_REG(ptr);
       src = RUNTIME_REG(ptr);
     }
   else
     {
-      offset += CompileTime_Get(source)->value;
+      offset += CompileTime_Get(ptr->source)->value;
       src = REG_NONE;
     }
-  if (is_runtime(svalue))
+  if (is_runtime(value->source))
     {
       DELAY_USE_OF(src);
       NEED_FREE_REG(rg);
@@ -437,7 +429,7 @@ vinfo_t* psyco_mem_write(PsycoObject* po, vinfo_t* ptr, long offset,
       //    }
   else
     {
-      offset += CompileTime_Get(source)->value;
+      offset += CompileTime_Get(ptr->source)->value;
       NEED_FREE_REG(rg);
       code[0] = 0x8B;        /* MOV rg, [offset] */
       code = write_modrm(code+1, rg<<3,
@@ -497,7 +489,7 @@ inline code_t* write_modrm(code_t* code, code_t middle,
         {
           extra_assert(offset >= 0);
           code[0] = 0x40 | middle | base;
-          code[1] = offset;
+          code[1] = (code_t) offset;
           return code+2;
         }
       else
@@ -519,7 +511,7 @@ inline code_t* write_modrm(code_t* code, code_t middle,
         {
           extra_assert(offset >= 0);
           code[0] = middle | 0x44;
-          code[2] = offset;
+          code[2] = (code_t) offset;
           return code+3;
         }
       else
@@ -579,7 +571,7 @@ static reg_t mem_access(PsycoObject* po, code_t opcodes[], vinfo_t* nv_ptr,
     }
   
   for (i = *opcodes++; i--; ) *code++ = *opcodes++;
-  code = write_modrm(code, extrareg<<3, basereg, indexreg, size2, offset);
+  code = write_modrm(code, (code_t)(extrareg<<3), basereg, indexreg, size2, offset);
   for (i = *opcodes++; i--; ) *code++ = *opcodes++;
   END_CODE
   return extrareg;
@@ -627,10 +619,9 @@ bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr, long offset,
                         vinfo_t* rt_vindex, int size2, vinfo_t* value)
 {
   code_t opcodes[8];
-  NonVirtualSource svalue = vinfo_compute(value, po);
-  if (svalue == SOURCE_ERROR) return false;
+  if (!compute_vinfo(value, po)) return false;
 
-  if (is_runtime(svalue))
+  if (is_runtime(value->source))
     {
       switch (size2) {
       case 0:
@@ -658,7 +649,7 @@ bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr, long offset,
   else
     {
       code_t* code1;
-      long immed = CompileTime_Get(svalue)->value;
+      long immed = CompileTime_Get(value->source)->value;
       value = NULL;  /* not run-time */
       switch (size2) {
       case 0:
@@ -1133,7 +1124,6 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 
 	for (count=0; arguments[count]; count++) {
 		long arg;
-		NonVirtualSource src;
 		char tag;
 		vinfo_t* vi;
 		
@@ -1149,15 +1139,13 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		case 'v':
 			/* Compute all values first */
 			vi = (vinfo_t*) arg;
-			src = vinfo_compute(vi, po);
-			if (src == SOURCE_ERROR)
-				return NULL;
-			if (!is_compiletime(src)) {
+			if (!compute_vinfo(vi, po)) return NULL;
+			if (!is_compiletime(vi->source)) {
 				flags &= ~CfPure;
 			}
 			else {
 				/* compile-time: get the value */
-				arg = CompileTime_Get(src)->value;
+				arg = CompileTime_Get(vi->source)->value;
 				tag = 'l';
 			}
 			break;
@@ -1437,7 +1425,7 @@ condition_code_t integer_non_null(PsycoObject* po, vinfo_t* vi)
 		result = psyco_vsource_cc(vi->source);
 		if (result != CC_ALWAYS_FALSE)
 			return result;
-		if (vinfo_compute(vi, po) == SOURCE_ERROR)
+		if (!compute_vinfo(vi, po))
 			return CC_ERROR;
 	}
 	if (is_compiletime(vi->source)) {
@@ -1478,33 +1466,26 @@ condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi)
 }
 
 #define GENERIC_BINARY_HEADER                   \
-  NonVirtualSource v1s, v2s;                    \
-  v2s = vinfo_compute(v2, po);                  \
-  if (v2s == SOURCE_ERROR) return NULL;         \
-  v1s = vinfo_compute(v1, po);                  \
-  if (v1s == SOURCE_ERROR) return NULL;
+  if (!compute_vinfo(v2, po) || !compute_vinfo(v1, po)) return NULL;
 
 #define GENERIC_BINARY_HEADER_i                 \
-  NonVirtualSource v1s;                         \
-  v1s = vinfo_compute(v1, po);                  \
-  if (v1s == SOURCE_ERROR) return NULL;
+  if (!compute_vinfo(v1, po)) return NULL;
 
-#define GENERIC_BINARY_CT_CT(c_code)                    \
-  if (is_compiletime(v1s) && is_compiletime(v2s))       \
-    {                                                   \
-      long a = CompileTime_Get(v1s)->value;             \
-      long b = CompileTime_Get(v2s)->value;             \
-      long c = (c_code);                                \
-      return vinfo_new(CompileTime_New(c));             \
+#define GENERIC_BINARY_CT_CT(c_code)                            \
+  if (is_compiletime(v1->source) && is_compiletime(v2->source)) \
+{                                                               \
+      long a = CompileTime_Get(v1->source)->value;              \
+      long b = CompileTime_Get(v2->source)->value;              \
+      long c = (c_code);                                        \
+      return vinfo_new(CompileTime_New(c));                     \
     }
 
 #define GENERIC_BINARY_COMMON_INSTR(group, ovf, nonneg)   {     \
   reg_t rg;                                                     \
   BEGIN_CODE                                                    \
-  NEED_CC_SRC(v2s);                                             \
-  DONT_OVERWRITE_SOURCE(v2s);                                   \
-  COPY_IN_REG(v1, rg);                   /* MOV rg, (v1) */     \
-  COMMON_INSTR_FROM(group, rg, v2s);     /* XXX rg, (v2) */     \
+  NEED_CC();                                                    \
+  COPY_IN_REG(v1, rg);                      /* MOV rg, (v1) */  \
+  COMMON_INSTR_FROM(group, rg, v2->source); /* XXX rg, (v2) */  \
   END_CODE                                                      \
   if ((ovf) && runtime_condition_f(po, CC_O))                   \
     return NULL;  /* if overflow */                             \
@@ -1513,11 +1494,10 @@ condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi)
 
 #define GENERIC_BINARY_INSTR_2(group, c_code, nonneg)                   \
 {                                                                       \
-  NonVirtualSource v1s = vinfo_compute(v1, po);                         \
-  if (v1s == SOURCE_ERROR) return NULL;				        \
-  if (is_compiletime(v1s))                                              \
+  if (!compute_vinfo(v1, po)) return NULL;                              \
+  if (is_compiletime(v1->source))                                       \
     {                                                                   \
-      long a = CompileTime_Get(v1s)->value;                             \
+      long a = CompileTime_Get(v1->source)->value;                      \
       long b = value2;                                                  \
       long c = (c_code);                                                \
       return vinfo_new(CompileTime_New(c));                             \
@@ -1534,51 +1514,53 @@ condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi)
     }                                                                   \
 }
 
-static vinfo_t* int_add_i(PsycoObject* po, RunTimeSource v1s, long value2,
+static vinfo_t* int_add_i(PsycoObject* po, vinfo_t* rt1, long value2,
                           bool unsafe)
 {
   reg_t rg, dst;
+  extra_assert(is_runtime(rt1->source));
   BEGIN_CODE
   NEED_FREE_REG(dst);
-  rg = getreg(v1s);
+  rg = getreg(rt1->source);
   if (rg == REG_NONE)
     {
       rg = dst;
-      LOAD_REG_FROM(v1s, rg);
+      LOAD_REG_FROM(rt1->source, rg);
     }
   LOAD_REG_FROM_REG_PLUS_IMMED(dst, rg, value2);
   END_CODE
-  return new_rtvinfo(po, dst, false, unsafe && value2>=0 && is_rtnonneg(v1s));
+  return new_rtvinfo(po, dst, false,
+		unsafe && value2>=0 && is_rtnonneg(rt1->source));
 }
 
 DEFINEFN
 vinfo_t* integer_add(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
 {
   GENERIC_BINARY_HEADER
-  if (is_compiletime(v1s))
+  if (is_compiletime(v1->source))
     {
-      long a = CompileTime_Get(v1s)->value;
+      long a = CompileTime_Get(v1->source)->value;
       if (a == 0)
         {
           /* adding zero to v2 */
           vinfo_incref(v2);
           return v2;
         }
-      if (is_compiletime(v2s))
+      if (is_compiletime(v2->source))
         {
-          long b = CompileTime_Get(v2s)->value;
+          long b = CompileTime_Get(v2->source)->value;
           long c = a + b;
           if (ovf && (c^a) < 0 && (c^b) < 0)
             return NULL;   /* overflow */
           return vinfo_new(CompileTime_New(c));
         }
       if (!ovf)
-        return int_add_i(po, v2s, a, false);
+        return int_add_i(po, v2, a, false);
     }
   else
-    if (is_compiletime(v2s))
+    if (is_compiletime(v2->source))
       {
-        long b = CompileTime_Get(v2s)->value;
+        long b = CompileTime_Get(v2->source)->value;
         if (b == 0)
           {
             /* adding zero to v1 */
@@ -1586,11 +1568,12 @@ vinfo_t* integer_add(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
             return v1;
           }
         if (!ovf)
-          return int_add_i(po, v1s, b, false);
+          return int_add_i(po, v1, b, false);
       }
 
   GENERIC_BINARY_COMMON_INSTR(0, ovf,   /* ADD */
-			      ovf && is_nonneg(v1s) && is_nonneg(v2s))
+			      ovf && is_nonneg(v1->source)
+			          && is_nonneg(v2->source))
 }
 
 DEFINEFN
@@ -1605,12 +1588,12 @@ vinfo_t* integer_add_i(PsycoObject* po, vinfo_t* v1, long value2, bool unsafe)
   else
     {
       GENERIC_BINARY_HEADER_i
-      if (is_compiletime(v1s))
+      if (is_compiletime(v1->source))
         {
-          long c = CompileTime_Get(v1s)->value + value2;
+          long c = CompileTime_Get(v1->source)->value + value2;
           return vinfo_new(CompileTime_New(c));
         }
-      return int_add_i(po, v1s, value2, unsafe);
+      return int_add_i(po, v1, value2, unsafe);
     }
 }
 
@@ -1618,12 +1601,12 @@ DEFINEFN
 vinfo_t* integer_sub(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
 {
   GENERIC_BINARY_HEADER
-  if (is_compiletime(v1s))
+  if (is_compiletime(v1->source))
     {
-      long a = CompileTime_Get(v1s)->value;
-      if (is_compiletime(v2s))
+      long a = CompileTime_Get(v1->source)->value;
+      if (is_compiletime(v2->source))
         {
-          long b = CompileTime_Get(v2s)->value;
+          long b = CompileTime_Get(v2->source)->value;
           long c = a - b;
           if (ovf && (c^a) < 0 && (c^~b) < 0)
             return NULL;   /* overflow */
@@ -1631,9 +1614,9 @@ vinfo_t* integer_sub(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
         }
     }
   else
-    if (is_compiletime(v2s))
+    if (is_compiletime(v2->source))
       {
-        long b = CompileTime_Get(v2s)->value;
+        long b = CompileTime_Get(v2->source)->value;
         if (b == 0)
           {
             /* subtracting zero from v1 */
@@ -1641,7 +1624,7 @@ vinfo_t* integer_sub(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
             return v1;
           }
         if (!ovf)
-          return int_add_i(po, v1s, -b, false);
+          return int_add_i(po, v1, -b, false);
       }
 
   GENERIC_BINARY_COMMON_INSTR(5, ovf, false)   /* SUB */
@@ -1653,7 +1636,8 @@ vinfo_t* integer_or(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
   GENERIC_BINARY_HEADER
   GENERIC_BINARY_CT_CT(a | b)
   GENERIC_BINARY_COMMON_INSTR(1, false,   /* OR */
-			      is_nonneg(v1s) && is_nonneg(v2s));
+			      is_nonneg(v1->source) &&
+			      is_nonneg(v2->source));
 }
 
 DEFINEFN
@@ -1662,7 +1646,8 @@ vinfo_t* integer_xor(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
   GENERIC_BINARY_HEADER
   GENERIC_BINARY_CT_CT(a ^ b)
   GENERIC_BINARY_COMMON_INSTR(6, false,   /* XOR */
-			      is_nonneg(v1s) && is_nonneg(v2s));
+			      is_nonneg(v1->source) &&
+			      is_nonneg(v2->source));
 }
 
 DEFINEFN
@@ -1671,14 +1656,15 @@ vinfo_t* integer_and(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
   GENERIC_BINARY_HEADER
   GENERIC_BINARY_CT_CT(a & b)
   GENERIC_BINARY_COMMON_INSTR(4, false,   /* AND */
-			      is_nonneg(v1s) || is_nonneg(v2s));
+			      is_nonneg(v1->source) ||
+			      is_nonneg(v2->source));
 }
 
 #if 0
 DEFINEFN   -- unused --
 vinfo_t* integer_and_i(PsycoObject* po, vinfo_t* v1, long value2)
      GENERIC_BINARY_INSTR_2(4, a & b,    /* AND */
-			    value2>=0 || is_rtnonneg(v1s))
+			    value2>=0 || is_rtnonneg(v1->source))
 #endif
 
 #define GENERIC_SHIFT_BY(rtmacro, nonneg)               \
@@ -1697,9 +1683,9 @@ vinfo_t* integer_and_i(PsycoObject* po, vinfo_t* v1, long value2)
   {                                             \
     reg_t rg;                                   \
     BEGIN_CODE                                  \
-    if (RSOURCE_REG(v2s) != SHIFT_COUNTER) {    \
+    if (RSOURCE_REG(v2->source) != SHIFT_COUNTER) { \
       NEED_REGISTER(SHIFT_COUNTER);             \
-      LOAD_REG_FROM(v2s, SHIFT_COUNTER);        \
+      LOAD_REG_FROM(v2->source, SHIFT_COUNTER); \
     }                                           \
     NEED_CC_REG(SHIFT_COUNTER);                 \
     DELAY_USE_OF(SHIFT_COUNTER);                \
@@ -1737,16 +1723,15 @@ static vinfo_t* int_mul_i(PsycoObject* po, vinfo_t* v1, long value2,
   else
     {
       reg_t rg;
-      RunTimeSource v1s = v1->source;
       BEGIN_CODE
-      NEED_CC_SRC(v1s);
-      DONT_OVERWRITE_SOURCE(v1s);
+      NEED_CC();
       NEED_FREE_REG(rg);
-      IMUL_IMMED_FROM_RT(v1s, value2, rg);
+      IMUL_IMMED_FROM_RT(v1->source, value2, rg);
       END_CODE
       if (ovf && runtime_condition_f(po, CC_O))
         return NULL;
-      return new_rtvinfo(po, rg, false, ovf && value2>=0 && is_rtnonneg(v1s));
+      return new_rtvinfo(po, rg, false,
+	      ovf && value2>=0 && is_rtnonneg(v1->source));
     }
 }
 
@@ -1755,12 +1740,12 @@ vinfo_t* integer_mul(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
 {
   reg_t rg;
   GENERIC_BINARY_HEADER
-  if (is_compiletime(v1s))
+  if (is_compiletime(v1->source))
     {
-      long a = CompileTime_Get(v1s)->value;
-      if (is_compiletime(v2s))
+      long a = CompileTime_Get(v1->source)->value;
+      if (is_compiletime(v2->source))
         {
-          long b = CompileTime_Get(v2s)->value;
+          long b = CompileTime_Get(v2->source)->value;
           /* unlike Python, we use a function written in assembly
              to perform the product overflow checking */
           if (ovf && glue_int_mul_1(a, b))
@@ -1770,37 +1755,37 @@ vinfo_t* integer_mul(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
       return int_mul_i(po, v2, a, ovf);
     }
   else
-    if (is_compiletime(v2s))
+    if (is_compiletime(v2->source))
       {
-        long b = CompileTime_Get(v2s)->value;
+        long b = CompileTime_Get(v2->source)->value;
         return int_mul_i(po, v1, b, ovf);
       }
   
   BEGIN_CODE
-  NEED_CC_SRC(v2s);
-  DONT_OVERWRITE_SOURCE(v2s);
-  COPY_IN_REG(v1, rg);              /* MOV rg, (v1) */
-  IMUL_REG_FROM_RT(v2s, rg);        /* IMUL rg, (v2) */
+  NEED_CC();
+  COPY_IN_REG(v1, rg);               /* MOV rg, (v1) */
+  IMUL_REG_FROM_RT(v2->source, rg);  /* IMUL rg, (v2) */
   END_CODE
   if (ovf && runtime_condition_f(po, CC_O))
     return NULL;  /* if overflow */
-  return new_rtvinfo(po, rg, false, ovf && is_rtnonneg(v1s) && is_rtnonneg(v2s));
+  return new_rtvinfo(po, rg, false,
+	  ovf && is_rtnonneg(v1->source) && is_rtnonneg(v2->source));
 }
 
 DEFINEFN
 vinfo_t* integer_mul_i(PsycoObject* po, vinfo_t* v1, long value2)
 {
   GENERIC_BINARY_HEADER_i
-  if (is_compiletime(v1s))
+  if (is_compiletime(v1->source))
     {
-      long c = CompileTime_Get(v1s)->value * value2;
+      long c = CompileTime_Get(v1->source)->value * value2;
       return vinfo_new(CompileTime_New(c));
     }
   return int_mul_i(po, v1, value2, false);
 }
 
 /* forward */
-static condition_code_t int_cmp_i(PsycoObject* po, RunTimeSource v1s,
+static condition_code_t int_cmp_i(PsycoObject* po, vinfo_t* rt1,
                                   long immed2, condition_code_t result);
 
 DEFINEFN
@@ -1808,16 +1793,16 @@ vinfo_t* integer_lshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 {
   condition_code_t cc;
   GENERIC_BINARY_HEADER
-  if (is_compiletime(v2s))
-    return integer_lshift_i(po, v1, CompileTime_Get(v2s)->value);
+  if (is_compiletime(v2->source))
+    return integer_lshift_i(po, v1, CompileTime_Get(v2->source)->value);
 
-  cc = int_cmp_i(po, v2s, LONG_BIT, CC_uGE);
+  cc = int_cmp_i(po, v2, LONG_BIT, CC_uGE);
   if (cc == CC_ERROR)
     return NULL;
 
   if (runtime_condition_f(po, cc))
     {
-      cc = int_cmp_i(po, v2s, 0, CC_L);
+      cc = int_cmp_i(po, v2, 0, CC_L);
       if (cc == CC_ERROR)
         return NULL;
       if (runtime_condition_f(po, cc))
@@ -1836,9 +1821,9 @@ vinfo_t* integer_lshift_i(PsycoObject* po, vinfo_t* v1, long counter)
   GENERIC_BINARY_HEADER_i
   if (0 < counter && counter < LONG_BIT)
     {
-      if (is_compiletime(v1s))
+      if (is_compiletime(v1->source))
         {
-          long c = CompileTime_Get(v1s)->value << counter;
+          long c = CompileTime_Get(v1->source)->value << counter;
           return vinfo_new(CompileTime_New(c));
         }
       else
@@ -1863,16 +1848,16 @@ vinfo_t* integer_rshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 {
   condition_code_t cc;
   GENERIC_BINARY_HEADER
-  if (is_compiletime(v2s))
-    return integer_rshift_i(po, v1, CompileTime_Get(v2s)->value);
+  if (is_compiletime(v2->source))
+    return integer_rshift_i(po, v1, CompileTime_Get(v2->source)->value);
 
-  cc = int_cmp_i(po, v2s, LONG_BIT, CC_uGE);
+  cc = int_cmp_i(po, v2, LONG_BIT, CC_uGE);
   if (cc == CC_ERROR)
     return NULL;
 
   if (runtime_condition_f(po, cc))
     {
-      cc = int_cmp_i(po, v2s, 0, CC_L);
+      cc = int_cmp_i(po, v2, 0, CC_L);
       if (cc == CC_ERROR)
         return NULL;
       if (runtime_condition_f(po, cc))
@@ -1891,15 +1876,15 @@ vinfo_t* integer_rshift_i(PsycoObject* po, vinfo_t* v1, long counter)
   GENERIC_BINARY_HEADER_i
   if (counter >= LONG_BIT-1)
     {
-      if (is_nonneg(v1s))
+      if (is_nonneg(v1->source))
         return vinfo_new(CompileTime_New(0));
       counter = LONG_BIT-1;
     }
   if (counter > 0)
     {
-      if (is_compiletime(v1s))
+      if (is_compiletime(v1->source))
         {
-          long c = ((long)(CompileTime_Get(v1s)->value)) >> counter;
+          long c = ((long)(CompileTime_Get(v1->source)->value)) >> counter;
           return vinfo_new(CompileTime_New(c));
         }
       else
@@ -1923,9 +1908,9 @@ vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter)
   GENERIC_BINARY_HEADER_i
   if (0 < counter && counter < LONG_BIT)
     {
-      if (is_compiletime(v1s))
+      if (is_compiletime(v1->source))
         {
-          long c = ((unsigned long)(CompileTime_Get(v1s)->value)) >> counter;
+          long c = ((unsigned long)(CompileTime_Get(v1->source)->value)) >> counter;
           return vinfo_new(CompileTime_New(c));
         }
       else
@@ -1962,12 +1947,11 @@ vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter)
 
 #define GENERIC_UNARY_INSTR(rtmacro, c_code, ovf, c_ovf, cond_ovf, nonneg, XTR) \
 {                                                                       \
-  NonVirtualSource v1s = vinfo_compute(v1, po);                         \
-  if (v1s == SOURCE_ERROR) return NULL;				        \
+  if (!compute_vinfo(v1, po)) return NULL;                              \
   XTR                                                                   \
-  if (is_compiletime(v1s))                                              \
+  if (is_compiletime(v1->source))                                       \
     {                                                                   \
-      long a = CompileTime_Get(v1s)->value;                             \
+      long a = CompileTime_Get(v1->source)->value;                      \
       long c = (c_code);                                                \
       if (!((ovf) && (c_ovf)))                                          \
         return vinfo_new(CompileTime_New(c));                           \
@@ -2001,7 +1985,7 @@ vinfo_t* integer_abs(PsycoObject* po, vinfo_t* v1, bool ovf)
   GENERIC_UNARY_INSTR(INT_ABS(rg, v1->source), a<0 ? -a : a,
                            ovf, c == (-LONG_MAX-1), CHECK_ABS_OVERFLOW,
                            /*ovf*/ true  /* assert no overflow */,
-                      if (is_nonneg(v1s)) { vinfo_incref(v1); return v1; })
+                      if (is_nonneg(v1->source)) { vinfo_incref(v1); return v1; })
 
 static const condition_code_t direct_results[16] = {
 	  /*****   signed comparison      **/
@@ -2069,44 +2053,45 @@ static condition_code_t immediate_compare(long a, long b, int py_op)
   }
 }
 
-static condition_code_t int_cmp_i(PsycoObject* po, RunTimeSource v1s,
+static condition_code_t int_cmp_i(PsycoObject* po, vinfo_t* rt1,
                                   long immed2, condition_code_t result)
 {
+  extra_assert(is_runtime(rt1->source));
   /* detect easy cases */
   if (immed2 == 0)
     {
-      if (is_rtnonneg(v1s))   /* if we know that v1s>=0 */
+      if (is_rtnonneg(rt1->source))   /* if we know that rt1>=0 */
         switch (result) {
-        case CC_L:   /* v1s < 0 */
+        case CC_L:   /* rt1 < 0 */
           return CC_ALWAYS_FALSE;
-        case CC_GE:  /* v1s >= 0 */
+        case CC_GE:  /* rt1 >= 0 */
           return CC_ALWAYS_TRUE;
         default:
           ; /* pass */
         }
       switch (result) {
-      case CC_uL:   /* (unsigned) v1s < 0 */
+      case CC_uL:   /* (unsigned) rt1 < 0 */
         return CC_ALWAYS_FALSE;
-      case CC_uGE:  /* (unsigned) v1s >= 0 */
+      case CC_uGE:  /* (unsigned) rt1 >= 0 */
         return CC_ALWAYS_TRUE;
       default:
         ; /* pass */
       }
     }
-  else if (immed2 < 0 && is_rtnonneg(v1s))  /* v1s>=0 && immed2<0 */
+  else if (immed2 < 0 && is_rtnonneg(rt1->source))  /* rt1>=0 && immed2<0 */
     {
       switch (result) {
-      case CC_E:    /* v1s == immed2 */
-      case CC_L:    /* v1s <  immed2 */
-      case CC_LE:   /* v1s <= immed2 */
-      case CC_uG:   /* (unsigned) v1s >  immed2 */
-      case CC_uGE:  /* (unsigned) v1s >= immed2 */
+      case CC_E:    /* rt1 == immed2 */
+      case CC_L:    /* rt1 <  immed2 */
+      case CC_LE:   /* rt1 <= immed2 */
+      case CC_uG:   /* (unsigned) rt1 >  immed2 */
+      case CC_uGE:  /* (unsigned) rt1 >= immed2 */
         return CC_ALWAYS_FALSE;
-      case CC_NE:   /* v1s != immed2 */
-      case CC_GE:   /* v1s >= immed2 */
-      case CC_G:    /* v1s >  immed2 */
-      case CC_uLE:  /* (unsigned) v1s <= immed2 */
-      case CC_uL:   /* (unsigned) v1s <  immed2 */
+      case CC_NE:   /* rt1 != immed2 */
+      case CC_GE:   /* rt1 >= immed2 */
+      case CC_G:    /* rt1 >  immed2 */
+      case CC_uLE:  /* (unsigned) rt1 <= immed2 */
+      case CC_uL:   /* (unsigned) rt1 <  immed2 */
         return CC_ALWAYS_TRUE;
       default:
         ; /* pass */
@@ -2114,8 +2099,8 @@ static condition_code_t int_cmp_i(PsycoObject* po, RunTimeSource v1s,
     }
   /* end of easy cases */
   BEGIN_CODE
-  NEED_CC_SRC(v1s);
-  COMPARE_IMMED_FROM_RT(v1s, immed2); /* CMP v1, immed2 */
+  NEED_CC();
+  COMPARE_IMMED_FROM_RT(rt1->source, immed2); /* CMP v1, immed2 */
   END_CODE
   return result;
 }
@@ -2125,18 +2110,14 @@ condition_code_t integer_cmp(PsycoObject* po, vinfo_t* v1,
                              vinfo_t* v2, int py_op)
 {
   condition_code_t result;
-  NonVirtualSource v1s;
-  NonVirtualSource v2s;
-  
+
   if (v1->source == v2->source)
     goto same_source;
 
-  v1s = vinfo_compute(v1, po);
-  if (v1s == SOURCE_ERROR) return CC_ERROR;
-  v2s = vinfo_compute(v2, po);
-  if (v2s == SOURCE_ERROR) return CC_ERROR;
+  if (!compute_vinfo(v1, po) || !compute_vinfo(v2, po))
+    return CC_ERROR;
 
-  if (v1s == v2s)
+  if (v1->source == v2->source)
     {
     same_source:
       /* comparing equal sources */
@@ -2149,30 +2130,30 @@ condition_code_t integer_cmp(PsycoObject* po, vinfo_t* v1,
         return CC_ALWAYS_FALSE;
       }
     }
-  if (is_compiletime(v1s))
-    if (is_compiletime(v2s))
+  if (is_compiletime(v1->source))
+    if (is_compiletime(v2->source))
       {
-        long a = CompileTime_Get(v1s)->value;
-        long b = CompileTime_Get(v2s)->value;
+        long a = CompileTime_Get(v1->source)->value;
+        long b = CompileTime_Get(v2->source)->value;
         return immediate_compare(a, b, py_op);
       }
     else
       {
-        NonVirtualSource tmp;
+        vinfo_t* tmp;
         /* invert the two operands because the processor has only CMP xxx,immed
            and not CMP immed,xxx */
         result = inverted_results[py_op];
-        tmp = v1s;
-        v1s = v2s;
-        v2s = tmp;
+        tmp = v1;
+        v1 = v2;
+        v2 = tmp;
       }
   else
     {
       result = direct_results[py_op];
     }
-  if (is_compiletime(v2s))
+  if (is_compiletime(v2->source))
     {
-      result = int_cmp_i(po, v1s, CompileTime_Get(v2s)->value, result);
+      result = int_cmp_i(po, v1, CompileTime_Get(v2->source)->value, result);
     }
   else
     {
@@ -2189,16 +2170,15 @@ DEFINEFN
 condition_code_t integer_cmp_i(PsycoObject* po, vinfo_t* v1,
                                long value2, int py_op)
 {
-  NonVirtualSource v1s = vinfo_compute(v1, po);
-  if (v1s == SOURCE_ERROR) return CC_ERROR;
+  if (!compute_vinfo(v1, po)) return CC_ERROR;
   
-  if (is_compiletime(v1s))
+  if (is_compiletime(v1->source))
     {
-      long a = CompileTime_Get(v1s)->value;
+      long a = CompileTime_Get(v1->source)->value;
       return immediate_compare(a, value2, py_op);
     }
   else
-    return int_cmp_i(po, v1s, value2, direct_results[py_op]);
+    return int_cmp_i(po, v1, value2, direct_results[py_op]);
 }
 
 #if 0
@@ -2270,12 +2250,10 @@ DEFINEFN
 vinfo_t* make_runtime_copy(PsycoObject* po, vinfo_t* v)
 {
 	reg_t rg;
-	NonVirtualSource src = vinfo_compute(v, po);
-	if (src == SOURCE_ERROR)
-		return NULL;
+	if (!compute_vinfo(v, po)) return NULL;
 	BEGIN_CODE
 	NEED_FREE_REG(rg);
-	LOAD_REG_FROM(src, rg);
+	LOAD_REG_FROM(v->source, rg);
 	END_CODE
-	return new_rtvinfo(po, rg, false, is_nonneg(src));
+	return new_rtvinfo(po, rg, false, is_nonneg(v->source));
 }

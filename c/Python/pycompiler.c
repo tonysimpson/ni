@@ -303,21 +303,6 @@ vinfo_t* Psyco_Meta3x(PsycoObject* po, void* c_function, int flags,
 			(po, a1, a2, a3);
 }
 
-DEFINEFN
-vinfo_t* Psyco_Meta4x(PsycoObject* po, void* c_function, int flags,
-			     const char* arguments,
-			     long a1, long a2, long a3, long a4)
-{
-	void* psyco_fn = Psyco_Lookup(c_function);
-	if (psyco_fn == NULL)
-		return psyco_generic_call(po, c_function, flags, arguments,
-					   a1, a2, a3, a4);
-	else
-		return ((vinfo_t*(*)(PsycoObject*, long, long,
-				     long, long))(psyco_fn))
-			(po, a1, a2, a3, a4);
-}
-
 
 /***************************************************************/
  /***   pyc_data_t                                            ***/
@@ -1983,7 +1968,7 @@ static code_t* exit_function(PsycoObject* po)
 {
 	vinfo_t** locals_plus;
         vinfo_t** pp;
-	NonVirtualSource retsource;
+	Source retsource;
 	
 	/* clear the stack and the locals */
 	locals_plus = LOC_LOCALS_PLUS;
@@ -1997,8 +1982,7 @@ static code_t* exit_function(PsycoObject* po)
 		/* load the return value */
 		vinfo_t* retval = po->pr.val;
 		extra_assert(retval != NULL);
-		retsource = vinfo_compute(retval, po);
-		if (retsource == SOURCE_ERROR) return NULL;
+		if (!compute_vinfo(retval, po)) return NULL;
 		/* return a new reference */
 		consume_reference(po, retval);
 		if (retval->array->count > 0) {
