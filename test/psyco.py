@@ -4,23 +4,20 @@ import sys
 files = {}
 ticks = 0
 depth = 10
+funcs = {}
 
 def f(frame, event, arg):
     if event != 'call':  return
+    c = frame.f_code.co_code
     fn = frame.f_code.co_name
-    ffn = frame.f_code.co_filename
-    if not files.has_key(ffn):
-        files[ffn] = {}
-    funcs = files[ffn]
-    t = frame.f_code.co_firstlineno
     g = frame.f_globals
-    if not funcs.has_key(t):
-        funcs[t] = 1
-    if funcs[t] != None:
-        funcs[t] = funcs[t] + 1
-        if funcs[t] > ticks and g.has_key(fn):
+    if not funcs.has_key(c):
+        funcs[c] = 1
+    if funcs[c] != None:
+        funcs[c] = funcs[c] + 1
+        if funcs[c] > ticks and g.has_key(fn):
             g[fn] = _psyco.proxy(g[fn], depth)
-            funcs[t] = None
+            funcs[c] = None
             print 'psyco rebinding function:', fn
 
 sys.setprofile(f)
