@@ -54,6 +54,9 @@ def exc_test():
         print exc.__name__, str(value)
         print tb.tb_lineno - tb.tb_frame.f_code.co_firstlineno
 
+def fL5(longvalue):
+    return ('y'*longvalue) + 'x'
+
 def g5(x):
     return x+1
 
@@ -202,7 +205,6 @@ def testslices(s):
     print `s[9999:9999]`
     print `s[9999:]`
 
-
 if __name__ == '__main__':
     import time
     print "break!"
@@ -217,5 +219,6 @@ if __name__ == '__main__':
     #print f4("some-string")
     psyco.full()
     #print overflowtest()
-    exc_test()
+    #exc_test()
+    #print `f5(10L)`
     psyco.dumpcodebuf()

@@ -426,6 +426,9 @@ ${[a ^ b for a in (False,True) for b in (False,True)]}
 IndexError list index out of range
 2
 
+>>> print test5.fL5(10L)
+yyyyyyyyyyx
+
 >>> test5.f5(99)
 100
 100
