@@ -859,20 +859,22 @@ static PyObject* cimpl_vt_traceback(PyCodeObject* code, PyObject* globals,
 
 inline void PsycoTraceBack_Here(PsycoObject* po, int lasti)
 {
+	int lineno = PyCode_Addr2Line(po->pr.co, lasti);
+	
 	if (PycException_Is(po, &ERtPython)) {
 		/* Python exception is actually set at run-time */
 		psyco_generic_call(po, cimpl_rt_traceback,
-				   CfNoReturnValue, "lvl",
-				   (long) po->pr.co, LOC_GLOBALS, lasti);
+				   CfNoReturnValue, "lvll",
+				   (long) po->pr.co, LOC_GLOBALS, lasti, lineno);
 	}
 	else {
 		/* We only have a virtual-time exception (not set in Python),
 		   so we build po->pr.tb without actually setting it either */
 		extra_assert(po->pr.tb == NULL);
 		po->pr.tb = psyco_generic_call(po, cimpl_vt_traceback,
-					       CfReturnRef, "lvl",
+					       CfReturnRef, "lvll",
 					       (long) po->pr.co, LOC_GLOBALS,
-					       lasti);
+					       lasti, lineno);
 	}
 }
 
