@@ -74,7 +74,7 @@ static PyObject* direct_compute_xrange(vinfo_t* v, char* data)
 	len   = direct_read_vinfo(vinfo_getitem(v, iRANGE_LEN),   data);
 	if (PyErr_Occurred())
 		return NULL;
-	return PyRange_New(start, len, 1, 1);
+	return cimpl_xrange_new(start, len);
 }
 
 DEFINEFN
