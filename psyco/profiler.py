@@ -359,11 +359,16 @@ def psyco_setprofile(*args, **kw):
     go()
     return result
 
-def psyco_start_new_thread(*args, **kw):
-    "This is the Psyco-aware version of thread.start_new_thread()."
-    result = original_start_new_thread(*args, **kw)
+def psyco_thread_stub(callable, args, kw):
     _psyco.statcollect()
-    return result
+    if kw is None:
+        return callable(*args)
+    else:
+        return callable(*args, **kw)
+
+def psyco_start_new_thread(callable, args, kw=None):
+    "This is the Psyco-aware version of thread.start_new_thread()."
+    return original_start_new_thread(psyco_thread_stub, (callable, args, kw))
 
 original_settrace         = sys.settrace
 original_setprofile       = sys.setprofile
@@ -372,3 +377,8 @@ sys.settrace            = psyco_settrace
 sys.setprofile          = psyco_setprofile
 if PYTHON_SUPPORT:
     thread.start_new_thread = psyco_start_new_thread
+    # hack to patch threading._start_new_thread if the module is
+    # already loaded
+    if (sys.modules.has_key('threading') and
+        hasattr(sys.modules['threading'], '_start_new_thread')):
+        sys.modules['threading']._start_new_thread = psyco_start_new_thread
