@@ -9,6 +9,8 @@ import math
 import random
 import operator
 import string
+import _psyco
+psyobj = object
 
 random.seed(0)
 
@@ -36,7 +38,7 @@ def makeMatrix(I, J, fill=0.0):
         m.append([fill]*J)
     return m
 
-class NN:
+class NN(psyobj):
     def __init__(self, ni, nh, no):
         # number of input, hidden, and output nodes
         self.ni = ni + 1 # +1 for bias node
@@ -175,7 +177,6 @@ def demo():
 
 
 if __name__ == '__main__':
-    import _psyco
     v, t1 = time(demo)
     v, t2 = time(demo)
     demo = _psyco.proxy(demo, 99)
