@@ -5,7 +5,7 @@
 #include "codemanager.h"
 
 #define FUN_BOUND -1
-#define MAX_RECURSION 1
+#define MAX_RECURSION 99
 
 EXTERNVAR PyObject* funcs;
 EXTERNVAR int ticks;
