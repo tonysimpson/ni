@@ -7,8 +7,8 @@ DEFINEVAR fixed_switch_t psyfs_int;
 DEFINEVAR fixed_switch_t psyfs_int_long;
 DEFINEVAR fixed_switch_t psyfs_tuple_list;
 DEFINEVAR fixed_switch_t psyfs_string_unicode;
-EXTERNVAR fixed_switch_t psyfs_tuple;
-EXTERNVAR fixed_switch_t psyfs_dict;
+DEFINEVAR fixed_switch_t psyfs_tuple;
+DEFINEVAR fixed_switch_t psyfs_dict;
 DEFINEVAR fixed_switch_t psyfs_none;
 
 
