@@ -24,6 +24,7 @@
 #include "Objects/pdictobject.c"
 #include "Objects/pfuncobject.c"
 #include "Objects/pintobject.c"
+#include "Objects/pfloatobject.c"
 #include "Objects/piterobject.c"
 #include "Objects/plistobject.c"
 #include "Objects/plongobject.c"

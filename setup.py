@@ -13,6 +13,7 @@ src = [
     "c/Objects/pdictobject.c",
     "c/Objects/pfuncobject.c",
     "c/Objects/pintobject.c",
+    "c/Objects/pfloatobject.c",
     "c/Objects/piterobject.c",
     "c/Objects/plistobject.c",
     "c/Objects/plongobject.c",

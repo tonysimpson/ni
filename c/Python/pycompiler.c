@@ -14,6 +14,7 @@
 #include "../Objects/pdictobject.h"
 #include "../Objects/pfuncobject.h"
 #include "../Objects/pintobject.h"
+#include "../Objects/pfloatobject.h"
 #include "../Objects/piterobject.h"
 #include "../Objects/plistobject.h"
 #include "../Objects/plongobject.h"
@@ -586,6 +587,7 @@ void psyco_pycompiler_init()
         psy_dictobject_init();
         psy_funcobject_init();
         psy_intobject_init();
+	psy_floatobject_init();
         psy_iterobject_init();
         psy_listobject_init();
         psy_longobject_init();
