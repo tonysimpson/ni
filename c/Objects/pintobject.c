@@ -1,6 +1,41 @@
 #include "pintobject.h"
 
 
+/* Division and Modulo code follows Python's intobject.c */
+static long cimpl_int_mod(long x, long y)
+{
+	long xmody;
+	/* (-sys.maxint-1)/-1 is the only overflow case. */
+	if (y == 0 || (y == -1 && x < 0 && x == -x)) {
+		/* the exception will be cleared by the caller */
+		PyErr_SetString(PyExc_ValueError, "punt and do this in python code");
+		return -1;
+	}
+	xmody = x % y;
+	if (xmody && ((y ^ xmody) < 0) /* i.e. and signs differ */) {
+		xmody += y;
+	}
+	return xmody;
+}
+
+static long cimpl_int_div(long x, long y)
+{
+	long xdivy;
+	long xmody;
+	/* (-sys.maxint-1)/-1 is the only overflow case. */
+	if (y == 0 || (y == -1 && x < 0 && x == -x)) {
+		/* the exception will be cleared by the caller */
+		PyErr_SetString(PyExc_ValueError, "punt and do this in python code");
+		return -1;
+	}
+	xdivy = x / y;
+	xmody = x - xdivy * y;
+	if (xmody && ((y ^ xmody) < 0) /* i.e. and signs differ */) {
+		--xdivy;
+	}
+	return xdivy;
+}
+
 DEFINEFN
 vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v)
 {
@@ -186,6 +221,40 @@ static vinfo_t* pint_sub(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 				  "vv", v, w);
 }
 
+static vinfo_t* pint_mod(PsycoObject* po, vinfo_t* v, vinfo_t* w) 
+{
+	vinfo_t* a;
+	vinfo_t* b;
+	vinfo_t* x;
+	CONVERT_TO_LONG(v, a);
+	CONVERT_TO_LONG(w, b);
+	x = psyco_generic_call(po, cimpl_int_mod, CfPure|CfReturnNormal|CfPyErrCheckMinus1, "vv", a, b);
+	if (x != NULL)
+		return PsycoInt_FROM_LONG(x);
+	/* Either an error occured or it overflowed. In either case let python deal with it */
+	PycException_Clear(po);
+	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_remainder,
+				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  "vv", v, w);
+}
+
+static vinfo_t* pint_div(PsycoObject* po, vinfo_t* v, vinfo_t* w) 
+{
+	vinfo_t* a;
+	vinfo_t* b;
+	vinfo_t* x;
+	CONVERT_TO_LONG(v, a);
+	CONVERT_TO_LONG(w, b);
+	x = psyco_generic_call(po, cimpl_int_div, CfPure|CfReturnNormal|CfPyErrCheckMinus1, "vv", a, b);
+	if (x != NULL)
+		return PsycoInt_FROM_LONG(x);
+	/* Either an error occured or it overflowed. In either case let python deal with it */
+	PycException_Clear(po);
+	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_divide,
+				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  "vv", v, w);
+}
+
 DEFINEFN
 vinfo_t* pint_base2op(PsycoObject* po, vinfo_t* v, vinfo_t* w,
                       vinfo_t*(*op)(PsycoObject*,vinfo_t*,vinfo_t*))
@@ -277,6 +346,10 @@ void psy_intobject_init(void)
 	Psyco_DefineMeta(m->nb_multiply, pint_mul);
 	Psyco_DefineMeta(m->nb_lshift,   pint_lshift);
 	Psyco_DefineMeta(m->nb_rshift,   pint_rshift);
+
+        /* partial implementations not emitting machine code */
+        Psyco_DefineMeta(m->nb_divide,   pint_div);
+	Psyco_DefineMeta(m->nb_remainder,pint_mod);
 
 	INIT_SVIRTUAL(psyco_computed_int, compute_int, 0, 0);
 }
