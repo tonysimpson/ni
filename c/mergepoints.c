@@ -27,12 +27,18 @@
                               (op) == JUMP_ABSOLUTE ||  \
                               (op) == CONTINUE_LOOP ||  \
                               (op) == RAISE_VARARGS ||  \
-                              0)
+                              IS_EPILOGUE_INSTR(op))
 
 #ifdef FOR_ITER
 # define COMMON_FOR_OPCODE    FOR_ITER
 #else
 # define COMMON_FOR_OPCODE    FOR_LOOP
+#endif
+
+#ifdef RETURN_NONE
+# define IS_EPILOGUE_INSTR(op)  ((op) == RETURN_NONE)
+#else
+# define IS_EPILOGUE_INSTR(op)   0
 #endif
 
 /* instructions with a target: */
@@ -145,7 +151,9 @@ static const unsigned char other_opcodes[] = {
 #ifdef GET_ITER
   GET_ITER,
 #endif
+#ifdef SET_LINENO
   SET_LINENO,
+#endif
   CALL_FUNCTION,
   MAKE_FUNCTION,
   0 };
@@ -207,11 +215,11 @@ inline PyObject* build_merge_points(PyCodeObject* co)
   int mp_flags = MP_FLAGS_EXTRA;
   int length = PyString_GET_SIZE(co->co_code);
   unsigned char* source = (unsigned char*) PyString_AS_STRING(co->co_code);
-  char* paths = (char*) PyMem_MALLOC(length);
+  char* paths = (char*) PyMem_MALLOC(length+1);
   int i, lasti, count, oparg = 0;
   if (paths == NULL)
     OUT_OF_MEMORY();
-  memset(paths, 0, length);
+  memset(paths, 0, length+1);
   paths[0] = 2;  /* always a merge point at the beginning of the bytecode */
   
   for (i=0; i<length; )
@@ -260,6 +268,8 @@ inline PyObject* build_merge_points(PyCodeObject* co)
         jtarget = oparg;
       else
         continue;  /* not a jump */
+
+#ifdef SET_LINENO
       /* always ignore SET_LINENO opcodes.
          This could better group merge points, and
          it also ensures that there is a merge point right
@@ -268,9 +278,10 @@ inline PyObject* build_merge_points(PyCodeObject* co)
              (source[jtarget] == EXTENDED_ARG &&
               source[jtarget+3] == SET_LINENO))
         jtarget += 3;
+#endif
       if (flags & MP_HAS_J_MULTIPLE)
         paths[jtarget] = 2;
-      else
+      else if (paths[jtarget] < 2)
         paths[jtarget]++;
     }
 

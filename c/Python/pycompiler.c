@@ -1064,7 +1064,8 @@ static code_t* do_changed_global(changed_global_t* cg)
 
 	extra_assert(target != code);
 	JUMP_TO(target);  /* code a jump from the original code */
-	
+
+        Py_DECREF(cg->varname);
 	Py_DECREF(cg->previousvalue);
   /* cannot Py_DECREF(cg->self) because the current function is returning into
      that code now, but any time later is fine: use the trash of codemanager.h */
@@ -1139,7 +1140,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 	PyObject* result;
 	/* the compiler only puts interned strings in op_names */
 	extra_assert(PyString_CheckExact(key));
-	extra_assert(((PyStringObject*) key)->ob_sinterned != NULL);
+	/*extra_assert(((PyStringObject*) key)->ob_sinterned != NULL);*/
 	extra_assert(((PyStringObject*) key)->ob_shash != -1);
 
 	ep = (globals->ma_lookup)(globals, key,
@@ -1173,7 +1174,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 						   &do_changed_global, 1, 1);
 		cg->self = onchangebuf;
 		cg->po = po;
-		cg->varname = key;
+		cg->varname = key;             Py_INCREF(key);
                 cg->previousvalue = result;    Py_INCREF(result);
 		SHRINK_CODE_BUFFER(onchangebuf,
                                    (code_t*)(cg+1) - onchangebuf->codeptr,
@@ -2267,6 +2268,13 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		PycException_Raise(po, vinfo_new(VirtualTime_New(&EReturn)), v);
 		break;
 
+#ifdef RETURN_NONE
+	case RETURN_NONE:
+		v = psyco_vi_None();
+		PycException_Raise(po, vinfo_new(VirtualTime_New(&EReturn)), v);
+		break;
+#endif
+
 	/*MISSING_OPCODE(YIELD_VALUE);*/
 	/*MISSING_OPCODE(EXEC_STMT);*/
 
@@ -2818,10 +2826,14 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			    STACK_LEVEL());
 		goto fine;
 
+#ifdef SET_LINENO
 	case SET_LINENO:
-		/* trace execution at each SET_LINENO opcode */
+		/* trace machine code execution at each SET_LINENO opcode
+		       XXX re-implement this feature for Python 2.3, which
+		       no longer uses the SET_LINENO opcode */
 		TRACE_EXECUTION_NOERR("SET_LINENO");
 		goto fine;
+#endif
 
 	case CALL_FUNCTION:
 	{
