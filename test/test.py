@@ -47,7 +47,8 @@ def f4(filelist):
         f = open(filename, 'r')
         for line in f:
             for c in line:
-                result[ord(c)] += 1
+                k = ord(c)
+                result[k] = result[k] + 1
         f.close()
     d = {}
     for i in range(256):
@@ -61,7 +62,8 @@ def f5(filelist):
     for filename in filelist:
         f = open(filename, 'r')
         for c in f.read():
-            result[ord(c)] += 1
+            k = ord(c)
+            result[k] = result[k] + 1
         f.close()
     d = {}
     for i in range(256):

@@ -58,20 +58,26 @@ class Record:
 TRUE = 1
 FALSE = 0
 
+def mydiv(a,b):
+    try:
+        return float(a) / b
+    except:
+        return float("nan")
+
 def main():
     print "Pystone(%s)                   time     loops per second" % __version__
     py_time, = pystones_reg(LOOPS1+LOOPS)
     pyloop_time = py_time / (LOOPS1+LOOPS)
     print "regular Python for %d passes  %g        %g" % \
-          (LOOPS1+LOOPS, py_time, 1.0/pyloop_time)
+          (LOOPS1+LOOPS, py_time, mydiv(1, pyloop_time))
     psy_time1, psy_time = pystones_psycho(LOOPS1, LOOPS)
     print "Psyco for %d passes           %g        %g" % \
-          (LOOPS1, psy_time1, LOOPS1/psy_time1)
+          (LOOPS1, psy_time1, mydiv(LOOPS1, psy_time1))
     print "Psyco for %d more passes      %g        %g" % \
-          (LOOPS, psy_time, LOOPS/psy_time)
+          (LOOPS, psy_time, mydiv(LOOPS, psy_time))
     print "Total for %d passes           %g        %g" % \
           (LOOPS1+LOOPS, psy_time1+psy_time, 
-             (LOOPS1+LOOPS)/(psy_time1+psy_time))
+             mydiv(LOOPS1+LOOPS, psy_time1+psy_time))
 
     # invert the equation system:
     #   psy_time1          = start_time + LOOPS1*loop_time
@@ -81,24 +87,24 @@ def main():
     print "Separated compilation/execution timings for %d passes" % \
           (LOOPS1+LOOPS)
     print "Compilation (i.e. start-up)   %g        %g" % \
-          (start_time, 1.0/start_time)
+          (start_time, mydiv(1, start_time))
     print "Machine code execution        %g        %g" % \
-          (loop_time*(LOOPS1+LOOPS), 1.0/loop_time)
+          (loop_time*(LOOPS1+LOOPS), mydiv(1, loop_time))
     print
     print "Relative execution frequencies (iterations per second)"
     print "iterations        Psyco        Python    Psyco is ... times faster"
     for d in range(8):
         n = 10**d
-        psyco1 = n/(start_time+n*loop_time)
+        psyco1 = mydiv(n, start_time+n*loop_time)
         print " %8d       %g         %g           %.2f" % \
-            (n, psyco1, 1.0/pyloop_time, psyco1*pyloop_time)
+            (n, psyco1, mydiv(1, pyloop_time), psyco1*pyloop_time)
 
     # invert the equation
     #   start_time + c*loop_time = c*pyloop_time
     if pyloop_time <= loop_time:
         print "Psyco is always slower than regular Python."
     else:
-        c = start_time/(pyloop_time - loop_time)
+        c = mydiv(start_time, pyloop_time - loop_time)
         print "Cut-off point: %.1f iterations" % c
     if start_time < 0.07:
         print "Note: start-up time is very low, the above figure is not reliable."
