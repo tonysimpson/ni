@@ -1,6 +1,25 @@
 #include "codemanager.h"
 #include <ipyencoding.h>
 
+/*** Allocators for Large Executable Blocks of Memory ***/
+/* Defaults, possibly overridden below */
+#define LEBM_WITH_MMAP         0  /* assume memory executable by default */
+#define LEBM_NUM_BIGBLOCKS     1  /* not too large blocks */
+
+#ifndef MS_WINDOWS
+/* Assume UNIX */
+#  include <sys/mman.h>
+#  if defined(MAP_ANONYMOUS) || defined(MAP_ANON)
+#    undef LEBM_WITH_MMAP
+#    undef LEBM_NUM_BIGBLOCKS
+#    define LEBM_WITH_MMAP           1  /* use mmap() with PROT_EXEC */
+#    define LEBM_NUM_BIGBLOCKS      32  /* ask for 32MB at a time */
+#    ifndef MAP_ANONYMOUS
+#      define MAP_ANONYMOUS  MAP_ANON
+#    endif
+#  endif
+#endif
+
 
 #define BUFFER_SIGNATURE    0xE673B506   /* arbitrary */
 
@@ -21,45 +40,62 @@ inline void check_signature(codemanager_buf_t* b)
     Py_FatalError("psyco: code buffer overwrite detected");
 }
 
-static code_t* get_next_buffer(code_t** limit)
+static void allocate_more_buffers(codemanager_buf_t** bb)
 {
   char* p;
+  int i;
+  
+#if LEBM_WITH_MMAP
+  p = (char*) mmap(NULL, BIG_BUFFER_SIZE * LEBM_NUM_BIGBLOCKS,
+                   PROT_EXEC|PROT_READ|PROT_WRITE,
+                   MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+  if (p == MAP_FAILED)
+    OUT_OF_MEMORY();
+#else
+  p = (char*) PyMem_MALLOC(BIG_BUFFER_SIZE * LEBM_NUM_BIGBLOCKS);
+  if (!p)
+    OUT_OF_MEMORY();
+#endif
+
+  for (i=0; i<LEBM_NUM_BIGBLOCKS; i++)
+    {
+      /* the codemanager_buf_t structure is put at the end of the buffer,
+         with its signature to detect overflows (just in case) */
+#define BUFFER_START_OFFSET  (BIG_BUFFER_SIZE - sizeof(codemanager_buf_t))
+      codemanager_buf_t* b;
+      b = (codemanager_buf_t*) (p + BUFFER_START_OFFSET);
+      b->signature = BUFFER_SIGNATURE;
+      b->position = p;
+      b->next = NULL;
+      /* insert 'b' at the end of the chained list */
+      *bb = b;
+      bb = &b->next;
+      p += BIG_BUFFER_SIZE;
+    }
+}
+
+static code_t* get_next_buffer(code_t** limit)
+{
   codemanager_buf_t* b;
   codemanager_buf_t** bb;
-  int count;
   for (b=big_buffers; b!=NULL; b=b->next)
     {
       check_signature(b);
       if (!b->inuse)
-        {   /* returns the first (oldest) unlocked buffer */
-          b->inuse = true;
-          *limit = ((code_t*) b) - GUARANTEED_MINIMUM;
-          return (code_t*) b->position;
-        }
+        break;  /* returns the first (oldest) unlocked buffer */
     }
-  /* no more free buffer, allocate a new one */
-  p = (char*) PyMem_MALLOC(BIG_BUFFER_SIZE);
-  if (!p)
-    OUT_OF_MEMORY();
-
-  /* the codemanager_buf_t structure is put at the end of the buffer,
-     with its signature to detect overflows (just in case) */
-#define BUFFER_START_OFFSET  (BIG_BUFFER_SIZE - sizeof(codemanager_buf_t))
-  b = (codemanager_buf_t*) (p + BUFFER_START_OFFSET);
-  b->signature = BUFFER_SIGNATURE;
-  b->position = p;
+  
+  if (b == NULL)
+    {
+      /* no more free buffers, allocate one or a few new ones */
+      for (bb=&big_buffers; *bb!=NULL; bb=&(*bb)->next)
+        ;
+      allocate_more_buffers(bb);
+      b = *bb;
+    }
   b->inuse = true;
-  b->next = NULL;
-
-  /* insert 'b' at the end of the chained list */
-  count = 0;
-  for (bb=&big_buffers; *bb!=NULL; bb=&(*bb)->next)
-    count++;
-  if (count > WARN_TOO_MANY_BUFFERS)
-    fprintf(stderr, "psyco: warning: detected many (%d) buffers in use\n", count);
-  *bb = b;
   *limit = ((code_t*) b) - GUARANTEED_MINIMUM;
-  return (code_t*) p;
+  return (code_t*) b->position;
 }
 
 DEFINEFN int psyco_locked_buffers(void)
