@@ -272,8 +272,8 @@ EXTERNFN condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi);
    if 'ovf' is true. They return NULL if an overflow is detected. */
 EXTERNFN
 vinfo_t* integer_add  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf);
-EXTERNFN
-vinfo_t* integer_add_i(PsycoObject* po, vinfo_t* v1, long value2);
+EXTERNFN   /* 'unsafe': optimize by silently assuming no overflow is possible */
+vinfo_t* integer_add_i(PsycoObject* po, vinfo_t* v1, long value2, bool unsafe);
 EXTERNFN
 vinfo_t* integer_sub  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf);
 /*EXTERNFN XXX implement me

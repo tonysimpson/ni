@@ -135,7 +135,7 @@ void psyco_emit_header(PsycoObject* po, int nframelocal)
   array = LOC_CONTINUATION->array = array_new(nframelocal);
   while (j--)
     array->items[j] = vinfo_new(RunTime_NewStack
-                             (po->stack_depth - 4*j, REG_NONE, false));
+                             (po->stack_depth - 4*j, REG_NONE, false, false));
 }
 
 DEFINEFN
@@ -308,7 +308,7 @@ vinfo_t* psyco_get_array_item(PsycoObject* po, vinfo_t* vi, int index)
         code += 6;
       }
       END_CODE
-      result = new_rtvinfo(po, rg, false);
+      result = new_rtvinfo(po, rg, false, false);
     }
   else {
     long value = ((long*)(CompileTime_Get(source)->value))[index];
@@ -364,7 +364,7 @@ vinfo_t* psyco_read_array_item(PsycoObject* po, vinfo_t* vi, int index)
   NEED_FREE_REG(rg);
   READ_ARRAY_ITEM_1(rg, vi, index*4, 0);
   END_CODE
-  return new_rtvinfo(po, rg, false);
+  return new_rtvinfo(po, rg, false, false);
 }
 
 DEFINEFN
@@ -437,7 +437,7 @@ vinfo_t* psyco_read_array_item_var(PsycoObject* po, vinfo_t* v0,
         }
     }
   END_CODE
-  return new_rtvinfo(po, rg1, false);
+  return new_rtvinfo(po, rg1, false, false);
 }
 
 DEFINEFN
@@ -606,7 +606,7 @@ code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 	NEED_FREE_BYTE_REG(rg, reserved);
 	LOAD_REG_FROM_CONDITION(rg, cc->cc);
 
-	v->source = RunTime_New(rg, false);
+	v->source = RunTime_New(rg, false, true);
 	REG_NUMBER(po, rg) = v;
 	po->ccreg = NULL;
         return code;
@@ -1066,7 +1066,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 				END_CODE
 			}
                         arg = RunTime_NewStack(getstack(vi->source),
-                                               REG_NONE, false);
+                                               REG_NONE, false, false);
 			has_refs = true;
 			break;
 
@@ -1178,7 +1178,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		case 'r':
 			LOAD_ADDRESS_FROM_RT (args[i],   REG_ANY_CALLER_SAVED);
 			CALL_SET_ARG_FROM_RT (RunTime_New(REG_ANY_CALLER_SAVED,
-							  false),  i, count);
+						     false, false),  i, count);
 			break;
 			
 		case 'a':
@@ -1191,15 +1191,14 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 				do {
 					stackbase += 4;
 					array->items[--j] = vinfo_new
-						(RunTime_NewStack(stackbase,
-								REG_NONE,
-								with_reference));
+					    (RunTime_NewStack(stackbase,
+					       REG_NONE, with_reference, false));
 				} while (j);
 				LOAD_ADDRESS_FROM_RT (array->items[0]->source,
 						      REG_ANY_CALLER_SAVED);
 			}
 			CALL_SET_ARG_FROM_RT (RunTime_New(REG_ANY_CALLER_SAVED,
-							  false),  i, count);
+						       false, false),  i, count);
 			break;
 		}
 			
@@ -1214,18 +1213,18 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 	switch (flags & CfReturnMask) {
 
 	case CfReturnNormal:
-		vresult = new_rtvinfo(po, REG_FUNCTIONS_RETURN, false);
+		vresult = new_rtvinfo(po, REG_FUNCTIONS_RETURN, false, false);
 		break;
 
 	case CfReturnRef:
-		vresult = new_rtvinfo(po, REG_FUNCTIONS_RETURN, true);
+		vresult = new_rtvinfo(po, REG_FUNCTIONS_RETURN, true, false);
 		break;
 
 	default:
 		if ((flags & CfPyErrMask) == 0)
 			return (vinfo_t*) 1;   /* anything non-NULL */
 		
-		vresult = new_rtvinfo(po, REG_FUNCTIONS_RETURN, false);
+		vresult = new_rtvinfo(po, REG_FUNCTIONS_RETURN, false, false);
 		vresult = generic_call_check(po, flags, vresult);
 		if (vresult == NULL)
 			goto error_detected;
@@ -1291,7 +1290,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 		POP_CC_FLAGS();
 	END_CODE
 	return generic_call_check(po, CfReturnRef|CfPyErrIfNull,
-				  new_rtvinfo(po, REG_FUNCTIONS_RETURN, true));
+			   new_rtvinfo(po, REG_FUNCTIONS_RETURN, true, false));
 }
 
 DEFINEFN struct stack_frame_info_s**
@@ -1377,7 +1376,7 @@ condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi)
       return vinfo_new(CompileTime_New(c));             \
     }
 
-#define GENERIC_BINARY_COMMON_INSTR(group, ovf)   {             \
+#define GENERIC_BINARY_COMMON_INSTR(group, ovf, nonneg)   {     \
   reg_t rg;                                                     \
   BEGIN_CODE                                                    \
   NEED_CC_SRC(v2s);                                             \
@@ -1387,10 +1386,10 @@ condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi)
   END_CODE                                                      \
   if ((ovf) && runtime_condition_f(po, CC_O))                   \
     return NULL;  /* if overflow */                             \
-  return new_rtvinfo(po, rg, false);                            \
+  return new_rtvinfo(po, rg, false, nonneg);                    \
 }
 
-#define GENERIC_BINARY_INSTR_2(group, c_code)                           \
+#define GENERIC_BINARY_INSTR_2(group, c_code, nonneg)                   \
 {                                                                       \
   NonVirtualSource v1s = vinfo_compute(v1, po);                         \
   if (v1s == SOURCE_ERROR) return NULL;				        \
@@ -1409,11 +1408,12 @@ condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi)
       COPY_IN_REG(v1, rg);                   /* MOV rg, (v1) */         \
       COMMON_INSTR_IMMED(group, rg, value2); /* XXX rg, value2 */       \
       END_CODE                                                          \
-      return new_rtvinfo(po, rg, false);                                \
+      return new_rtvinfo(po, rg, false, nonneg);                        \
     }                                                                   \
 }
 
-static vinfo_t* int_add_i(PsycoObject* po, RunTimeSource v1s, long value2)
+static vinfo_t* int_add_i(PsycoObject* po, RunTimeSource v1s, long value2,
+                          bool unsafe)
 {
   reg_t rg, dst;
   BEGIN_CODE
@@ -1426,7 +1426,7 @@ static vinfo_t* int_add_i(PsycoObject* po, RunTimeSource v1s, long value2)
     }
   LOAD_REG_FROM_REG_PLUS_IMMED(dst, rg, value2);
   END_CODE
-  return new_rtvinfo(po, dst, false);
+  return new_rtvinfo(po, dst, false, unsafe && value2>=0 && is_rtnonneg(v1s));
 }
 
 DEFINEFN
@@ -1451,7 +1451,7 @@ vinfo_t* integer_add(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
           return vinfo_new(CompileTime_New(c));
         }
       if (!ovf)
-        return int_add_i(po, v2s, a);
+        return int_add_i(po, v2s, a, false);
     }
   else
     if (is_compiletime(v2s))
@@ -1464,14 +1464,15 @@ vinfo_t* integer_add(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
             return v1;
           }
         if (!ovf)
-          return int_add_i(po, v1s, b);
+          return int_add_i(po, v1s, b, false);
       }
 
-  GENERIC_BINARY_COMMON_INSTR(0, ovf)   /* ADD */
+  GENERIC_BINARY_COMMON_INSTR(0, ovf,   /* ADD */
+			      ovf && is_nonneg(v1s) && is_nonneg(v2s))
 }
 
 DEFINEFN
-vinfo_t* integer_add_i(PsycoObject* po, vinfo_t* v1, long value2)
+vinfo_t* integer_add_i(PsycoObject* po, vinfo_t* v1, long value2, bool unsafe)
 {
   if (value2 == 0)
     {
@@ -1487,7 +1488,7 @@ vinfo_t* integer_add_i(PsycoObject* po, vinfo_t* v1, long value2)
           long c = CompileTime_Get(v1s)->value + value2;
           return vinfo_new(CompileTime_New(c));
         }
-      return int_add_i(po, v1s, value2);
+      return int_add_i(po, v1s, value2, unsafe);
     }
 }
 
@@ -1518,10 +1519,10 @@ vinfo_t* integer_sub(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
             return v1;
           }
         if (!ovf)
-          return int_add_i(po, v1s, -b);
+          return int_add_i(po, v1s, -b, false);
       }
 
-  GENERIC_BINARY_COMMON_INSTR(5, ovf)   /* SUB */
+  GENERIC_BINARY_COMMON_INSTR(5, ovf, false)   /* SUB */
 }
 
 DEFINEFN
@@ -1529,7 +1530,8 @@ vinfo_t* integer_or(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 {
   GENERIC_BINARY_HEADER
   GENERIC_BINARY_CT_CT(a | b)
-  GENERIC_BINARY_COMMON_INSTR(1, false)   /* OR */
+  GENERIC_BINARY_COMMON_INSTR(1, false,   /* OR */
+			      is_nonneg(v1s) && is_nonneg(v2s));
 }
 
 DEFINEFN
@@ -1537,14 +1539,16 @@ vinfo_t* integer_and(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 {
   GENERIC_BINARY_HEADER
   GENERIC_BINARY_CT_CT(a & b)
-  GENERIC_BINARY_COMMON_INSTR(4, false)   /* AND */
+  GENERIC_BINARY_COMMON_INSTR(4, false,   /* AND */
+			      is_nonneg(v1s) || is_nonneg(v2s));
 }
 
 DEFINEFN
 vinfo_t* integer_and_i(PsycoObject* po, vinfo_t* v1, long value2)
-     GENERIC_BINARY_INSTR_2(4, a & b)    /* AND */
+     GENERIC_BINARY_INSTR_2(4, a & b,    /* AND */
+			    value2>=0 || is_rtnonneg(v1s))
 
-#define GENERIC_SHIFT_BY(rtmacro)                       \
+#define GENERIC_SHIFT_BY(rtmacro, nonneg)               \
   {                                                     \
     reg_t rg;                                           \
     extra_assert(0 < counter && counter < LONG_BIT);    \
@@ -1553,17 +1557,17 @@ vinfo_t* integer_and_i(PsycoObject* po, vinfo_t* v1, long value2)
     COPY_IN_REG(v1, rg);                                \
     rtmacro(rg, counter);                               \
     END_CODE                                            \
-    return new_rtvinfo(po, rg, false);                  \
+    return new_rtvinfo(po, rg, false, nonneg);          \
   }
 
 static vinfo_t* int_lshift_i(PsycoObject* po, vinfo_t* v1, int counter)
-     GENERIC_SHIFT_BY(SHIFT_LEFT_BY)
+     GENERIC_SHIFT_BY(SHIFT_LEFT_BY, false)
 
 static vinfo_t* int_rshift_i(PsycoObject* po, vinfo_t* v1, int counter)
-     GENERIC_SHIFT_BY(SHIFT_SIGNED_RIGHT_BY)
+     GENERIC_SHIFT_BY(SHIFT_SIGNED_RIGHT_BY, is_nonneg(v1->source))
 
 static vinfo_t* int_urshift_i(PsycoObject* po, vinfo_t* v1, int counter)
-     GENERIC_SHIFT_BY(SHIFT_RIGHT_BY)
+     GENERIC_SHIFT_BY(SHIFT_RIGHT_BY, true)
 
 static vinfo_t* int_mul_i(PsycoObject* po, vinfo_t* v1, long value2,
                           bool ovf)
@@ -1592,7 +1596,7 @@ static vinfo_t* int_mul_i(PsycoObject* po, vinfo_t* v1, long value2,
       END_CODE
       if (ovf && runtime_condition_f(po, CC_O))
         return NULL;
-      return new_rtvinfo(po, rg, false);
+      return new_rtvinfo(po, rg, false, ovf && value2>=0 && is_rtnonneg(v1s));
     }
 }
 
@@ -1630,7 +1634,7 @@ vinfo_t* integer_mul(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
   END_CODE
   if (ovf && runtime_condition_f(po, CC_O))
     return NULL;  /* if overflow */
-  return new_rtvinfo(po, rg, false);
+  return new_rtvinfo(po, rg, false, ovf && is_rtnonneg(v1s) && is_rtnonneg(v2s));
 }
 
 DEFINEFN
@@ -1716,7 +1720,7 @@ vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter)
 /* } */
 
 
-#define GENERIC_UNARY_INSTR(rtmacro, c_code, ovf, c_ovf, cond_ovf)      \
+#define GENERIC_UNARY_INSTR(rtmacro, c_code, ovf, c_ovf, cond_ovf, nonneg) \
 {                                                                       \
   NonVirtualSource v1s = vinfo_compute(v1, po);                         \
   if (v1s == SOURCE_ERROR) return NULL;				        \
@@ -1736,7 +1740,7 @@ vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter)
       rtmacro;                              /* XXX rg       */          \
       END_CODE                                                          \
       if (!((ovf) && runtime_condition_f(po, cond_ovf)))                \
-        return new_rtvinfo(po, rg, false);                              \
+        return new_rtvinfo(po, rg, false, nonneg);                      \
     }                                                                   \
   return NULL;                                                          \
 }
@@ -1744,17 +1748,17 @@ vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter)
 DEFINEFN
 vinfo_t* integer_not(PsycoObject* po, vinfo_t* v1)
   GENERIC_UNARY_INSTR(UNARY_INSTR_ON_REG(2, rg), ~a,
-                           false, false, CC_ALWAYS_FALSE)
+                           false, false, CC_ALWAYS_FALSE, false)
 
 DEFINEFN
 vinfo_t* integer_neg(PsycoObject* po, vinfo_t* v1, bool ovf)
   GENERIC_UNARY_INSTR(UNARY_INSTR_ON_REG(3, rg), -a,
-                           ovf, c == (-LONG_MAX-1), CC_O)
+                           ovf, c == (-LONG_MAX-1), CC_O, false)
 
 DEFINEFN
 vinfo_t* integer_abs(PsycoObject* po, vinfo_t* v1, bool ovf)
   GENERIC_UNARY_INSTR(INT_ABS(rg, v1->source), a<0 ? -a : a,
-                           ovf, c == (-LONG_MAX-1), CHECK_ABS_OVERFLOW)
+                           ovf, c == (-LONG_MAX-1), CHECK_ABS_OVERFLOW, ovf)
 
 
 static const condition_code_t direct_results[16] = {
@@ -1797,7 +1801,7 @@ static const condition_code_t inverted_results[16] = {
 	  /* (14)            */  CC_ERROR,
 	  /* (15)            */  CC_ERROR };
 
-inline condition_code_t immediate_compare(long a, long b, int py_op)
+static condition_code_t immediate_compare(long a, long b, int py_op)
 {
   switch (py_op) {
     case Py_LT:  return a < b  ? CC_ALWAYS_TRUE : CC_ALWAYS_FALSE;
@@ -1821,6 +1825,57 @@ inline condition_code_t immediate_compare(long a, long b, int py_op)
     Py_FatalError("immediate_compare(): bad py_op");
     return CC_ERROR;
   }
+}
+
+static condition_code_t int_cmp_i(PsycoObject* po, RunTimeSource v1s,
+                                  long immed2, condition_code_t result)
+{
+  /* detect easy cases */
+  if (immed2 == 0)
+    {
+      if (is_rtnonneg(v1s))   /* if we know that v1s>=0 */
+        switch (result) {
+        case CC_L:   /* v1s < 0 */
+          return CC_ALWAYS_FALSE;
+        case CC_GE:  /* v1s >= 0 */
+          return CC_ALWAYS_TRUE;
+        default:
+          ; /* pass */
+        }
+      switch (result) {
+      case CC_uL:   /* (unsigned) v1s < 0 */
+        return CC_ALWAYS_FALSE;
+      case CC_uGE:  /* (unsigned) v1s >= 0 */
+        return CC_ALWAYS_TRUE;
+      default:
+        ; /* pass */
+      }
+    }
+  else if (immed2 < 0 && is_rtnonneg(v1s))  /* v1s>=0 && immed2<0 */
+    {
+      switch (result) {
+      case CC_E:    /* v1s == immed2 */
+      case CC_L:    /* v1s <  immed2 */
+      case CC_LE:   /* v1s <= immed2 */
+      case CC_uG:   /* (unsigned) v1s >  immed2 */
+      case CC_uGE:  /* (unsigned) v1s >= immed2 */
+        return CC_ALWAYS_FALSE;
+      case CC_NE:   /* v1s != immed2 */
+      case CC_GE:   /* v1s >= immed2 */
+      case CC_G:    /* v1s >  immed2 */
+      case CC_uLE:  /* (unsigned) v1s <= immed2 */
+      case CC_uL:   /* (unsigned) v1s <  immed2 */
+        return CC_ALWAYS_TRUE;
+      default:
+        ; /* pass */
+      }
+    }
+  /* end of easy cases */
+  BEGIN_CODE
+  NEED_CC_SRC(v1s);
+  COMPARE_IMMED_FROM_RT(v1s, immed2); /* CMP v1, immed2 */
+  END_CODE
+  return result;
 }
 
 DEFINEFN
@@ -1873,16 +1928,18 @@ condition_code_t integer_cmp(PsycoObject* po, vinfo_t* v1,
     {
       result = direct_results[py_op];
     }
-  BEGIN_CODE
-  NEED_CC();
   if (is_compiletime(v2s))
-    COMPARE_IMMED_FROM_RT(v1s, CompileTime_Get(v2s)->value); /* CMP v1, immed2 */
+    {
+      result = int_cmp_i(po, v1s, CompileTime_Get(v2s)->value, result);
+    }
   else
     {
+      BEGIN_CODE
+      NEED_CC();
       RTVINFO_IN_REG(v1);         /* CMP v1, v2 */
       COMMON_INSTR_FROM_RT(7, getreg(v1->source), v2->source);
+      END_CODE
     }
-  END_CODE
   return result;
 }
 
@@ -1899,13 +1956,7 @@ condition_code_t integer_cmp_i(PsycoObject* po, vinfo_t* v1,
       return immediate_compare(a, value2, py_op);
     }
   else
-    {
-      BEGIN_CODE
-      NEED_CC_SRC(v1s);
-      COMPARE_IMMED_FROM_RT(v1s, value2);  /* CMP v1, immed2 */
-      END_CODE
-      return direct_results[py_op];
-    }
+    return int_cmp_i(po, v1s, value2, direct_results[py_op]);
 }
 
 #if 0
@@ -1933,18 +1984,18 @@ vinfo_t* integer_seqindex(PsycoObject* po, vinfo_t* vi, vinfo_t* vn, bool ovf)
       vns = vn->source;  /* reload, could have been moved by NEED_FREE_REG */
       COMMON_INSTR_FROM(7, rg, vns);
          /* SBB t, t */
-      COMMON_INSTR_FROM_RT(3, tmprg, RunTime_New(tmprg, false));
+      COMMON_INSTR_FROM_RT(3, tmprg, RunTime_New(tmprg, false...));
          /* AND t, n */
       COMMON_INSTR_FROM(4, tmprg, vns);
          /* SUB i, t */
-      COMMON_INSTR_FROM_RT(5, rg, RunTime_New(tmprg, false));
+      COMMON_INSTR_FROM_RT(5, rg, RunTime_New(tmprg, false...));
          /* ADD i, n */
       COMMON_INSTR_FROM(0, rg, vns);
       END_CODE
 
       if (ovf && runtime_condition_f(po, CC_NB))  /* if out of range */
         return NULL;
-      return new_rtvinfo(po, rg, false);
+      return new_rtvinfo(po, rg, false...);
     }
   else
     {
@@ -1968,7 +2019,7 @@ vinfo_t* integer_seqindex(PsycoObject* po, vinfo_t* vi, vinfo_t* vn, bool ovf)
           return vi;
         }
       else
-        return integer_add_i(po, vn, index);
+        return integer_add_i(po, vn, index...);
     }
 }
 #endif  /* 0 */
@@ -1984,5 +2035,5 @@ vinfo_t* make_runtime_copy(PsycoObject* po, vinfo_t* v)
 	NEED_FREE_REG(rg);
 	LOAD_REG_FROM(src, rg);
 	END_CODE
-	return new_rtvinfo(po, rg, false);
+	return new_rtvinfo(po, rg, false, is_nonneg(src));
 }

@@ -96,6 +96,23 @@ def f7(start, end, step):
         print ''.join(line)
         start += complex(0, step.imag)
 
+def mandelbrotbis(c_r, c_i):
+    z_r = z_i = 0.0
+    for i in xrange(1000):
+        z_r, z_i = z_r*z_r-z_i*z_i + c_r, 2*z_r*z_i + c_i
+        if z_r*z_r+z_i*z_i > 4.0:
+            if i > 126-33: i = 126-33
+            return chr(33+i)
+    return " "
+
+def f7bis((start_r, start_i), (end_r, end_i), (step_r, step_i)):
+    "Computes the Mandelbrot set. All args are (real, imag) tuples."
+    width = int((end_r - start_r) / step_r)
+    while start_i < end_i:
+        line = [mandelbrotbis(start_r + n*step_r, start_i) for n in range(width)]
+        print ''.join(line)
+        start_i += step_i
+
 def f8():
     try:
         x = 1.0 / 0.0
@@ -171,6 +188,9 @@ def go6(n=100000, p=100000000000001L):
 def go7(start=-2-1j, end=1+1j, step=0.04+0.08j):
     go(f7, start, end, step)
 
+def go7bis(start=(-2.0, -1.0), end=(1.0, 1.0), step=(0.04, 0.08)):
+    go(f7bis, start, end, step)
+
 
 if __name__ == "__main__":
     go(f11, 50)
@@ -179,6 +199,7 @@ if __name__ == "__main__":
     go5()
     go6()
     go7()
+    go7bis()
     go(f10)
     psyco.dumpcodebuf()
     print_results()

@@ -159,7 +159,7 @@ static long getdictoffset(PsycoObject* po, vinfo_t* obj, vinfo_t** varindex)
 			if (a == NULL)
 				return -1;
 			c = integer_add_i(po, a, tp->tp_basicsize + dictoffset +
-						 SIZEOF_VOID_P - 1);
+						 SIZEOF_VOID_P - 1, false);
 			vinfo_decref(a, po);
 			if (c == NULL)
 				return -1;

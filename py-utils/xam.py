@@ -290,7 +290,7 @@ class RunTimeVInfo(VInfo):
     def gettext(self):
         text = "Run-time source,"
         reg = self.source >> 28
-        stack = self.source & 0x07FFFFFC
+        stack = self.source & 0x03FFFFFC
         if 0 <= reg < 8:
             text += " in register %s" % self.REG_NAMES[reg].upper()
             if stack:
@@ -298,6 +298,8 @@ class RunTimeVInfo(VInfo):
         if stack:
             text += " in stack [ESP+0x%x] or from top %d" %  \
                     (self.stackdepth - stack, stack)
+        if self.source & 0x04000000:
+            text += " non-negative"
         if not (self.source & 0x08000000):
             text += " holding a reference"
         return text

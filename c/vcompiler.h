@@ -48,22 +48,26 @@ inline long gettime(Source s)        { return s & TimeMask; }
  **/
 
 /* flags */
-#define RunTime_StackMask    0x07FFFFFC
+#define RunTime_StackMask    0x03FFFFFC
 #define RunTime_StackMax     RunTime_StackMask
 #define RunTime_StackNone    0
 #define RunTime_RegMask      0xF0000000
 #define RunTime_NoRef        0x08000000
+#define RunTime_NonNeg       0x04000000
 #define RunTime_FlagsMask    RunTime_NoRef
 
 /* construction */
-inline RunTimeSource RunTime_NewStack(int stack_position, reg_t reg, bool ref) {
+inline RunTimeSource RunTime_NewStack(int stack_position, reg_t reg,
+				      bool ref, bool nonneg) {
 	long result = RunTime + stack_position + ((long) reg << 28);
 	if (!ref)
 		result += RunTime_NoRef;
+	if (nonneg)
+		result += RunTime_NonNeg;
 	return (RunTimeSource) result;
 }
-inline RunTimeSource RunTime_New(reg_t reg, bool ref) {
-	return RunTime_NewStack(RunTime_StackNone, reg, ref);
+inline RunTimeSource RunTime_New(reg_t reg, bool ref, bool nonneg) {
+	return RunTime_NewStack(RunTime_StackNone, reg, ref, nonneg);
 }
 
 /* field inspection */
@@ -76,6 +80,7 @@ inline int getstack(RunTimeSource s)     { return s & RunTime_StackMask; }
 inline bool is_runtime_with_reg(Source s) {
   return (s & (TimeMask|(1<<31))) == 0;
 }
+inline bool is_rtnonneg(Source s)        { return s & RunTime_NonNeg; }
 
 /* mutation */
 inline RunTimeSource remove_rtref(RunTimeSource s) { return s | RunTime_NoRef; }
@@ -167,6 +172,10 @@ inline CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
 						SkFlagMask));
 	}
 }
+inline bool is_nonneg(Source s) {
+  return is_runtime(s) ? is_rtnonneg(s) :
+     is_compiletime(s) ? (CompileTime_Get(s)->value >= 0) : false;
+}
 
 
 /************************ Virtual-time sources *******************************
@@ -192,8 +201,8 @@ inline source_virtual_t* VirtualTime_Get(VirtualTimeSource s) {
 EXTERNVAR source_virtual_t psyco_vsource_not_important;
 
 #define SOURCE_NOT_IMPORTANT     VirtualTime_New(&psyco_vsource_not_important)
-#define SOURCE_DUMMY             RunTime_New(REG_NONE, false)
-#define SOURCE_DUMMY_WITH_REF    RunTime_New(REG_NONE, true)
+#define SOURCE_DUMMY             RunTime_New(REG_NONE, false, false)
+#define SOURCE_DUMMY_WITH_REF    RunTime_New(REG_NONE, true, false)
 #define SOURCE_ERROR             ((Source) -1)
 
 
@@ -358,8 +367,8 @@ struct PsycoObject_s {
          (arraycnt)*sizeof(vinfo_t*))
 
 /* run-time vinfo_t creation */
-inline vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref) {
-	vinfo_t* vi = vinfo_new(RunTime_New(reg, ref));
+inline vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonneg) {
+	vinfo_t* vi = vinfo_new(RunTime_New(reg, ref, nonneg));
 	REG_NUMBER(po, reg) = vi;
 	return vi;
 }

@@ -57,7 +57,7 @@ static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
 		   immediately deleted when exhausted. Well, I guess that
 		   muting an object we iterate over is generally considered
 		   as DDIWWY (Don't Do It -- We Warned You.) */
-		vinfo_t* index_plus_1 = integer_add_i(po, index, 1);
+		vinfo_t* index_plus_1 = integer_add_i(po, index, 1, true);
 		if (index_plus_1 == NULL) {
 			vinfo_decref(result, po);
 			result = NULL;

@@ -3022,7 +3022,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		u = psyco_loop_subscript(po, v, w);
 		if (u != NULL) {
 			x = PsycoInt_AS_LONG(po, w);
-			x = integer_add_i(po, x, 1);
+			x = integer_add_i(po, x, 1, true);
 			if (x == NULL)
 				break;
 			POP_DECREF();

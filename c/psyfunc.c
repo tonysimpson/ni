@@ -33,7 +33,7 @@ static void fix_run_time_args(PsycoObject * po, vinfo_array_t* target,
               po->stack_depth += sizeof(long);
               /* arguments get borrowed references */
               b->source = RunTime_NewStack(po->stack_depth, REG_NONE,
-                                                false);
+                                                false, false);
             }
           extra_assert(b == target->items[i]);
           a->tmp = NULL;
@@ -186,7 +186,7 @@ static PsycoObject* psyco_build_frame(PyCodeObject* co, vinfo_t* vglobals,
   /* set up the CALL return address */
   po->stack_depth += sizeof(long);
   LOC_CONTINUATION = vinfo_new(RunTime_NewStack(po->stack_depth, REG_NONE,
-                                                false));
+                                                false, false));
   psyco_assert_coherent(po);
   return po;
 }

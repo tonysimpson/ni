@@ -1309,7 +1309,7 @@ static void data_update_stack(vinfo_t* a, RunTimeSource bsource,
           rg = REG_NONE;
         }
       /* Now 'a' is at 'dststack', but might still be in 'rg' too */
-      a->source = RunTime_NewStack(dststack, rg, false);
+      a->source = RunTime_NewStack(dststack, rg, false, false);
       ORIGINAL_VINFO(dststack) = a; /* 'a' is now there */
       
       if (code > dm->code_limit)
