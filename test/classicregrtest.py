@@ -78,7 +78,7 @@ def alltests():
         print '='*40
         tests1 = testlist[:GROUP_TESTS]
         del testlist[:GROUP_TESTS]
-        err = os.system('"%s" "%s" %s' % (sys.executable, sys.argv[0],
+        err = os.system('"%s" %s %s' % (sys.executable, sys.argv[0],
                                           ' '.join(tests1)))
         if err:
             print '*** exited with error code', err
