@@ -87,25 +87,19 @@ extern double modf (double, double *);
         vinfo_t *v; \
         int tuplesize = PsycoTuple_Load(varg); \
         if (tuplesize != 1){ \
-            PycException_SetFormat(po, PyExc_TypeError, \
-                                   funcname  "() takes exactly 1 argument (%d given)", tuplesize); \
-        } \
-        if (PycException_Occurred(po)) \
-        return NULL; \
-        if ( Psyco_TypeSwitch(po,varg,&psyfs_tuple) == 0 ) \
-            v = PsycoTuple_GET_ITEM(varg, 0); \
-        else \
+            if (!PycException_Occurred(po)) \
+                PycException_SetFormat(po, PyExc_TypeError, \
+                                       funcname  "() takes exactly 1 argument (%d given)", tuplesize); \
             return NULL; \
+        } \
+        v = PsycoTuple_GET_ITEM(varg, 0); \
         PMATH_CONVERT_TO_DOUBLE(v,a1,a2); \
         result = array_new(2); \
         x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfNoReturnValue|CfPyErrIfNonNull, \
                                   "vva",a1,a2,result); \
         PMATH_RELEASE_DOUBLE(a1,a2); \
-        if (x == NULL) { \
-            array_delete(result,po); \
-            return NULL; \
-        } \
-        x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]); \
+        if (x != NULL) \
+            x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]); \
         array_release(result); \
         return x; \
     }
@@ -118,17 +112,13 @@ extern double modf (double, double *);
         vinfo_t *v1, *v2; \
         int tuplesize = PsycoTuple_Load(varg); \
         if (tuplesize != 2){ \
-            PycException_SetFormat(po, PyExc_TypeError, \
-                           funcname  "() takes exactly 2 argument (%d given)", tuplesize); \
-        } \
-        if (PycException_Occurred(po)) \
+            if (!PycException_Occurred(po)) \
+                PycException_SetFormat(po, PyExc_TypeError, \
+                               funcname  "() takes exactly 2 argument (%d given)", tuplesize); \
             return NULL; \
-        if ( Psyco_TypeSwitch(po,varg,&psyfs_tuple) == 0 ) {\
-            v1 = PsycoTuple_GET_ITEM(varg, 0); \
-            v2 = PsycoTuple_GET_ITEM(varg, 1); \
         } \
-        else \
-            return NULL; \
+        v1 = PsycoTuple_GET_ITEM(varg, 0); \
+        v2 = PsycoTuple_GET_ITEM(varg, 1); \
         PMATH_CONVERT_TO_DOUBLE(v1,a1,a2); \
         PMATH_CONVERT_TO_DOUBLE(v2,b1,b2); \
         result = array_new(2); \
@@ -136,11 +126,8 @@ extern double modf (double, double *);
                                "vvvva",a1,a2,b1,b2,result); \
         PMATH_RELEASE_DOUBLE(a1,a2); \
         PMATH_RELEASE_DOUBLE(b1,b2); \
-        if (x == NULL) { \
-            array_delete(result,po); \
-            return NULL; \
-        } \
-        x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]); \
+        if (x != NULL) \
+            x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]); \
         array_release(result); \
         return x; \
     }
