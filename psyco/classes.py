@@ -21,8 +21,6 @@ will automatically use the Psyco-optimized metaclass.
 """
 ###########################################################################
 
-import core
-
 __all__ = ['psyobj', 'psymetaclass', '__metaclass__']
 
 
@@ -35,26 +33,24 @@ except NameError:
     psymetaclass = None
 else:
     # version >= 2.2 only
+
+    import core
+    from _psyco import compact
     from types import FunctionType
-    recursivity = 5
-    
+
     class psymetaclass(type):
         "Psyco-optimized meta-class. Turns all methods into Psyco proxies."
-    
-        def __init__(self, name, bases, dict):
-            type.__init__(self, name, bases, dict)
-            bindlist = self.__dict__.get('__psyco__bind__')
+
+        def __new__(cls, name, bases, dict):
+            if bases == () or bases == (object,):
+                bases = (compact,)
+            bindlist = dict.get('__psyco__bind__')
             if bindlist is None:
-                try:
-                    core.bind(self)
-                except core.error:
-                    pass
-            else:
-                for attr in bindlist:
-                    try:
-                        core.bind(self.__dict__.get(attr))
-                    except core.error:
-                        pass
+                bindlist = [key for key, value in dict.items()
+                            if isinstance(value, FunctionType)]
+            for attr in bindlist:
+                dict[attr] = core.proxy(dict[attr])
+            return super(psymetaclass, cls).__new__(cls, name, bases, dict)
     
     psyobj = psymetaclass("psyobj", (), {})
 __metaclass__ = psymetaclass

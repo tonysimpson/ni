@@ -359,7 +359,8 @@ static PyObject* Psyco_dumpcodebuf(PyObject* self, PyObject* args)
 /***************************************************************/
  /***   Replacements for PyEval_GetXxx()                      ***/
 
-static PyObject* need_cpsyco_obj(char* name)
+DEFINEFN
+PyObject* need_cpsyco_obj(char* name)
 {
 	PyObject* d = PyModule_GetDict(CPsycoModule);
 	PyObject* result = PyDict_GetItemString(d, name);

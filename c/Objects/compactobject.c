@@ -535,15 +535,88 @@ int compact_setattro(PyCompactObject* ko, PyObject* attr, PyObject* value)
 	return err;
 }
 
+static PyObject* compact_getslot(PyCompactObject* ko, PyObject* key)
+{
+	compact_impl_t* impl = ko->k_impl;
+	PyObject* o;
+
+	if (key->ob_type != &PyString_Type) {
+		if (!PyString_Check(key)) {
+			PyErr_SetObject(PyExc_KeyError, key);
+			return NULL;
+		}
+		key = PyString_FromStringAndSize(PyString_AS_STRING(key),
+						 PyString_GET_SIZE(key));
+		if (key == NULL)
+			return NULL;
+	}
+	else {
+		Py_INCREF(key);
+	}
+	K_INTERN(key);
+	while (impl->attrname != NULL) {
+		if (impl->attrname == key) {
+			o = direct_xobj_vinfo(impl->vattr, ko->k_data);
+			if (o != NULL || PyErr_Occurred())
+				goto finally;
+		}
+		impl = impl->parent;
+	}
+	PyErr_SetObject(PyExc_KeyError, key);
+	o = NULL;
+ finally:
+	Py_DECREF(key);
+	return o;
+}
+
+static PyObject* compact_getmembers(PyCompactObject* ko, void* context)
+{
+	compact_impl_t* impl = ko->k_impl;
+	PyObject* result = PyList_New(0);
+	if (result == NULL)
+		return NULL;
+	while (impl->attrname != NULL) {
+		if (PyList_Append(result, impl->attrname) < 0) {
+			Py_DECREF(result);
+			return NULL;
+		}
+		impl = impl->parent;
+	}
+	if (PyList_Reverse(result) < 0) {
+		Py_DECREF(result);
+		return NULL;
+	}
+	return result;
+}
+
+static PyObject* compact_getdict(PyCompactObject* ko, void* context)
+{
+	PyObject* t = need_cpsyco_obj("compactdictproxy");
+	if (t == NULL)
+		return NULL;
+	return PyObject_CallFunction(t, "O", (PyObject*) ko);
+}
+
 
 /*****************************************************************/
 
 DEFINEVAR compact_impl_t* PyCompact_EmptyImpl;
 
+static PyMethodDef compact_methods[] = {
+	{"__getslot__",	(PyCFunction)compact_getslot, METH_O, NULL},
+	{NULL,		NULL}		/* sentinel */
+};
+
+static PyGetSetDef compact_getsets[] = {
+	{"__members__", (getter)compact_getmembers, NULL, NULL},
+	{"__dict__", (getter)compact_getdict, NULL, NULL},
+	{NULL}
+};
+
 DEFINEVAR PyTypeObject PyCompact_Type = {
 	PyObject_HEAD_INIT(NULL)
 	0,                                      /*ob_size*/
-	"_psyco.compact",                       /*tp_name*/
+	"psyco.compact",                        /*tp_name*/
 	sizeof(PyCompactObject),                /*tp_size*/
 	0,                                      /*tp_itemsize*/
 	/* methods */
@@ -571,9 +644,9 @@ DEFINEVAR PyTypeObject PyCompact_Type = {
 	0,                                      /* tp_weaklistoffset */
 	0,                                      /* tp_iter */
 	0,                                      /* tp_iternext */
-	0,                                      /* tp_methods */
+	compact_methods,                        /* tp_methods */
 	0,                                      /* tp_members */
-	0,                                      /* tp_getset */
+	compact_getsets,                        /* tp_getset */
 	0,                                      /* tp_base */
 	0,                                      /* tp_dict */
 	0,                                      /* tp_descr_get */
@@ -588,8 +661,8 @@ DEFINEVAR PyTypeObject PyCompact_Type = {
 void psyco_compact_init(void)
 {
 	PyCompact_EmptyImpl = &k_empty_impl;
-	PyCompact_Type.ob_type = &PyType_Type;
 	PyCompact_Type.tp_alloc = &PyType_GenericAlloc;
+	PyType_Ready(&PyCompact_Type);
 }
 
 #else  /* !HAVE_COMPACT_OBJECT */

@@ -277,6 +277,9 @@ EXTERNFN code_t* psyco_pycompiler_mainloop(PsycoObject* po);
 /* Thread-specific state */
 EXTERNFN PyObject* psyco_thread_dict(void);
 
+/* Getting data from the _psyco module */
+EXTERNFN PyObject* need_cpsyco_obj(char* name);
+
 /* defined in dispatcher.c */
 EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 
