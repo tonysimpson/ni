@@ -9,9 +9,9 @@
         Psyco Home page: \url{http://psyco.sourceforge.net/}
 }
 
-\date{March 15, 2003}
+\date{May 2, 2003}
 
-\release{1.0.0b1}                   % release version
+\release{1.0}                   % release version
 
 \makeindex
 
@@ -67,11 +67,12 @@ To install from the binaries, be sure to download the version of Psyco that corr
   \lineii{ psyco-x.y.z-OS-2.1     }{2.1 or any 2.1.x}
   \lineii{ psyco-x.y.z-OS-2.2.0-1 }{2.2 older than 2.2.2}
   \lineii{ psyco-x.y.z-OS-2.2.2   }{2.2.2 and up}
+  \lineii{ psyco-x.y.z-OS-2.3b1   }{2.3b1}
 \end{tableii}
 
 \file{x.y.z} is the Psyco version number, and \file{OS} is the operating system this version has been compiled for.
 
-A 2.3 version is developed in parallel with Python 2.3 itself.  A binary for 2.3 will be provided as soon as Python 2.3 is released.  In the meantime, compiling Psyco against the Python CVS should work seamlessly.
+The 2.3 Psyco development occurs in in parallel with Python 2.3 itself.  A binary is provided for the current 2.3b1 beta release of Python.  In the future, if you want to try Psyco with a more recent release, I would recommend recompiling it.
 
 The binaries contain a subdirectory named \file{psyco} which is a Python package (which you can check by looking for the \file{__init__.py} file it contains).  Just drop this directory into your \file{site-package} directory.  In other words, you need a directory \file{.../python2.x/lib/site-packages/psyco/} which contains the files \file{__init__.py}, \file{core.py}, and so on.
 
@@ -286,7 +287,7 @@ Results:
 
 Here you can see that only the TAL test is accelerated.  If you have a Zope server using TAL, you could try to add the above two lines to it.  You may get very interesting speed-ups for a very reasonable memory overweight!  (untested: please tell me about it --- there is no real Zope server I can play with myself.)
 
-Another ceveat of Psyco is that it is not always easy to know which module or class Psyco has just acclerated in \code{psyco.full()} mode.  It took me some time to discover what I should bind to accelerate specifically the ZPT test.  Here is how: I ran Psyco in \code{psyco.log();psyco.profile()} mode, running only the ZPT test, and inspected the log file.  Indeed, when a function is about to be accelerated, Psyco writes a line \samp{tag function: xxx} (with Python 2.2.2) or \samp{bind function: xxx} (with previous versions of Python).  In this case I figured out from the \file{markbench.log-psyco} file that I had to write this:
+Another ceveat of Psyco is that it is not always easy to know which module or class Psyco has just acclerated in \code{psyco.full()} mode.  It took me some time to discover what I should bind to accelerate specifically the ZPT test.  Here is how: I ran Psyco in \code{psyco.log();psyco.profile()} mode, running only the ZPT test, and inspected the log file.  Indeed, when a function is about to be accelerated, Psyco writes a line \samp{tag function: xxx} (with Python 2.2.2 and up) or \samp{bind function: xxx} (with previous versions of Python).  In this case I figured out from the \file{markbench.log-psyco} file that I had to write this:
 
 \begin{verbatim}
 import TAL.TALInterpreter
@@ -314,7 +315,7 @@ Results:
 
 \section{Old-style classes vs. Built-in types}\label{metaclass}
 
-Althought Psyco can plug itself over various versions of the interpreter, there are some features that depend on specific extensions.  Extra features only available from Python 2.2.2 (not in 2.2) are depending on new hooks that the core interpreter offer.  While minor, these hooks are crucial for some features and they are the reason I recommend to upgrade your Python installation to 2.2.2.  On the other hand, differences between Python 2.1 and the 2.2 series are due to the general-purpose enhancements done by the Python team between these releases.
+Althought Psyco can plug itself over various versions of the interpreter, there are some features that depend on specific extensions.  Extra features only available from Python 2.2.2 and up (not in 2.2) are depending on new hooks that the core interpreter offer.  While minor, these hooks are crucial for some features and they are the reason I recommend to upgrade your Python installation to 2.2.2.  On the other hand, differences between Python 2.1 and the 2.2 series are due to the general-purpose enhancements done by the Python team between these releases.
 
 A major introduction of Python 2.2 are the so-called new-style classes, which have a (positive) performance impact on Psyco.  So \strong{with Python 2.2} you should, as much as possible, let your classes be built-in types and not old-style classes.  This means that your classes should inherit from \class{object} (directly or not; if its parent inherit from \class{object} it is fine).  This lets Psyco produce faster code.  Even better, if you add the line
 
@@ -421,7 +422,7 @@ This section lists the functions that use the Python profiler and line tracer to
 \begin{funcdesc}{profile}{watermark=0.09, halflife=0.5, pollfreq=20, parentframe=0.25, memory=None, time=None, memorymax=None, timemax=None}
   Do profiling to detect the functions that consume a lot of interpretation time, and only compile those.
 
-  As far as I can tell, the best solution for large applications.  With Python 2.2.2, if a function takes a long time to run, it will be detected and compiled \emph{while it is still running,} in the middle of its execution.  Psyco takes it away from the standard interpreter.
+  As far as I can tell, the best solution for large applications.  With Python 2.2.2 and up, if a function takes a long time to run, it will be detected and compiled \emph{while it is still running,} in the middle of its execution.  Psyco takes it away from the standard interpreter.
 
   The (optional) arguments are used for fine-tuning.  They are described in the next sections.
 \end{funcdesc}
@@ -437,7 +438,7 @@ This section lists the functions that use the Python profiler and line tracer to
 \begin{funcdesc}{runonly}{memory=None, time=None, memorymax=None, timemax=None}
   Run the compiled functions but don't compile new ones.
 
-  Python 2.2.2 only.  The usefulness of this routine is unknown.  See below.
+  Python 2.2.2 and up only.  The usefulness of this routine is unknown.  See below.
 \end{funcdesc}
 
 \begin{funcdesc}{stop}{}
@@ -461,7 +462,7 @@ The ``time measure'' is done using one of three methods, depending on availabili
 
 \begin{itemize}
   
-\item Python 2.2.2 maintains a counter of executed bytecode instructions; this number is the most accurate (well, the least inaccurate) method I found out to guess how much a function could benefit from being run by Psyco.  By ``time measure'' we mean in this case the number of bytecode instructions (or elementary steps) taken during the interpretation.  This ``time'' does not include things like time spent waiting for data to be read or written to a file, for example, which is a good thing because Psyco cannot optimize this anyway.
+\item Python 2.2.2 (and up) maintains a counter of executed bytecode instructions; this number is the most accurate (well, the least inaccurate) method I found out to guess how much a function could benefit from being run by Psyco.  By ``time measure'' we mean in this case the number of bytecode instructions (or elementary steps) taken during the interpretation.  This ``time'' does not include things like time spent waiting for data to be read or written to a file, for example, which is a good thing because Psyco cannot optimize this anyway.
 
 \item Without Python 2.2.2, under Linux, we measure the CPU time spent by the Python process.  This does not allow us to tell apart multiple threads; Psyco will charge all the time to the main thread.  Time spent waiting for a disk I/O is correctly not counted, but time working on (say) multiplying two very long integers will be (althought Psyco cannot do anything about it).
   
@@ -549,7 +550,7 @@ causes Psyco to compile everything until it takes 100 kilobytes of memory, and t
 
 If all profilers reach their limits, profiling is stopped.  Already-compiled functions will continue to run faster.
 
-With Python 2.2.2 you may try to add a line \samp{psyco.runonly()} after the last profiler, if all your profilers may stop (i.e.\ all of them have limits).  It might help, or it might not.  Feedback appreciated.
+With Python 2.2.2 (or up) you may try to add a line \samp{psyco.runonly()} after the last profiler, if all your profilers may stop (i.e.\ all of them have limits).  It might help, or it might not.  Feedback appreciated.
 
 \note{Besides the limits, external events may prevent a specific profiler from running.  When this occurs, Psyco falls back to the next profiler but may come back later when the external condition changes again.  This occurs if some other program (e.g.\ the \module{pdb} debugger) sets a profiling or line-by-line tracing hook.  Psyco always gracefully leaves the priority to other programs when they want to occupy Python's hooks.}
 
@@ -689,7 +690,7 @@ The most common lines you will find in logs are:
   The profiler's attempt to use \function{psyco.bind} failed because the function object could not be found.  Indeed, the profiler charges code objects, and \function{psyco.bind} only applies to function objects.  Looking for a function when we only have the code object is difficult (not to mention that some code objects may have been created by \function{compile} or \function{execfile} and are not owned by any function whatsoever).  Psyco currently only locates the functions defined at the module top-level and the methods of top-level classes.  (This is one reason why profilers tag and don't bind if they can.)
 
 \item[profiling stopped, binding \var{n} functions]
-  When active profiling stops, the profiler calls \function{psyco.bind} on all currently tagged functions.  If you feel that this operation is too heavy (e.g.\ makes a visible pause in your real-time application) use the \function{psyco.runonly} profiler to prevent this from occuring.  Normally it only applies if you have set limits on all the profilers queued so far.  Python 2.2.2 only.
+  When active profiling stops, the profiler calls \function{psyco.bind} on all currently tagged functions.  If you feel that this operation is too heavy (e.g.\ makes a visible pause in your real-time application) use the \function{psyco.runonly} profiler to prevent this from occuring.  Normally it only applies if you have set limits on all the profilers queued so far.  Python 2.2.2 and up only.
 
 \item[disabled (\var{L} limit reached)]
   The profiler is stopped because it reached the limit \var{L}.  The next queued profiler can start.
@@ -954,7 +955,7 @@ Notes:
 \begin{description}
 
 \item[(py2.2)]
-  Python 2.2 only.
+  Python 2.2 and up.
   
 \item[(1)]
   In the common \samp{object.method(args)} the intermediate bound method object is never built; it is translated into a direct call to the function that implements the method.  For C methods, the underlying \ctype{PyMethodDef} structure is decoded at compile-time.  Algorithms doing repetitive calls to methods of e.g.\ lists or strings can see huge benefits.

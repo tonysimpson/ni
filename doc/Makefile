@@ -2,7 +2,7 @@
 # Makefile.local should define MKHOWTO to point to the Python
 # distribution's Doc/tools/mkhowto, e.g.
 # MKHOWTO = ${HOME}/cvs/python/dist/src/Doc/tools/mkhowto
--include Makefile.local
+include Makefile.local
 
 PAPER=a4
 DVIPS=dvips -N0 -t $(PAPER)
