@@ -4,6 +4,7 @@
 #include "dispatcher.h"
 #include "processor.h"
 #include "mergepoints.h"
+#include "selective.h"
 #include "Python/pycompiler.h"
 #include "Objects/ptupleobject.h"
 
@@ -551,58 +552,15 @@ void psyco_dump_code_buffers(void)
 
 /*****************************************************************/
 
-// TODO: timer stuff from hotspot (or do we care at all about the 
-// exact timings?), split into separate file to avoid mixing too
-// muc stuff into this file
-
-#define FUN_BOUND -1
-#define MAX_RECURSION 1
-
-DEFINEVAR PyObject* funcs = NULL;
-DEFINEVAR long ticks;
-
-static int do_selective(void *v, PyFrameObject *frame, int what,
-		  	PyObject *arg)
-{
-  PyObject *code, *name, *g, *tmp;
-  long value;
-
-  /* Only handle function calls for now */
-  if (what == PyTrace_CALL) {
-    code = frame->f_code->co_code;
-    name = frame->f_code->co_name;
-    g = frame->f_globals;
-
-    /* Get the current tick counter value */
-    tmp = PyDict_GetItem(funcs, code);
-    if (tmp == NULL) {
-      PyDict_SetItem(funcs, code, Py_BuildValue("i", 1));
-      value = 1;
-    } else {
-      value = PyInt_AS_LONG(tmp);
-    }
-
-    /* Update ticks if the function is not already bound */
-    if (value != FUN_BOUND) {
-      if (value++ >= ticks) {
-	tmp = PyDict_GetItem(g, name);
-	if (tmp != NULL) {
-	  /* Rebind function to a proxy */
-	  printf("psyco: rebinding %s to proxy\n", PyString_AS_STRING(name));
-	  value = FUN_BOUND;
-	  PyDict_SetItem(g, name, (PyObject*)psyco_PsycoFunction_New((PyFunctionObject*)tmp, MAX_RECURSION));
-	}
-      }
-      PyDict_SetItem(funcs, code, Py_BuildValue("i", value));
-    }
-  }
-  return 0;
-}
-
-
+/* Initialize selective compilation */
 static PyObject* Psyco_selective(PyObject* self, PyObject* args)
 {
   if (!PyArg_ParseTuple(args, "i", &ticks)) {
+    return NULL;
+  }
+
+  /* Sanity check argument */
+  if (ticks < 0) {
     return NULL;
   }
 
@@ -613,7 +571,7 @@ static PyObject* Psyco_selective(PyObject* self, PyObject* args)
 
   assert(funcs != NULL);
 
-  /* Set Python profile function to our schedule-function */
+  /* Set Python profile function to our selective compilation function */
   PyEval_SetProfile((Py_tracefunc)do_selective, NULL);
   Py_INCREF(Py_None);
 

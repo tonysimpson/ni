@@ -41,6 +41,7 @@
 #include "mergepoints.c"
 #include "pycencoding.c"
 #include "linuxmemchk.c"
+#include "selective.c"
 #include "psyco.c"   /* must be the last one for CODE_DUMP_AT_END_ONLY to work */
 
 
