@@ -35,6 +35,8 @@ EXTERNFN vinfo_t* PsycoSequence_GetSlice(PsycoObject* po, vinfo_t* o,
 EXTERNFN bool     PsycoSequence_SetSlice(PsycoObject* po, vinfo_t* o,
                                          vinfo_t* ilow, vinfo_t* ihigh,
                                          vinfo_t* value);
+EXTERNFN vinfo_t* PsycoSequence_Contains(PsycoObject* po, vinfo_t* seq,
+                                         vinfo_t* ob);
 
 EXTERNFN vinfo_t* PsycoNumber_Positive(PsycoObject* po, vinfo_t* vi);
 EXTERNFN vinfo_t* PsycoNumber_Negative(PsycoObject* po, vinfo_t* vi);

@@ -11,33 +11,29 @@ DEFINEVAR fixed_switch_t psyfs_none;
 
 
 DEFINEFN
-condition_code_t PsycoObject_IsTrue(PsycoObject* po, vinfo_t* vi)
+vinfo_t* PsycoObject_IsTrue(PsycoObject* po, vinfo_t* vi)
 {
 	PyTypeObject* tp;
 	tp = (PyTypeObject*) Psyco_NeedType(po, vi);
 	if (tp == NULL)
-		return CC_ERROR;
+		return NULL;
 
 	if (tp == Py_None->ob_type)
-		return CC_ALWAYS_FALSE;
-	
+		return psyco_vi_Zero();
 	else if (tp->tp_as_number != NULL &&
 		 tp->tp_as_number->nb_nonzero != NULL)
-		return Psyco_flag_META1(po, tp->tp_as_number->nb_nonzero,
-					CfReturnFlag, "v", vi);
-	
+		return Psyco_META1(po, tp->tp_as_number->nb_nonzero,
+				   CfReturnNormal|CfPyErrIfNeg, "v", vi);
 	else if (tp->tp_as_mapping != NULL &&
 		 tp->tp_as_mapping->mp_length != NULL)
-		return Psyco_flag_META1(po, tp->tp_as_mapping->mp_length,
-					CfReturnFlag, "v", vi);
-	
+		return Psyco_META1(po, tp->tp_as_mapping->mp_length,
+				   CfReturnNormal|CfPyErrIfNeg, "v", vi);
 	else if (tp->tp_as_sequence != NULL &&
 		 tp->tp_as_sequence->sq_length != NULL)
-		return Psyco_flag_META1(po, tp->tp_as_sequence->sq_length,
-					CfReturnFlag, "v", vi);
-
+		return Psyco_META1(po, tp->tp_as_sequence->sq_length,
+				   CfReturnNormal|CfPyErrIfNeg, "v", vi);
 	else
-		return CC_ALWAYS_TRUE;
+		return psyco_vi_One();
 }
 
 DEFINEFN
@@ -103,13 +99,13 @@ bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
 {
 	/* XXX implement me */
 	if (v != NULL)
-		return psyco_flag_call(po, PyObject_SetAttr,
-				       CfReturnFlag|CfPyErrIfNonNull,
-				       "vvv", o, attr_name, v) != CC_ERROR;
+		return psyco_generic_call(po, PyObject_SetAttr,
+                                          CfNoReturnValue|CfPyErrIfNonNull,
+                                          "vvv", o, attr_name, v) != NULL;
 	else
-		return psyco_flag_call(po, PyObject_SetAttr,
-				       CfReturnFlag|CfPyErrIfNonNull,
-				       "vvl", o, attr_name, NULL) != CC_ERROR;
+		return psyco_generic_call(po, PyObject_SetAttr,
+                                          CfNoReturnValue|CfPyErrIfNonNull,
+                                          "vvl", o, attr_name, NULL) != NULL;
 }
 
 /* Helper to get the offset an object's __dict__ slot, if any.
@@ -255,8 +251,8 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 		/* no __dict__ slot */
 	}
 	else {
-		int cond;
 		condition_code_t cc;
+		int cond;
 		vinfo_t* dict;
 		if (dictofs == NULL)
 			dict = read_array_item(po, obj, QUARTER(dictofsbase));
@@ -266,7 +262,13 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
                                                    dictofs, false);
 		if (dict == NULL)
 			goto done;
-		if (runtime_condition_t(po, integer_non_null(po, dict))) {
+		cc = integer_non_null(po, dict);
+		if (cc == CC_ERROR) {
+			vinfo_decref(dict, po);
+			goto done;
+		}
+
+		if (runtime_condition_t(po, cc)) {
 			/* the __dict__ slot contains a non-NULL value */
 			res = psyco_generic_call(po, PyDict_GetItem,
 						 CfReturnNormal,
@@ -281,20 +283,31 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 			   with that name; otherwise, it is likely that we
 			   do find it. */
 			cc = integer_non_null(po, res);
+			if (cc == CC_ERROR) {
+				vinfo_decref(res, po);
+				goto done;
+			}
+			
 			if (f != NULL)
 				cond = runtime_condition_f(po, cc);
 			else
 				cond = runtime_condition_t(po, cc);
-			
+
 			if (cond) {
+				/* we have found the attribute */
 				need_reference(po, res);
 				goto done;
 			}
-			vinfo_decref(res, po);
-			res = NULL;
+			else {
+				/* there is no such attribute */
+				vinfo_decref(res, po);
+				res = NULL;
+			}
 		}
-		else
+		else {
+			/* the __dict__ slot contains NULL */
 			vinfo_decref(dict, po);
+		}
 	}
 	
 	if (f != NULL) {
@@ -321,6 +334,10 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 #define RICHCOMPARE(t) (PyType_HasFeature((t), Py_TPFLAGS_HAVE_RICHCOMPARE) \
                          ? (t)->tp_richcompare : NULL)
 
+#define IS_IMPLEMENTED(x)   \
+  ((x) == NULL || ((x)->source != CompileTime_NewSk(&psyco_skNotImplemented)))
+
+
 /* Map rich comparison operators to their swapped version, e.g. LT --> GT */
 static int swapped_op[] = {Py_GT, Py_GE, Py_EQ, Py_NE, Py_LT, Py_LE};
 
@@ -339,14 +356,14 @@ static vinfo_t* try_rich_compare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int op
 	if (swap) {
 		res = Psyco_META3(po, fw, CfReturnRef|CfPyErrNotImplemented,
 				  "vvl", w, v, swapped_op[op]);
-		if (res != psyco_viNotImplemented)
-			return res;
+		if (IS_IMPLEMENTED(res))
+			return res;   /* 'res' might be NULL */
 		vinfo_decref(res, po);
 	}
 	if (fv != NULL) {
 		res = Psyco_META3(po, fv, CfReturnRef|CfPyErrNotImplemented,
 				  "vvl", v, w, op);
-		if (res != psyco_viNotImplemented)
+		if (IS_IMPLEMENTED(res))
 			return res;
 		vinfo_decref(res, po);
 	}
@@ -354,9 +371,7 @@ static vinfo_t* try_rich_compare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int op
 		return Psyco_META3(po, fw, CfReturnRef|CfPyErrNotImplemented,
 				   "vvl", w, v, swapped_op[op]);
 	}
-	res = psyco_viNotImplemented;
-	vinfo_incref(res);
-	return res;
+	return psyco_vi_NotImplemented();
 }
 
 inline vinfo_t* convert_3way_to_object(PsycoObject* po, int op, vinfo_t* c)
@@ -419,7 +434,7 @@ DEFINEFN vinfo_t* PsycoObject_RichCompare(PsycoObject* po, vinfo_t* v,
 			res = Psyco_META3(po, f1,
 					  CfReturnRef|CfPyErrNotImplemented,
 					  "vvl", v, w, (long) op);
-			if (res != psyco_viNotImplemented)
+			if (IS_IMPLEMENTED(res))
 				return res;
 			vinfo_decref(res, po);
 		}
@@ -427,11 +442,13 @@ DEFINEFN vinfo_t* PsycoObject_RichCompare(PsycoObject* po, vinfo_t* v,
 				"vv", v, w);
 		if (c == NULL)
 			return NULL;
-		return convert_3way_to_object(po, op, c);
+		res = convert_3way_to_object(po, op, c);
+                vinfo_decref(c, po);
+                return res;
 	}
 
 	res = try_rich_compare(po, v, w, op);
-	if (res != psyco_viNotImplemented)
+	if (IS_IMPLEMENTED(res))
 		return res;
 	vinfo_decref(res, po);
 
@@ -439,15 +456,14 @@ DEFINEFN vinfo_t* PsycoObject_RichCompare(PsycoObject* po, vinfo_t* v,
 }
 
 DEFINEFN
-condition_code_t PsycoObject_RichCompareBool(PsycoObject* po,
-                                             vinfo_t* v,
-                                             vinfo_t* w, int op)
+vinfo_t* PsycoObject_RichCompareBool(PsycoObject* po,
+                                     vinfo_t* v, vinfo_t* w, int op)
 {
-	condition_code_t cc;
+	vinfo_t* diff;
 	vinfo_t* result = PsycoObject_RichCompare(po, v, w, op);
 	if (result == NULL)
-		return CC_ERROR;
-        cc = PsycoObject_IsTrue(po, result);
+		return NULL;
+        diff = PsycoObject_IsTrue(po, result);
         vinfo_decref(result, po);
-	return cc;
+	return diff;
 }

@@ -68,7 +68,7 @@ inline void Psyco_AssertType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
 
 /* The following functions are Psyco implementations of common functions
    of the standard interpreter. */
-EXTERNFN condition_code_t PsycoObject_IsTrue(PsycoObject* po, vinfo_t* vi);
+EXTERNFN vinfo_t* PsycoObject_IsTrue(PsycoObject* po, vinfo_t* vi);
 EXTERNFN vinfo_t* PsycoObject_Repr(PsycoObject* po, vinfo_t* vi);
 
 /* Note: DelAttr() is SetAttr() with 'v' set to NULL (and not some vinfo_t
@@ -82,9 +82,9 @@ EXTERNFN vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 
 EXTERNFN vinfo_t* PsycoObject_RichCompare(PsycoObject* po, vinfo_t* v,
 					  vinfo_t* w, int op);
-EXTERNFN condition_code_t PsycoObject_RichCompareBool(PsycoObject* po,
-						      vinfo_t* v,
-						      vinfo_t* w, int op);
+EXTERNFN vinfo_t* PsycoObject_RichCompareBool(PsycoObject* po,
+                                              vinfo_t* v,
+                                              vinfo_t* w, int op);
 
 
 /* a quick way to specify the type of the object returned by an operation

@@ -27,10 +27,15 @@ vinfo_t* PsycoObject_Call(PsycoObject* po, vinfo_t* callable_object,
 		return NULL;
 
 	if ((call = tp->tp_call) != NULL) {
+		vinfo_t* result;
 		if (kw == NULL)
-			kw = psyco_viZero;
-		return Psyco_META3(po, call, CfReturnRef|CfPyErrIfNull,
-				   "vvv", callable_object, args, kw);
+			kw = psyco_vi_Zero();
+		else
+			vinfo_incref(kw);
+		result = Psyco_META3(po, call, CfReturnRef|CfPyErrIfNull,
+				     "vvv", callable_object, args, kw);
+		vinfo_decref(kw, po);
+		return result;
 	}
 	PycException_SetFormat(po, PyExc_TypeError,
 			       "object of type '%.100s' is not callable",
@@ -77,13 +82,13 @@ bool PsycoObject_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key,
 {
 	/* XXX implement me */
 	if (value != NULL)
-		return psyco_flag_call(po, PyObject_SetItem,
-				       CfReturnFlag|CfPyErrIfNonNull,
-				       "vvv", o, key, value) != CC_ERROR;
+		return psyco_generic_call(po, PyObject_SetItem,
+                                          CfNoReturnValue|CfPyErrIfNonNull,
+                                          "vvv", o, key, value) != NULL;
 	else
-		return psyco_flag_call(po, PyObject_DelItem,
-				       CfReturnFlag|CfPyErrIfNonNull,
-				       "vv", o, key) != CC_ERROR;
+		return psyco_generic_call(po, PyObject_DelItem,
+                                          CfNoReturnValue|CfPyErrIfNonNull,
+                                          "vv", o, key) != NULL;
 }
 
 DEFINEFN
@@ -169,13 +174,13 @@ bool PsycoSequence_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i,
 {
 	/* XXX implement me */
 	if (value != NULL)
-		return psyco_flag_call(po, PySequence_SetItem,
-				       CfReturnFlag|CfPyErrIfNonNull,
-				       "vvv", o, i, value) != CC_ERROR;
+		return psyco_generic_call(po, PySequence_SetItem,
+                                          CfNoReturnValue|CfPyErrIfNonNull,
+                                          "vvv", o, i, value) != NULL;
 	else
-		return psyco_flag_call(po, PySequence_DelItem,
-				       CfReturnFlag|CfPyErrIfNonNull,
-				       "vv", o, i) != CC_ERROR;
+		return psyco_generic_call(po, PySequence_DelItem,
+                                          CfNoReturnValue|CfPyErrIfNonNull,
+                                          "vv", o, i) != NULL;
 }
 
 DEFINEFN
@@ -194,13 +199,22 @@ bool PsycoSequence_SetSlice(PsycoObject* po, vinfo_t* o,
 {
 	/* XXX implement me */
 	if (value != NULL)
-		return psyco_flag_call(po, PySequence_SetSlice,
-				       CfReturnFlag|CfPyErrIfNonNull,
-				       "vvvv", o, ilow, ihigh, value)!= CC_ERROR;
+		return psyco_generic_call(po, PySequence_SetSlice,
+                                          CfNoReturnValue|CfPyErrIfNonNull,
+                                          "vvvv", o, ilow, ihigh, value)!=NULL;
 	else
-		return psyco_flag_call(po, PySequence_DelSlice,
-				       CfReturnFlag|CfPyErrIfNonNull,
-				       "vvv", o, ilow, ihigh) != CC_ERROR;
+		return psyco_generic_call(po, PySequence_DelSlice,
+                                          CfNoReturnValue|CfPyErrIfNonNull,
+                                          "vvv", o, ilow, ihigh) != NULL;
+}
+
+DEFINEFN
+vinfo_t* PsycoSequence_Contains(PsycoObject* po, vinfo_t* seq, vinfo_t* ob)
+{
+	/* XXX implement me */
+	return psyco_generic_call(po, PySequence_Contains,
+				  CfReturnNormal|CfPyErrIfNeg,
+				  "vv", seq, ob);
 }
 
 
@@ -266,6 +280,9 @@ vinfo_t* PsycoNumber_Invert(PsycoObject* po, vinfo_t* vi)
 #define NB_TERNOP(nb_methods, slot) \
 		((ternaryfunc*)(& ((char*)nb_methods)[slot] ))
 
+#define IS_IMPLEMENTED(x)   \
+  ((x) == NULL || ((x)->source != CompileTime_NewSk(&psyco_skNotImplemented)))
+
 
 /* the 'cimpl_xxx()' functions are called at run-time, to do things
    we give up to write at the meta-level in the PsycoXxx() functions. */
@@ -325,39 +342,38 @@ static vinfo_t* binary_op1(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 			x = Psyco_META2(po, slotw,
 					CfReturnRef|CfPyErrNotImplemented,
 					"vv", v, w);
-			if (x != psyco_viNotImplemented)
+			if (IS_IMPLEMENTED(x))
 				return x;  /* may be NULL */
 			vinfo_decref(x, po); /* can't do it */
 			slotw = NULL;
 		}
 		x = Psyco_META2(po, slotv,
 				CfReturnRef|CfPyErrNotImplemented, "vv", v, w);
-		if (x != psyco_viNotImplemented)
+		if (IS_IMPLEMENTED(x))
 			return x;
 		vinfo_decref(x, po); /* can't do it */
 	}
 	if (slotw) {
 		x = Psyco_META2(po, slotw, CfReturnRef|CfPyErrNotImplemented,
 				"vv", v, w);
-		if (x != psyco_viNotImplemented)
+		if (IS_IMPLEMENTED(x))
 			return x;
 		vinfo_decref(x, po); /* can't do it */
 	}
 	if (!NEW_STYLE_NUMBER(vtp) || !NEW_STYLE_NUMBER(wtp)) {
 		/* no optimization for the part specific to old-style numbers */
 		return psyco_generic_call(po, cimpl_oldstyle_binary_op1,
-                                          CfReturnRef|CfPyErrIfNull,
+                                          CfReturnRef|CfPyErrNotImplemented,
 					  "vvl", v, w, op_slot);
 	}
-	vinfo_incref(psyco_viNotImplemented);
-	return psyco_viNotImplemented;
+	return psyco_vi_NotImplemented();
 }
 
 static vinfo_t* binary_op(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 			  const int op_slot, const char *op_name)
 {
 	vinfo_t* result = binary_op1(po, v, w, op_slot);
-	if (result == psyco_viNotImplemented) {
+	if (!IS_IMPLEMENTED(result)) {
 		vinfo_decref(result, po);
 		PycException_SetFormat(po, PyExc_TypeError,
 			"unsupported operand type(s) for %s: '%s' and '%s'",
@@ -389,7 +405,7 @@ DEFINEFN
 vinfo_t* PsycoNumber_Add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
 	vinfo_t* result = binary_op1(po, v, w, NB_SLOT(nb_add));
-	if (result == psyco_viNotImplemented) {
+	if (!IS_IMPLEMENTED(result)) {
 		PySequenceMethods* m;
 		vinfo_decref(result, po);
 		m = Psyco_FastType(v)->tp_as_sequence;

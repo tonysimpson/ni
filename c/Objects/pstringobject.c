@@ -42,8 +42,7 @@ inline vinfo_t* PsycoCharacter_NEW(vinfo_t* chrval)
 	result->array = array_new(CHARACTER_CHAR+1);
 	result->array->items[OB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyString_Type)));
-	result->array->items[VAR_OB_SIZE] = psyco_viOne;
-	vinfo_incref(psyco_viOne);
+	result->array->items[VAR_OB_SIZE] = psyco_vi_One();
 	result->array->items[CHARACTER_CHAR] = chrval;
 	return result;
 }

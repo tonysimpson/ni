@@ -1,4 +1,5 @@
 #include "psycofuncobject.h"
+#include "pclassobject.h"
 
 
 static vinfo_t* meta_psycofunction_call(PsycoObject* po, vinfo_t* func,

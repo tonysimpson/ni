@@ -49,6 +49,7 @@ static vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 		int flags = ml->ml_flags;
 		int tuplesize;
 		vinfo_t* carg;
+                char* argumentlist = "vv";
 
 		vinfo_t* vself = get_array_item(po, func, CFUNC_M_SELF);
 		if (vself == NULL)
@@ -71,7 +72,8 @@ static vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 			if (tuplesize != 0)
 				/* if size unknown or known to be != 0 */
 				goto use_proxy;
-			carg = psyco_viZero;
+			carg = NULL;
+                        argumentlist = "vl";
 			break;
 		case METH_O:
 			tuplesize = PsycoTuple_Load(tuple);
@@ -84,7 +86,7 @@ static vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 			goto use_proxy;
 		}
 		return Psyco_META2(po, ml->ml_meth, CfReturnRef|CfPyErrIfNull,
-				   "vv", vself, carg);
+				   argumentlist, vself, carg);
 	}
 
 	/* default, slow version */

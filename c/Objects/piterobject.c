@@ -30,12 +30,10 @@ static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
 	set_array_item(po, v, SEQITER_IT_INDEX, index_plus_1);
 
 	if (result == NULL) {
-		condition_code_t cc;
-		cc = PycException_Matches(po, PyExc_IndexError);
-		if (cc != CC_ERROR && runtime_condition_t(po, cc)) {
-			vinfo_incref(psyco_viNone);
+		vinfo_t* matches = PycException_Matches(po, PyExc_IndexError);
+		if (runtime_NON_NULL_t(po, matches)) {
 			PycException_SetVInfo(po, PyExc_StopIteration,
-					      psyco_viNone);
+					      psyco_vi_None());
 		}
 	}
 	return result;
