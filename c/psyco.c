@@ -561,15 +561,16 @@ static PyObject* Psyco_selective(PyObject* self, PyObject* args)
 
   /* Sanity check argument */
   if (ticks < 0) {
+    PyErr_SetString(PyExc_ValueError, "negative ticks");
     return NULL;
   }
 
   /* Allocate a dict to hold counters and statistics in */
   if (funcs == NULL) {
     funcs = PyDict_New();
+    if (funcs == NULL)
+      return NULL;
   }
-
-  assert(funcs != NULL);
 
   /* Set Python profile function to our selective compilation function */
   PyEval_SetProfile((Py_tracefunc)do_selective, NULL);
