@@ -8,7 +8,7 @@
 
 #include <Python.h>
 
-#define PSYCO_VERSION_HEX          0x010400f0   /* 1.4 */
+#define PSYCO_VERSION_HEX          0x010500a0   /* 1.5a */
 #define HAVE_PYTHON_SUPPORT        (PY_VERSION_HEX>=0x02020200)   /* 2.2.2 */
 
 

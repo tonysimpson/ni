@@ -46,6 +46,7 @@ except ImportError, e:
 
 # Publish important data by importing them in the package
 from support import __version__, error, warning, _getrealframe, _getemulframe
+from support import version_info, __version__ as hexversion
 from core import full, profile, background, runonly, stop, cannotcompile
 from core import log, bind, unbind, proxy, unproxy, dumpcodebuf
 
