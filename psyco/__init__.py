@@ -129,24 +129,13 @@ __builtin__.__in_psyco__ = 0
 
 
 ###########################################################################
-# Support for Python's warnings is not complete, because it
-# uses sys._getframe() which will give strange results on a mixed Psyco-
-# and Python-style stack frame.
-# We work around this by having sys._getframe() always raise ValueError.
-# The warning subsystem will then apply the filters globally instead of
-# on a per-module basis.
+# sys._getframe() gives strange results on a mixed Psyco- and Python-style
+# stack frame. Psyco provides a replacement that partially emulates Python
+# frames from Psyco frames. Be aware that the f_back fields are not
+# correctly set up.
 
-def disabled_getframe(n=0):
-    global _erronce
-    if not _erronce:
-        # cannot use Warnings, I guess it would cause an endless loop
-        print >> sys.stderr, 'psyco: sys._getframe() not supported; support for warnings is only partial'
-        _erronce = 1
-    raise ValueError, 'sys._getframe() disabled for Psyco'
-
-sys_getframe = sys._getframe  # old value
-sys._getframe = disabled_getframe
-_erronce = 0
+original_sys_getframe = sys._getframe  # old value, if you need it
+sys._getframe = _psyco._getframe
 
 
 ###########################################################################

@@ -289,5 +289,8 @@ EXTERNFN code_t* psyco_pycompiler_mainloop(PsycoObject* po);
    should we report the exception? */
 #define OUT_OF_MEMORY()      Py_FatalError("psyco: out of memory")
 
+/* Thread-specific state */
+EXTERNFN PyObject* psyco_thread_dict(void);
+
 
 #endif /* _PSYCO_H */

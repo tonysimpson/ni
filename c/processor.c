@@ -42,6 +42,9 @@ static code_t glue_run_code[] = {
   PUSH_REG_INSTR(REG_386_EBX),  /*   PUSH EBX        */
   PUSH_REG_INSTR(REG_386_ESI),  /*   PUSH ESI        */
   PUSH_REG_INSTR(REG_386_EDI),  /*   PUSH EDI        */
+  0x8B, 0x5C, 0x24, 32,         /*   MOV EBX, [ESP+32] (finfo frame stack ptr) */
+  0x6A, -1,                     /*   PUSH -1         */
+  0x89, 0x23,                   /*   MOV [EBX], ESP  */
   0xEB, +5,                     /*   JMP Label2      */
                                 /* Label1:           */
   0x83, 0xE9, 4,                /*   SUB ECX, 4      */
@@ -58,8 +61,9 @@ static code_t glue_run_code[] = {
 };
 
 typedef PyObject* (*glue_run_code_fn) (code_t* code_target,
-                                      long* stack_end,
-                                      long* initial_stack);
+				       long* stack_end,
+				       long* initial_stack,
+				       struct stack_frame_info_s*** finfo);
 
 #ifdef COPY_CODE_IN_HEAP
 static glue_run_code_fn glue_run_code_1;
@@ -69,9 +73,11 @@ static glue_run_code_fn glue_run_code_1;
 
 DEFINEFN
 PyObject* psyco_processor_run(CodeBufferObject* codebuf,
-                              long initial_stack[], int argc)
+                              long initial_stack[], int argc,
+                              struct stack_frame_info_s*** finfo)
 {
-  return glue_run_code_1(codebuf->codeptr, initial_stack + argc, initial_stack);
+  return glue_run_code_1(codebuf->codeptr, initial_stack + argc,
+                         initial_stack, finfo);
 }
 
 /* call a C function with a variable number of arguments */
@@ -172,8 +178,8 @@ code_t* psyco_finish_return(PsycoObject* po, NonVirtualSource retval)
      which is now at the top of the stack, and finishes to clean the
      stack by removing everything left past the return address
      (typically the arguments, although it could be anything). */
-  retpos -= INITIAL_STACK_DEPTH+4;
-  extra_assert(0<=retpos);
+  retpos -= INITIAL_STACK_DEPTH;
+  extra_assert(0<retpos);
   if (retpos >= 0x8000)
     {
       /* uncommon case: too many stuff left in the stack for the 16-bit
@@ -1245,7 +1251,8 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 
 DEFINEFN
 vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
-			  Source argsources[], int argcount)
+			  Source argsources[], int argcount,
+			  struct stack_frame_info_s* finfo)
 {
 	/* this is a simplified version of psyco_generic_call() which
 	   assumes Psyco's calling convention instead of the C's. */
@@ -1259,17 +1266,30 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 		PUSH_CC_FLAGS();
 	for (i=0; i<REG_TOTAL; i++)
 		NEED_REGISTER(i);
+	finfo->stack_depth = po->stack_depth;
+	SAVE_IMMED_TO_EBP_BASE((long) finfo, INITIAL_STACK_DEPTH);
 	initial_depth = po->stack_depth;
+	CALL_SET_ARG_IMMED(-1, argcount, argcount+1);
 	p = argsources;
 	for (i=argcount; i--; p++)
-		CALL_SET_ARG_FROM_RT(*p, i, argcount);
-	CALL_C_FUNCTION(codebuf->codeptr,   argcount);
+		CALL_SET_ARG_FROM_RT(*p, i, argcount+1);
+	CALL_C_FUNCTION(codebuf->codeptr,   argcount+1);
 	po->stack_depth = initial_depth;  /* callee removes arguments */
+	SAVE_IMM8_TO_EBP_BASE(-1, INITIAL_STACK_DEPTH);
 	if (ccflags)
 		POP_CC_FLAGS();
 	END_CODE
 	return generic_call_check(po, CfReturnRef|CfPyErrIfNull,
 				  new_rtvinfo(po, REG_FUNCTIONS_RETURN, true));
+}
+
+DEFINEFN struct stack_frame_info_s**
+psyco_next_stack_frame(struct stack_frame_info_s** finfo)
+{
+	/* Hack to pick directly from the machine stack the stored
+	   "stack_frame_info_t*" pointers */
+	return (struct stack_frame_info_s**)
+		(((char*) finfo) - (*finfo)->stack_depth);
 }
 
 

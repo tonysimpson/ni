@@ -110,7 +110,7 @@ class CodeBuf:
         #self.reverse_lookup = []  # list of (offset, codebuf pointing there)
         self.specdict = []
         if self.data:
-            codeboundary.append((self.addr+len(self.data), self))
+            codeboundary.append((self.addr+len(self.data)-1, self))
         #for i in range(4, len(data)+1):
         #    offset, = struct.unpack('l', data[i-4:i])
         #    rawtargets.setdefault(addr+i+offset, {})[self] = 1

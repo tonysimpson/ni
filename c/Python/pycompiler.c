@@ -879,6 +879,52 @@ inline void PsycoTraceBack_Here(PsycoObject* po, int lasti)
 }
 
 
+#define FRAME_STACK_ALLOC_BY	83   /* about 1KB */
+
+DEFINEFN
+stack_frame_info_t* psyco_finfo(PsycoObject* callee)
+{
+	Source sglobals;
+	static stack_frame_info_t* current = NULL;
+	static stack_frame_info_t* end = NULL;
+	if (current == end) {
+		current = (stack_frame_info_t*)
+			PyCore_MALLOC(FRAME_STACK_ALLOC_BY *
+				      sizeof(stack_frame_info_t));
+		if (current == NULL)
+			OUT_OF_MEMORY();
+		end = current + FRAME_STACK_ALLOC_BY;
+	}
+	current->co = callee->pr.co;
+	sglobals = callee->vlocals.items[INDEX_LOC_GLOBALS]->source;
+	if (is_compiletime(sglobals))
+		current->globals = (PyObject*) CompileTime_Get(sglobals)->value;
+	else
+		current->globals = NULL;  /* uncommon */
+	
+	return current++;
+}
+
+DEFINEFN
+PyFrameObject* psyco_emulate_frame(stack_frame_info_t* finfo,
+				   PyObject* default_globals)
+{
+	PyFrameObject* back;
+	PyFrameObject* result;
+	PyThreadState* tstate = PyThreadState_GET();
+	
+	/* frame objects are not created in stack order
+	   with Psyco, so it's probably better not to
+	   create plain wrong chained lists */
+	back = tstate->frame;
+	tstate->frame = NULL;
+	result = PyFrame_New(tstate, finfo->co,
+			     finfo->globals!=NULL?finfo->globals:default_globals,
+			     NULL);
+	tstate->frame = back;
+	return result;
+}
+
  /***************************************************************/
 /***                      Initialization                       ***/
  /***************************************************************/

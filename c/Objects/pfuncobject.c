@@ -94,6 +94,8 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 				return NULL;
 
 			co = (PyCodeObject*) PyFunction_GET_CODE(f);
+			if (PyCode_GetNumFree(co) > 0)
+				goto fallback;
 			glob = PyFunction_GET_GLOBALS(f);
 			defl = PyFunction_GET_DEFAULTS(f);
 			Py_INCREF(glob);
@@ -135,18 +137,18 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 						 arg, po->pr.auto_recursion);
 		}
 	}
-	else {
+
+   fallback:
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
-		return psyco_generic_call(po, PyFunction_Type.tp_call,
-					  CfReturnRef|CfPyErrIfNull,
-					  "vvv", func, arg, kw);
+        return psyco_generic_call(po, PyFunction_Type.tp_call,
+                                  CfReturnRef|CfPyErrIfNull,
+                                  "vvv", func, arg, kw);
 #else
-		/* PyFunction_Type.tp_call == NULL... */
-		return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
-					  CfReturnRef|CfPyErrIfNull,
-					  "vvv", func, arg, kw);
+        /* PyFunction_Type.tp_call == NULL... */
+        return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
+                                  CfReturnRef|CfPyErrIfNull,
+                                  "vvv", func, arg, kw);
 #endif
-	}
 }
 
 

@@ -48,6 +48,10 @@
 # define METH_O           0x0008
 #endif
 
+#ifndef PyCode_GetNumFree
+# define PyCode_GetNumFree(op) (PyTuple_GET_SIZE((op)->co_freevars))
+#endif
+
 #define MAX3(a,b,c)  ((a)>(b)?((a)>(c)?(a):(c)):(b)>(c)?(b):(c))
 
 
@@ -376,5 +380,16 @@ inline void pyc_data_delete(pyc_data_t* pyc) {
 	PyCore_FREE(pyc);
 }
 
+/* to keep a trace of the Psyco stack frames */
+typedef struct stack_frame_info_s {
+	int stack_depth;
+	PyCodeObject* co;
+	PyObject* globals;  /* NULL if not compile-time */
+} stack_frame_info_t;
+
+EXTERNFN stack_frame_info_t* psyco_finfo(PsycoObject* callee);
+     
+EXTERNFN PyFrameObject* psyco_emulate_frame(stack_frame_info_t* finfo,
+					    PyObject* default_globals);
 
 #endif /* _PYCOMPILER_H */

@@ -1,7 +1,7 @@
 import sys, os, StringIO, psyco
 
 
-NO_SYS_GETFRAME = """using sys._getframe() fails with Psyco"""
+#NO_SYS_GETFRAME = """using sys._getframe() fails with Psyco"""
 
 #NO_THREAD = """XXX not reliable, check if Psyco is generally
 #        unreliable with threads or if there is another problem"""
@@ -11,7 +11,7 @@ NO_SYS_GETFRAME = """using sys._getframe() fails with Psyco"""
 #NO_SYS_EXC = """XXX Psyco does not set sys.exc_xxx upon exception"""
 
 
-SKIP = {'test_gc': NO_SYS_GETFRAME,
+SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's limited frames",
 #        'test_thread': NO_THREAD,
 #        'test_asynchat': NO_THREAD,
 #        'test_extcall': 'prints to stdout a function object that Psyco rebinds',
@@ -23,7 +23,7 @@ SKIP = {'test_gc': NO_SYS_GETFRAME,
 #        'test_string': NO_SYS_EXC,
 #        'test_unicode': NO_SYS_EXC,
 #        'test_inspect': 'gets confused with Psyco rebinding functions',
-        'test_profilehooks': NO_SYS_GETFRAME,
+        'test_profilehooks': 'profiling does not see all functions run by Psyco',
         'test_profile': 'profiling does not see all functions run by Psyco',
         'test_repr': 'self-nested tuples and lists not supported',
         'test_builtin': 'vars() and locals() not supported',
@@ -36,21 +36,7 @@ SKIP = {'test_gc': NO_SYS_GETFRAME,
 if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
     SKIP['test_popen2'] = 'gets confused by Psyco debugging output to stderr'
 
-GROUP_TESTS = 40    # number of tests to run per Python process
-
-
-# Per-module user-filtered warnings don't work correctly
-# because sys._getframe() cannot see the Psyco frames.
-# Some tests expect an OverflowError to be raised when
-# an overflow is detected. To work around this, we
-# globally force these to raise an error.
-try:
-    OverflowWarning
-except NameError:
-    pass   # Python < 2.2
-else:
-    import warnings
-    warnings.filterwarnings("error", "", OverflowWarning, "")
+GROUP_TESTS = 5    # number of tests to run per Python process
 
 
 for dir in sys.path:
@@ -139,7 +125,8 @@ def main(testlist, verbose=0, use_resources=None):
     
     if type(testlist) == type(""):
         testlist = [testlist]
-    testlist = filter(python_check, testlist)
+    if not verbose:
+        testlist = filter(python_check, testlist)
 
     # Psyco selective compilation is only activated here
     psyco.jit(1)
@@ -150,7 +137,7 @@ def main(testlist, verbose=0, use_resources=None):
     for test in testlist:
         for i in range(repeat_counter):
             print '%s, Psyco iteration %d' % (test, i+1)
-            ok = regrtest.runtest(test, 0, 0, 0)
+            ok = regrtest.runtest(test, 0, verbose, 0)
             special_cleanup()
             if ok == 0:
                 return 0

@@ -26,8 +26,10 @@
    of values pushed are determined by the saved arguments_count of
    the 'codebuf'.
 */
+struct stack_frame_info_s;
 EXTERNFN PyObject* psyco_processor_run(CodeBufferObject* codebuf,
-                                       long initial_stack[], int argc);
+                                       long initial_stack[], int argc,
+                                       struct stack_frame_info_s*** finfo);
 
 /* return a new vinfo_t* meaning `in the processor flags, true if <cc>',
    as an integer 0 or 1. The source of the vinfo_t* is compile-time
@@ -237,13 +239,20 @@ inline void psyco_call_void(PsycoObject* po, void* c_function) {
    the run-time sources for the arguments, as specified by
    psyco_build_frame(). */
 EXTERNFN vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
-                                   Source argsources[], int argcount);
+				   Source argsources[], int argcount,
+				   struct stack_frame_info_s* finfo);
+
 
 inline int get_arguments_count(vinfo_array_t* vlocals) {
 	int retpos = getstack(vlocals->items[INDEX_LOC_CONTINUATION]->source);
 	extra_assert(retpos != RunTime_StackNone);
 	return (retpos - (INITIAL_STACK_DEPTH+4)) / 4;
 }
+
+/* find the next stack frame
+   ("next" = more recent in time = towards innermost frames) */
+EXTERNFN struct stack_frame_info_s**
+psyco_next_stack_frame(struct stack_frame_info_s** finfo);
 
 
 /*****************************************************************/

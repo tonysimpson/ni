@@ -456,6 +456,17 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define XCHG_REG_AND_EBP_BASE(src, stack_pos)		\
   INSTR_EBP_BASE(0x87, (src)<<3, stack_pos)	/* XCHG src, [EBP-stack_pos] */
 
+#define SAVE_IMMED_TO_EBP_BASE(immed, stack_pos)   do { \
+  INSTR_EBP_BASE(0xC7, 0<<3, stack_pos);        /* MOV [EBP-stack_pos], immed */\
+  *(long*)code = (immed);                               \
+  code += 4;                                            \
+} while (0)
+
+#define SAVE_IMM8_TO_EBP_BASE(imm8, stack_pos)     do { \
+  INSTR_EBP_BASE(0xC6, 0<<3, stack_pos);    /* MOV byte [EBP-stack_pos], imm8 */\
+  *code++ = (imm8);                                     \
+} while (0)
+
 #define LOAD_REG_FROM_RT(source, dst)			\
   INSTR_MODRM_FROM_RT(source, 0x8B, (dst)<<3)   /* MOV dst, (...) */
 

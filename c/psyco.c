@@ -248,6 +248,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   PsycoObject* mypo;
   Source* sources;
   vinfo_t* result;
+  stack_frame_info_t* finfo;
   int tuple_size, argcount, defcount=-2;
 
   if (is_proxycode(co))
@@ -256,6 +257,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
     if (--recursion < 0)  /* the recursion limit only applies to non-proxified
                              functions */
       goto fail_to_default;
+  extra_assert(PyCode_GetNumFree(co) == 0);
   
   tuple_size = PsycoTuple_Load(arg_tuple);
   if (tuple_size == -1)
@@ -285,6 +287,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   if (mypo == NULL)
     goto pyerr;
   argcount = get_arguments_count(&mypo->vlocals);
+  finfo = psyco_finfo(mypo);
 
   /* compile the function (this frees mypo) */
   codebuf = psyco_compile_code(mypo,
@@ -292,7 +295,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
 
   /* get the run-time argument sources and push them on the stack
      and write the actual CALL */
-  result = psyco_call_psyco(po, codebuf, sources, argcount);
+  result = psyco_call_psyco(po, codebuf, sources, argcount, finfo);
   PyCore_FREE(sources);
   return result;
 
@@ -353,6 +356,35 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   return NULL;
 }
 
+DEFINEFN
+PyObject* psyco_thread_dict()
+{
+  static PyObject* key = NULL;
+  PyObject* dict = PyThreadState_GetDict();
+  PyObject* result;
+  bool err;
+
+  if (dict == NULL)
+    return NULL;
+  if (key == NULL)
+    {
+      key = PyString_InternFromString("Psyco");
+      if (key == NULL)
+        return NULL;
+    }
+  result = PyDict_GetItem(dict, key);
+  if (result == NULL)
+    {
+      result = PyDict_New();
+      if (result == NULL)
+        return NULL;
+      err = PyDict_SetItem(dict, key, result);
+      Py_DECREF(result);  /* one reference left in 'dict' */
+      if (err)
+        result = NULL;
+    }
+  return result;
+}
 
  /***************************************************************/
 /***   PsycoFunctionObjects                                    ***/
@@ -428,7 +460,7 @@ PyObject* psyco_proxycode(PyFunctionObject* func, int rec)
       Py_INCREF(code);
       return (PyObject*) code;
     }
-  if (PyTuple_Size(code->co_freevars) > 0)
+  if (PyCode_GetNumFree(code) > 0)
     {
       /* it would be dangerous to continue in this case: the calling
          convention changes when a function has free variables */
@@ -522,8 +554,13 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 {
 	PyObject* codebuf;
 	PyObject* result;
+	PyObject* tdict;
+	PyObject* tmp;
+	PyObject* f;
+	stack_frame_info_t** finfo;
         long* initial_stack;
 	int key;
+	bool err;
 
 	if (kw != NULL && PyDict_Check(kw) && PyDict_Size(kw) > 0) {
 		/* keyword arguments not supported yet */
@@ -618,20 +655,41 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 
 	if (codebuf == Py_None)
 		goto unsupported;
-	
+
+	/* over the current Python frame, a lightweight chained list of
+	   Psyco frames will be built. Mark the current Python frame as
+	   the starting point of this chained list. */
+	f = PyEval_GetFrame();
+	if (f == NULL) {
+		debug_printf(("psyco: warning: empty Python frame stack\n"));
+		goto unsupported;
+	}
+	tdict = psyco_thread_dict();            if (tdict==NULL) return NULL;
+	tmp   = PyInt_FromLong((long) &finfo);  if (tmp==NULL) return NULL;
+	extra_assert(PyDict_GetItem(tdict, f) == NULL);
+	err   = PyDict_SetItem(tdict, f, tmp);
+	Py_XDECREF(tmp);
+	if (err) return NULL;
+	/* Warning, no 'return' between this point and the PyDict_DelItem()
+	   below */
+        
 	/* get the actual arguments */
 	initial_stack = (long*) (&PyTuple_GET_ITEM(arg, 0));
 
 	/* run! */
         Py_INCREF(codebuf);
 	result = psyco_processor_run((CodeBufferObject*) codebuf, initial_stack,
-				     PyTuple_GET_SIZE(arg));
+				     PyTuple_GET_SIZE(arg), &finfo);
 	Py_DECREF(codebuf);
 	psyco_trash_object(NULL);  /* free any trashed object now */
 
 #if CODE_DUMP >= 2
         psyco_dump_code_buffers();
 #endif
+	if (PyDict_DelItem(tdict, f)) {
+		Py_XDECREF(result);
+		result = NULL;
+	}
 
 	if (result==NULL)
 		extra_assert(PyErr_Occurred());
@@ -1012,6 +1070,74 @@ static PyObject* Psyco_unproxycode(PyObject* self, PyObject* args)
 	return func;
 }
 
+/* replacement for sys._getframe() */
+static PyObject* Psyco_getframe(PyObject* self, PyObject* args)
+{
+	PyObject* finfo_start;
+	PyObject* tdict = psyco_thread_dict();
+	PyFrameObject* f = (PyFrameObject*) PyEval_GetFrame();
+	int depth = 0;
+	if (!PyArg_ParseTuple(args, "|i:_getframe", &depth))
+		return NULL;
+
+        /* Whenever we run Psyco-produced machine code, we mark the current
+           Python frame as the starting point of a chained list of Psyco
+           frames. The machine code will update this chained list so that
+           psyco_next_stack_frame() can be used to visit the list from
+           the outermost to the innermost frames. Note that the list does
+           not contain the first Psyco frame, the one directly run by a
+           call to psyco_processor_run(). This still gives the expected
+           result, because PsycoFunctionObjects are only supposed to be
+           called by proxy codes (see psyco_proxycode()). This proxy
+           code itself has a frame. It replaces the missing the missing
+           Psyco frame.
+           XXX this would no longer work if we filled the emulated frames
+               with more information, like local variables */
+        
+	while (f != NULL) {
+		/* is this Python frame the starting point of a chained
+		   list of Psyco frames ? */
+		finfo_start = PyDict_GetItem(tdict, (PyObject*) f);
+		if (finfo_start != NULL) {
+			/* Yes. Get the list start. */
+			stack_frame_info_t** finfo;
+			stack_frame_info_t** f1;
+			long v = PyInt_AsLong(finfo_start);
+			if (v==-1) {
+				extra_assert(PyErr_Occurred());
+				return NULL;
+			}
+			finfo = *((stack_frame_info_t***) v);
+
+			/* Count the frames in the list. The end is marked by
+			   a pointer with an odd integer value (actually the
+			   least significant byte of the integer value is -1,
+			   but real pointers cannot be odd at all because they
+			   are aligned anyway). */
+			for (f1 = finfo; (((long)(*f1)) & 1) == 0;
+			     f1 = psyco_next_stack_frame(f1))
+				depth--;
+
+			if (depth < 0) {
+				/* The requested frame is one of these Psyco
+				   frames */
+				while (++depth != 0)
+					finfo = psyco_next_stack_frame(finfo);
+				return (PyObject*) psyco_emulate_frame
+							(*finfo, f->f_globals);
+			}
+		}
+		if (depth-- == 0) {
+			/* the result is a real Python frame */
+			Py_INCREF((PyObject*) f);
+			return (PyObject*) f;
+		}
+		f = f->f_back;
+	}
+	PyErr_SetString(PyExc_ValueError, "call stack is not deep enough");
+	return NULL;
+}
+
 /* Initialize selective compilation */
 static PyObject* Psyco_selective(PyObject* self, PyObject* args)
 {
@@ -1051,10 +1177,23 @@ static char unproxycode_doc[] =
 Return a new copy of the original function that was used to build the\n\
 given proxy code object. Raise psyco.error if code is not a proxy.";
 
+static char getframe_doc[] =
+"_getframe([depth]) -> frameobject\n\
+\n\
+Return a frame object from the call stack. This is a replacement for the\n\
+original sys._getframe() function that can return Psyco frames as well.\n\
+When imported, Psyco installs this function as sys._getframe() and stores\n\
+the original function in psyco.original_sys_getframe().\n\
+\n\
+Note that the Python frame emulation is partial. In particular, do not\n\
+use the f_back fields but always call _getframe() to parse the whole\n\
+stack.";
+
 static PyMethodDef PsycoMethods[] = {
 	{"proxycode",	&Psyco_proxycode,	METH_VARARGS,	proxycode_doc},
 	{"unproxycode",	&Psyco_unproxycode,	METH_VARARGS,	unproxycode_doc},
-	{"selective",   &Psyco_selective,	METH_VARARGS},
+        {"_getframe",	&Psyco_getframe,	METH_VARARGS,	getframe_doc},
+	{"selective",	&Psyco_selective,	METH_VARARGS},
 #if CODE_DUMP
 	{"dumpcodebuf",	&Psyco_dumpcodebuf,	METH_VARARGS},
 #endif
