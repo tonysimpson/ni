@@ -252,7 +252,7 @@ struct vinfo_s {
 
 /* allocation */
 EXTERNVAR void** vinfo_linked_list;
-EXTERNVAR void* vinfo_malloc_block(void);
+EXTERNFN void* vinfo_malloc_block(void);
 /* private! Do not use */
 #ifdef PSYCO_NO_LINKED_LISTS
 # define VINFO_FREE_1(vi)   PyCore_FREE(vi)
