@@ -17,11 +17,7 @@
 
  /* set to 0 to disable all debugging checks and output */
 #ifndef PSYCO_DEBUG
-# ifdef NDEBUG
-#  define PSYCO_DEBUG   0
-# else
-#  define PSYCO_DEBUG   1
-# endif
+# define PSYCO_DEBUG   0
 #endif
 
 
