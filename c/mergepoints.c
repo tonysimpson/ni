@@ -526,15 +526,9 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
      be unreachable. */
   if (co->co_flags & CO_GENERATOR)
     {
-#if PY_VERSION_HEX < 0x02040000
       debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
-                   ("generator not supported at %s\n",
+                   ("unsupported generator at %s\n",
                     PyCodeObject_NAME(co)));
-#else
-      debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
-                   ("generator or generator expression not supported at %s\n",
-                    PyCodeObject_NAME(co)));
-#endif
       Py_INCREF(Py_None);
       return Py_None;
     }
