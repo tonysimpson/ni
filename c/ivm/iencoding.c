@@ -161,7 +161,8 @@ code_t* psyco_compute_cc(PsycoObject* po, code_t* code)
 	vinfo_t* v = po->ccreg;
 	condition_code_t cc = cc_from_vsource(v->source);
 
-	INSN_push_cc(cc);
+	INSN_normalize_cc(cc);
+	INSN_flag_push();
         INSNPUSHED(1);
 
 	v->source = RunTime_TOSF(false, true);
@@ -228,10 +229,16 @@ DEFINEFN
 vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
 		      long immed_true, long immed_false)
 {
+	extra_assert(cc == CC_FLAG || cc == CC_NOT_FLAG);
+	if (cc == CC_NOT_FLAG) {
+		long tmp = immed_true;
+		immed_true = immed_false;
+		immed_false = tmp;
+	}
 	BEGIN_CODE
-        INSN_push_cc(cc);
-        INSN_immed(-1);
-        INSN_add();
+	INSN_flag_push();
+	INSN_immed(-1);
+	INSN_add();
         INSN_immed(immed_false - immed_true);
         INSN_and();
         INSN_immed(immed_true);

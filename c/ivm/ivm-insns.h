@@ -88,17 +88,9 @@ inline code_t* META_dynamicfreq2(code_t* code) {
 #define INSN_normalize_cc(cc)    do {                   \
   if ((cc) == CC_NOT_FLAG) {                            \
     INSN_flag_push();                                   \
-    INSN_not();                                         \
-    INSN_flag_pop();                                    \
+    INSN_cmpz();                                        \
     if (po->ccreg != NULL) psyco_inverted_cc(po);       \
   }                                                     \
-} while (0)
-#define INSN_push_cc(cc)    do {                \
-  extra_assert((int)(cc) < CC_TOTAL);           \
-  INSN_flag_push();                             \
-  if ((cc) == CC_NOT_FLAG) {                    \
-    INSN_not();                                 \
-  }                                             \
 } while (0)
 
 #if META_ASSERT_DEPTH

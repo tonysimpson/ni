@@ -26,8 +26,7 @@ default: $(addsuffix .default,$(GENERATED) mode_combine.pl)
 minimal: empty_mode_combine all
 
 empty_mode_combine:
-	-rm mode_combine.pl
-	touch mode_combine.pl
+	echo > mode_combine.pl
 
 
 $(GENERATED): insns.pl $(VMWRITER)

@@ -2,23 +2,23 @@
 DEFINEFN code_t* psyco_insn_settos(code_t* code, int arg1)
 {
 if (arg1 == 0) {
-INSN_EMIT_opcode(23);
+INSN_EMIT_opcode(22);
 INSN_EMIT_void(arg1);
-setlatestopcode(23);
+setlatestopcode(22);
 return(code);
 }
 else {
 if ((1 <= arg1) && (arg1 <= 255)) {
-INSN_EMIT_opcode(24);
+INSN_EMIT_opcode(23);
 INSN_EMIT_byte(arg1);
-setlatestopcode(24);
+setlatestopcode(23);
 return(code);
 }
 else {
 if (1 <= arg1) {
-INSN_EMIT_opcode(25);
+INSN_EMIT_opcode(24);
 INSN_EMIT_int(arg1);
-setlatestopcode(25);
+setlatestopcode(24);
 return(code);
 }
 else {
@@ -32,16 +32,16 @@ return NULL;
 DEFINEFN code_t* psyco_insn_pushn(code_t* code, word_t arg1)
 {
 if ((-128 <= arg1) && (arg1 <= 127)) {
-INSN_EMIT_opcode(26);
+INSN_EMIT_opcode(25);
 INSN_EMIT_char(arg1);
-setlatestopcode(26);
+setlatestopcode(25);
 return(code);
 }
 else {
 if (1) {
-INSN_EMIT_opcode(27);
+INSN_EMIT_opcode(26);
 INSN_EMIT_word_t(arg1);
-setlatestopcode(27);
+setlatestopcode(26);
 return(code);
 }
 else {
@@ -54,30 +54,30 @@ return NULL;
 DEFINEFN code_t* psyco_insn_immed(code_t* code, word_t arg1)
 {
 if (arg1 == 0) {
+INSN_EMIT_opcode(27);
+INSN_EMIT_void(arg1);
+setlatestopcode(27);
+return(code);
+}
+else {
+if (arg1 == 1) {
 INSN_EMIT_opcode(28);
 INSN_EMIT_void(arg1);
 setlatestopcode(28);
 return(code);
 }
 else {
-if (arg1 == 1) {
+if ((-128 <= arg1) && (arg1 <= 127)) {
 INSN_EMIT_opcode(29);
-INSN_EMIT_void(arg1);
+INSN_EMIT_char(arg1);
 setlatestopcode(29);
 return(code);
 }
 else {
-if ((-128 <= arg1) && (arg1 <= 127)) {
-INSN_EMIT_opcode(30);
-INSN_EMIT_char(arg1);
-setlatestopcode(30);
-return(code);
-}
-else {
 if (1) {
-INSN_EMIT_opcode(31);
+INSN_EMIT_opcode(30);
 INSN_EMIT_word_t(arg1);
-setlatestopcode(31);
+setlatestopcode(30);
 return(code);
 }
 else {
@@ -92,23 +92,23 @@ return NULL;
 DEFINEFN code_t* psyco_insn_s_push(code_t* code, int arg1)
 {
 if (arg1 == 0) {
-INSN_EMIT_opcode(32);
+INSN_EMIT_opcode(31);
 INSN_EMIT_void(arg1);
-setlatestopcode(32);
+setlatestopcode(31);
 return(code);
 }
 else {
 if ((1 <= arg1) && (arg1 <= 255)) {
-INSN_EMIT_opcode(33);
+INSN_EMIT_opcode(32);
 INSN_EMIT_byte(arg1);
-setlatestopcode(33);
+setlatestopcode(32);
 return(code);
 }
 else {
 if (1 <= arg1) {
-INSN_EMIT_opcode(34);
+INSN_EMIT_opcode(33);
 INSN_EMIT_int(arg1);
-setlatestopcode(34);
+setlatestopcode(33);
 return(code);
 }
 else {
@@ -122,23 +122,23 @@ return NULL;
 DEFINEFN code_t* psyco_insn_s_pop(code_t* code, int arg1)
 {
 if (arg1 == 0) {
-INSN_EMIT_opcode(35);
+INSN_EMIT_opcode(34);
 INSN_EMIT_void(arg1);
-setlatestopcode(35);
+setlatestopcode(34);
 return(code);
 }
 else {
 if ((1 <= arg1) && (arg1 <= 255)) {
-INSN_EMIT_opcode(36);
+INSN_EMIT_opcode(35);
 INSN_EMIT_byte(arg1);
-setlatestopcode(36);
+setlatestopcode(35);
 return(code);
 }
 else {
 if (1 <= arg1) {
-INSN_EMIT_opcode(37);
+INSN_EMIT_opcode(36);
 INSN_EMIT_int(arg1);
-setlatestopcode(37);
+setlatestopcode(36);
 return(code);
 }
 else {
@@ -152,16 +152,16 @@ return NULL;
 DEFINEFN code_t* psyco_insn_ref_push(code_t* code, word_t arg1)
 {
 if ((-128 <= arg1) && (arg1 <= 127)) {
-INSN_EMIT_opcode(38);
+INSN_EMIT_opcode(37);
 INSN_EMIT_char(arg1);
-setlatestopcode(38);
+setlatestopcode(37);
 return(code);
 }
 else {
 if (1) {
-INSN_EMIT_opcode(39);
+INSN_EMIT_opcode(38);
 INSN_EMIT_word_t(arg1);
-setlatestopcode(39);
+setlatestopcode(38);
 return(code);
 }
 else {
@@ -174,16 +174,16 @@ return NULL;
 DEFINEFN code_t* psyco_insn_assertdepth(code_t* code, word_t arg1)
 {
 if ((-128 <= arg1) && (arg1 <= 127)) {
-INSN_EMIT_opcode(41);
+INSN_EMIT_opcode(40);
 INSN_EMIT_char(arg1);
-setlatestopcode(41);
+setlatestopcode(40);
 return(code);
 }
 else {
 if (1) {
-INSN_EMIT_opcode(42);
+INSN_EMIT_opcode(41);
 INSN_EMIT_word_t(arg1);
-setlatestopcode(42);
+setlatestopcode(41);
 return(code);
 }
 else {
@@ -195,9 +195,9 @@ return NULL;
 
 DEFINEFN code_t* psyco_insn_dynamicfreq(code_t* code, word_t** arg1)
 {
-INSN_EMIT_opcode(43);
+INSN_EMIT_opcode(42);
 INSN_EMIT_placeholder_long(arg1);
-setlatestopcode(43);
+setlatestopcode(42);
 return(code);
 }
 
@@ -209,13 +209,21 @@ return(code);
 
 DEFINEFN code_t* psyco_insn_jcondnear(code_t* code, code_t** arg1)
 {
-INSN_EMIT_opcode(46);
+INSN_EMIT_opcode(45);
 INSN_EMIT_placeholder_byte(arg1);
-setlatestopcode(46);
+setlatestopcode(45);
 return(code);
 }
 
 DEFINEFN code_t* psyco_insn_jcondfar(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(46);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(46);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_jumpfar(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(47);
 INSN_EMIT_placeholder_long(arg1);
@@ -223,7 +231,7 @@ setlatestopcode(47);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_jumpfar(code_t* code, word_t** arg1)
+DEFINEFN code_t* psyco_insn_cbuild1(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(48);
 INSN_EMIT_placeholder_long(arg1);
@@ -231,7 +239,7 @@ setlatestopcode(48);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_cbuild1(code_t* code, word_t** arg1)
+DEFINEFN code_t* psyco_insn_cbuild2(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(49);
 INSN_EMIT_placeholder_long(arg1);
@@ -239,42 +247,34 @@ setlatestopcode(49);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_cbuild2(code_t* code, word_t** arg1)
-{
-INSN_EMIT_opcode(50);
-INSN_EMIT_placeholder_long(arg1);
-setlatestopcode(50);
-return(code);
-}
-
 DEFINEFN code_t* psyco_insn_decrefnz(code_t* code, word_t** arg1)
 {
-INSN_EMIT_opcode(56);
+INSN_EMIT_opcode(55);
 INSN_EMIT_placeholder_long(arg1);
-setlatestopcode(56);
+setlatestopcode(55);
 return(code);
 }
 
 DEFINEFN code_t* psyco_insn_ret(code_t* code, int arg1)
 {
 if (arg1 == 0) {
-INSN_EMIT_opcode(58);
+INSN_EMIT_opcode(57);
 INSN_EMIT_void(arg1);
-setlatestopcode(58);
+setlatestopcode(57);
 return(code);
 }
 else {
 if ((1 <= arg1) && (arg1 <= 255)) {
-INSN_EMIT_opcode(59);
+INSN_EMIT_opcode(58);
 INSN_EMIT_byte(arg1);
-setlatestopcode(59);
+setlatestopcode(58);
 return(code);
 }
 else {
 if (1 <= arg1) {
-INSN_EMIT_opcode(60);
+INSN_EMIT_opcode(59);
 INSN_EMIT_int(arg1);
-setlatestopcode(60);
+setlatestopcode(59);
 return(code);
 }
 else {
@@ -287,13 +287,21 @@ return NULL;
 
 DEFINEFN code_t* psyco_insn_pyenter(code_t* code, word_t** arg1)
 {
-INSN_EMIT_opcode(63);
+INSN_EMIT_opcode(62);
 INSN_EMIT_placeholder_long(arg1);
-setlatestopcode(63);
+setlatestopcode(62);
 return(code);
 }
 
 DEFINEFN code_t* psyco_insn_vmcall(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(64);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(64);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_ccall0(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(65);
 INSN_EMIT_placeholder_long(arg1);
@@ -301,7 +309,7 @@ setlatestopcode(65);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_ccall0(code_t* code, word_t** arg1)
+DEFINEFN code_t* psyco_insn_ccall1(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(66);
 INSN_EMIT_placeholder_long(arg1);
@@ -309,7 +317,7 @@ setlatestopcode(66);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_ccall1(code_t* code, word_t** arg1)
+DEFINEFN code_t* psyco_insn_ccall2(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(67);
 INSN_EMIT_placeholder_long(arg1);
@@ -317,7 +325,7 @@ setlatestopcode(67);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_ccall2(code_t* code, word_t** arg1)
+DEFINEFN code_t* psyco_insn_ccall3(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(68);
 INSN_EMIT_placeholder_long(arg1);
@@ -325,7 +333,7 @@ setlatestopcode(68);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_ccall3(code_t* code, word_t** arg1)
+DEFINEFN code_t* psyco_insn_ccall4(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(69);
 INSN_EMIT_placeholder_long(arg1);
@@ -333,7 +341,7 @@ setlatestopcode(69);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_ccall4(code_t* code, word_t** arg1)
+DEFINEFN code_t* psyco_insn_ccall5(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(70);
 INSN_EMIT_placeholder_long(arg1);
@@ -341,7 +349,7 @@ setlatestopcode(70);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_ccall5(code_t* code, word_t** arg1)
+DEFINEFN code_t* psyco_insn_ccall6(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(71);
 INSN_EMIT_placeholder_long(arg1);
@@ -349,7 +357,7 @@ setlatestopcode(71);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_ccall6(code_t* code, word_t** arg1)
+DEFINEFN code_t* psyco_insn_ccall7(code_t* code, word_t** arg1)
 {
 INSN_EMIT_opcode(72);
 INSN_EMIT_placeholder_long(arg1);
@@ -357,21 +365,13 @@ setlatestopcode(72);
 return(code);
 }
 
-DEFINEFN code_t* psyco_insn_ccall7(code_t* code, word_t** arg1)
-{
-INSN_EMIT_opcode(73);
-INSN_EMIT_placeholder_long(arg1);
-setlatestopcode(73);
-return(code);
-}
-
 DEFINEFN code_t* psyco_insn_checkdict(code_t* code, word_t** arg1, word_t** arg2, word_t** arg3, word_t** arg4)
 {
-INSN_EMIT_opcode(74);
+INSN_EMIT_opcode(73);
 INSN_EMIT_placeholder_long(arg1);
 INSN_EMIT_placeholder_long(arg2);
 INSN_EMIT_placeholder_long(arg3);
 INSN_EMIT_placeholder_long(arg4);
-setlatestopcode(74);
+setlatestopcode(73);
 return(code);
 }

@@ -3,8 +3,6 @@
  /***************************************************************/
 
 
-#error "ivm is still buggy -- sorry, Psyco requires a PC at the moment."
-
 #ifndef _IENCODING_H
 #define _IENCODING_H
 
@@ -178,12 +176,11 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 /***************************************************************/
  /***   some macro for code emission                          ***/
 
-#define CHECK_NONZERO_FROM_RT(src, rcc)   do {	\
-	NEED_CC();				\
-	INSN_rt_push(src);			\
-	INSN_not();  /* normalize to 1 or 0 */	\
-	INSN_flag_pop();			\
-	rcc = CC_NOT_FLAG;			\
+#define CHECK_NONZERO_FROM_RT(src, rcc)   do {                          \
+	NEED_CC();                                                      \
+	INSN_rt_push(src);                                              \
+	INSN_cmpz();  /* negative form, to normalize to 1 or 0 */       \
+	rcc = CC_NOT_FLAG;                                              \
 } while (0)
 
 #define NEED_CC()   do {                        \

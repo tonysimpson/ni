@@ -2,7 +2,6 @@
 :- consult(mode_combine).
 
 
-unary_insn(not).
 unary_insn(inv).
 unary_insn(neg_o, '-').
 overflow_flag(neg_o).
@@ -42,8 +41,8 @@ insn(stackgrow, [], [impl_stackgrow('VM_EXTRA_STACK_SIZE')], []).
 insn(assertdepth, [i], [comment('debugging assertion')], []).
 insn(dynamicfreq, [l], [impl_dynamicfreq], [nonchainable]).
 
-insn(flag_push, [], [out(0)=flag],   [stack(push), flag(get)]).
-insn(flag_pop,  [], [setflag=in(0)], [stack(pop), flag(set)]).
+insn(flag_push, [], [out(0)=flag],       [stack(push), flag(get)]).
+insn(cmpz,      [], [setflag=not(in(0))], [stack(pop), flag(set)]).
 insn(flag_forget, [],[], [flag(get), suffixonly]).
 insn(jcondnear,[b], [impl_jcond(flag, nextip+arg(0))],[nonchainable,flag(get)]).
 insn(jcondfar, [l], [impl_jcond(flag, arg(0))],       [nonchainable,flag(get)]).

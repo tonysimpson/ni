@@ -192,6 +192,9 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   code_t* code = po->code;
   CodeBufferObject* target_codebuf = lastmatch->matching;
   int sdepth = get_stack_depth(&target_codebuf->snapshot);
+#if PSYCO_DEBUG
+  bool has_ccreg = (po->ccreg != NULL);
+#endif
 
   extra_assert(lastmatch->diff == NullArray);  /* unify with exact match only */
   psyco_assert_coherent(po);
@@ -234,6 +237,9 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   STACK_CORRECTION(sdepth - po->stack_depth);
   if (code > dm.code_limit)  /* start a new buffer if we wrote past the end */
     code = data_new_buffer(code, &dm);
+#if PSYCO_DEBUG
+  extra_assert(has_ccreg == (po->ccreg != NULL));
+#endif
   JUMP_TO((code_t*) target_codebuf->codestart);
   
   /* start a new buffer if the last JUMP_TO overflowed,
