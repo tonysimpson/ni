@@ -524,7 +524,7 @@ static code_t* data_update_stack(code_t* code, struct dmove_s* dm,
         {
           if (is_runtime(b->source))
             {
-              char rg;
+              char rg, rgb;
               vinfo_t* overridden;
               vinfo_t* a = b->tmp;   /* source value */
               long dststack = RUNTIME_STACK(b);
@@ -543,9 +543,9 @@ static code_t* data_update_stack(code_t* code, struct dmove_s* dm,
                   a->source &= ~RunTime_NoRef;
                 }
               
-              rg = RUNTIME_REG(b);
-              if (rg != REG_NONE)
-                dm->copy_regs[(int)rg] = a;
+              rgb = RUNTIME_REG(b);
+              if (rgb != REG_NONE)
+                dm->copy_regs[(int)rgb] = a;
               if (dststack == RUNTIME_STACK_NONE || dststack == srcstack)
                 goto done;
               rg = RUNTIME_REG(a);
@@ -556,7 +556,7 @@ static code_t* data_update_stack(code_t* code, struct dmove_s* dm,
                   REG_NUMBER(po, rg) = a;
                   SET_RUNTIME_REG_TO(a, rg);
                 }
-              a->source = RunTime_NewStack(dststack, getreg(a->source), false);
+              a->source = RunTime_NewStack(dststack, rg, false);
               overridden = ORIGINAL_VINFO(dststack);
               if (overridden == NULL)
                 goto can_save_only;
@@ -567,12 +567,21 @@ static code_t* data_update_stack(code_t* code, struct dmove_s* dm,
                   SET_RUNTIME_STACK_TO_NONE(overridden);
                 can_save_only:
                   SAVE_REG_TO_EBP_BASE(rg, dststack);
+                  if (rgb == REG_NONE)
+                    {
+                      /* value has been stored in the stack
+                         and it is no longer needed in a register */
+                      REG_NUMBER(po, rg) = NULL;
+                      SET_RUNTIME_REG_TO_NONE(a);
+                    }
                 }
               else
                 {
                   XCHG_REG_AND_EBP_BASE(rg, dststack);
+                  REG_NUMBER(po, rg) = overridden;
                   SET_RUNTIME_REG_TO(overridden, rg);
                   SET_RUNTIME_STACK_TO_NONE(overridden);
+                  SET_RUNTIME_REG_TO_NONE(a);
                 }
               
               if (code > dm->code_limit)

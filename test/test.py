@@ -105,10 +105,13 @@ def f8():
         x = 5
     print "x is now", x
 
-def f9():
-    for i in range(100):
+def f9(n):
+    for i in range(n):
         print i,
     print
+
+def f10():
+    apply(f9, (50,))
 
 
 def go(f, *args):
@@ -129,12 +132,14 @@ def go(f, *args):
 def go1(arg=2117):
     go(f1, arg)
 
-def go4(arg=[s for s in os.listdir('.')
-             if os.path.isfile(s) and s!='psyco.dump']):
+FILEPATH = '../c'
+FILELIST = [os.path.join(FILEPATH, s) for s in os.listdir(FILEPATH)]
+FILELIST = [s for s in FILELIST if os.path.isfile(s) and s!='psyco.dump']
+
+def go4(arg=FILELIST):
     go(f4, arg)
 
-def go5(arg=[s for s in os.listdir('.')
-             if os.path.isfile(s) and s!='psyco.dump']):
+def go5(arg=FILELIST):
     go(f5, arg)
 
 def go6(n=100000, p=100000000000001L):
@@ -150,3 +155,4 @@ if __name__ == "__main__":
     go5()
     go6()
     go7()
+    go(f10)

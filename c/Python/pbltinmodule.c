@@ -159,20 +159,29 @@ static vinfo_t* pbuiltin_xrange(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 
 static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 {
-	vinfo_t* vi;
+	vinfo_t* intval;
+	vinfo_t* result;
 	condition_code_t cc;
 	
 	if (PsycoTuple_Load(vargs) != 1)
 		goto use_proxy;
-	vi = PsycoTuple_GET_ITEM(vargs, 0);
-
-	cc = integer_cmp_i(po, vi, 255, Py_GT|COMPARE_UNSIGNED);
-	if (cc == CC_ERROR)
+	intval = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 0));
+	if (intval == NULL)
 		return NULL;
-	if (runtime_condition_f(po, cc))
-		goto use_proxy;
 
-	return PsycoCharacter_New(vi);
+	cc = integer_cmp_i(po, intval, 255, Py_GT|COMPARE_UNSIGNED);
+	if (cc == CC_ERROR) {
+		vinfo_decref(intval, po);
+		return NULL;
+	}
+	if (runtime_condition_f(po, cc)) {
+		vinfo_decref(intval, po);
+		goto use_proxy;
+	}
+
+	result = PsycoCharacter_New(intval);
+	vinfo_decref(intval, po);
+	return result;
 
    use_proxy:
 	return psyco_generic_call(po, cd_chr.cd_function,
