@@ -69,7 +69,7 @@ compact_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 }
 
 static void
-compact_del(PyObject *op)
+compact_del(void *op)
 {
 	PyObject_GC_Del(op);
 }

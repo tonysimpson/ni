@@ -164,6 +164,17 @@ static void unset_ceval_hook(ceval_events_t* cev, int when,
 	}
 }
 
+#if VERBOSE_STATS
+# define set_ceval_hook(cev, when, fn, arg)   do {                             \
+    stats_printf(("set_ceval_hook:   " #when ", " #fn ", " #arg " = 0x%x\n", (int)arg));  \
+    set_ceval_hook(cev, when, fn, arg);                                        \
+  } while (0)
+# define unset_ceval_hook(cev, when, fn, arg)   do {                           \
+    stats_printf(("unset_ceval_hook: " #when ", " #fn ", " #arg " = 0x%x\n", (int)arg));  \
+    unset_ceval_hook(cev, when, fn, arg);                                      \
+  } while (0)
+#endif
+
 inline bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
 {
 	bool r = true;

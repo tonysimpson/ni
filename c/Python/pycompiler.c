@@ -45,7 +45,8 @@ void Psyco_DefineMeta(void* c_function, void* psyco_function)
 			return;
 	}
 	if (c_function == NULL) {
-		debug_printf(2, ("init: C function pointer NULL in CPython\n"));
+          extra_assert(0);
+		debug_printf(1, ("init: C function pointer NULL in CPython\n"));
 		return;
 	}
 	key = PyInt_FromLong((long) c_function);

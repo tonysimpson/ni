@@ -1,5 +1,6 @@
 #include "pfloatobject.h"
 #include "plongobject.h"
+#include "pboolobject.h"
 
 #if HAVE_FP_FN_CALLS
 
@@ -8,6 +9,20 @@ static int
 cimpl_fp_cmp(double a, double b) {
     return (a < b) ? -1 : (a > b) ? 1 : 0;
 }
+
+/* XXX the following is only valid if sizeof(long) < sizeof(double).
+       See Python 2.4's PyFloat_Type.tp_richcompare() */
+static int cimpl_fp_eq_int(double a, long b) { return a == (double) b; }
+static int cimpl_fp_ne_int(double a, long b) { return a != (double) b; }
+static int cimpl_fp_le_int(double a, long b) { return a <= (double) b; }
+static int cimpl_fp_lt_int(double a, long b) { return a <  (double) b; }
+static int cimpl_fp_ge_int(double a, long b) { return a >= (double) b; }
+static int cimpl_fp_gt_int(double a, long b) { return a >  (double) b; }
+
+static int cimpl_fp_eq_fp(double a, double b) { return a == b; }
+static int cimpl_fp_ne_fp(double a, double b) { return a != b; }
+static int cimpl_fp_le_fp(double a, double b) { return a <= b; }
+static int cimpl_fp_lt_fp(double a, double b) { return a <  b; }
 
 static int
 cimpl_fp_add(double a, double b, double* result) {
@@ -141,6 +156,8 @@ bool PsycoFloat_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** result_1, vinfo_
     if (PsycoFloat_Check(tp)) {
         *result_1 = PsycoFloat_AS_DOUBLE_1(po, v);
         *result_2 = PsycoFloat_AS_DOUBLE_2(po, v);
+        if (*result_1 == NULL || *result_2 == NULL)
+            return false;
         vinfo_incref(*result_1);
         vinfo_incref(*result_2);
         return true;
@@ -161,6 +178,10 @@ bool PsycoFloat_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** result_1, vinfo_
     /* silently assumes the result is a float object */
     *result_1 = PsycoFloat_AS_DOUBLE_1(po, v);
     *result_2 = PsycoFloat_AS_DOUBLE_2(po, v);
+    if (*result_1 == NULL || *result_2 == NULL) {
+        vinfo_decref(v, po);
+        return false;
+    }
     vinfo_incref(*result_1);
     vinfo_incref(*result_2);
     vinfo_decref(v, po);
@@ -286,12 +307,81 @@ int psyco_convert_to_double(PsycoObject* po, vinfo_t* vobj,
 
 static vinfo_t* pfloat_cmp(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
+    /* Python < 2.4 */
     vinfo_t *a1, *a2, *b1, *b2, *x;
     /* We could probably assume that these are floats, but using CONVERT is easier */
     CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     x = psyco_generic_call(po, cimpl_fp_cmp, CfPure|CfReturnNormal, "vvvv", a1, a2, b1, b2);
     RELEASE_DOUBLE2(a1, a2, b1, b2);
     return x;
+}
+
+static vinfo_t* pfloat_richcompare(PsycoObject* po, vinfo_t* v,
+                                   vinfo_t* w, int op)
+{
+    /* Python >= 2.4 */
+    /* TypeSwitch */
+    PyTypeObject* wtp;
+    vinfo_t *a1, *a2, *b1, *b2, *r;
+    void* fn;
+
+    wtp = Psyco_NeedType(po, w);
+    if (wtp == NULL)
+        return NULL;
+
+    extra_assert(Psyco_KnownType(v) != NULL);
+    extra_assert(PsycoFloat_Check(Psyco_KnownType(v)));
+    a1 = PsycoFloat_AS_DOUBLE_1(po, v);
+    a2 = PsycoFloat_AS_DOUBLE_2(po, v);
+    if (a1 == NULL || a2 == NULL)
+        return NULL;
+
+    if (PyType_TypeCheck(wtp, &PyInt_Type)) {
+        switch (op) {
+        case Py_EQ: fn = cimpl_fp_eq_int; break;
+	case Py_NE: fn = cimpl_fp_ne_int; break;
+	case Py_LE: fn = cimpl_fp_le_int; break;
+	case Py_GE: fn = cimpl_fp_ge_int; break;
+	case Py_LT: fn = cimpl_fp_lt_int; break;
+	case Py_GT: fn = cimpl_fp_gt_int; break;
+        default: Py_FatalError("bad richcmp op");
+        }
+        r = psyco_generic_call(po, fn, CfReturnNormal|CfPure,
+                               "vvv", a1, a2, PsycoInt_AS_LONG(po, w));
+        if (r != NULL)
+            r = PsycoBool_FROM_LONG(r);
+        return r;
+    }
+    if (PyType_TypeCheck(wtp, &PyLong_Type)) {
+        /* fall back */
+        return psyco_generic_call(po, PyFloat_Type.tp_richcompare,
+                                  CfReturnRef|CfPure,
+                                  "vvl", v, w, op);
+    }
+    if (PyType_TypeCheck(wtp, &PyFloat_Type)) {
+        b1 = PsycoFloat_AS_DOUBLE_1(po, w);
+        b2 = PsycoFloat_AS_DOUBLE_2(po, w);
+        if (b1 == NULL || b2 == NULL)
+            return NULL;
+#define SWAP_A_B		r=a1; a1=b1; b1=r; r=a2; a2=b2; b2=r
+        switch (op) {
+        case Py_EQ: fn = cimpl_fp_eq_fp; break;
+	case Py_NE: fn = cimpl_fp_ne_fp; break;
+	case Py_LE: fn = cimpl_fp_le_fp; break;
+	case Py_GE: fn = cimpl_fp_le_fp; SWAP_A_B; break;
+	case Py_LT: fn = cimpl_fp_lt_fp; break;
+	case Py_GT: fn = cimpl_fp_lt_fp; SWAP_A_B; break;
+        default: Py_FatalError("bad richcmp op");
+        }
+#undef SWAP_A_B
+        r = psyco_generic_call(po, fn, CfReturnNormal|CfPure,
+                               "vvvv", a1, a2, b1, b2);
+        if (r != NULL)
+            r = PsycoBool_FROM_LONG(r);
+        return r;
+    }
+
+    return psyco_vi_NotImplemented();  /* cannot do it */
 }
 
 static vinfo_t* pfloat_nonzero(PsycoObject* po, vinfo_t* v)
@@ -427,7 +517,10 @@ void psy_floatobject_init(void)
     Psyco_DefineMeta(m->nb_multiply, pfloat_mul);
     Psyco_DefineMeta(m->nb_divide,   pfloat_div);
 
-    Psyco_DefineMeta(PyFloat_Type.tp_compare, pfloat_cmp);
+    if (PyFloat_Type.tp_compare == NULL)  /* Python >= 2.4 */
+      Psyco_DefineMeta(PyFloat_Type.tp_richcompare, pfloat_richcompare);
+    else
+      Psyco_DefineMeta(PyFloat_Type.tp_compare, pfloat_cmp);
 
     INIT_SVIRTUAL(psyco_computed_float, compute_float,
                   direct_compute_float, 0, 0, 0);
