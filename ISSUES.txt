@@ -111,13 +111,43 @@ constants that you might occasionally run into. Note that apart from these
 particular cases, Python objects are rarely promoted; more often, only their
 type is.
 
+New version of eval(), execfile(), globals(), input(), sys._getframe()
+----------------------------------------------------------------------
+
+For proper operation, these functions are re-implemented by Psyco. The new
+versions are put directly into the built-in and sys modules respectively,
+so that you should not notice the difference. That is, unless you really
+want to and copy of one of these functions somewhere *before* you import
+Psyco.
+
+No locals() dictionary
+----------------------
+
+Psyco has no dictionary of local variables. The built-in function
+'locals()', as well as 'vars()' or 'dir()' without argument, will not
+work. Psyco re-implements them to return an empty dictionary and issue
+a warning.
+
 Limited sys._getframe() and frame objects
 -----------------------------------------
 
-Frame objects are only partially emulated. Using 'sys._getframe()' to
-grab frame objects does work, but the returned frame objects are
-incomplete. You cannot only use 'f_back' (use 'sys._getframe()' again
-instead), and 'f_locals' is always empty.
+The frames executed by Psyco are simply ignored by the Python core.
+Psyco does its best to mask the difference, but frame objects are only
+partially emulated. Using 'sys._getframe()' to grab frame objects works
+correctly, but the returned frame objects are incomplete. You cannot
+only use 'f_back' (use 'sys._getframe()' again instead), and 'f_locals'
+is always empty. You may run into troubles with some other extension
+modules (from the standard library or not) because they will not see
+the Psyco frames; for example they might grab the current globals dict
+from the top Python-executing frame instead of from the more recent
+Psyco-accelerated frames.
+
+This difference also shows up for dynamically compiled code object:
+the future statements considered to be active are taken from the most
+recent *regular Python* frame.
+
+Fixing this cleanly would require some reorganization within the
+Python core interpreter.
 
 Limited traceback objects
 -------------------------
