@@ -369,6 +369,9 @@ PyObject* psyco_stats_top(int n)
 
  /***************************************************************/
 
+DEFINEVAR PyThreadState* psyco_main_threadstate;
+
+
 INITIALIZATIONFN
 void psyco_stats_init(void)
 {
