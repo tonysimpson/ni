@@ -120,11 +120,13 @@
 # define EXTERNFN    static
 # define DEFINEVAR   statichere
 # define DEFINEFN    static
+# define INITIALIZATIONFN  inline
 #else
 # define EXTERNVAR
 # define EXTERNFN
 # define DEFINEVAR
 # define DEFINEFN
+# define INITIALIZATIONFN  DEFINEFN
 #endif
 
 #if ALL_CHECKS

@@ -269,8 +269,19 @@ static vinfo_t* pint_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 }
 
 
-DEFINEFN
-void psy_intobject_init()
+/* Careful, most operations might return a long if they overflow.
+   Only list here the ones that cannot. Besides, all these operations
+   should sooner or later be implemented in Psyco. */
+DEF_KNOWN_RET_TYPE_2(pint_lshift, PyInt_Type.tp_as_number->nb_lshift,
+		     CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)
+DEF_KNOWN_RET_TYPE_2(pint_rshift, PyInt_Type.tp_as_number->nb_rshift,
+		     CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)
+DEF_KNOWN_RET_TYPE_2(pint_xor, PyInt_Type.tp_as_number->nb_xor,
+		     CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)
+
+
+INITIALIZATIONFN
+void psy_intobject_init(void)
 {
 	PyNumberMethods *m = PyInt_Type.tp_as_number;
 	Psyco_DefineMeta(m->nb_nonzero,  pint_nonzero);
@@ -285,6 +296,10 @@ void psy_intobject_init()
 	Psyco_DefineMeta(m->nb_or,       pint_or);
 	Psyco_DefineMeta(m->nb_and,      pint_and);
 	Psyco_DefineMeta(m->nb_multiply, pint_mul);
-
+	
+	Psyco_DefineMeta(m->nb_lshift,   pint_lshift);
+	Psyco_DefineMeta(m->nb_rshift,   pint_rshift);
+	Psyco_DefineMeta(m->nb_xor,      pint_xor);
+	
 	psyco_computed_int.compute_fn = &compute_int;
 }

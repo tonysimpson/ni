@@ -110,8 +110,8 @@ static vinfo_t* pfunc_descr_get(PsycoObject* po, PyObject* func,
 }
 
 
-DEFINEFN
-void psy_funcobject_init()
+INITIALIZATIONFN
+void psy_funcobject_init(void)
 {
 	Psyco_DefineMeta(PyFunction_Type.tp_call, pfunction_call);
 	Psyco_DefineMeta(PyFunction_Type.tp_descr_get, pfunc_descr_get);

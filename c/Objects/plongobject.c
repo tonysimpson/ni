@@ -1,4 +1,5 @@
 #include "plongobject.h"
+#include "../Python/pycinternal.h"  /* for BINARY_FLOOR_DIVIDE */
 
 
 DEFINEFN
@@ -9,7 +10,6 @@ vinfo_t* PsycoLong_AsLong(PsycoObject* po, vinfo_t* v)
 				  CfReturnNormal|CfPyErrCheckMinus1,
 				  "v", v);
 }
-
 
 static int cimpl_lng_as_double(PyObject* o, double* result)
 {
@@ -36,35 +36,60 @@ bool PsycoLong_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd1, vinfo_t** vd
 }
 
 
-DEF_KNOWN_RET_TYPE_1(plong_pos, PyLong_Type.tp_as_number->nb_positive,
-		     CfReturnRef|CfPyErrIfNull, PyLong_Type)
-DEF_KNOWN_RET_TYPE_1(plong_neg, PyLong_Type.tp_as_number->nb_negative,
-		     CfReturnRef|CfPyErrIfNull, PyLong_Type)
-DEF_KNOWN_RET_TYPE_1(plong_invert, PyLong_Type.tp_as_number->nb_invert,
-		     CfReturnRef|CfPyErrIfNull, PyLong_Type)
-DEF_KNOWN_RET_TYPE_1(plong_abs, PyLong_Type.tp_as_number->nb_absolute,
-		     CfReturnRef|CfPyErrIfNull, PyLong_Type)
-DEF_KNOWN_RET_TYPE_2(plong_add, PyLong_Type.tp_as_number->nb_add,
-		     CfReturnRef|CfPyErrIfNull, PyLong_Type)
-DEF_KNOWN_RET_TYPE_2(plong_sub, PyLong_Type.tp_as_number->nb_subtract,
-		     CfReturnRef|CfPyErrIfNull, PyLong_Type)
-DEF_KNOWN_RET_TYPE_2(plong_or, PyLong_Type.tp_as_number->nb_or,
-		     CfReturnRef|CfPyErrIfNull, PyLong_Type)
-DEF_KNOWN_RET_TYPE_2(plong_and, PyLong_Type.tp_as_number->nb_and,
-		     CfReturnRef|CfPyErrIfNull, PyLong_Type)
+/* XXX this assumes that operations between longs always return a long.
+   There are hints that this might change in future releases of Python. */
+#define RETLONG(arity, cname, slotname)						\
+	DEF_KNOWN_RET_TYPE_##arity(cname,					\
+				   PyLong_Type.tp_as_number->slotname,		\
+				   (arity)==1 ? (CfReturnRef|CfPyErrIfNull) :	\
+				        (CfReturnRef|CfPyErrNotImplemented),	\
+				   &PyLong_Type)
 
-DEFINEFN
-void psy_longobject_init()
+RETLONG(2,	plong_add,		nb_add)
+RETLONG(2,	plong_sub,		nb_subtract)
+RETLONG(2,	plong_mul,		nb_multiply)
+RETLONG(2,	plong_classic_div,	nb_divide)
+RETLONG(2,	plong_mod,		nb_remainder)
+RETLONG(3,	plong_pow,		nb_power)
+RETLONG(1,	plong_neg,		nb_negative)
+RETLONG(1,	plong_pos,		nb_positive)
+RETLONG(1,	plong_abs,		nb_absolute)
+RETLONG(1,	plong_invert,		nb_invert)
+RETLONG(2,	plong_lshift,		nb_lshift)
+RETLONG(2,	plong_rshift,		nb_rshift)
+RETLONG(2,	plong_and,		nb_and)
+RETLONG(2,	plong_xor,		nb_xor)
+RETLONG(2,	plong_or,		nb_or)
+#ifdef BINARY_FLOOR_DIVIDE
+RETLONG(2,	plong_div,		nb_floor_divide)
+RETLONG(2,	plong_true_divide,	nb_true_divide)
+#endif
+
+#undef RETLONG
+
+
+INITIALIZATIONFN
+void psy_longobject_init(void)
 {
 	PyNumberMethods *m = PyLong_Type.tp_as_number;
-	
-	Psyco_DefineMeta(m->nb_positive, plong_pos);
-	Psyco_DefineMeta(m->nb_negative, plong_neg);
-	Psyco_DefineMeta(m->nb_invert,   plong_invert);
-	Psyco_DefineMeta(m->nb_absolute, plong_abs);
-	
-	Psyco_DefineMeta(m->nb_add,      plong_add);
-	Psyco_DefineMeta(m->nb_subtract, plong_sub);
-	Psyco_DefineMeta(m->nb_or,       plong_or);
-	Psyco_DefineMeta(m->nb_and,      plong_and);
+
+	Psyco_DefineMeta(m->nb_add,		plong_add);
+	Psyco_DefineMeta(m->nb_subtract,	plong_sub);
+	Psyco_DefineMeta(m->nb_multiply,	plong_mul);
+	Psyco_DefineMeta(m->nb_divide,		plong_classic_div);
+	Psyco_DefineMeta(m->nb_remainder,	plong_mod);
+	Psyco_DefineMeta(m->nb_power,		plong_pow);
+	Psyco_DefineMeta(m->nb_negative,	plong_neg);
+	Psyco_DefineMeta(m->nb_positive,	plong_pos);
+	Psyco_DefineMeta(m->nb_absolute,	plong_abs);
+	Psyco_DefineMeta(m->nb_invert,		plong_invert);
+	Psyco_DefineMeta(m->nb_lshift,		plong_lshift);
+	Psyco_DefineMeta(m->nb_rshift,		plong_rshift);
+	Psyco_DefineMeta(m->nb_and,		plong_and);
+	Psyco_DefineMeta(m->nb_xor,		plong_xor);
+	Psyco_DefineMeta(m->nb_or,		plong_or);
+#ifdef BINARY_FLOOR_DIVIDE
+	Psyco_DefineMeta(m->nb_floor_divide,	plong_div);
+	Psyco_DefineMeta(m->nb_true_divide,	plong_true_divide);
+#endif
 }

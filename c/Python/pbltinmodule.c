@@ -5,16 +5,15 @@
 #include "../Objects/pstringobject.h"
 
 
-static cfunc_descr_t cd_range	= { "range",	METH_VARARGS };
-static cfunc_descr_t cd_xrange	= { "xrange",	METH_VARARGS };
-static cfunc_descr_t cd_chr	= { "chr",	METH_VARARGS };
-static cfunc_descr_t cd_ord	= { "ord",	METH_O };
-static cfunc_descr_t cd_id	= { "id",	METH_O };
-static cfunc_descr_t cd_len	= { "len",	METH_O };
-static cfunc_descr_t cd_abs	= { "abs",	METH_O };
-static cfunc_descr_t cd_apply	= { "apply",	METH_VARARGS };
-static cfunc_descr_t cd_divmod	= { "divmod",	METH_VARARGS };
-/*static cfunc_descr_t cd_type  = { "type",  CD_META_TP_NEW };*/
+static PyCFunction cimpl_range;
+static PyCFunction cimpl_xrange;
+static PyCFunction cimpl_chr;
+static PyCFunction cimpl_ord;
+static PyCFunction cimpl_id;
+static PyCFunction cimpl_len;
+static PyCFunction cimpl_abs;
+static PyCFunction cimpl_apply;
+static PyCFunction cimpl_divmod;
 
 
 /***************************************************************/
@@ -120,8 +119,7 @@ static vinfo_t* pbuiltin_range_or_xrange(PsycoObject* po,
 		if (ihigh == NULL) goto End;
 		break;
 	default: {
-		void* fn = (ntype == &PyList_Type) ? cd_range.cd_function :
-			cd_xrange.cd_function;
+		void* fn = (ntype == &PyList_Type) ? cimpl_range : cimpl_xrange;
 		return psyco_generic_call(po, fn,
 					  CfReturnRef|CfPyErrIfNull,
 					  "lv", NULL, vargs);
@@ -184,8 +182,7 @@ static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 	return result;
 
    use_proxy:
-	return psyco_generic_call(po, cd_chr.cd_function,
-				  CfReturnRef|CfPyErrIfNull,
+	return psyco_generic_call(po, cimpl_chr, CfReturnRef|CfPyErrIfNull,
 				  "lv", NULL, vargs);
 }
 
@@ -227,8 +224,7 @@ static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 	}
 	
    use_proxy:
-	return psyco_generic_call(po, cd_ord.cd_function,
-				  CfReturnRef|CfPyErrIfNull,
+	return psyco_generic_call(po, cimpl_ord, CfReturnRef|CfPyErrIfNull,
 				  "lv", NULL, vobj);
 }
 
@@ -282,8 +278,7 @@ static vinfo_t* pbuiltin_apply(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 
 	if (PycException_Occurred(po))
 		return NULL;
-	return psyco_generic_call(po, cd_apply.cd_function,
-				  CfReturnRef|CfPyErrIfNull,
+	return psyco_generic_call(po, cimpl_apply, CfReturnRef|CfPyErrIfNull,
 				  "lv", NULL, vargs);
 }
 
@@ -296,31 +291,32 @@ static vinfo_t* pbuiltin_divmod(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 					  PsycoTuple_GET_ITEM(vargs, 0),
 					  PsycoTuple_GET_ITEM(vargs, 1));
 	}
-	return psyco_generic_call(po, cd_divmod.cd_function,
-				  CfReturnRef|CfPyErrIfNull,
+	return psyco_generic_call(po, cimpl_divmod, CfReturnRef|CfPyErrIfNull,
 				  "lv", NULL, vargs);
 }
 
 
 /***************************************************************/
 
-static meta_impl_t meta_bltin[] = {
-	{&cd_range,	&pbuiltin_range},
-	{&cd_xrange,	&pbuiltin_xrange},
-	{&cd_chr,	&pbuiltin_chr},
-	{&cd_ord,	&pbuiltin_ord},
-	{&cd_id,	&pbuiltin_id},
-	{&cd_len,	&pbuiltin_len},
-	{&cd_abs,	&pbuiltin_abs},
-	{&cd_apply,	&pbuiltin_apply},
-	{&cd_divmod,	&pbuiltin_divmod},
-	/*{&cd_type,	&pbuiltin_type},*/
-	{NULL,		NULL}	/* sentinel */
-};
 
-DEFINEFN
-void psy_bltinmodule_init()
+INITIALIZATIONFN
+void psyco_bltinmodule_init(void)
 {
+	PyObject* md = Psyco_DefineMetaModule("__builtin__");
 	psyco_computed_range.compute_fn = &compute_range;
-	Psyco_DefineMetaModule("__builtin__", meta_bltin);
+
+#define DEFMETA(name, flags)							\
+    cimpl_ ## name = Psyco_DefineModuleFn(md, #name, flags, &pbuiltin_ ## name)
+
+	DEFMETA( range,		METH_VARARGS );
+	DEFMETA( xrange,	METH_VARARGS );
+	DEFMETA( chr,		METH_VARARGS );
+	DEFMETA( ord,		METH_O       );
+	DEFMETA( id,		METH_O       );
+	DEFMETA( len,		METH_O       );
+	DEFMETA( abs,		METH_O       );
+	DEFMETA( apply,		METH_VARARGS );
+	DEFMETA( divmod,	METH_VARARGS );
+#undef META
+	Py_XDECREF(md);
 }

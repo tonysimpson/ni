@@ -16,6 +16,4 @@
 EXTERNFN vinfo_t* PsycoLong_AsLong(PsycoObject* po, vinfo_t* v);
 EXTERNFN bool PsycoLong_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd1, vinfo_t** vd2);
 
-EXTERNFN void psy_longobject_init(void);
-
 #endif /* _PSY_LONGOBJECT_H */

@@ -11,9 +11,6 @@
 #include "processor.h"
 
 
-inline void psyco_dispatcher_init(void) { }
-
-
 /* a frozen PsycoObject is a snapshot of an actual PsycoObject,
    capturing the state of the compiler in a form that can be used
    later to compare live states to it. Currently implemented as a

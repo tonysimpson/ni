@@ -126,8 +126,8 @@ static vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,
 }
 
 
-DEFINEFN
-void psy_classobject_init()
+INITIALIZATIONFN
+void psy_classobject_init(void)
 {
 	Psyco_DefineMeta(PyMethod_Type.tp_call, pinstancemethod_call);
 	psyco_computed_method.compute_fn = &compute_method;

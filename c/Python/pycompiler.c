@@ -5,24 +5,13 @@
 #include "../mergepoints.h"
 #include "../codemanager.h"
 
-#include "pbltinmodule.h"
-
-#include "../Objects/pobject.h"
 #include "../Objects/pabstract.h"
-#include "../Objects/pclassobject.h"
-#include "../Objects/pdescrobject.h"
+#include "../Objects/pintobject.h"
+#include "../Objects/plongobject.h"
+#include "../Objects/ptupleobject.h"
+#include "../Objects/plistobject.h"
 #include "../Objects/pdictobject.h"
 #include "../Objects/pfuncobject.h"
-#include "../Objects/pintobject.h"
-#include "../Objects/pfloatobject.h"
-#include "../Objects/piterobject.h"
-#include "../Objects/plistobject.h"
-#include "../Objects/plongobject.h"
-#include "../Objects/pmethodobject.h"
-#include "../Objects/pstringobject.h"
-#include "../Objects/pstructmember.h"
-#include "../Objects/psycofuncobject.h"
-#include "../Objects/ptupleobject.h"
 
 #include <eval.h>
 #include "pycinternal.h"
@@ -59,62 +48,69 @@ void Psyco_DefineMeta(void* c_function, void* psyco_function)
 }
 
 DEFINEFN
-void Psyco_DefineMetaModule(char* modulename, meta_impl_t* def)
+PyObject* Psyco_DefineMetaModule(char* modulename)
 {
-	/* call Psyco_DefineMeta() for all functions of module 'modulename'
-	   found in the NULL-terminated array 'def'. */
-	PyObject* module;
-	PyObject* fobj;
-	char* name;
-	void* f;
-
-	/* XXX should not load the modules now. Not loaded modules should
-	   be registered in some hook and Psyco_DefineMetaModule() should
-	   be automatically called again if and when the module is called. */
-	module = PyImport_ImportModule(modulename);
+	PyObject* module = PyImport_ImportModule(modulename);
 	if (module == NULL) {
 		PyErr_Clear();
 		debug_printf(("psyco: note: module %s not found\n",
 			      modulename));
-		return;
 	}
-	
-	for (; def->mm_descr != NULL; def++) {
-		name = def->mm_descr->cd_name;
-		fobj = PyObject_GetAttrString(module, name);
-		if (fobj == NULL) {
-			PyErr_Clear();
-			debug_printf(("psyco: note: %s.%s not found\n",
-				      modulename, name));
-			continue;
-		}
-		f = NULL;
-		switch (def->mm_descr->cd_flags) {
-
-#if NEW_STYLE_TYPES
-		case CD_META_TP_NEW:
-			if (PyType_Check(fobj))
-				f = ((PyTypeObject*) fobj)->tp_new;
-			break;
+	else {
+#if VERBOSE_LEVEL > 1
+		debug_printf(("psyco: activated module %s\n", modulename));
 #endif
-		default:
-			if (PyCFunction_Check(fobj) &&
-			    PyCFunction_GET_FLAGS(fobj)==def->mm_descr->cd_flags)
-				f = PyCFunction_GET_FUNCTION(fobj);
-		}
-
-		def->mm_descr->cd_function = f;
-		if (f != NULL) {
-			Psyco_DefineMeta(f, def->mm_psyco_fn);
-		}
-		else {
-			debug_printf(("psyco: note: %s.%s not implemented "
-				      "as expected\n",
-				      modulename, name));
-		}
-		Py_DECREF(fobj);
 	}
-	Py_DECREF(module);
+	return module;
+}
+
+DEFINEFN
+PyObject* Psyco_GetModuleObject(PyObject* module, char* name,
+				PyTypeObject* expected_type)
+{
+	PyObject* fobj;
+	if (module == NULL)
+		return NULL;
+	
+	fobj = PyObject_GetAttrString(module, name);
+	if (fobj == NULL) {
+		debug_printf(("psyco: note: %s.%s not found\n",
+			      PyModule_GetName(module), name));
+		PyErr_Clear();
+		return NULL;
+	}
+	if (expected_type != NULL && !PyObject_TypeCheck(fobj, expected_type)) {
+		debug_printf(("psyco: note: %s.%s is of type %200s instead of "
+			      "%200s\n", PyModule_GetName(module), name,
+			      fobj->ob_type->tp_name, expected_type->tp_name));
+		Py_DECREF(fobj);
+		fobj = NULL;
+	}
+	return fobj;
+}
+
+DEFINEFN
+PyCFunction Psyco_DefineModuleFn(PyObject* module, char* meth_name,
+				 int meth_flags, void* meta_fn)
+{
+	PyCFunction f;
+	PyObject* fobj = Psyco_GetModuleObject(module, meth_name,
+					       &PyCFunction_Type);
+	if (fobj == NULL)
+		return NULL;
+
+	if (PyCFunction_GET_FLAGS(fobj) != meth_flags) {
+		f = NULL;
+		debug_printf(("psyco: note: %s.%s built-in has wrong "
+			      "meth_flags\n", PyModule_GetName(module),
+			      meth_name));
+	}
+	else {
+		f = PyCFunction_GET_FUNCTION(fobj);
+		Psyco_DefineMeta(f, meta_fn);
+	}
+	Py_DECREF(fobj);
+	return f;
 }
 
 
@@ -527,7 +523,6 @@ inline bool PycException_FetchNormalize(PsycoObject* po)
 /***                      Initialization                       ***/
  /***************************************************************/
 
-
 DEFINEVAR source_known_t psyco_skNone;    /* known value 'Py_None' */
 DEFINEVAR source_known_t psyco_skZero;    /* known value 0 */
 DEFINEVAR source_known_t psyco_skOne;     /* known value 1 */
@@ -535,8 +530,8 @@ DEFINEVAR source_known_t psyco_skNotImplemented;
 
 static PyObject* s_builtin_object;   /* intern string '__builtins__' */
 
-DEFINEFN
-void psyco_pycompiler_init()
+INITIALIZATIONFN
+void psyco_pycompiler_init(void)
 {
 	s_builtin_object = PyString_InternFromString("__builtins__");
 	
@@ -557,25 +552,6 @@ void psyco_pycompiler_init()
 	EReturn   = psyco_vsource_not_important;
 	EContinue = psyco_vsource_not_important;
 	EBreak    = psyco_vsource_not_important;
-
-        psy_object_init();
-        psy_abstract_init();
-        psy_classobject_init();
-        psy_descrobject_init();
-        psy_dictobject_init();
-        psy_funcobject_init();
-        psy_intobject_init();
-	psy_floatobject_init();
-        psy_iterobject_init();
-        psy_listobject_init();
-        psy_longobject_init();
-        psy_methodobject_init();
-        psy_stringobject_init();
-        psy_structmember_init();
-        psy_psycofuncobject_init();
-        psy_tupleobject_init();
-
-	psy_bltinmodule_init();
 }
 
 

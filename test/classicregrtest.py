@@ -1,4 +1,4 @@
-import sys, os, StringIO
+import sys, os, StringIO, psyco
 
 
 NO_SYS_GETFRAME = """using sys._getframe() fails with Psyco"""
@@ -98,9 +98,8 @@ def alltests():
         os.unlink(filename)
     except:
         pass
-    import _psyco
     print "Psyco compilation flags:",
-    d = _psyco.__dict__
+    d = psyco._psyco.__dict__
     if 'ALL_CHECKS' not in d:
         print "Release mode",
     for key in d:
@@ -131,7 +130,7 @@ def main(testlist, verbose=0, use_resources=None):
     testlist = filter(python_check, testlist)
 
     # Psyco selective compilation is only activated here
-    import psyco
+    psyco.jit(1)
     #print "sleeping, time for a Ctrl-C !..."
     #import time; time.sleep(1.5)
 
@@ -165,9 +164,8 @@ if __name__ == '__main__':
             err = not main(sys.argv[1:])
         finally:
             # Write psyco.dump
-            import _psyco
-            if hasattr(_psyco, 'dumpcodebuf'):
+            if hasattr(psyco._psyco, 'dumpcodebuf'):
                 print "Dumping code buffers..."
-                _psyco.dumpcodebuf()
+                psyco._psyco.dumpcodebuf()
         if err:
             sys.exit(2)

@@ -470,3 +470,47 @@ vinfo_t* PsycoObject_RichCompareBool(PsycoObject* po,
         vinfo_decref(result, po);
 	return diff;
 }
+
+
+INITIALIZATIONFN
+void psy_object_init(void)
+{
+	long values[3];
+        int cnt;
+
+	values[0] = (long)(&PyInt_Type);
+	psyco_build_run_time_switch(&psyfs_int, SkFlagFixed, values, 1);
+
+	values[0] = (long)(&PyInt_Type);
+	values[1] = (long)(&PyLong_Type);
+	values[2] = (long)(&PyFloat_Type);
+        psyco_build_run_time_switch(&psyfs_int_long, SkFlagFixed, values, 2);
+	psyco_build_run_time_switch(&psyfs_int_long_float, SkFlagFixed, values, 3);
+
+	values[0] = (long)(&PyTuple_Type);
+	values[1] = (long)(&PyList_Type);
+        psyco_build_run_time_switch(&psyfs_tuple_list, SkFlagFixed, values, 2);
+
+	values[0] = (long)(&PyString_Type);
+#ifdef Py_USING_UNICODE
+	values[1] = (long)(&PyUnicode_Type);
+        cnt = 2;
+#else
+        cnt = 1;
+#endif
+        psyco_build_run_time_switch(&psyfs_string_unicode, SkFlagFixed,
+                                    values, cnt);
+
+	values[0] = (long)(Py_None->ob_type);
+	psyco_build_run_time_switch(&psyfs_none, SkFlagFixed, values, 1);
+
+        values[0] = (long)(&PyTuple_Type);
+	psyco_build_run_time_switch(&psyfs_tuple, SkFlagFixed, values, 1);
+
+        values[0] = (long)(&PyDict_Type);
+	psyco_build_run_time_switch(&psyfs_dict, SkFlagFixed, values, 1);
+
+        /* associate the Python implementation of some functions with
+           the one from Psyco */
+        Psyco_DefineMeta(PyObject_GenericGetAttr, PsycoObject_GenericGetAttr);
+}

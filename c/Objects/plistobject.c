@@ -70,8 +70,8 @@ static vinfo_t* plist_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 }
 
 
-DEFINEFN
-void psy_listobject_init()
+INITIALIZATIONFN
+void psy_listobject_init(void)
 {
 	PySequenceMethods *m = PyList_Type.tp_as_sequence;
 	Psyco_DefineMeta(m->sq_length, psyco_generic_mut_ob_size);

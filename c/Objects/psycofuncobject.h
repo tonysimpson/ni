@@ -11,6 +11,4 @@
 #include "pabstract.h"
 
 
-EXTERNFN void psy_psycofuncobject_init(void);
-
 #endif /* _PSY_PSYCOFUNCOBJECT_H */

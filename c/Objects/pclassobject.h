@@ -28,7 +28,4 @@ EXTERNFN
 vinfo_t* PsycoMethod_New(PyObject* func, vinfo_t* self, PyObject* cls);
 
 
-EXTERNFN void psy_classobject_init(void);
-
-
 #endif /* _PSY_CLASSOBJECT_H */

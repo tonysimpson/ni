@@ -1,4 +1,5 @@
-import _psyco, os
+import os
+from psyco import _psyco
 
 def time(fn, *args):
     "Measure the execution time of fn(*args)."
@@ -48,7 +49,7 @@ def f4(filelist):
         for line in f:
             for c in line:
                 k = ord(c)
-                result[k] = result[k] + 1
+                result[k] += 1
         f.close()
     d = {}
     for i in range(256):
@@ -63,7 +64,7 @@ def f5(filelist):
         f = open(filename, 'r')
         for c in f.read():
             k = ord(c)
-            result[k] = result[k] + 1
+            result[k] += 1
         f.close()
     d = {}
     for i in range(256):

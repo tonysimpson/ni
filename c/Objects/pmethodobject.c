@@ -38,12 +38,20 @@ DEFINEVAR source_virtual_t psyco_computed_cfunction;
 static vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 				    vinfo_t* tuple, vinfo_t* kw)
 {
+	long mllong;
 	vinfo_t* vml = get_array_item(po, func, CFUNC_M_ML);
 	if (vml == NULL)
 		return NULL;
-	
-	if (is_compiletime(vml->source)) {
-		/* optimize only if we know which C function we are calling. */
+
+	/* promote to compile-time the function if we do not know which one
+	   it is yet */
+	mllong = psyco_atcompiletime(po, vml);
+	if (mllong == -1) {
+		/* -1 is not a valid pointer */
+		extra_assert(PycException_Occurred(po));
+		return NULL;
+	}
+	else {
 		PyMethodDef* ml = (PyMethodDef*) \
 			CompileTime_Get(vml->source)->value;
 		int flags = ml->ml_flags;
@@ -97,8 +105,8 @@ static vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 }
 
 
-DEFINEFN
-void psy_methodobject_init()
+INITIALIZATIONFN
+void psy_methodobject_init(void)
 {
 	Psyco_DefineMeta(PyCFunction_Type.tp_call, PsycoCFunction_Call);
 

@@ -9,7 +9,7 @@ import math
 import random
 import operator
 import string
-import _psyco
+from psyco import _psyco
 psyobj = object
 
 random.seed(0)

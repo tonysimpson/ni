@@ -670,8 +670,8 @@ static bool computed_do_not_use(PsycoObject* po, vinfo_t* vi)
   return true;
 }
 
-DEFINEFN
-void psyco_compiler_init()
+INITIALIZATIONFN
+void psyco_compiler_init(void)
 {
   psyco_vsource_not_important.compute_fn = &computed_do_not_use;
 }

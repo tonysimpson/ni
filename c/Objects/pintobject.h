@@ -63,7 +63,4 @@ inline vinfo_t* PsycoIntInt_RichCompare(PsycoObject* po, vinfo_t* v,
 }
 
 
-EXTERNFN void psy_intobject_init(void);
-
-
 #endif /* _PSY_INTOBJECT_H */

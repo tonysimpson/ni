@@ -96,8 +96,8 @@ static bool compute_seqiter(PsycoObject* po, vinfo_t* v)
 DEFINEVAR source_virtual_t psyco_computed_seqiter;
 
 
-DEFINEFN
-void psy_iterobject_init()
+INITIALIZATIONFN
+void psy_iterobject_init(void)
 {
 	psyco_computed_seqiter.compute_fn = &compute_seqiter;
         Psyco_DefineMeta(PySeqIter_Type.tp_iter, &piter_getiter);

@@ -551,13 +551,13 @@ typedef struct {
 
 /* internal, see NEED_CC() */
 DEFINEFN
-code_t* psyco_compute_cc(PsycoObject* po, code_t* code)
+code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 {
 	vinfo_t* v = po->ccreg;
 	computed_cc_t* cc = (computed_cc_t*) VirtualTime_Get(v->source);
 	reg_t rg;
 
-	NEED_FREE_BYTE_REG(rg);
+	NEED_FREE_BYTE_REG(rg, reserved);
 	LOAD_REG_FROM_CONDITION(rg, cc->cc);
 
 	v->source = RunTime_New(rg, false);
@@ -570,7 +570,7 @@ static bool generic_computed_cc(PsycoObject* po, vinfo_t* v)
 {
 	extra_assert(po->ccreg == v);
         BEGIN_CODE
-	code = psyco_compute_cc(po, code);
+	code = psyco_compute_cc(po, code, REG_NONE);
         END_CODE
 	return true;
 }
@@ -642,8 +642,8 @@ condition_code_t psyco_vsource_cc(Source source)
 
 static bool computed_promotion(PsycoObject* po, vinfo_t* v);  /* forward */
 
-DEFINEFN
-void psyco_processor_init()
+INITIALIZATIONFN
+void psyco_processor_init(void)
 {
   int i;
 #ifdef COPY_CODE_IN_HEAP
@@ -747,7 +747,7 @@ static code_t* fx_writecases(code_t* code, code_t** lastcmp,
     {
       code_t* code2 = code+1;
       long offset;
-      int middle = (first+last)/2;
+      int middle = (first+last-1)/2;
       COMMON_INSTR_IMMED(7, 0, fxc[middle].value); /* CMP reg, imm */
       if (*lastcmp != NULL)
         {
@@ -756,7 +756,7 @@ static code_t* fx_writecases(code_t* code, code_t** lastcmp,
           **lastcmp = code2 - *lastcmp;
         }
       *lastcmp = code2;
-      if ((last-first) > 2)
+      if (middle > first)
         {
           code += 2;
           code2 = fx_writecases(code+6, lastcmp, fxc, fixtargets,
@@ -776,19 +776,15 @@ static code_t* fx_writecases(code_t* code, code_t** lastcmp,
               code[-5] = 0x8F;    /* JG rel32 */
               *(long*)(code-4) = code2 - code;
             }
-          first = middle+1;
         }
       else
-        {
-          code2 = code+6;
-          last = middle;
-        }
+        code2 = code+6;
       code[0] = 0x0F;
       code[1] = 0x84;    /* JE rel32 */
       code += 6;
       fixtargets[fxc[middle].index] = *(long*)(code-4) = (supposed_end+5) - code;
       code = fx_writecases(code2, lastcmp, fxc, fixtargets,
-                           first, last, supposed_end);
+                           middle+1, last, supposed_end);
     }
   return code;
 }
@@ -1190,9 +1186,13 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	/* this is a simplified version of psyco_generic_call() which
 	   assumes Psyco's calling convention instead of the C's. */
 	int i, initial_depth;
+	bool ccflags;
 	Source* p;
 	BEGIN_CODE
-	NEED_CC();
+          /* cannot use NEED_CC() */
+	ccflags = (po->ccreg != NULL);
+	if (ccflags)
+		PUSH_CC_FLAGS();
 	for (i=0; i<REG_TOTAL; i++)
 		NEED_REGISTER(i);
 	initial_depth = po->stack_depth;
@@ -1201,6 +1201,8 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 		CALL_SET_ARG_FROM_RT(*p, i, argcount);
 	CALL_C_FUNCTION(codebuf->codeptr,   argcount);
 	po->stack_depth = initial_depth;  /* callee removes arguments */
+	if (ccflags)
+		POP_CC_FLAGS();
 	END_CODE
 	return generic_call_check(po, CfReturnRef|CfPyErrIfNull,
 				  new_rtvinfo(po, REG_FUNCTIONS_RETURN, true));
@@ -1283,7 +1285,8 @@ condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi)
 #define GENERIC_BINARY_COMMON_INSTR(group, ovf)   {             \
   reg_t rg;                                                     \
   BEGIN_CODE                                                    \
-  NEED_CC();                                                    \
+  NEED_CC_SRC(v2s);                                             \
+  DONT_OVERWRITE_SOURCE(v2s);                                   \
   COPY_IN_REG(v1, rg);                   /* MOV rg, (v1) */     \
   COMMON_INSTR_FROM(group, rg, v2s);     /* XXX rg, (v2) */     \
   END_CODE                                                      \
@@ -1487,7 +1490,8 @@ static vinfo_t* int_mul_i(PsycoObject* po, vinfo_t* v1, long value2,
       reg_t rg;
       RunTimeSource v1s = v1->source;
       BEGIN_CODE
-      NEED_CC();
+      NEED_CC_SRC(v1s);
+      DONT_OVERWRITE_SOURCE(v1s);
       NEED_FREE_REG(rg);
       IMUL_IMMED_FROM_RT(v1s, value2, rg);
       END_CODE
@@ -1524,7 +1528,8 @@ vinfo_t* integer_mul(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
       }
   
   BEGIN_CODE
-  NEED_CC();
+  NEED_CC_SRC(v2s);
+  DONT_OVERWRITE_SOURCE(v2s);
   COPY_IN_REG(v1, rg);              /* MOV rg, (v1) */
   IMUL_REG_FROM_RT(v2s, rg);        /* IMUL rg, (v2) */
   END_CODE
@@ -1801,7 +1806,7 @@ condition_code_t integer_cmp_i(PsycoObject* po, vinfo_t* v1,
   else
     {
       BEGIN_CODE
-      NEED_CC();
+      NEED_CC_SRC(v1s);
       COMPARE_IMMED_FROM_RT(v1s, value2);  /* CMP v1, immed2 */
       END_CODE
       return direct_results[py_op];
@@ -1822,7 +1827,7 @@ vinfo_t* integer_seqindex(PsycoObject* po, vinfo_t* vi, vinfo_t* vn, bool ovf)
     {
       reg_t rg, tmprg;
       BEGIN_CODE
-      NEED_CC();
+      NEED_CC_SRC(vis);
       NEED_FREE_REG(rg);
       LOAD_REG_FROM_RT(vis, rg);
       DELAY_USE_OF(rg);
@@ -1830,6 +1835,7 @@ vinfo_t* integer_seqindex(PsycoObject* po, vinfo_t* vi, vinfo_t* vn, bool ovf)
 
       /* Increase 'rg' by 'vns' unless it is already in the range(0, vns). */
          /* CMP i, n */
+      vns = vn->source;  /* reload, could have been moved by NEED_FREE_REG */
       COMMON_INSTR_FROM(7, rg, vns);
          /* SBB t, t */
       COMMON_INSTR_FROM_RT(3, tmprg, RunTime_New(tmprg, false));

@@ -10,7 +10,4 @@
 #include "pabstract.h"
 
 
-EXTERNFN void psy_descrobject_init(void);
-
-
 #endif /* _PSY_DESCROBJECT_H */

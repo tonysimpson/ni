@@ -358,8 +358,8 @@ static vinfo_t* pfloat_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 }
 
 
-DEFINEFN
-void psy_floatobject_init()
+INITIALIZATIONFN
+void psy_floatobject_init(void)
 {
     PyNumberMethods *m = PyFloat_Type.tp_as_number;
     Psyco_DefineMeta(m->nb_nonzero,  pfloat_nonzero);

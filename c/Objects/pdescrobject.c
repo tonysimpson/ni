@@ -24,8 +24,8 @@ static vinfo_t* pmethod_get(PsycoObject* po, PyMethodDescrObject* descr,
 }
 
 
-DEFINEFN
-void psy_descrobject_init()
+INITIALIZATIONFN
+void psy_descrobject_init(void)
 {
 	PyObject* dummy;
 	PyTypeObject* PyMemberDescr_Type;

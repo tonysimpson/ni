@@ -12,9 +12,6 @@
 #include "../dispatcher.h"
 
 
-EXTERNFN void psyco_pycompiler_init(void);
-
-
 #ifdef PyString_CheckExact
 # define NEW_STYLE_TYPES       1    /* Python >=2.2b1 */
 #else
@@ -264,23 +261,18 @@ inline void* Psyco_Lookup(void* c_function) {
 		return NULL;
 }
 
-/* for tables describing the content of a Python module and mapping its
-   objects to meta-implementations */
-typedef struct {
-	char* cd_name;             /* name of an object in the module */
-	int cd_flags;              /* METH_xxx or CD_META_xxx */
-	void* cd_function;         /* filled by Psyco_DefineMetaModule() */
-} cfunc_descr_t;
-typedef struct {
-	cfunc_descr_t* mm_descr;   /* C function */
-	void* mm_psyco_fn;         /* it meta-implementation */
-} meta_impl_t;
-EXTERNFN void Psyco_DefineMetaModule(char* modulename, meta_impl_t* def);
-
-/* To implement calls to a built-in function object, use the same calling
-   convention METH_xxx as cd_flags. To implement calls to a type
-   (Python >=2.2b1) use: */
-#define CD_META_TP_NEW   101
+/*** To map the content of a Python module to meta-implementations. ***/
+/* Returns the module object (refcount *incremented*) or NULL if
+   not found. It also prints some infos in verbose mode. */
+EXTERNFN PyObject* Psyco_DefineMetaModule(char* modulename);
+/* Returns an object from a module (refcount *incremented*) or NULL
+   if not found. In verbose mode, 'not found' errors are printed. */
+EXTERNFN PyObject* Psyco_GetModuleObject(PyObject* module, char* name,
+                                         PyTypeObject* expected_type);
+/* Maps a built-in object from a module to a meta-implementation.
+   Returns a pointer to the C function itself. */
+EXTERNFN PyCFunction Psyco_DefineModuleFn(PyObject* module, char* meth_name,
+                                          int meth_flags, void* meta_fn);
 
 
 /* the general-purpose calling routine: it looks for a meta implementation of

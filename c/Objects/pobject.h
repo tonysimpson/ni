@@ -90,24 +90,34 @@ EXTERNFN vinfo_t* PsycoObject_RichCompareBool(PsycoObject* po,
 /* a quick way to specify the type of the object returned by an operation
    when it is known, without having to go into all the details of the
    operation itself (be careful, you must be *sure* of the return type): */
-#define DEF_KNOWN_RET_TYPE_1(cname, op, flags, knowntype)			\
-static vinfo_t* cname(PsycoObject* po, vinfo_t* v1) {				\
-	vinfo_t* result = psyco_generic_call(po, op, flags, "v", v1);		\
-	if (result != NULL) {							\
-		set_array_item(po, result, OB_TYPE,				\
-			       vinfo_new(CompileTime_New((long)(&knowntype))));	\
-	}									\
-	return result;								\
-}
+
+#define DEF_KNOWN_RET_TYPE_1(cname, op, flags, knowntype)	\
+    DEF_KNOWN_RET_TYPE_internal(cname, knowntype,		\
+				(PsycoObject* po, vinfo_t* v1),	\
+				(po, op, flags, "v", v1))
 #define DEF_KNOWN_RET_TYPE_2(cname, op, flags, knowntype)			\
-static vinfo_t* cname(PsycoObject* po, vinfo_t* v1,				\
-				      vinfo_t* v2) {				\
-	vinfo_t* result = psyco_generic_call(po, op, flags, "vv", v1, v2);	\
-	if (result != NULL) {							\
-		set_array_item(po, result, OB_TYPE,				\
-			       vinfo_new(CompileTime_New((long)(&knowntype))));	\
-	}									\
-	return result;								\
+    DEF_KNOWN_RET_TYPE_internal(cname, knowntype,				\
+				(PsycoObject* po, vinfo_t* v1, vinfo_t* v2),	\
+				(po, op, flags, "vv", v1, v2))
+#define DEF_KNOWN_RET_TYPE_3(cname, op, flags, knowntype)			\
+    DEF_KNOWN_RET_TYPE_internal(cname, knowntype,				\
+				(PsycoObject* po, vinfo_t* v1, vinfo_t* v2,	\
+					vinfo_t* v3),				\
+				(po, op, flags, "vvv", v1, v2, v3))
+#define DEF_KNOWN_RET_TYPE_4(cname, op, flags, knowntype)			\
+    DEF_KNOWN_RET_TYPE_internal(cname, knowntype,				\
+				(PsycoObject* po, vinfo_t* v1, vinfo_t* v2,	\
+					vinfo_t* v3, vinfo_t* v4),		\
+				(po, op, flags, "vvvv", v1, v2, v3, v4))
+
+#define DEF_KNOWN_RET_TYPE_internal(cname, knowntype, fargs, gargs)             \
+static vinfo_t* cname  fargs  {                                                 \
+	vinfo_t* result = psyco_generic_call  gargs ;                           \
+	if (result != NULL) {                                                   \
+		set_array_item(po, result, OB_TYPE,                             \
+			       vinfo_new(CompileTime_New((long)(knowntype))));  \
+	}                                                                       \
+	return result;                                                          \
 }
 
 
@@ -134,47 +144,5 @@ inline int Psyco_IsNone(PsycoObject* po, vinfo_t* vi) {
 	return Psyco_TypeSwitch(po, vi, &psyfs_none);
 }
 
-
-inline void psy_object_init(void)
-{
-	long values[3];
-        int cnt;
-
-	values[0] = (long)(&PyInt_Type);
-	psyco_build_run_time_switch(&psyfs_int, SkFlagFixed, values, 1);
-
-	values[0] = (long)(&PyInt_Type);
-	values[1] = (long)(&PyLong_Type);
-	values[2] = (long)(&PyFloat_Type);
-        psyco_build_run_time_switch(&psyfs_int_long, SkFlagFixed, values, 2);
-	psyco_build_run_time_switch(&psyfs_int_long_float, SkFlagFixed, values, 3);
-
-	values[0] = (long)(&PyTuple_Type);
-	values[1] = (long)(&PyList_Type);
-        psyco_build_run_time_switch(&psyfs_tuple_list, SkFlagFixed, values, 2);
-
-	values[0] = (long)(&PyString_Type);
-#ifdef Py_USING_UNICODE
-	values[1] = (long)(&PyUnicode_Type);
-        cnt = 2;
-#else
-        cnt = 1;
-#endif
-        psyco_build_run_time_switch(&psyfs_string_unicode, SkFlagFixed,
-                                    values, cnt);
-
-	values[0] = (long)(Py_None->ob_type);
-	psyco_build_run_time_switch(&psyfs_none, SkFlagFixed, values, 1);
-
-        values[0] = (long)(&PyTuple_Type);
-	psyco_build_run_time_switch(&psyfs_tuple, SkFlagFixed, values, 1);
-
-        values[0] = (long)(&PyDict_Type);
-	psyco_build_run_time_switch(&psyfs_dict, SkFlagFixed, values, 1);
-
-        /* associate the Python implementation of some functions with
-           the one from Psyco */
-        Psyco_DefineMeta(PyObject_GenericGetAttr, PsycoObject_GenericGetAttr);
-}
 
 #endif /* _PSY_OBJECT_H */

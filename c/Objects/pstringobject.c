@@ -86,8 +86,8 @@ static vinfo_t* pstring_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 }
 
 
-DEFINEFN
-void psy_stringobject_init()
+INITIALIZATIONFN
+void psy_stringobject_init(void)
 {
 	PySequenceMethods *m = PyString_Type.tp_as_sequence;
 	Psyco_DefineMeta(m->sq_length, psyco_generic_immut_ob_size);

@@ -10,9 +10,6 @@
 #include "Python/pycheader.h"
 
 
-EXTERNFN void psyco_compiler_init(void);
-
-
 /*****************************************************************/
  /***   Definition of the "sources" of vinfo_t structures       ***/
 
@@ -75,6 +72,9 @@ inline bool has_rtref(Source s) {
 inline reg_t getreg(RunTimeSource s)     { return (reg_t)(s >> 28); }
 inline bool is_reg_none(RunTimeSource s) { return s < 0; }
 inline int getstack(RunTimeSource s)     { return s & RunTime_StackMask; }
+inline bool is_runtime_with_reg(Source s) {
+  return (s & (TimeMask|(1<<31))) == 0;
+}
 
 /* mutation */
 inline RunTimeSource remove_rtref(RunTimeSource s) { return s | RunTime_NoRef; }

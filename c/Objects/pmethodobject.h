@@ -38,6 +38,4 @@ inline vinfo_t* PsycoCFunction_New(PsycoObject* po, PyMethodDef* ml,
 }
 
 
-EXTERNFN void psy_methodobject_init(void);
-
 #endif /* _PSY_METHODOBJECT_H */

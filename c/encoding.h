@@ -303,7 +303,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define CHECK_ZERO_CONDITION      CC_E
 #define CHECK_NONZERO_CONDITION   INVERT_CC(CHECK_ZERO_CONDITION)
 #define CHECK_NONZERO_FROM_RT(source)             do {                          \
-  NEED_CC();                                                                    \
+  NEED_CC_SRC(source);                                                          \
   if (RSOURCE_REG_IS_NONE(source))                                              \
     {                                                                           \
       INSTR_MODRM_FROM_RT(source, 0x83, 7<<3);  /* CMP (source), imm8 */        \
@@ -702,12 +702,17 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 /* ensure that the condition code flags of the processor no
    longer contain any useful information */
 
-#define NEED_CC()       do {                    \
+#define NEED_CC()       NEED_CC_REG(REG_NONE)
+/* same as NEED_CC() but don't overwrite rg */
+#define NEED_CC_REG(rg)   do {                  \
   if (po->ccreg != NULL)                        \
-    code = psyco_compute_cc(po, code);          \
+    code = psyco_compute_cc(po, code, (rg));    \
 } while (0)
+/* same as NEED_CC() but don't overwrite the given source */
+#define NEED_CC_SRC(src)                                        \
+    NEED_CC_REG(is_runtime(src) ? RSOURCE_REG(src) : REG_NONE)
 /*internal, see processor.c*/
-EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
+EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved);
 
 #define LOAD_REG_FROM_CONDITION(rg, cc)   do {  /* 'rg' is an 8-bit reg */      \
   code[0] = 0x0F;               /* SETcond rg8 */                               \
@@ -739,15 +744,17 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
   }                                             \
 } while (0)
 
-#define NEED_FREE_BYTE_REG(rg)   do {                                           \
+#define NEED_FREE_BYTE_REG(rg, reserved)   do {                                 \
   /* test some registers only --                                                \
      cannot access the other registers as a single byte */                      \
+  /* 'reserved' is a register that will not be used */                          \
   if (REG_NUMBER(po, REG_386_EDX) == NULL)       rg = REG_386_EDX;  /* DL */    \
   else if (REG_NUMBER(po, REG_386_ECX) == NULL)  rg = REG_386_ECX;  /* CL */    \
   else if (REG_NUMBER(po, REG_386_EAX) == NULL)  rg = REG_386_EAX;  /* AL */    \
+  else if (REG_NUMBER(po, REG_386_EBX) == NULL)  rg = REG_386_EBX;  /* BL */    \
   else {                                                                        \
-    NEED_REGISTER(REG_386_EBX);                                                 \
-    rg = REG_386_EBX;  /* BL */                                                 \
+    if ((reserved) == REG_386_EBX) rg = REG_386_ECX; else rg = REG_386_EBX;     \
+    NEED_REGISTER(rg);                                                          \
   }                                                                             \
 } while (0)
 
@@ -765,6 +772,12 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
   DELAY_USE_OF(rg1);                            \
   DELAY_USE_OF(rg2);                            \
   DELAY_USE_OF(rg1);                            \
+} while (0)
+
+/* the same if the given source is run-time and in a register */
+#define DONT_OVERWRITE_SOURCE(src)   do {       \
+  if (is_runtime_with_reg(src))                 \
+    DELAY_USE_OF(RSOURCE_REG(src));             \
 } while (0)
 
 

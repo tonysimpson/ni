@@ -8,8 +8,6 @@
 
 #include "vcompiler.h"
 
-EXTERNFN void psyco_processor_init(void);
-
 
 #define SIZE_OF_LONG_BITS   2
 #if (1<<SIZE_OF_LONG_BITS) != SIZEOF_LONG

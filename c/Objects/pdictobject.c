@@ -26,8 +26,8 @@ static vinfo_t* psyco_dict_length(PsycoObject* po, vinfo_t* vi)
 }
 
 
-DEFINEFN
-void psy_dictobject_init()
+INITIALIZATIONFN
+void psy_dictobject_init(void)
 {
 	PyMappingMethods *m = PyDict_Type.tp_as_mapping;
 	Psyco_DefineMeta(m->mp_length, psyco_dict_length);
