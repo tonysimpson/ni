@@ -33,7 +33,7 @@ Version History:
 """
 
 LOOPS = 10000
-LOOPS1 = 1000  # number of loops for the first run of Psyco
+LOOPS1 = 10000  # number of loops for the first run of Psyco
 
 from time import clock
 
@@ -62,8 +62,8 @@ def main():
     print "Pystone(%s)                   time     loops per second" % __version__
     py_time, = pystones_reg(LOOPS1+LOOPS)
     pyloop_time = py_time / (LOOPS1+LOOPS)
-    print "regular Python                  %g        %g" % \
-          (py_time, 1.0/pyloop_time)
+    print "regular Python for %d passes  %g        %g" % \
+          (LOOPS1+LOOPS, py_time, 1.0/pyloop_time)
     psy_time1, psy_time = pystones_psycho(LOOPS1, LOOPS)
     print "Psyco for %d passes           %g        %g" % \
           (LOOPS1, psy_time1, LOOPS1/psy_time1)
@@ -100,6 +100,10 @@ def main():
     else:
         c = start_time/(pyloop_time - loop_time)
         print "Cut-off point: %.1f iterations" % c
+    if start_time < 0.07:
+        print "Note: start-up time is very low, the above figure is not reliable."
+        print "You should consider running the same benchmark a large number of times"
+        print "and taking the mean value for the cut-off point."
 
 def pystones_psycho(*loopslist):
     import _psyco
