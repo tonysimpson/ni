@@ -135,6 +135,7 @@ static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
       Py_DECREF(key);
     }
 }
+#ifndef MS_WIN32
 static void vinfo_dump_a1(vinfo_array_t* array)
 {
   char cmdline[999];
@@ -167,6 +168,7 @@ DEFINEFN void po_dump(PsycoObject* po)
   vinfo_dump_a1(&po->vlocals);
   if (&po_dump) ;  /* force the compiler to consider it as used */
 }
+#endif  /* !MS_WIN32 */
 #if !ALL_STATIC
  EXTERNFN int psyco_top_array_count(FrozenPsycoObject* fpo);  /*in dispatcher.c*/
 #else

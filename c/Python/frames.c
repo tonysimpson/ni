@@ -306,6 +306,7 @@ bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering)
 		result = NULL;
 	}
 	if (result == NULL) {
+		PyObject *exc, *value, *tb;
 		if (entering) {
 			/* Nothing special to worry in this case,
 			   eval_frame() will return right away */
@@ -320,7 +321,6 @@ bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering)
 		   however empty the block stack to prevent exception
 		   handlers to be entered --- they have already been run by
 		   Psyco! */
-		PyObject *exc, *value, *tb;
 		PyErr_Fetch(&exc, &value, &tb);
 		extra_assert(exc != NULL);      /* exception */
                 f->f_iblock = 0;

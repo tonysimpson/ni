@@ -204,6 +204,8 @@ class Profiler:
     def stop(self):
         for alarm in self.alarms:
             alarm.stop(0)
+        for alarm in self.alarms:
+            alarm.stop(1)   # wait for parallel threads to stop
         del self.alarms[:]
         if self.time is not None:
             self.time -= time.time() - self.time_at_start
