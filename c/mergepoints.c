@@ -209,7 +209,7 @@
                     (NO_MERGE_POINT(op)   ? MP_NO_MERGEPT     : 0) |    \
                     (OTHER_OPCODE(op)     ? MP_OTHER          : 0))
 
-/* opcode table -- the preprocessor expands this into several hunderds KB
+/* opcode table -- the preprocessor expands this into several hundreds KB
    of code (which reduces down to 256 bytes!).  Hopefully not a problem
    for modern C compilers */
 static const char instr_control_flow[256] = {
@@ -334,19 +334,28 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
 	    Py_INCREF(Py_None);
 	    return Py_None;
 	  }
-      if (flags & MP_HAS_JREL)
-        jtarget = i+oparg;
-      else if (flags & MP_HAS_JABS)
-        jtarget = oparg;
+      if (flags & (MP_HAS_JREL|MP_HAS_JABS))
+        {
+          jtarget = oparg;
+          if (flags & MP_HAS_JREL)
+            jtarget += i;
+          if (flags & MP_HAS_J_MULTIPLE)
+            instrnodes[jtarget].inpaths = 99;
+          else
+            instrnodes[jtarget].inpaths++;
+        }
       else
-        jtarget = -1;  /* not a jump */
-      next = (flags & MP_IS_JUMP) ? jtarget : i;
-      if (next >= 0)
-        instrnodes[next].inpaths++;
-      if (flags & MP_HAS_J_MULTIPLE)
-        instrnodes[jtarget].inpaths = 99;
-      if (flags & MP_IS_CTXDEP)
-        instrnodes[i].inpaths = 99;
+        jtarget = -1;  /* no jump target */
+      if (flags & MP_IS_JUMP)
+        next = jtarget;
+      else
+        {
+          next = i;
+          if (flags & MP_IS_CTXDEP)
+            instrnodes[next].inpaths = 99;
+          else
+            instrnodes[next].inpaths++;
+        }
       instrnodes[i0].next = (flags & MP_NO_MERGEPT) ? next : -1;
     }
 
