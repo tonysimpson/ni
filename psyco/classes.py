@@ -26,8 +26,8 @@ __all__ = ['psyobj', 'psymetaclass', '__metaclass__']
 
 # Python version check
 try:
-    object
-except NameError:
+    from _psyco import compacttype
+except ImportError:
     class psyobj:        # compatilibity
         pass
     psymetaclass = None
@@ -35,15 +35,12 @@ else:
     # version >= 2.2 only
 
     import core
-    from _psyco import compact
     from types import FunctionType
 
-    class psymetaclass(type):
+    class psymetaclass(compacttype):
         "Psyco-optimized meta-class. Turns all methods into Psyco proxies."
 
         def __new__(cls, name, bases, dict):
-            if bases == () or bases == (object,):
-                bases = (compact,)
             bindlist = dict.get('__psyco__bind__')
             if bindlist is None:
                 bindlist = [key for key, value in dict.items()

@@ -50,6 +50,6 @@ from core import full, profile, background, runonly, stop, cannotcompile
 from core import log, bind, unbind, proxy, unproxy, dumpcodebuf
 
 try:
-    from _psyco import compact    # Python 2.2 and above only
+    from _psyco import compact, compacttype    # Python 2.2 and above only
 except ImportError:
     pass

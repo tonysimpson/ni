@@ -975,11 +975,6 @@ PyMODINIT_FUNC init_psyco(void)
   if (PyModule_AddObject(CPsycoModule, "PsycoFunctionType",
 			 (PyObject*) &PsycoFunction_Type))
     return;
-#if NEW_STYLE_TYPES
-  Py_INCREF(&PyCompact_Type);
-  if (PyModule_AddObject(CPsycoModule, "compact", (PyObject*) &PyCompact_Type))
-    return;
-#endif
 /*if (PyModule_AddIntConstant(CPsycoModule, "DEFAULT_RECURSION", DEFAULT_RECURSION))
     return;*/
 #if ALL_CHECKS

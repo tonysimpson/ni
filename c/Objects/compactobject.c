@@ -53,13 +53,24 @@ static void debug_k_impl(compact_impl_t* p)
 
 /*****************************************************************/
 
+static int
+compact_init(PyObject *self, PyObject *args, PyObject *kwds)
+{
+	return 0;
+}
+
 static PyObject *
 compact_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
 	PyCompactObject* ko;
-	char* keywords[] = {NULL};
-	if (!PyArg_ParseTupleAndKeywords(args, kwds, "", keywords))
+
+	/* See comments in typeobject.c:object_new() */
+	if (type->tp_init == compact_init && (PyTuple_GET_SIZE(args) ||
+	     (kwds && PyDict_Check(kwds) && PyDict_Size(kwds)))) {
+		PyErr_SetString(PyExc_TypeError,
+				"default __new__ takes no parameters");
 		return NULL;
+	}
 
 	ko = (PyCompactObject*) type->tp_alloc(type, 0);
 	if (ko != NULL) {
@@ -599,6 +610,129 @@ static PyObject* compact_getdict(PyCompactObject* ko, void* context)
 
 
 /*****************************************************************/
+/*  The custom metaclass 'psyco.compacttype'.
+ *  The only difference with the standard 'type' is that it
+ *  forces some values:
+ *     __slots__ == ()
+ *     __bases__[-1] == psyco.compact
+ */
+
+static PyObject *
+compacttype_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
+{
+	int i, n;
+	PyObject *name, *bases, *dict, *slots, *result;
+	static char *kwlist[] = {"name", "bases", "dict", 0};
+
+	/* Check arguments: (name, bases, dict) */
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "SO!O!:compacttype",
+					 kwlist,
+					 &name,
+					 &PyTuple_Type, &bases,
+					 &PyDict_Type, &dict))
+		return NULL;
+
+	slots = PyDict_GetItemString(dict, "__slots__");
+	if (slots != NULL) {
+		/* Specifying __slots__ on compacttypes is forbidden! */
+		PyErr_SetString(PyExc_PsycoError, "psyco.compact classes "
+				"cannot have an explicit __slots__");
+		return NULL;
+	}
+
+	args = PyTuple_New(3);
+	if (args == NULL)
+		return NULL;
+	PyTuple_SET_ITEM(args, 0, name); Py_INCREF(name);
+
+	/* Append 'psyco.compact' to bases if necessary */
+	n = PyTuple_GET_SIZE(bases);
+	if (n == 0 ||
+	    PyTuple_GET_ITEM(bases, n-1) != (PyObject*) &PyCompact_Type) {
+		result = PyTuple_New(n+1);
+		if (result == NULL) {
+			Py_DECREF(args);
+			return NULL;
+		}
+		for (i=0; i<n; i++) {
+			PyObject* o = PyTuple_GET_ITEM(bases, i);
+			PyTuple_SET_ITEM(result, i, o);
+			Py_INCREF(o);
+		}
+		PyTuple_SET_ITEM(result, n, (PyObject*) &PyCompact_Type);
+		Py_INCREF(&PyCompact_Type);
+		bases = result;
+	}
+	else
+		Py_INCREF(bases);
+	PyTuple_SET_ITEM(args, 1, bases);
+
+	/* Insert '__slots__=()' into a copy of 'dict' */
+	dict = PyDict_Copy(dict);
+	slots = PyTuple_New(0);
+	if (dict == NULL || slots == NULL ||
+	    PyDict_SetItemString(dict, "__slots__", slots) < 0) {
+		Py_XDECREF(slots);
+		Py_XDECREF(dict);
+		Py_DECREF(args);
+		return NULL;
+	}
+	PyTuple_SET_ITEM(args, 2, dict);
+	Py_DECREF(slots);
+
+	/* Call the base type's tp_new() to actually create the class */
+	result = PyType_Type.tp_new(metatype, args, NULL);
+	Py_DECREF(args);
+	return result;
+}
+
+static PyTypeObject PyCompactType_Type = {
+	PyObject_HEAD_INIT(NULL)
+	0,                                      /*ob_size*/
+	"psyco.compacttype",                    /*tp_name*/
+	0,                                      /*tp_size*/
+	0,                                      /*tp_itemsize*/
+	/* methods */
+	0,                                      /* tp_dealloc */
+	0,                                      /* tp_print */
+	0,                                      /* tp_getattr */
+	0,                                      /* tp_setattr */
+	0,                                      /* tp_compare */
+	0,                                      /* tp_repr */
+	0,                                      /* tp_as_number */
+	0,                                      /* tp_as_sequence */
+	0,                                      /* tp_as_mapping */
+	0,                                      /* tp_hash */
+	0,                                      /* tp_call */
+	0,                                      /* tp_str */
+	0,                                      /* tp_getattro */
+	0,                                      /* tp_setattro */
+	0,                                      /* tp_as_buffer */
+	Py_TPFLAGS_DEFAULT |
+		Py_TPFLAGS_BASETYPE,		/* tp_flags */
+	0,                                      /* tp_doc */
+	0,                                      /* tp_traverse */
+	0,                                      /* tp_clear */
+	0,                                      /* tp_richcompare */
+	0,                                      /* tp_weaklistoffset */
+	0,                                      /* tp_iter */
+	0,                                      /* tp_iternext */
+	0,                                      /* tp_methods */
+	0,                                      /* tp_members */
+	0,                                      /* tp_getset */
+	/*&PyType_Type set below*/ 0,           /* tp_base */
+	0,                                      /* tp_dict */
+	0,                                      /* tp_descr_get */
+	0,                                      /* tp_descr_set */
+	0,                                      /* tp_dictoffset */
+	0,                                      /* tp_init */
+	0,                                      /* tp_alloc */
+	compacttype_new,                        /* tp_new */
+	0,                                      /* tp_free */
+};
+
+
+/*****************************************************************/
 
 DEFINEVAR compact_impl_t* PyCompact_EmptyImpl;
 
@@ -614,7 +748,7 @@ static PyGetSetDef compact_getsets[] = {
 };
 
 DEFINEVAR PyTypeObject PyCompact_Type = {
-	PyObject_HEAD_INIT(NULL)
+	PyObject_HEAD_INIT(&PyCompactType_Type)
 	0,                                      /*ob_size*/
 	"psyco.compact",                        /*tp_name*/
 	sizeof(PyCompactObject),                /*tp_size*/
@@ -652,7 +786,7 @@ DEFINEVAR PyTypeObject PyCompact_Type = {
 	0,                                      /* tp_descr_get */
 	0,                                      /* tp_descr_set */
 	0,                                      /* tp_dictoffset */
-	0,                                      /* tp_init */
+	compact_init,                           /* tp_init */
 	/*PyType_GenericAlloc set below*/ 0,    /* tp_alloc */
 	compact_new,                            /* tp_new */
 	compact_del,                            /* tp_free */
@@ -661,8 +795,17 @@ DEFINEVAR PyTypeObject PyCompact_Type = {
 void psyco_compact_init(void)
 {
 	PyCompact_EmptyImpl = &k_empty_impl;
+	PyCompactType_Type.tp_base = &PyType_Type;
 	PyCompact_Type.tp_alloc = &PyType_GenericAlloc;
+	PyType_Ready(&PyCompactType_Type);
 	PyType_Ready(&PyCompact_Type);
+
+	Py_INCREF(&PyCompact_Type);
+	PyModule_AddObject(CPsycoModule, "compact",
+			   (PyObject*) &PyCompact_Type);
+	Py_INCREF(&PyCompactType_Type);
+	PyModule_AddObject(CPsycoModule, "compacttype",
+			   (PyObject*) &PyCompactType_Type);
 }
 
 #else  /* !HAVE_COMPACT_OBJECT */
