@@ -427,7 +427,7 @@ Ok
 >>> assert_true(test5.f3(15, 2) == (60, 30,
 ...                                 clamp(32212254720L), 3, 7, 0))
 Ok
->>> assert_true(test5.f3(-1, 0) == (-1, -2, -2147483648, -1, -1, -1))
+>>> assert_true(test5.f3(-1, 0) == (-1, -2, -2147483648L, -1, -1, -1))
 Ok
 
 >>> print test5.f4("some-string")
