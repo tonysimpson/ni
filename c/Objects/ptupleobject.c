@@ -125,6 +125,7 @@ static vinfo_t* ptuple_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 {
 	condition_code_t cc;
 	vinfo_t* vlen;
+	vinfo_t* result;
 
 	vlen = get_array_item(po, a, VAR_OB_SIZE);
 	if (vlen == NULL)
@@ -139,8 +140,12 @@ static vinfo_t* ptuple_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 				       "tuple index out of range");
 		return NULL;
 	}
-        
-        return read_immut_array_item_var(po, a, TUPLE_OB_ITEM, i, false);
+
+	result = read_immut_array_item_var(po, a, TUPLE_OB_ITEM, i, false);
+	/* the tuple could be freed while the returned item is still in use */
+	if (result != NULL)
+		need_reference(po, result);
+	return result;
 }
 
 

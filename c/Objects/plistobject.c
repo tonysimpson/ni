@@ -62,6 +62,9 @@ static vinfo_t* plist_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 
 	result = read_array_item_var(po, ob_item, 0, i, false);
 	vinfo_decref(ob_item, po);
+	/* the list could be freed while the returned item is still in use */
+	if (result != NULL)
+		need_reference(po, result);
 	return result;
 }
 
