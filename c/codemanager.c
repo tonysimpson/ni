@@ -45,7 +45,7 @@ static void allocate_more_buffers(codemanager_buf_t** bb)
       num_bigblocks = 32;    /* allocate 32MB at a time */
       p = (char*) mmap(NULL, BIG_BUFFER_SIZE * num_bigblocks,
                        PROT_EXEC|PROT_READ|PROT_WRITE,
-                       MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+                       MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
       if (p == MAP_FAILED || p == NULL)
         {
           if (mmap_works == 1)
