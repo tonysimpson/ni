@@ -3,13 +3,18 @@
 ======================================================================
 
 
+                              VERSION 1.2
+                              -----------
+
+Psyco transparently accelerates the execution of Python code.
+
+
 REQUIREMENTS
 ------------
 
-Psyco accelerates the execution of Python code. It works on any
-recent version of Python (currently 2.1 to 2.3). At present it
-*requires* a *PC* (i.e. a 386-compatible processor), but it is
-OS-independant.
+Psyco works on any recent version of Python (currently 2.1 to 2.3).
+At present it *requires* a *PC* (i.e. a 386-compatible processor),
+but it is OS-independant.
 
 This program is still incomplete, but still it seems to have been
 quite stable for some time and can give good results.

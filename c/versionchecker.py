@@ -15,6 +15,7 @@ FILES = {
     '../../my/psyco/site/content/index.rst': re.compile(r'`Psyco ([0-9.]+)@'),
     '../../my/psyco/site/content/download.rst': re.compile(r'Current version is ([0-9.]+)'),
     '../../my/psyco/site/content/./download.rst': re.compile(r'Download Release ([0-9.]+)'),
+    '../README.txt': re.compile(r'VERSION ([0-9.]+)'),
     }
 
 versions = {}
