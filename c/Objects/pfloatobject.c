@@ -200,16 +200,45 @@ DEFINEVAR source_virtual_t psyco_computed_float;
  /*** float objects meta-implementation                       ***/
 
 
-#define CONVERT_TO_DOUBLE(vobj, v1, v2)                         \
+#define CONVERT_TO_DOUBLE_CORE(vobj, v1, v2, ERRORACTION)       \
     switch (psyco_convert_to_double(po, vobj, &v1, &v2)) {      \
     case true:                                                  \
         break;   /* fine */                                     \
     case false:                                                 \
-        return NULL;  /* error or promotion */                  \
+        return ERRORACTION;  /* error or promotion */           \
     default:                                                    \
+        ERRORACTION;                                            \
         return psyco_vi_NotImplemented();  /* cannot do it */   \
     }
 
+#define CONVERT_TO_DOUBLE(vobj, v1, v2)     \
+    CONVERT_TO_DOUBLE_CORE(vobj, v1, v2, return_null())  
+    
+#define CONVERT_TO_DOUBLE2(uobj, u1, u2, vobj, v1, v2)     \
+    CONVERT_TO_DOUBLE_CORE(uobj, u1, u2, return_null());    \
+    CONVERT_TO_DOUBLE_CORE(vobj, v1, v2, release_double(po, u1, u2))  
+    
+#define RELEASE_DOUBLE(v1, v2) \
+    vinfo_decref(v1, po); \
+    vinfo_decref(v2, po);
+
+#define RELEASE_DOUBLE2(v1, v2, u1, u2) \
+    vinfo_decref(v1, po); \
+    vinfo_decref(v2, po); \
+    vinfo_decref(u1, po); \
+    vinfo_decref(u2, po); 
+    
+static vinfo_t*  release_double(PsycoObject* po, vinfo_t* u1, vinfo_t* u2) {
+    vinfo_decref(u1, po);
+    vinfo_decref(u2, po);
+    return NULL;
+}
+    
+static vinfo_t*  return_null() {
+    return NULL;
+}
+
+    
 DEFINEFN
 int psyco_convert_to_double(PsycoObject* po, vinfo_t* vobj,
                             vinfo_t** pv1, vinfo_t** pv2)
@@ -243,20 +272,13 @@ int psyco_convert_to_double(PsycoObject* po, vinfo_t* vobj,
     return -1;  /* cannot do it */
 }
 
-#define RELEASE_DOUBLE(v1, v2) \
-    vinfo_decref(v2, po); \
-    vinfo_decref(v1, po);
-
-
 static vinfo_t* pfloat_cmp(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
     /* We could probably assume that these are floats, but using CONVERT is easier */
-    CONVERT_TO_DOUBLE(v, a1, a2);
-    CONVERT_TO_DOUBLE(w, b1, b2);
+    CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     x = psyco_generic_call(po, cimpl_fp_cmp, CfPure|CfReturnNormal, "vvvv", a1, a2, b1, b2);
-    RELEASE_DOUBLE(a1, a2);
-    RELEASE_DOUBLE(b1, b2);
+    RELEASE_DOUBLE2(a1, a2, b1, b2);
     return x;
 }
 
@@ -317,13 +339,11 @@ static vinfo_t* pfloat_add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
     vinfo_array_t* result;
-    CONVERT_TO_DOUBLE(v, a1, a2);
-    CONVERT_TO_DOUBLE(w, b1, b2);
+    CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     result = array_new(2);
     x = psyco_generic_call(po, cimpl_fp_add, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
-    RELEASE_DOUBLE(b1, b2);
-    RELEASE_DOUBLE(a1, a2);
+    RELEASE_DOUBLE2(a1, a2, b1, b2);
     if (x != NULL) {
 	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     }
@@ -335,13 +355,11 @@ static vinfo_t* pfloat_sub(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
     vinfo_array_t* result;
-    CONVERT_TO_DOUBLE(v, a1, a2);
-    CONVERT_TO_DOUBLE(w, b1, b2);
+    CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     result = array_new(2);
     x = psyco_generic_call(po, cimpl_fp_sub, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
-    RELEASE_DOUBLE(b1, b2);
-    RELEASE_DOUBLE(a1, a2);
+    RELEASE_DOUBLE2(a1, a2, b1, b2);
     if (x != NULL) {
 	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     }
@@ -353,13 +371,11 @@ static vinfo_t* pfloat_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
     vinfo_array_t* result;
-    CONVERT_TO_DOUBLE(v, a1, a2);
-    CONVERT_TO_DOUBLE(w, b1, b2);
+    CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     result = array_new(2);
     x = psyco_generic_call(po, cimpl_fp_mul, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
-    RELEASE_DOUBLE(b1, b2);
-    RELEASE_DOUBLE(a1, a2);
+    RELEASE_DOUBLE2(a1, a2, b1, b2);
     if (x != NULL) {
 	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     }
@@ -371,13 +387,11 @@ static vinfo_t* pfloat_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
     vinfo_array_t* result;
-    CONVERT_TO_DOUBLE(v, a1, a2);
-    CONVERT_TO_DOUBLE(w, b1, b2);
+    CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     result = array_new(2);
     x = psyco_generic_call(po, cimpl_fp_div, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
-    RELEASE_DOUBLE(b1, b2);
-    RELEASE_DOUBLE(a1, a2);
+    RELEASE_DOUBLE2(a1, a2, b1, b2);
     if (x != NULL) {
 	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     }
