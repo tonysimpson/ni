@@ -87,7 +87,7 @@ def recfindcode(code, codename):
     if code.co_name == codename:
         return code
     else:
-        for c in co.co_consts:
+        for c in code.co_consts:
             if type(c) is type(code):
                 result = recfindcode(c, codename)
                 if result:
