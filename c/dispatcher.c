@@ -487,16 +487,18 @@ static void fpo_find_regs_array(vinfo_array_t* source, PsycoObject* po)
       vinfo_t* a = source->items[i];
       if (a != NULL)
         {
-#if REG_TOTAL > 0
           Source src = a->source;
+#if REG_TOTAL > 0
           if (is_runtime(src) && !is_reg_none(src))
             REG_NUMBER(po, getreg(src)) = a;
+          else
 #endif
 #if HAVE_CCREG
-          else
             if (psyco_vsource_cc(src) != CC_ALWAYS_FALSE)
               po->ccreg = a;
+            else
 #endif
+              /* nothing */ ;
           if (a->array != NullArray)
             fpo_find_regs_array(a->array, po);
         }
@@ -582,7 +584,7 @@ static code_t* do_respawn(respawn_t* rs)
   codebuf->snapshot.fz_stuff.respawning = rs;
   codebuf->snapshot.fz_respawned_cnt = rs->respawn_cnt;
   codebuf->snapshot.fz_respawned_from = firstcodebuf;
-  po->code = (code_t*) codebuf->codestart;
+  po->code = insn_code_label(codebuf->codestart);
   /* respawn by restarting the Python compiler at the beginning of the
      instruction where it left. It will probably re-emit a few machine
      instructions -- not needed, they will be trashed, but this has
@@ -647,32 +649,34 @@ void psyco_respawn_detected(PsycoObject* po)
      lost code does not looses references to other objects as well.
      Use is_respawning() to bypass the creation of all references when
      compiling during respawn. */
-  po->code = codebuf->codestart;
+  po->code = (code_t*) codebuf->codestart;
   INIT_CODE_EMISSION(po->code);
 }
 
 DEFINEFN
-void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
+void* psyco_prepare_respawn_ex(PsycoObject* po, condition_code_t jmpcondition,
+                               void* fn, int extrasize)
 {
   /* ignore calls to psyco_prepare_respawn() while currently respawning */
   if (!is_respawning(po))
     {
+      char* closure;
       respawn_t* rs;
       code_t* calling_code;
       code_t* calling_limit;
       code_t* limit;
       CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL, &limit);
   
-      extra_assert(jmpcondition < CC_TOTAL);
+      extra_assert((int)jmpcondition < CC_TOTAL);
 
       /* the proxy contains only a jump to do_respawn,
          followed by a respawn_t structure */
       calling_code = po->code;
       calling_limit = po->codelimit;
-      po->code = (code_t*) codebuf->codestart;
+      po->code = insn_code_label(codebuf->codestart);
       po->codelimit = limit;
-      rs = (respawn_t*) psyco_call_code_builder(po, &do_respawn, true,
-                                                SOURCE_DUMMY);
+      closure = (char*) psyco_call_code_builder(po, fn, true, SOURCE_DUMMY);
+      rs = (respawn_t*) (closure+extrasize);
       SHRINK_CODE_BUFFER(codebuf, (code_t*)(rs+1), "respawn");
       /* fill in the respawn_t structure */
       extra_assert(po->respawn_proxy != NULL);
@@ -686,6 +690,7 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
       rs->write_jmp = conditional_jump_to(po, (code_t*)codebuf->codestart,
                                           jmpcondition);
       dump_code_buffers();
+      return closure;
     }
   else
     {
@@ -694,7 +699,30 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
          the next instructions */
       po->code = (code_t*) po->respawn_proxy->codestart;
       INIT_CODE_EMISSION(po->code);
+      return NULL;
     }
+}
+
+DEFINEFN
+bool psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
+{
+  if (detect_respawn(po)) return true;
+  psyco_prepare_respawn_ex(po, jmpcondition, &do_respawn, 0);
+  return false;
+}
+
+DEFINEFN
+code_t* psyco_do_respawn(void* arg, int extrasize)
+{
+  respawn_t* rs = (respawn_t*)(((char*) arg) + extrasize);
+  return do_respawn(rs);
+}
+
+DEFINEFN
+code_t* psyco_dont_respawn(void* arg, int extrasize)
+{
+  respawn_t* rs = (respawn_t*)(((char*) arg) + extrasize);
+  return resume_after_cond_jump(rs->write_jmp);
 }
 
 DEFINEFN
@@ -1734,8 +1762,7 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
     buf->key = key;
     fs->local_chained_list = buf;
     
-    po->code = result;
-    INIT_CODE_EMISSION(po->code);
+    po->code = insn_code_label(result);
     codeend = psyco_compile(po, mp, false);
     psyco_shrink_code_buffer(codebuf, codeend);
     /* XXX don't know what to do with reference to 'codebuf' */

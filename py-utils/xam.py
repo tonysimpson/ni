@@ -1,6 +1,5 @@
 from __future__ import nested_scopes
 import os, sys, re, htmlentitydefs, struct, bisect
-from psyco import _psyco
 __metaclass__ = type
 
 tmpfile = '~tmpfile.tmp'
@@ -14,7 +13,12 @@ objdump = 'objdump -b binary -m i386 --adjust-vma=%(origin)d -D %(file)s'
 # the files from which symbols are loaded.
 # the order and number of files must match
 # psyco_dump_code_buffers() in psyco.c.
-symbolfiles = [sys.executable, _psyco.__file__]
+symbolfiles = [sys.executable]
+try:
+    from psyco import _psyco
+    symbolfiles.append(_psyco.__file__)
+except ImportError:
+    pass
 
 # the program that lists symbols, and the output it gives
 symbollister = 'nm %s'
@@ -393,6 +397,7 @@ class VirtualTimeVInfo(VInfo):
         return "Virtual-time (%x)" % self.vs
 
 def readdump(filename = 'psyco.dump'):
+    del codeboundary[:]
     re_header = re.compile(r"Psyco dump [[](\w+?)[]]")
     re_symb1 = re.compile(r"(\w+?)[:]\s0x([0-9a-fA-F]+)")
     re_codebuf = re.compile(r"CodeBufferObject 0x([0-9a-fA-F]+) (\-?\d+) \'(.*?)\' \'(.*?)\' (\-?\d+) \'(.*?)\'$")

@@ -171,4 +171,4 @@ patch('vars')
 patch('dir')
 patch('input')
 _psyco.original_raw_input = raw_input
-__builtin__.__in_psyco__ = 0
+__builtin__.__in_psyco__ = 0==1   # False

@@ -223,8 +223,13 @@ EXTERNFN void psyco_unfix(PsycoObject* po, vinfo_t* vi);
  /***   Respawning                                              ***/
 
 /* internal use */
-EXTERNFN void psyco_prepare_respawn(PsycoObject* po,
+EXTERNFN void* psyco_prepare_respawn_ex(PsycoObject* po,
+                                        condition_code_t jmpcondition,
+                                        void* fn, int extrasize);
+EXTERNFN bool psyco_prepare_respawn(PsycoObject* po,
                                     condition_code_t jmpcondition);
+EXTERNFN code_t* psyco_do_respawn(void* arg, int extrasize);
+EXTERNFN code_t* psyco_dont_respawn(void* arg, int extrasize);
 EXTERNFN void psyco_respawn_detected(PsycoObject* po);
 inline bool detect_respawn(PsycoObject* po) {
 	if (!++po->respawn_cnt) {
@@ -246,18 +251,20 @@ inline bool runtime_condition_f(PsycoObject* po, condition_code_t cond) {
 	extra_assert(cond != CC_ERROR);
 	if (cond == CC_ALWAYS_FALSE) return false;
 	if (cond == CC_ALWAYS_TRUE) return true;
-	if (detect_respawn(po)) return true;
-	psyco_prepare_respawn(po, cond);
-	return false;
+        return psyco_prepare_respawn(po, cond);
 }
 inline bool runtime_condition_t(PsycoObject* po, condition_code_t cond) {
 	extra_assert(cond != CC_ERROR);
 	if (cond == CC_ALWAYS_TRUE) return true;
 	if (cond == CC_ALWAYS_FALSE) return false;
-	if (detect_respawn(po)) return false;
-	psyco_prepare_respawn(po, INVERT_CC(cond));
-	return true;
+        return !psyco_prepare_respawn(po, INVERT_CC(cond));
 }
+/* extreme care is needed when using the runtime_condition_x() functions:
+   they must *always* get called in a sequence that doesn't depend on external
+   factors that may change. If a call is in one branch on an if/else, for
+   example, then you must make sure that the "if" condition cannot give a
+   different result during later respawning. See load_global for a what to do
+   if this is not the case. */
 
 /* the following functions let you test at compile-time the fact that a
    value is 0 or not. Returns 0 or 1, or -1 in case of error.

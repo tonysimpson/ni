@@ -49,22 +49,28 @@ inline void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promotion
 inline void* conditional_jump_to(PsycoObject* po, code_t* target,
 				 condition_code_t condition)
 {
-	word_t* arg = NULL;
-	BEGIN_CODE
-	switch (condition) {
-	case CC_ALWAYS_FALSE:          /* never jumps */
-		break;
-	case CC_ALWAYS_TRUE:
+	/* no INSN_PUSHED() in this function! Otherwise, fix
+	   detect_respawn() calls to track the new stack depth! */
+	if (condition == CC_ALWAYS_FALSE)
+		return NULL;            /* never jumps */
+	else if (condition == CC_ALWAYS_TRUE) {
+		word_t* arg;
+		BEGIN_CODE
 		INSN_jumpfar(&arg);            /* always jumps */
+		END_CODE
 		*arg = (word_t) target;
-		break;
-	default:
-		INSN_rtcc_push(condition);
-		INSN_jcondfar(&arg);
-		*arg = (word_t) target;
+		return arg;
 	}
-	END_CODE
-	return arg;
+	else {
+		word_t* arg;
+		BEGIN_CODE
+		INSN_normalize_cc(condition);
+		INSN_jcondfar(&arg);
+		code = META_dynamicfreq2(code);
+		END_CODE
+		*arg = (word_t) target;
+		return arg;
+	}
 }
 
 inline void change_cond_jump_target(void* tag, code_t* newtarget)
@@ -73,6 +79,13 @@ inline void change_cond_jump_target(void* tag, code_t* newtarget)
 	*arg = (word_t) newtarget;
 }
 
+inline code_t* resume_after_cond_jump(void* tag)
+{
+	word_t* arg = (word_t*)tag;
+	return (code_t*) (arg+1);
+}
+
+
 /* reserve a small buffer of code behind po->code in which conditional
    code can be stored.  That code should only be executed if 'condition'. */
 inline void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2,
@@ -80,7 +93,7 @@ inline void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2,
 {
 	code_t* forward_distance_ptr;
 	BEGIN_CODE
-	INSN_rtcc_push(INVERT_CC(condition));
+	INSN_normalize_cc(INVERT_CC(condition));
 	INSN_jcondnear(&forward_distance_ptr);
 	po2->code = code;
 	po2->codelimit = code + 255;
@@ -94,8 +107,8 @@ inline void make_code_conditional(PsycoObject* po, code_t* codeend,
 {
 	code_t* forward_distance_ptr = (code_t*) extra;
         code_t* code = codeend;
-        int distance = INSN_CODE_LABEL() - po->code;
-        po->code = code;
+        int distance = code - po->code;
+        po->code = insn_code_label(code);
 	extra_assert(0 <= distance && distance <= 255);
 	*forward_distance_ptr = (code_t) distance;
 }

@@ -1017,23 +1017,19 @@ static void mark_varying(PsycoObject* po, PyObject* key)
 		OUT_OF_MEMORY();
 }
 
-/* 'compilation pause' stuff, similar to psyco_coding_pause() */
+/* closure for the do_changed_global call-back */
 typedef struct {
-	CodeBufferObject* self;
-	PsycoObject* po;
 	PyObject* varname;
 	PyObject* previousvalue;
-	code_t* originalmacrocode;
+	void* originalmacrocode;
+	PyDictObject* globals;
 } changed_global_t;
 
 static code_t* do_changed_global(changed_global_t* cg)
 {
-	PsycoObject* po = cg->po;
 	PyObject* key = cg->varname;
-	code_t* code = cg->originalmacrocode;
-	KNOWN_VAR(PyDictObject*, globals, LOC_GLOBALS);
 	PyDictEntry* ep;
-	code_t* target;
+	PyDictObject* globals = cg->globals;
 
 	/* first check that the value really changed; it could merely
 	   have moved in the dictionary table (reallocations etc.) */
@@ -1043,27 +1039,14 @@ static code_t* do_changed_global(changed_global_t* cg)
 	if (ep->me_value == cg->previousvalue) {
 		/* no real change; update the original macro code
 		   and that's it */
-		code = dictitem_update_nochange(code, globals, ep);
-		return code;  /* execution continues after the macro code */
+		dictitem_update_nochange(cg->originalmacrocode,
+					 globals, ep);
+		return psyco_dont_respawn(cg, sizeof(*cg));
 	}
-
-	/* Mark the global variable as varying and compile again */
-	mark_varying(po, key);
-
-	/* 'v' is now run-time, recompile */
-	target = (code_t*) psyco_compile_code(po, NULL)->codestart;
-	/* XXX don't know what to do with the reference returned by
-	   XXX psyco_compile_code() */
-
-        /* code a jump from the original code */
-        dictitem_update_jump(code, target);
-
-        Py_DECREF(cg->varname);
-	Py_DECREF(cg->previousvalue);
-  /* cannot Py_DECREF(cg->self) because the current function is returning into
-     that code now, but any time later is fine: use the trash of codemanager.h */
-	psyco_trash_object((PyObject*) cg->self);
-	return target;
+	else {
+		/* real change: respawn */
+		return psyco_do_respawn(cg, sizeof(*cg));
+	}
 }
 
 PyObject* psy_get_builtins(PyObject* globals)
@@ -1101,9 +1084,13 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
            in the ma_table of the dictionary. We then emit machine
            code that performs a speeded-up version of the lookup by
            checking directly at that place if the same value is still
-           in place. If it is not, we call a helper function to redo
-           a complete look-up, and if the value is found to have
-	   changed, un-promote the variable from compile-time to
+           in place. If it is not, do_changed_global() is called.
+	   It redoes a complete look-up, and if the value has merely
+	   moved in the dictionary it updates the machine code.
+	   If the value has really changed, a full respawn is
+	   triggered, which will eventually cause load_global() to
+	   be re-entered and detect_respawn() to succeed. At that
+	   point we un-promote the variable from compile-time to
            run-time.
 	   
 	   This requires knowledge of the internal workings of a
@@ -1131,6 +1118,17 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 	KNOWN_VAR(PyDictObject*, globals, LOC_GLOBALS);
 	PyDictEntry* ep;
 	PyObject* result;
+
+	/* careful when respawning. The value could have been added or
+	   deleted from the globals in the meantime. This is why we
+	   cannot just do that in the "found in globals()" branch
+	   below. */
+	if (detect_respawn(po)) {
+		/* respawning was triggered by the call to
+		   psyco_prepare_respawn_ex() below */
+		mark_varying(po, key);
+		return NULL;
+	}
 	/* the compiler only puts interned strings in op_names */
 	extra_assert(PyString_CheckExact(key));
 	/*extra_assert(((PyStringObject*) key)->ob_sinterned != NULL);*/
@@ -1140,34 +1138,22 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 				  ((PyStringObject*) key)->ob_shash);
 	if (ep->me_value != NULL) {
 		/* found in the globals() */
-		CodeBufferObject* onchangebuf;
-		PsycoObject* po1 = po;
 		changed_global_t* cg;
-		code_t* newcodelimit;
+		void* macrocode;
+		condition_code_t cc;
 		result = ep->me_value;
 
-		/* if the object is changed later we will jump to
-		   a proxy which we prepare now */
-		onchangebuf = psyco_new_code_buffer(NULL, NULL, &newcodelimit);
-		dictitem_check_change(po, (code_t*) onchangebuf->codestart,
-				      globals, ep);
-		po = PsycoObject_Duplicate(po);
-		/* make the new 'po' point to the proxy buffer */
-		po->code = (code_t*) onchangebuf->codestart;
-		po->codelimit = newcodelimit;
-		cg = (changed_global_t*) psyco_call_code_builder(po,
-						       &do_changed_global, true,
-								 SOURCE_DUMMY);
-		cg->self = onchangebuf;
-		cg->po = po;
-		cg->varname = key;             Py_INCREF(key);
-		cg->previousvalue = result;    Py_INCREF(result);
-		cg->originalmacrocode = po1->code;
-		SHRINK_CODE_BUFFER(onchangebuf, (code_t*)(cg+1), "load_global");
-
-		/* done with the proxy, go on in the main code sequence */
-		po = po1;
-		dump_code_buffers();
+                macrocode = dictitem_check_change(po, globals, ep);
+		cc = DICT_ITEM_CHECK_CC;
+                cg = (changed_global_t*) psyco_prepare_respawn_ex(po, cc,
+							&do_changed_global,
+							sizeof(*cg));
+		if (cg != NULL) {
+			cg->varname = key;             Py_INCREF(key);
+			cg->previousvalue = result;    Py_INCREF(result);
+			cg->originalmacrocode = macrocode;
+			cg->globals = globals;
+		}
 	}
 	else if (strcmp(PyString_AS_STRING(key), "__in_psyco__") == 0) {
 		/* special-case __in_psyco__ to always return 1, although
@@ -2906,7 +2892,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			break;
 		if (opcode == JUMP_IF_FALSE)
 			cc = INVERT_CC(cc);
-		if (cc < CC_TOTAL) {
+		if ((int)cc < CC_TOTAL) {
 			/* compile the beginning of the "if true" path */
 			int current_instr = next_instr;
 			JUMPBY(oparg);

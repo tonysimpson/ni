@@ -1,7 +1,7 @@
 :- consult(insns).
 :- dynamic psycodump/1, stackpush/2.
-:- dynamic frequency/2, bestmodes/1, dynsubmodes/2, residualfreq/2.
-:- dynamic rfhash/1.
+:- dynamic frequency/2, subfrequency/3, bestmodes/1, removefreq/2.
+:- index(subfrequency(1,1,0)).
 
 
 %%% interactive usage %%%
@@ -14,22 +14,37 @@ load(DumpDir) :-
         see(pipe(CmdLine)),
         read(Filename),
         seen,
+        loaddumpfile(Filename).
+
+loaddumpfile(Filename) :-
+        write('loading '), write(Filename), write('...'), nl,
         see(Filename),
         load_rec,
         seen.
 
 measure(MaxLength) :-
-        tell(pipe('python samelines.py "frequency(%s, %d)." > optimize.tmp')),
+        write('measuring code sequence frequencies...'), nl,
+        tell(pipe('python samelines.py "frequency(\'%s\', %d)." > optimize.tmp')),
         (
             L1 = [_,_|_],
             codeslice(L1, MaxLength),
             generalize(L1, L),
             write(L), nl,
             fail
-        ) ;
+        ;
+        told,
+        write('measuring subsequence frequencies...'), nl,
+        tell(pipe('python samelines.py "subfrequency(\'%s\', %d)." >> optimize.tmp')),
+        (
+            L1 = [_,_|_],
+            gcodesubslice(SubG, G, MaxLength),
+            write(SubG), write('\', \''), write(G), nl,
+            fail
+        ;
         told,
         retractall(frequency(_,_)),
-        loadmeasures.
+        retractall(subfrequency(_,_,_)),
+        loadmeasures)).
 
 loadmeasures :-
         (recorded(allranks, _, Ref) -> erase(Ref); true),
@@ -42,18 +57,19 @@ buildcosts(HighestOpcode) :-
         countsuccesses(insn_single_mode(_, _, InitialStack), NbBaseOpcodes),
         MaxLen is HighestOpcode - NbBaseOpcodes,
         retractall(bestmodes(_)),
-        retractall(dynsubmodes(_,_)),
-        retractall(residualfreq(_,_)),
-        retractall(rfhash(_)),
+        retractall(removefreq(_,_)),
         allranks(AllRanks),
         workcostsrec(MaxLen, AllRanks).
-
 
 show :-
         bestmodes(X),
         write(X), nl,
         fail ;
         true.
+
+emitmodes(HighestOpcode) :-
+        buildcosts(HighestOpcode),
+        emitmodes.
 
 emitmodes :-
         initial_stack(InitialStack),
@@ -62,7 +78,8 @@ emitmodes :-
         tell('mode_combine.pl'),
         (
             enumerate(bestmodes(Mode), Opcode, FirstOpcode),
-            write(mode_combine(Mode)),
+            atom_to_term(Mode, RealMode),
+            write(mode_combine(RealMode)),
             write('.  % '),
             write(Opcode),
             nl,
@@ -77,6 +94,10 @@ emitmodes :-
 %preprocess(psycodump(L1), psycodump(L2)) :-
 %        joinlist(basemodes, L1, L2).
 
+:- det(atom_to_term/2).
+atom_to_term(Atom, Term) :-
+        atom_to_term(Atom, Term, []).
+
 load_rec :-
         read(Term),
         Term \= end_of_file,
@@ -88,20 +109,52 @@ load_rec.
 
 codeslice(L1, MaxLength) :-
         psycodump(L),
-        subchainable(L, L1, MaxLength).
+        subslice(L, L1, MaxLength).
 
-subchainable(L, L1, MaxLength) :-
-        subchainable1(L, L1, MaxLength).
-subchainable([_|Tail], L1, MaxLength) :-
-        subchainable(Tail, L1, MaxLength).
+subslice(L, L1, MaxLength) :-
+        subslice1(L, L1, MaxLength).
+subslice([_|Tail], L1, MaxLength) :-
+        subslice(Tail, L1, MaxLength).
 
-subchainable1([X|_], [X], _).
-subchainable1([X1,X2|Xs], [X1,X2|Ys], MaxLength) :-
-        MaxLength > 1,
-        X1 =.. [Insn | _],
-        chainable(Insn),
+subslice1(_, [], _).
+subslice1([X|Xs], [X|Ys], MaxLength) :-
+        MaxLength > 0,
         N is MaxLength-1,
-        subchainable1([X2|Xs], [X2|Ys], N).
+        subslice1(Xs, Ys, N).
+
+gcodesubslice(SubG, G, MaxLength) :-
+        psycodump(L),
+        findall(Gs, bagof(G1, L0^L1^L2^(between(2, MaxLength, Len),
+                                        length(L1, Len),
+                                        append(L0, L1, L2, L),
+                                        generalize(L1, G1)),
+                          Gs),
+                ByLength),
+        % ByLength = [[2-slice, ...], [3-slice, ...], ... [MaxLength-slice, ...]]
+        write(ByLength), nl,
+        triangle_lt(ByLength, SubG, G).
+
+triangle_lt([BaseLine | ExtraLines], A, B) :-
+        nth0(I, BaseLine, A),
+        I1 is I-1,
+        triangle_cut(ExtraLines, I1, I, B).
+triangle_lt([_ | ExtraLines], A, B) :-
+        triangle_lt(ExtraLines, A, B).
+
+triangle_cut([Line1 | _], Min, Max, B) :-
+        triangle_cutline(Line1, Min, Max, 0, B).
+triangle_cut([_ | Lines], Min, Max, B) :-
+        Min1 is Min-1,
+        triangle_cut(Lines, Min1, Max, B).
+
+triangle_cutline([Head|Tail], Min, Max, N, B) :-
+        N =< Max,
+        (
+            (Min =< N, Head = B)
+        ;
+            N1 is N+1,
+            triangle_cutline(Tail, Min, Max, N1, B)).
+
 
 generalize(L, G) :-
         initial_stack(InitialStack),
@@ -124,18 +177,18 @@ generalize_arg(Stack, FormalArg, RealArg, ArgMode) :-
         condition_test(ArgMode, RealArg),
         !.
 
-:- det(typicalexample/2).
-typicalexample(Term1, Term2) :-
-        Term1 =.. [Insn | Args1],
-        maplist(typicalexample_arg, Args1, Args2),
-        Term2 =.. [Insn | Args2].
-
-typicalexample_arg(char, 100).
-typicalexample_arg(int, 1000000).
-typicalexample_arg(indirect(code_t), 100).
-typicalexample_arg(indirect(word_t), 1000000).
-typicalexample_arg(_:B, B).
-typicalexample_arg(N, N) :- integer(N).
+%:- det(typicalexample/2).
+%typicalexample(Term1, Term2) :-
+%        Term1 =.. [Insn | Args1],
+%        maplist(typicalexample_arg, Args1, Args2),
+%        Term2 =.. [Insn | Args2].
+%
+%typicalexample_arg(char, 100).
+%typicalexample_arg(int, 1000000).
+%typicalexample_arg(indirect(code_t), 100).
+%typicalexample_arg(indirect(word_t), 1000000).
+%typicalexample_arg(_:B, B).
+%typicalexample_arg(N, N) :- integer(N).
 
 
 complexity(Term, P, Q) :-
@@ -143,33 +196,25 @@ complexity(Term, P, Q) :-
         S is P+1,
         chainlist(complexity, Subterms, S, Q).
 
-trivial_c_arg(Term) :- var(Term).
-trivial_c_arg(Term) :- Term =.. [_].
-
-trivial_c_op(X=Y) :- trivial_c_arg(X), trivial_c_arg(Y).
-
-codecost(block_locals(_, L), Cost) :-
-        closelist(L, FlatL),
-        countsuccesses((member(X, FlatL), \+trivial_c_op(X)), Cost).
-
 modecost(Mode, Cost) :-
         mode_operate(Mode, Code),
         codecost(Code, Cost1),
         Cost is Cost1+1.
 
 moderank(Mode, Freq, Rank) :-
-        modecost(Mode, Cost),
+        atom_to_term(Mode, RealMode),
+        modecost(RealMode, Cost),
         Rank is Freq/Cost.
 
 % highestrank(+InputRanks, +CurrentBest, -Best)
 highestrank([], Best, Best).
 highestrank([R1 | Tail], R2, R3) :-
-        R1 = rank(Mode, _, Rank1),
+        R1 = rank(Mode, Freq1, Rank1),
         R2 = rank(_, _, Rank2),
         Rank1 > Rank2,
-        hash_term(Mode, Hash),
-        ((rfhash(Hash), residualfreq(Mode, Freq1m)) ->
+        (removefreq(Mode, Freq1r) ->
             \+ bestmodes(Mode),
+            Freq1m is Freq1 - Freq1r,
             moderank(Mode, Freq1m, Rank1m),
             %(Rank1m > Rank2 -> true ;
             %    write('   '),
@@ -233,67 +278,73 @@ highestrank([_ | Tail], R2, R3) :-
 %        forklist1([], OtherVars).
 %forklist1([], []).
 
+initialsection(SubMode, Mode) :-
+        atom_to_term(Mode, RealMode),
+        RealSubMode = [_, _ | _],
+        append(RealSubMode, [_|_], RealMode),
+        term_to_atom(RealSubMode, SubMode).
 
-:- det(buildnextbest/1).
-buildnextbest(AllRanks) :-
+:- det(buildnextbest/2).
+buildnextbest(AllRanks, Exhausted) :-
         highestrank(AllRanks, rank(_, _, -1), rank(FullBestMode, _, _)),
-        BestMode = [_, _ | _],
+        (var(FullBestMode) ->
+            Exhausted = true
+        ;
+        Exhausted = false,
         (
-            append(BestMode, _, FullBestMode),
+            (initialsection(BestMode, FullBestMode) ; BestMode = FullBestMode),
             \+ bestmodes(BestMode),
             selectnextbest(AllRanks, BestMode),
             fail
-        ) ;
-        true.
+        ;
+        true)).
 
-:- det(selectnextbest/1).
+:- det(selectnextbest/2).
 selectnextbest(AllRanks, BestMode) :-
-        CurrentBest = rank(BestMode, _, BestRank),
+        CurrentBest = rank(BestMode, BestFreq, BestRank),
         memberchk(CurrentBest, AllRanks),
         write('selecting '),
         write(CurrentBest),
         nl,
         assertz(bestmodes(BestMode)),
-        (residualfreq(BestMode, ResidualFreq) ->
+        (removefreq(BestMode, Freqr) ->
+            ResidualFreq is BestFreq-Freqr,
             moderank(BestMode, ResidualFreq, EffectiveRank) ;
             EffectiveRank = BestRank
         ),
         recorda(lasteffectiverank, EffectiveRank),
-        ignore(assertfreqtree(BestMode)),
         % rebuild the frequency tree below BestMode
-        setof(SubMode, dynsubmodes(SubMode, BestMode), SubModes),
-        maplist(retractresidualfreq, SubModes),
-        maplist(assertresidualfreq(AllRanks), SubModes, _).
+        assertresidualfreq(BestMode),
+        ignore(rebuildfreqtree(BestMode)).
 
-assertfreqtree(Mode) :-
-        \+ dynsubmodes(_, Mode),
-        maplist(typicalexample, Mode, Insns),
-        SubInsns = [_, _ | _],
-        append(_, SubInsns, _, Insns),
-        generalize(SubInsns, SubMode),
-        assert(dynsubmodes(SubMode, Mode)),
+rebuildfreqtree(BestMode) :-
+        subfrequency(SubMode, BestMode, _),
+        assertresidualfreq(SubMode),
         fail.
 
-:- det(retractresidualfreq/1).
-retractresidualfreq(Mode) :-
-        retractall(residualfreq(Mode, _)).
+%assertfreqtree(Mode) :-
+%        \+ dynsubmodes(_, Mode),
+%        maplist(typicalexample, Mode, Insns),
+%        SubInsns = [_, _ | _],
+%        append(_, SubInsns, _, Insns),
+%        generalize(SubInsns, SubMode),
+%        assert(dynsubmodes(SubMode, Mode)),
+%        fail.
 
-:- det(assertresidualfreq/3).
-assertresidualfreq(_, SubMode, Freq) :-
-        residualfreq(SubMode, Freq), !.
-assertresidualfreq(AllRanks, SubMode, ResidualFreq) :-
-        findall(Mode, (bestmodes(Mode),
-                       dynsubmodes(SubMode,Mode),
-                       Mode\=SubMode), SuperModes),
-        maplist(assertresidualfreq(AllRanks), SuperModes, SuperFreqs),
-        memberchk(rank(SubMode, Freq, _), AllRanks),
-        chainlist(int_sub, SuperFreqs, Freq, ResidualFreq),
-        assert(residualfreq(SubMode, ResidualFreq)),
-        hash_term(SubMode, Hash),
-        assert(rfhash(Hash)).
+:- det(assertresidualfreq/1).
+assertresidualfreq(SubMode) :-
+        findall(Freq, (subfrequency(SubMode,Mode,Freq),
+                       bestmodes(Mode)), SuperFreqs),
+        list_max(SuperFreqs, 0, SuperFreq),
+        setfreqr(SubMode, SuperFreq).
 
-int_sub(B, A, C) :-
-        C is A-B.
+setfreqr(M, Fr) :-
+        retractall(removefreq(M, _)),
+        assert(removefreq(M, Fr)).
+
+list_max([H|T], Accum, Max) :-
+        H > Accum -> list_max(T, H, Max) ; list_max(T, Accum, Max).
+list_max([], Max, Max).
 
 
 %currentrank(AllRanks, Mode, Rank) :-
@@ -302,21 +353,25 @@ int_sub(B, A, C) :-
 %                memberchk(rank(Mode, Freq, _), AllRanks))),
 %        moderank(Mode, Freq, Rank).
 
-killoldranks :-
+residualfreq(AllRanks, Mode, Freq) :-
+        removefreq(Mode, Freqr),
+        memberchk(rank(Mode, TotalFreq, _), AllRanks),
+        Freq is TotalFreq-Freqr.
+
+killoldranks(AllRanks) :-
         recorded(lasteffectiverank, LimitRank), !,
-        setof(Mode, oldkillable(LimitRank, Mode), DiscardModes),
+        setof(Mode, oldkillable(AllRanks, LimitRank, Mode), DiscardModes),
         nl,
         maplist(oldkill, DiscardModes).
 
-oldkillable(LimitRank, (Mode, Rank, LimitRank)) :-
+oldkillable(AllRanks, LimitRank, (Mode, Rank, LimitRank)) :-
         bestmodes(Mode),
-        residualfreq(Mode, Freq),
+        residualfreq(AllRanks, Mode, Freq),
         moderank(Mode, Freq, Rank),
-        %write(x(Mode, Rank, LimitRank)), nl,
+        %write(x(LimitRank, Mode, Rank)), nl,
         Rank < LimitRank,
         % cannot kill an initial segment of another mode
-        append(Mode, [_|_], LongerMode),
-        \+ bestmodes(LongerMode).
+        \+ (bestmodes(LongerMode), initialsection(Mode, LongerMode)).
 
 oldkill((Mode, Rank, LimitRank)) :-
         write('      unselecting '),
@@ -334,12 +389,16 @@ workcostsrec(MaxLen, AllRanks) :-
         Len >= MaxLen,
         !,
         repeat,
-        \+ killoldranks,
+        \+ killoldranks(AllRanks),
         !,
         workcostpostprocess(MaxLen, AllRanks).
 workcostsrec(MaxLen, AllRanks) :-
-        buildnextbest(AllRanks),
-        workcostsrec(MaxLen, AllRanks).
+        buildnextbest(AllRanks, Exhausted),
+        (Exhausted = true ->
+            write('all instruction sequences have been selected.'),
+            nl
+        ;
+        workcostsrec(MaxLen, AllRanks)).
 
 workcostpostprocess(MaxLen, AllRanks) :-
         findall(Mode, bestmodes(Mode), Modes),
@@ -349,6 +408,9 @@ workcostpostprocess(MaxLen, AllRanks) :-
         ;
         (Len > MaxLen ->
             last(LastMode, Modes),
+            write('      unselecting '),
+            write(LastMode),
+            nl,
             retract(bestmodes(LastMode)),
             workcostpostprocess(MaxLen, AllRanks)
         ;
@@ -359,6 +421,7 @@ workcostpostprocess(MaxLen, AllRanks) :-
 allranks(AllRanks) :-
         recorded(allranks, AllRanks), !.
 allranks(AllRanks) :-
+        write('computing ranks...'), nl,
         findall(R, (R=rank(Mode, Freq, Rank),
                     frequency(Mode, Freq),
                     moderank(Mode, Freq, Rank)), AllRanks),
@@ -394,6 +457,14 @@ closelist(A, [A]).
 %processmodes(Result, _, _) :-
 %        closelist(Result, Result).
 
+remotecontrol :-
+        read(Term),
+        Term \= end_of_file,
+        !,
+        Term,
+        remotecontrol.
+remotecontrol.
+
 
 setup :-
         retractall(stackpush(_,_)),
@@ -401,7 +472,7 @@ setup :-
             count_stackpush(Insn, P),
             assert(stackpush(Insn, P)),
             fail
-        ) ;
-        true.
+        ;
+        true).
 
 :- setup.

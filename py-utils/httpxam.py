@@ -400,6 +400,15 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-type", "text/plain")
             self.end_headers()
             return f
+
+        if self.path == '/checkall':
+            for codebuf in codebufs:
+                codebuf.cache_text
+            f = cStringIO.StringIO('done')
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            return f
         
         self.send_error(404, "Invalid path")
         return None

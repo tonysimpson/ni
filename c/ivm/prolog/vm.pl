@@ -122,52 +122,45 @@ condition_type(_, word_t).
 unary_insn(Name, Name) :- unary_insn(Name).
 binary_insn(Name, Name) :- binary_insn(Name).
 
-overflow_code(Name, Args, Ovf) :-
+overflow_code(Name, Args, Ovf, [flag(set)]) :-
         overflow_flag(Name),
         !,
         Op =.. [macro_args | Args],
-        Ovf = [flag=ovf_check(Name, Op)].
-overflow_code(_, _, []).
+        Ovf = [setflag=ovf_check(Name, Op)].
+overflow_code(_, _, [], []).
 
-build_simple_insn(Name, COp, Code, N, Args) :-
-        (overflow_flag(Name) ->
-            N=2,
-            OvfOp =.. [macro_args | Args],
-            Code = [out(1) = Op,
-                    out(0) = ovf_check(Name, OvfOp)]
-        ;
-            N=1,
-            Code = [out(0) = Op]
-        ),
-        Op =.. [COp | Args].
+build_simple_insn(Name, COp, Code, Args, Opts) :-
+        Code = [out(0) = Op | OvfCode],
+        Op =.. [COp | Args],
+        overflow_code(Name, Args, OvfCode, Opts).
 
-insn(Name, [], Code, [stack(1->N)]) :-
+insn(Name, [], Code, [stack(1->1)|Opts]) :-
         unary_insn(Name, COp),
         atom(COp),
-        build_simple_insn(Name, COp, Code, N, [in(0)]).
+        build_simple_insn(Name, COp, Code, [in(0)], Opts).
 
-insn(Name, [], Code, [stack(2->N)]) :-
+insn(Name, [], Code, [stack(2->1)|Opts]) :-
         binary_insn(Name, COp),
         atom(COp),
-        build_simple_insn(Name, COp, Code, N, [in(1), in(0)]).
+        build_simple_insn(Name, COp, Code, [in(1), in(0)], Opts).
 
-insn(Name, [], Code, [stack(1->N)]) :-
-        unary_insn(Name, COp),
-        is_list(COp),
-        length(COp, N),
-        build_insn(COp, [in(0)], Code).
-
-insn(Name, [], Code, [stack(2->N)]) :-
-        binary_insn(Name, COp),
-        is_list(COp),
-        length(COp, N),
-        build_insn(COp, [in(1), in(0)], Code).
-
-build_insn([COp1|Tail], CArgs, [out(TN) = Op | CodeTail]) :-
-        Op =.. [COp1 | CArgs],
-        length(Tail, TN),
-        build_insn(Tail, CArgs, CodeTail).
-build_insn([], _, []).
+%insn(Name, [], Code, [stack(1->N)]) :-
+%        unary_insn(Name, COp),
+%        is_list(COp),
+%        length(COp, N),
+%        build_insn(COp, [in(0)], Code).
+%
+%insn(Name, [], Code, [stack(2->N)]) :-
+%        binary_insn(Name, COp),
+%        is_list(COp),
+%        length(COp, N),
+%        build_insn(COp, [in(1), in(0)], Code).
+%
+%build_insn([COp1|Tail], CArgs, [out(TN) = Op | CodeTail]) :-
+%        Op =.. [COp1 | CArgs],
+%        length(Tail, TN),
+%        build_insn(Tail, CArgs, CodeTail).
+%build_insn([], _, []).
 
 
 % combined instructions
@@ -315,10 +308,23 @@ insn_operate_stack(Insn, OldStack, NewStack, Extra) :-
 insn_operate_stack(Insn, OldStack, NewStack) :-
         insn_operate_stack(Insn, OldStack, NewStack, dummy).
 
-map_operate(OldStack, _, _,  in(N),  Item) :- !, stack_nth(OldStack, N, Item).
-map_operate(_, NewStack, _,  out(N), Item) :- !, stack_nth(NewStack, N, Item).
-map_operate(_, _, InputArgs, arg(N), Item) :- !, nth0(N, InputArgs, Item).
-map_operate(OldStack, _, _, stkshft, N) :- !, stack_depth(OldStack, N).
+:- det(insn_operate_flag/3).
+insn_operate_flag(Insn, OldFlag, NewFlag) :-
+        insn(Insn, _, _, Options),
+        (memberchk(flag(Mode), Options) ->
+            (Mode = set ->
+                true
+            ;
+            NewFlag = consumed)
+        ;
+        NewFlag = OldFlag).
+
+map_operate((OldStack,_), _, _, in(N),  Item) :- !, stack_nth(OldStack, N, Item).
+map_operate(_, (NewStack,_), _, out(N), Item) :- !, stack_nth(NewStack, N, Item).
+map_operate(_, _,    InputArgs, arg(N), Item) :- !, nth0(N, InputArgs, Item).
+map_operate((OldStack,_), _, _, stkshft, N) :- !, stack_depth(OldStack, N).
+map_operate((_,OldFlag),  _, _, flag,    OldFlag) :- !.
+map_operate(_, (_,NewFlag),  _, setflag, NewFlag) :- !.
 map_operate(P1, P2, P3, Compound, Item) :-
         Compound =.. [Functor|Args],
         !,
@@ -335,9 +341,9 @@ map_operate_top(P1, P2, P3, Input, Item) :-
         map_operate(P1, P2, P3, Input, Item).
 
 :- det(insn_operate_code/5).
-insn_operate_code(Insn, OldStack, NewStack, InputArgs, Code) :-
+insn_operate_code(Insn, OldState, NewState, InputArgs, Code) :-
         insn(Insn, _, CodeTemplate, _),
-        maplist(map_operate_top(OldStack, NewStack, InputArgs),
+        maplist(map_operate_top(OldState, NewState, InputArgs),
                 CodeTemplate, Code).
 
 :- det(load_initexpr/5).
@@ -377,14 +383,15 @@ size_arg(Cond, bytecode_size(T)) :-
         !.
 
 :- det(mode_operate1/3).
-mode_operate1(Mode, (Stack1, InitU1, CodeL1),
-                    (Stack2, InitU2, CodeL2)) :-
+mode_operate1(Mode, (Stack1, Flag1, InitU1, CodeL1),
+                    (Stack2, Flag2, InitU2, CodeL2)) :-
         Mode =.. [Insn|CondList],
         insn(Insn, Args, _, _),
         maplist(init_arg, CondList, InitUnif, InitArgs),
         maplist(load_initexpr(Stack1), Args, CondList, InitArgs, UseArgs),
         insn_operate_stack(Insn, Stack1, Stack2, extra(CondList, UseArgs)),
-        insn_operate_code(Insn, Stack1, Stack2, UseArgs, Code),
+        insn_operate_flag(Insn, Flag1, Flag2),
+        insn_operate_code(Insn, (Stack1, Flag1), (Stack2, Flag2), UseArgs, Code),
         append(InitU1, InitUnif, InitU2),
         append(CodeL1, Code, CodeL2).
 
@@ -392,10 +399,16 @@ mode_operate1(Mode, (Stack1, InitU1, CodeL1),
 mode_operate(Mode, block_locals(word_t, CodeBlock)) :-
         initial_stack(OldStack),
         chainlist(mode_operate1, Mode,
-                  (OldStack, [], []), (NewStack, U1, C3)),
-        mode_unify(NewStack, OldStack, C4),
+                  (OldStack, flag, [], []), (NewStack, NewFlag, U1, C3)),
+        mode_unify((NewStack, NewFlag), (OldStack, flag), C4),
         append(U1, C3, C4, CodeBlock1),
         code_simplify(CodeBlock1, CodeBlock).
+
+mode_nonclobber_flag(Mode) :-
+        initial_stack(OldStack),
+        chainlist(mode_operate1, Mode,
+                  (OldStack, _, [], []), (_, NewFlag, _, _)),
+        var(NewFlag).
 
 % stack_unify(+CurrentStack, +TargetStack, -UnificationsList1, -2, -StackShift)
 stack_unify(slice(E1), slice(E2), [], [], StackShift) :-
@@ -424,16 +437,21 @@ stack_unify(CurrentStack, TargetStack, UnifList1, UnifList2, StackShift) :-
         UnifList1 = [Temp=Src | UnifL1],
         UnifList2 = [Dest=Temp | UnifL2]).
 
-mode_unify(S1, S2, Code) :-
+:- det(mode_unify/3).
+mode_unify((S1,F1), (S2,F2), Code) :-
         stack_unify(S1, S2, UnifList1, UnifList2, StackShift),
         reverse(UnifList2, UnifList2r),
         (StackShift > 0 ->
-            CodeL4 = [stack_shift_pos(StackShift)]
+            CodeL4 = [stack_shift_pos(StackShift)|CodeTail]
         ;
         (StackShift < 0 ->
-            CodeL4 = [stack_shift(StackShift)]
+            CodeL4 = [stack_shift(StackShift)|CodeTail]
         ;
-        CodeL4 = [])),
+        CodeL4 = CodeTail)),
+        (var(F1) ->
+            CodeTail = [F2=F1]
+        ;
+        CodeTail = []),
         append(UnifList1, UnifList2r, CodeL4, Code).
 
 % instruction emitters
@@ -518,10 +536,15 @@ insn_combination(InputArgs, Insn, Case) :-
 :- det(insn_defbody/2).
 insn_defbody(Insn, block(DeclCode, BodyCode)) :-
         insn(Insn, Args, _, Options),
+        %(memberchk(flag(get), Options) ->
+        %    BodyCode = [extra_assert('FLAG_NONCLOBBERING'('LATEST_OPCODE')) |
+        %                MainBodyCode]
+        %;
+        MainBodyCode = BodyCode,
         enumerate_list(Args, NumberedArgs, 1, _),
         maplist(insn_inputargname, NumberedArgs, ArgNames),
         joinlist(insn_preparearg, Args, ArgNames, InputArgs, DeclCode),
-        BodyCode = [switch('LATEST_OPCODE', Cases) | RegularBodyCode],
+        MainBodyCode = [switch('LATEST_OPCODE', Cases) | RegularBodyCode],
         findall(Code, insn_combination(InputArgs, Insn, Code), Cases),
         initial_stack(InitialStack),
         findall(StdMode, insn_single_mode(Insn,StdMode,InitialStack), StdModes),

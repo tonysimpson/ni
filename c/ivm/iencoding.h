@@ -13,27 +13,34 @@
 
 #define REG_TOTAL   0           /* the virtual machine has only a stack */
 
-/* the 'flags' condition codes are stored on the stack as well,
-   which makes our vm very unprocessor-like. We abuse condition_code_t
-   to actually hold the stack position where the 'current flags' are
-   stored. If moreover the last bit of condition_code_t is set, then
-   the 'flag' is actually the negation of the value in the stack. */
-typedef int condition_code_t;
-#define CC_TOTAL       RunTime_StackMax
-#define HAVE_CCREG     0
-
-/* pseudo condition codes for known outcomes */
-#define CC_ALWAYS_FALSE   (CC_TOTAL)
-#define CC_ALWAYS_TRUE    (CC_TOTAL|1)
-#define CC_ERROR          (-1)
+/* the condition code is stored in the 'flag' register. */
+typedef enum {
+	CC_FLAG      = 0,
+        CC_NOT_FLAG  = 1,
+#define CC_TOTAL       2
+        CC_ALWAYS_FALSE  = 2,   /* pseudo condition codes for known outcomes */
+        CC_ALWAYS_TRUE   = 3,
+        CC_ERROR         = -1 } condition_code_t;
 
 #define INVERT_CC(cc)    ((condition_code_t)((int)(cc) ^ 1))
+#define HAVE_CCREG     1
+
+#if PSYCO_DEBUG
+struct cc_s;
+# define CC_FLAG          ((struct cc_s*) CC_FLAG)
+# define CC_NOT_FLAG      ((struct cc_s*) CC_NOT_FLAG)
+# define CC_ALWAYS_FALSE  ((struct cc_s*) CC_ALWAYS_FALSE)
+# define CC_ALWAYS_TRUE   ((struct cc_s*) CC_ALWAYS_TRUE)
+# define CC_ERROR         ((struct cc_s*) CC_ERROR)
+# define condition_code_t   struct cc_s*
+#endif
 
 
 /* processor-depend part of PsycoObject */
 #define PROCESSOR_PSYCOOBJECT_FIELDS                                            \
 	int stack_depth;   /* the size of data currently pushed in the stack */ \
-        int minimal_stack_size;   /* total stack size that we are sure about */
+        int minimal_stack_size;   /* total stack size that we are sure about */ \
+	vinfo_t* ccreg;            /* processor condition codes (aka flags)  */
 #define INIT_PROCESSOR_PSYCOOBJECT(po)           \
           ((po)->minimal_stack_size = VM_INITIAL_MINIMAL_STACK_SIZE)
 
@@ -87,9 +94,11 @@ typedef int condition_code_t;
 #define RTVINFO_MOVE(rtsource, vtarget)   do { /*nothing*/ } while (0)
 
 /* for PsycoObject_Duplicate() */
-#define DUPLICATE_PROCESSOR(result, po)   do {			\
-	result->stack_depth = po->stack_depth;			\
-	result->minimal_stack_size = po->minimal_stack_size;	\
+#define DUPLICATE_PROCESSOR(result, po)   do {                  \
+	result->stack_depth = po->stack_depth;                  \
+	result->minimal_stack_size = po->minimal_stack_size;    \
+	if (po->ccreg != NULL)                                  \
+		result->ccreg = po->ccreg->tmp;                 \
 } while (0)
 
 #define RTVINFO_CHECK(po, vsource, found) do { /*nothing*/ } while (0)
@@ -166,11 +175,23 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 /***************************************************************/
  /***   some macro for code emission                          ***/
 
-#define NEED_CC()   do { /* nothing -- no real flag register */ } while (0)
+#define CHECK_NONZERO_FROM_RT(src, rcc)   do {	\
+	NEED_CC();				\
+	INSN_rt_push(src);			\
+	INSN_not();  /* normalize to 1 or 0 */	\
+	INSN_flag_pop();			\
+	rcc = CC_NOT_FLAG;			\
+} while (0)
 
-#define CHECK_NONZERO_FROM_RT(src, rcc)   (rcc = getstack(src))
+#define NEED_CC()   do {                        \
+  if (po->ccreg != NULL)                        \
+    code = psyco_compute_cc(po, code);          \
+} while (0)
+/* internal */
+EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
+EXTERNFN void psyco_inverted_cc(PsycoObject* po);
 
-#define SAVE_REGS_FN_CALLS   NEED_CC()
+#define SAVE_REGS_FN_CALLS            NEED_CC()
 
 #define TEMP_SAVE_REGS_FN_CALLS       do { /* nothing */ } while (0)
 
@@ -181,13 +202,6 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
   INSN_jumpfar(&_arg);                          \
   *_arg = (word_t) target;                      \
 } while (0)
-
-#define FAR_COND_JUMP_TO(target, condition)   do {      \
-  word_t* _arg;                                         \
-  INSN_rtcc_push(condition);                            \
-  INSN_jcondfar(&_arg);                                 \
-  *_arg = (word_t) target;                              \
-} while(0)
 
 #define MAXIMUM_SIZE_OF_FAR_JUMP  (sizeof(code_t)+sizeof(word_t)+sizeof(code_t))
 
@@ -233,6 +247,10 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 #define FUNCTION_RET(popbytes)      do {                                        \
   INSN_ret((popbytes) / sizeof(long) + 1);   /* +1 for the retaddr itself */    \
 } while (0)
+
+#if defined(PSYCO_TRACE)
+# error "This Trace not implemented for the ivm; use IVM_TRACE instead"
+#endif
 
 
 #define ALIGN_CODE_MASK  (sizeof(long)-1)

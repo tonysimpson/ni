@@ -7,6 +7,7 @@
 
 
 #include "vcompiler.h"
+#include <iencoding.h>
 
 #if SIZEOF_LONG != SIZEOF_VOID_P
 # error "sorry -- Psyco currently requires sizeof(long)==sizeof(void*)"
@@ -27,14 +28,20 @@
  /*** Condition Codes (a.k.a. the processor 'flags' register) ***/
 
 /* return a new vinfo_t* meaning `in the processor flags, true if <cc>',
-   as an integer 0 or 1. The source of the vinfo_t* is compile-time
+   as an integer 0 or 1.  For i386 the source of the vinfo_t* is compile-time
    if cc is CC_ALWAYS_TRUE/FALSE, and virtual-time otherwise. (In the latter
-   case it gets stored in po->ccreg.) */
+   case it gets stored in po->ccreg.)  For ivm the source is run-time if
+   cc < CC_TOTAL. */
 EXTERNFN vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc);
+EXTERNFN VirtualTimeSource psyco_source_condition(condition_code_t cc);
 
 /* if 'source' comes from psyco_vinfo_condition(), return its <cc>;
    otherwise return CC_ALWAYS_FALSE. */
+#if HAVE_CCREG
 EXTERNFN condition_code_t psyco_vsource_cc(Source source);
+#else
+# define psyco_vsource_cc(src)  CC_ALWAYS_FALSE
+#endif
 
 
 /***************************************************************/

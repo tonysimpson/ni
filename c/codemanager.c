@@ -129,8 +129,6 @@ static CodeBufferObject* new_code_buffer(PsycoObject* po, global_entries_t* ge,
       b->codestart = get_next_buffer(plimit);
       SET_CODEMODE(b, "(compiling)");
     }
-  INIT_CODE_EMISSION((code_t*) b->codestart);
-  
   debug_printf(3, ("%s code buffer %p\n",
                    proxy_to==NULL ? "new" : "proxy", b->codestart));
   
@@ -232,12 +230,11 @@ void psyco_emergency_enlarge_buffer(code_t** pcode, code_t** pcodelimit)
     Py_FatalError("psyco: code buffer overflowing");
 
   nextcode = get_next_buffer(pcodelimit);
-  INIT_CODE_EMISSION(nextcode);
   debug_printf(2, ("emergency enlarge buffer %p -> %p\n", code, nextcode));
   JUMP_TO(nextcode);
   close_buffer_use(code);
 
-  *pcode = nextcode;
+  *pcode = insn_code_label(nextcode);
 }
 
 #if CODE_DUMP

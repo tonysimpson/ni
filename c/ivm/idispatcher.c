@@ -41,15 +41,16 @@ static code_t* data_new_buffer(code_t* code, struct dmove_s* dm)
       codebuf->snapshot.fz_stuff.fz_stack_depth = dm->original_stack_depth;
       /* the new buffer should be at least as large as the old one */
       codesize = code - dm->code_origin;
-      if ((code_t*) codebuf->codestart + codesize > dm->code_limit)
+      code = insn_code_label(codebuf->codestart);
+      if (code + codesize > dm->code_limit)
         Py_FatalError("psyco: unexpected unify buffer overflow");
       /* copy old code to new buffer */
-      memcpy(codebuf->codestart, dm->code_origin, codesize+POST_CODEBUFFER_SIZE);
+      memcpy(code, dm->code_origin, codesize+POST_CODEBUFFER_SIZE);
       dm->private_codebuf = codebuf;
 #if PSYCO_DEBUG
       dm->code_origin = (code_t*) 0xCDCDCDCD;
 #endif
-      return ((code_t*) codebuf->codestart) + codesize;
+      return code + codesize;
     }
 }
 

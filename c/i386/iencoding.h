@@ -113,6 +113,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 
 #define INIT_CODE_EMISSION(code)         do { /* nothing */ } while (0)
 #define POST_CODEBUFFER_SIZE             0
+#define insn_code_label(code)            ((code_t*)(code))
 
 #define CHECK_STACK_SPACE()              do { /* nothing */ } while (0)
 
@@ -843,7 +844,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 /* same as NEED_CC() but don't overwrite the given source */
 #define NEED_CC_SRC(src)                                        \
     NEED_CC_REG(is_runtime(src) ? RSOURCE_REG(src) : REG_NONE)
-/*internal, see processor.c*/
+/* internal */
 EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved);
 
 #define LOAD_REG_FROM_CONDITION(rg, cc)   do {  /* 'rg' is an 8-bit reg */      \

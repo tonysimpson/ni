@@ -3,8 +3,8 @@
 # H = heavy mem check
 mode = O
 
-# PROCESSOR = i386
-PROCESSOR = ivm
+processor = i386
+# processor = ivm
 
 
 # OPTS    = -DPSYCO_DEBUG=1 -DBIG_BUFFER_SIZE=0x100000 -DVERBOSE_LEVEL=0 -DCODE_DUMP=1 -DHEAVY_MEM_CHECK=0
@@ -43,7 +43,7 @@ C_FLAGS_T = -g
 
 
 OPTS     = ${OPTS_${mode}}
-C_FLAGS  = -I${PROCESSOR} -DNDEBUG ${C_FLAGS_${mode}} -Wall -Wstrict-prototypes -fPIC -fno-strict-aliasing ${OPTS} ${incl}
+C_FLAGS  = -I${processor} -DNDEBUG ${C_FLAGS_${mode}} -Wall -Wstrict-prototypes -fPIC -fno-strict-aliasing ${OPTS} ${incl}
 LD_FLAGS = -shared
 BUILDDIR = ../build
 LIBDIR   = lib.linux-i686-${PY_VER}
@@ -62,7 +62,7 @@ PY_VER  := $(shell $(python) -c "import sys; print '%d.%d' % sys.version_info[:2
 PY_VER_EX := $(shell $(python) -V 2>&1)
 incl    := $(shell $(python) mkincl.py)
 
-BUILD_VERSION = Compiling mode ${mode} for ${PY_VER_EX} on ${PROCESSOR}
+BUILD_VERSION = Compiling mode ${mode} for ${PY_VER_EX} on ${processor}
 
 main: build_ext build_py
 
@@ -98,4 +98,4 @@ clean:
 
 depend:
 	python files.py
-	python depend.py ${PROCESSOR}
+	python depend.py ${processor}

@@ -47,12 +47,11 @@
    the number of arguments.)
 */
 
-#define LATEST_OPCODE        (extra_assert(*code <= LAST_DEFINED_OPCODE), *code)
+#define LATEST_OPCODE      (extra_assert(*code <= LAST_DEFINED_OPCODE), *code)
 #define INIT_CODE_EMISSION(code)         (*(code) = 0)
 #define POST_CODEBUFFER_SIZE             1  /* byte for the LATEST_OPCODE */
 #define INSN_EMIT_macro_opcode(opcode)   (*code++ = (opcode),           \
                                           *code = (opcode))
-#define INSN_CODE_LABEL()                (INIT_CODE_EMISSION(code), code)
 
 typedef long word_t;
 
@@ -64,6 +63,19 @@ typedef long word_t;
 #define INSNPUSHED(N)   (po->stack_depth += (N)*sizeof(long))
 
 /* meta-instructions */
+#if CODE_DUMP
+inline code_t* META_dynamicfreq2(code_t* code) {
+  word_t* arg;
+  INSN_dynamicfreq(&arg);
+  *arg = 0;
+  return code;
+}
+# define INSN_label_marker()      (code = META_dynamicfreq2(code))
+#else
+# define META_dynamicfreq2(code)  code
+# define INSN_label_marker()      (void)0   /* nothing */
+#endif
+
 #define INSN_nv_push(nvsource)    do {                  \
   if (is_compiletime(nvsource))                         \
     INSN_immed(CompileTime_Get(nvsource)->value);       \
@@ -73,11 +85,20 @@ typedef long word_t;
 
 #define INSN_rt_push(rtsource)   INSN_s_push(CURRENT_STACK_POSITION(rtsource))
 #define INSN_rt_pop(rtsource)    INSN_s_pop(CURRENT_STACK_POSITION(rtsource))
-#define INSN_rtcc_push(cc)       do {                           \
-  extra_assert((cc) < CC_TOTAL);                                \
-  INSN_s_push((po->stack_depth - (cc) + 1) / sizeof(long));     \
-  if ((cc) & 1)                                                 \
-    INSN_not();                                                 \
+#define INSN_normalize_cc(cc)    do {                   \
+  if ((cc) == CC_NOT_FLAG) {                            \
+    INSN_flag_push();                                   \
+    INSN_not();                                         \
+    INSN_flag_pop();                                    \
+    if (po->ccreg != NULL) psyco_inverted_cc(po);       \
+  }                                                     \
+} while (0)
+#define INSN_push_cc(cc)    do {                \
+  extra_assert((int)(cc) < CC_TOTAL);           \
+  INSN_flag_push();                             \
+  if ((cc) == CC_NOT_FLAG) {                    \
+    INSN_not();                                 \
+  }                                             \
 } while (0)
 
 #if META_ASSERT_DEPTH
@@ -87,5 +108,12 @@ typedef long word_t;
 #endif
 
 
+inline code_t* insn_code_label(void* code1)
+{
+  code_t* code = (code_t*) code1;
+  INSN_label_marker();
+  INIT_CODE_EMISSION(code);
+  return code;
+}
 
 #endif /* _IVMINSNS_H */

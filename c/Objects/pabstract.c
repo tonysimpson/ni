@@ -331,11 +331,11 @@ vinfo_t* PsycoSequence_GetSlice(PsycoObject* po, vinfo_t* o,
 		vinfo_t* release_me1 = NULL;
 		vinfo_t* release_me2 = NULL;
 		if (m->sq_length) {
-			condition_code_t cc1, cc2;
-			cc1 = integer_cmp_i(po, i1, 0, Py_LT);
-			if (cc1 == CC_ERROR)
+			condition_code_t cc;
+			cc = integer_cmp_i(po, i1, 0, Py_LT);
+			if (cc == CC_ERROR)
 				goto fail;
-			if (runtime_condition_f(po, cc1)) {
+			if (runtime_condition_f(po, cc)) {
 				/* i1 < 0 */
 				l = Psyco_META1(po, m->sq_length,
 						CfReturnNormal|CfPyErrIfNeg,
@@ -349,10 +349,10 @@ vinfo_t* PsycoSequence_GetSlice(PsycoObject* po, vinfo_t* o,
 			else
 				assert_nonneg(i1);
 			
-			cc2 = integer_cmp_i(po, i2, 0, Py_LT);
-			if (cc2 == CC_ERROR)
+			cc = integer_cmp_i(po, i2, 0, Py_LT);
+			if (cc == CC_ERROR)
 				goto fail;
-			if (runtime_condition_f(po, cc2)) {
+			if (runtime_condition_f(po, cc)) {
 				/* i2 < 0 */
 				if (l == NULL) {
 					l = Psyco_META1(po, m->sq_length,

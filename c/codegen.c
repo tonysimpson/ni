@@ -89,7 +89,7 @@ DEFINEFN
 vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc)
 {
   vinfo_t* result;
-  if (cc < CC_TOTAL)
+  if ((int)cc < CC_TOTAL)
     {
       if (po->ccreg != NULL)
         {
@@ -118,6 +118,12 @@ vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc)
 }
 
 DEFINEFN
+VirtualTimeSource psyco_source_condition(condition_code_t cc)
+{
+  return VirtualTime_New(cc_functions_table+(int)cc);
+}
+
+DEFINEFN
 condition_code_t psyco_vsource_cc(Source source)
 {
   if (is_virtualtime(source))
@@ -134,33 +140,7 @@ condition_code_t psyco_vsource_cc(Source source)
 
 #else /* if !HAVE_CCREG */
 
-DEFINEFN
-condition_code_t psyco_vsource_cc(Source source)
-{
-  return CC_ALWAYS_FALSE;
-}
-
-DEFINEFN
-vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc)
-{
-  Source src;
-  if (cc < CC_TOTAL)
-    {
-      src = RunTime_New1(cc&~1, false, true);
-      if (cc&1)
-        {
-          BEGIN_CODE
-          INSN_rt_push(src);
-          INSNPUSHED(1);
-          INSN_not();
-          END_CODE
-          src = RunTime_New1(po->stack_depth, false, true);
-        }
-    }
-  else
-    src = CompileTime_New(cc == CC_ALWAYS_TRUE);
-  return vinfo_new(src);
-}
+/* psyco_vinfo_condition() defined in iencoding.c */
 
 #endif /* HAVE_CCREG */
 
@@ -1136,11 +1116,11 @@ DEFINEFN
 vinfo_t* integer_conditional(PsycoObject* po, condition_code_t cc,
                              long immed_true, long immed_false)
 {
-  switch (cc) {
-  case CC_ALWAYS_FALSE:
+  switch ((int)cc) {
+  case (int)CC_ALWAYS_FALSE:
     return vinfo_new(CompileTime_New(immed_false));
 
-  case CC_ALWAYS_TRUE:
+  case (int)CC_ALWAYS_TRUE:
     return vinfo_new(CompileTime_New(immed_true));
 
   default:

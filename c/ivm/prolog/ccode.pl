@@ -261,3 +261,14 @@ code_simplify1(Code, Code).
 code_simplify(Code1, Code2) :-
         code_simplify1(Code1, Code2),
         !.
+
+
+trivial_c_arg(Term) :- var(Term).
+trivial_c_arg(Term) :- Term =.. [_].
+
+trivial_c_op(X=Y) :- trivial_c_arg(X), trivial_c_arg(Y).
+trivial_c_op(extra_assert(_)).
+
+codecost(block_locals(_, L), Cost) :-
+        closelist(L, FlatL),
+        countsuccesses((member(X, FlatL), \+trivial_c_op(X)), Cost).

@@ -121,6 +121,11 @@ inline void change_cond_jump_target(void* tag, code_t* newtarget)
   CHANGE_JUMP_TO(newtarget);
 }
 
+inline code_t* resume_after_cond_jump(void* tag)
+{
+  return (code_t*) tag;
+}
+
 /* reserve a small buffer of code behind po->code in which conditional
    code can be stored.  See make_code_conditional(). */
 inline void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2,

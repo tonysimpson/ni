@@ -126,9 +126,19 @@ vinfo_t* PsycoTuple_Concat(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 	vinfo_t* result;
 	int len1, len2;
 	
-	if (Psyco_VerifyType(po, v1, &PyTuple_Type) != true ||
-	    Psyco_VerifyType(po, v2, &PyTuple_Type) != true)
+	if (Psyco_VerifyType(po, v1, &PyTuple_Type) != true)
 		return NULL;
+	switch (Psyco_VerifyType(po, v2, &PyTuple_Type)) {
+	case true:    /* 'v2' is a tuple */
+		break;
+	case false:   /* fallback */
+		return psyco_generic_call(po,
+					  PyTuple_Type.tp_as_sequence->sq_concat,
+					  CfReturnRef|CfPyErrIfNull,
+					  "vv", v1, v2);
+	default:
+		return NULL;
+	}
 	
 	/* XXX a "virtual tuple concatenation" would be cool */
 	len1 = PsycoTuple_Load(v1);  /* -1 if unknown */

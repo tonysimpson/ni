@@ -291,7 +291,7 @@ vinfo_t* psyco_plist_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 	}
 
 	/* fallback */
-	return psyco_generic_call(po, PyString_Type.tp_as_sequence->sq_concat,
+	return psyco_generic_call(po, PyList_Type.tp_as_sequence->sq_concat,
 				  CfReturnRef|CfPyErrIfNull,
 				  "vv", a, b);
 }

@@ -10,9 +10,8 @@
 
 /* See comments in i386/ipyencoding.h about these functions */
 
-inline void dictitem_check_change(PsycoObject* po,
-				  code_t* onchange_target,
-				  PyDictObject* dict, PyDictEntry* ep)
+inline void* dictitem_check_change(PsycoObject* po,
+                                   PyDictObject* dict, PyDictEntry* ep)
 {
 	int index        = ep - dict->ma_table;
 	PyObject* key    = ep->me_key;
@@ -21,43 +20,31 @@ inline void dictitem_check_change(PsycoObject* po,
 	word_t* arg2;
 	word_t* arg3;
 	word_t* arg4;
-	word_t* arg5;
 	
 	Py_INCREF(key);    /* XXX these become immortal */
 	Py_INCREF(result); /* XXX                       */
 	BEGIN_CODE
+	NEED_CC();
 	/* this special instruction quickly checks that the same
 	   object is still in place in the dictionary */
-	INSN_checkdict(&arg1, &arg2, &arg3, &arg4, &arg5);
+	INSN_checkdict(&arg1, &arg2, &arg3, &arg4);
 	*arg1 = (word_t) dict;
 	*arg2 = (word_t) key;
 	*arg3 = (word_t) result;
-	*arg4 = (word_t) onchange_target;
-	*arg5 = index;
-	extra_assert(arg4 == ((word_t*)code) - 2);
-	extra_assert(arg5 == ((word_t*)code) - 1);
+	*arg4 = index;
 	END_CODE
+	return arg4;
 }
 
-inline code_t* dictitem_update_nochange(code_t* originalmacrocode,
-                                        PyDictObject* dict, PyDictEntry* new_ep)
+#define DICT_ITEM_CHECK_CC   CC_FLAG
+
+inline void dictitem_update_nochange(void* originalmacrocode,
+				     PyDictObject* dict, PyDictEntry* new_ep)
 {
 	int index = new_ep - dict->ma_table;
-	word_t* arg5 = ((word_t*)originalmacrocode) - 1;
+	word_t* arg5 = (word_t*) originalmacrocode;
 	*arg5 = index;
-	return originalmacrocode;
 }
-
-inline void dictitem_update_jump(code_t* originalmacrocode, code_t* target)
-{
-	word_t* arg4 = ((word_t*)originalmacrocode) - 2;
-	word_t* arg5 = ((word_t*)originalmacrocode) - 1;
-	*arg4 = (word_t) target;
-	*arg5 = (word_t) -1;
-	/* jump always -- we effectively changed the checkdict
-	   instruction into an unconditional jump */
-}
-
 
 inline void psyco_incref_nv(PsycoObject* po, vinfo_t* v)
 {
@@ -104,9 +91,13 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
 
 /* called by psyco_finish_return() */
 #define WRITE_FRAME_EPILOGUE(retval, nframelocal)   do {                        \
-  /* load the return value into 'flag' -- little abuse here :-)  */             \
+  /* load the return value into the dedicated 'retval' register */              \
+   /* which actually shares with 'flag' */                                      \
   if (retval != SOURCE_DUMMY) {                                                 \
-    INSN_nv_push(retval);                                                       \
+    if (is_runtime(retval) && getstack(retval) == po->stack_depth)              \
+      INSNPOPPED(1);                                                            \
+    else                                                                        \
+      INSN_nv_push(retval);                                                     \
     INSN_retval();                                                              \
   }                                                                             \
   if (nframelocal > 0)                                                          \

@@ -81,8 +81,7 @@ static void mem_access(PsycoObject* po, vinfo_t* nv_ptr,
 		INSN_rt_push(nv_ptr->source);
 		if (offset) {
 			INSN_immed(offset);
-			INSN_addo();
-			INSN_pop();
+			INSN_add();
 		}
 	}
 	else {
@@ -96,8 +95,7 @@ static void mem_access(PsycoObject* po, vinfo_t* nv_ptr,
 			INSN_immed(size2);
 			INSN_lshift();
 		}
-		INSN_addo();
-                INSN_pop();
+		INSN_add();
 	}
 	END_CODE
 }
@@ -154,6 +152,32 @@ bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr,
 }
 
 
+/* internal, see NEED_CC() */
+EXTERNFN condition_code_t cc_from_vsource(Source source);  /* in codegen.c */
+
+DEFINEFN
+code_t* psyco_compute_cc(PsycoObject* po, code_t* code)
+{
+	vinfo_t* v = po->ccreg;
+	condition_code_t cc = cc_from_vsource(v->source);
+
+	INSN_push_cc(cc);
+        INSNPUSHED(1);
+
+	v->source = RunTime_TOSF(false, true);
+	po->ccreg = NULL;
+        return code;
+}
+
+DEFINEFN
+void psyco_inverted_cc(PsycoObject* po)
+{
+	vinfo_t* v = po->ccreg;
+	condition_code_t cc = cc_from_vsource(v->source);
+	v->source = psyco_source_condition(INVERT_CC(cc));
+}
+
+
 /*****************************************************************/
  /***   Emit common instructions                                ***/
 
@@ -161,14 +185,15 @@ DEFINEFN
 condition_code_t bininstrcmp(PsycoObject* po, int base_py_op,
                              vinfo_t* v1, vinfo_t* v2)
 {
-  condition_code_t result = 0;
+  condition_code_t result = CC_FLAG;
   vinfo_t* tmp;
   BEGIN_CODE
+  NEED_CC();
   /* the only operation with have is '<', so exchange v1 and v2 as needed */
   switch (base_py_op & COMPARE_BASE_MASK) {
     
   case Py_NE:
-    result = 1; /* fall through */
+    result = CC_NOT_FLAG; /* fall through */
   case Py_EQ:
     INSN_rt_push(v1->source); INSNPUSHED(1);
     INSN_rt_push(v2->source);
@@ -176,12 +201,12 @@ condition_code_t bininstrcmp(PsycoObject* po, int base_py_op,
     goto done;
     
   case Py_LE:
-    result = 1; /* fall through */
+    result = CC_NOT_FLAG; /* fall through */
   case Py_GT:
     tmp=v1; v1=v2; v2=tmp;
     break;
   case Py_GE:
-    result = 1;
+    result = CC_NOT_FLAG;
     break;
   default:
     ;
@@ -194,22 +219,24 @@ condition_code_t bininstrcmp(PsycoObject* po, int base_py_op,
     INSN_cmplt();
   
  done:
+  INSNPOPPED(1);
   END_CODE
-  return (condition_code_t) (po->stack_depth | result);
+  return result;
 }
 
 DEFINEFN
 vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
 		      long immed_true, long immed_false)
 {
-	code_t* arg;
 	BEGIN_CODE
-	INSN_immed(immed_true); INSNPUSHED(1);
-	INSN_rtcc_push(cc);
-	INSN_jcondnear(&arg);
-	INSN_pop();
-	INSN_immed(immed_false);
-	*arg = INSN_CODE_LABEL() - (arg+sizeof(code_t));
+        INSN_push_cc(cc);
+        INSN_immed(-1);
+        INSN_add();
+        INSN_immed(immed_false - immed_true);
+        INSN_and();
+        INSN_immed(immed_true);
+        INSN_add();
+        INSNPUSHED(1);
 	END_CODE
 	return vinfo_new(RunTime_TOSF(false,
 				      immed_true >= 0 && immed_false >= 0));
@@ -219,19 +246,14 @@ vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
   DEFINEFN vinfo_t* bininstr##insn(PsycoObject* po, bool ovf, bool nonneg,	\
                                    vinfo_t* v1, vinfo_t* v2) {			\
     BEGIN_CODE									\
+    NEED_CC();									\
     INSN_nv_push(v1->source); INSNPUSHED(1);					\
     INSN_nv_push(v2->source);							\
-    INSN_##insn##o();								\
+    INSN_##insn##_o();								\
+    if (!ovf) INSN_flag_forget();						\
     END_CODE									\
-    if (ovf) {									\
-      INSNPUSHED(1);								\
-      if (runtime_condition_f(po, po->stack_depth))				\
-        return NULL;  /* if overflow */						\
-      INSNPOPPED(1);								\
-    }										\
-    BEGIN_CODE									\
-    INSN_pop();									\
-    END_CODE									\
+    if (ovf && runtime_condition_f(po, CC_FLAG))				\
+      return NULL;  /* if overflow */						\
     return vinfo_new(RunTime_TOSF(false, nonneg));				\
   }
 
@@ -239,18 +261,13 @@ vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
   DEFINEFN vinfo_t* unaryinstr##insn(PsycoObject* po, bool ovf, bool nonneg,	\
                                      vinfo_t* v1) {				\
     BEGIN_CODE									\
+    NEED_CC();									\
     INSN_rt_push(v1->source); INSNPUSHED(1);					\
-    INSN_##insn##o();								\
+    INSN_##insn##_o();								\
+    if (!ovf) INSN_flag_forget();						\
     END_CODE									\
-    if (ovf) {									\
-      INSNPUSHED(1);								\
-      if (runtime_condition_f(po, po->stack_depth))				\
-        return NULL;  /* if overflow */						\
-      INSNPOPPED(1);								\
-    }										\
-    BEGIN_CODE									\
-    INSN_pop();									\
-    END_CODE									\
+    if (ovf && runtime_condition_f(po, CC_FLAG))				\
+      return NULL;  /* if overflow */						\
     return vinfo_new(RunTime_TOSF(false, nonneg));				\
   }
 
@@ -291,11 +308,9 @@ DEFINEFN
 vinfo_t* bint_add_i(PsycoObject* po, vinfo_t* rt1, long value2, bool unsafe)
 {
   BEGIN_CODE
-  NEED_CC();
   INSN_rt_push(rt1->source); INSNPUSHED(1);
   INSN_immed(value2);
-  INSN_addo();
-  INSN_pop();
+  INSN_add();
   END_CODE
   return vinfo_new(RunTime_TOSF(false, unsafe &&
                                 value2>=0 && is_rtnonneg(rt1->source)));
@@ -305,19 +320,14 @@ DEFINEFN
 vinfo_t* bint_mul_i(PsycoObject* po, vinfo_t* v1, long value2, bool ovf)
 {
 	BEGIN_CODE
+	NEED_CC();
 	INSN_rt_push(v1->source); INSNPUSHED(1);
 	INSN_immed(value2);
-	INSN_mulo();
-	END_CODE
-	if (ovf) {
-		INSNPUSHED(1);
-		if (runtime_condition_f(po, po->stack_depth))
-			return NULL;
-		INSNPOPPED(1);
-	}
-	BEGIN_CODE
-	INSN_pop();
-	END_CODE
+	INSN_mul_o();
+	if (!ovf) INSN_flag_forget();
+        END_CODE
+	if (ovf && runtime_condition_f(po, CC_FLAG))
+          return NULL;
 	return vinfo_new(RunTime_TOSF(false,
                      ovf && value2>=0 && is_rtnonneg(v1->source)));
 }
@@ -349,21 +359,22 @@ DEFINEFN
 condition_code_t bint_cmp_i(PsycoObject* po, int base_py_op,
                             vinfo_t* rt1, long immed2)
 {
-  condition_code_t result = 0;
+  condition_code_t result = CC_FLAG;
   BEGIN_CODE
+  NEED_CC();
   /* the only operation with have is '<', so exchange v1 and v2 as needed */
   switch (base_py_op & COMPARE_BASE_MASK) {
     
   case Py_NE:
-    result = 1; /* fall through */
+    result = CC_NOT_FLAG; /* fall through */
   case Py_EQ:
-    INSN_rt_push(rt1->source); INSNPUSHED(1);
+    INSN_rt_push(rt1->source);
     INSN_immed(immed2);
     INSN_cmpeq();
     break;
     
   case Py_LE:
-    result = 1; /* fall through */
+    result = CC_NOT_FLAG; /* fall through */
   case Py_GT:
     INSN_immed(immed2); INSNPUSHED(1);   /* reversed arguments */
     INSN_rt_push(rt1->source);
@@ -371,12 +382,13 @@ condition_code_t bint_cmp_i(PsycoObject* po, int base_py_op,
       INSN_cmpltu();
     else
       INSN_cmplt();
+    INSNPOPPED(1);
     break;
     
   case Py_GE:
-    result = 1; /* fall through */
+    result = CC_NOT_FLAG; /* fall through */
   default:
-    INSN_rt_push(rt1->source); INSNPUSHED(1);
+    INSN_rt_push(rt1->source);
     INSN_immed(immed2);
     if (base_py_op & COMPARE_UNSIGNED)
       INSN_cmpltu();
@@ -384,7 +396,7 @@ condition_code_t bint_cmp_i(PsycoObject* po, int base_py_op,
       INSN_cmplt();
   }
   END_CODE
-  return (condition_code_t) (po->stack_depth | result);
+  return result;
 }
 
 DEFINEFN
@@ -392,6 +404,25 @@ vinfo_t* bfunction_result(PsycoObject* po, bool ref)
 {
 	return vinfo_new(RunTime_TOSF(ref, false));
 }
+
+/* DEFINEFN */
+/* vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc) */
+/* { */
+/*   Source src; */
+/*   if ((int)cc < CC_TOTAL) */
+/*     { */
+/*       BEGIN_CODE */
+/*       INSN_flag_push(); */
+/*       if (cc == CC_NOT_FLAG) */
+/*         INSN_not(); */
+/*       INSNPUSHED(1); */
+/*       END_CODE */
+/*       src = RunTime_TOSF(false, true); */
+/*     } */
+/*   else */
+/*     src = CompileTime_New(cc == CC_ALWAYS_TRUE); */
+/*   return vinfo_new(src); */
+/* } */
 
 DEFINEFN
 vinfo_t* make_runtime_copy(PsycoObject* po, vinfo_t* v)

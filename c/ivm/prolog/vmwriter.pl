@@ -11,8 +11,8 @@ main_emit(modes, switch) :-
             write_codestmt(Code),
             write('continue;\n\n'),
             fail
-        ) ;
-        true.
+        ;
+        true).
 
 
 threaded_table(absolute, 'void*',
@@ -73,7 +73,7 @@ insn_definition(MacroName, MacroArgList, FunctionName, FunctionArgList, Body,
         insn(Insn, _, _, _),
         insn_define(Insn, Name, MacroArgList, Body),
         atom_concat('INSN_', Name, MacroName),
-        (Body=block([],[emit(opcode,Op),setlatesteopcode(Op)|return(_)]) ->
+        (Body=block([],[emit(opcode,Op),setlatestopcode(Op)|return(_)]) ->
             % macro only
             SingleInstr = emit(macro_opcode, Op),
             FunctionName = ''
@@ -110,10 +110,18 @@ main_emit(insns, headers(Prefix)) :-
                 write(';'),
                 nl),
             fail
-        ) ;
-        true.
+        ;
+        true).
 
 main_emit(insns, functions(Prefix)) :-
+        %write('#define FLAG_NONCLOBBERING(op) ( \\'), nl,
+        %(
+        %    enumerate(insn_mode(M), Opcode, 1),
+        %    mode_nonclobber_flag(M),
+        %    write('\t(op)=='), write(Opcode), write(' || \\\n'),
+        %    fail
+        %;
+        %write('\t0)\n'),
         (
             insn_definition(_, _, FunctionName, FunctionArgList, Body, _),
             (FunctionName = '' ->
@@ -126,8 +134,8 @@ main_emit(insns, functions(Prefix)) :-
                 write_code(function_def(FunctionName, 'code_t*',
                                         FunctionArgList, Body))),
             fail
-        ) ;
-        true.
+        ;
+        true).
 
 % write the instruction table in Python
 :- det(objdump_mode/2).
@@ -199,7 +207,7 @@ main_emit(pytable) :-
             enumerate(insn_mode(M), Opcode, 1),
             objdump_mode(Opcode, M),
             fail
-        ) ;
+        ;
         write('}'),
         nl,
         write('stackpushes = {'),
@@ -209,7 +217,7 @@ main_emit(pytable) :-
             objdump_stackpushes(M, P),
             format('  ~d: ~d,\n', [Opcode, P]),
             fail
-        ) ;
+        ;
         write('}'),
         nl,
         write('chainable = {'),
@@ -219,6 +227,15 @@ main_emit(pytable) :-
             objdump_chainables(M),
             format('  ~d: 1,\n', [Opcode]),
             fail
-        ) ;
+        ;
         write('}'),
-        nl.
+        nl))).
+
+
+% generate all files
+main_emit :-
+        tell('insns-igen-h.i'), main_emit(insns, headers('EXTERNFN ')), told,
+        tell('insns-igen.i'), main_emit(insns, functions('DEFINEFN ')), told,
+        tell('insns-threaded.i'), main_emit(modes, threaded(absolute)), told,
+        tell('insns-switch.i'), main_emit(modes, switch), told,
+        tell('insns-table.py'), main_emit(pytable), told.

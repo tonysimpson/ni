@@ -21,10 +21,13 @@
 # define MA_SIZE_TO_LAST_USED    (-1)
 #endif
 
+#define TRACE_START_COMPILING(c)    do { /* nothing */ } while (0)
+
+
 /* Note: the following macro must output a fixed number of bytes of
-   code, so that DICT_ITEM_UPDCHANGED() can be called later
+   code, so that DICT_ITEM_UPDINDEX() can be called later
    to update an existing code buffer */
-#define DICT_ITEM_IFCHANGED(code, index, key, value, jmptarget, mprg)  do {     \
+#define DICT_ITEM_KEYVALUE(code, index, key, value, mprg)  do {                 \
   extra_assert(0 < offsetof(PyDictObject, ma_SIZE) &&                           \
                    offsetof(PyDictObject, ma_SIZE) < 128);                      \
   extra_assert(0 < offsetof(PyDictObject, ma_table) &&                          \
@@ -38,7 +41,7 @@
   code[8] = 0x40 | (mprg<<3) | mprg;   /* MOV mpreg, [mpreg->ma_table] */       \
   CODE_FOUR_BYTES(code+9,                                                       \
             offsetof(PyDictObject, ma_table),                                   \
-            0x70 | CC_L,                 /* JL +22 (to 'JNE target') */         \
+            0x70 | CC_L,                 /* JL +22 (skip rest of macro) */      \
             34 - 12,                                                            \
             0x81);       /* CMP [mpreg+dictentry*index+me_key], key */          \
   code[13] = 0x80 | (7<<3) | mprg;                                              \
@@ -46,23 +49,19 @@
                                   offsetof(PyDictEntry, me_key);                \
   *(long*)(code+18) = (long)(key);                                              \
   CODE_FOUR_BYTES(code+22,                                                      \
-            0x70 | CC_NE,              /* JNE +10 (to 'JNE target') */          \
+            0x70 | CC_NE,              /* JNE +10 (skip rest of macro) */       \
             34 - 24,                                                            \
             0x81,        /* CMP [mpreg+dictentry*index+me_value], value */      \
             0x80 | (7<<3) | mprg);                                              \
   *(long*)(code+26) = (index)*sizeof(PyDictEntry) +                             \
                                   offsetof(PyDictEntry, me_value);              \
   *(long*)(code+30) = (long)(value);                                            \
-  code[34] = 0x0F;                       /* JNE target */                       \
-  code[35] = 0x80 | CC_NE;                                                      \
-  code += 40;                                                                   \
-  *(long*)(code-4) = ((code_t*)(jmptarget)) - code;                             \
+  code += 34;                                                                   \
 } while (0)
 
-#define DICT_ITEM_MACRO_SPACE  40
+#define DICT_ITEM_CHECK_CC     CC_NE
 
-#define DICT_ITEM_UPDCHANGED(index)        do {                         \
-  code -= DICT_ITEM_MACRO_SPACE;                                        \
+#define DICT_ITEM_UPDINDEX(index)        do {                           \
   *(long*)(code+3) = (index) - MA_SIZE_TO_LAST_USED;                    \
   *(long*)(code+14) = (index)*sizeof(PyDictEntry) +                     \
                                   offsetof(PyDictEntry, me_key);        \
@@ -72,16 +71,17 @@
 
 
 /* A cleaner interface to the two big macros above: quickly
-   checking for a change in a dictionary of globals.
+   checking if a globals' dictionary still map the given key to
+   the given value.
    XXX 'dict' must never be released! */
-inline void dictitem_check_change(PsycoObject* po,
-                                  code_t* onchange_target,
-                                  PyDictObject* dict, PyDictEntry* ep)
+inline void* dictitem_check_change(PsycoObject* po,
+                                   PyDictObject* dict, PyDictEntry* ep)
 {
   int index        = ep - dict->ma_table;
   PyObject* key    = ep->me_key;
   PyObject* result = ep->me_value;
   reg_t mprg;
+  code_t* codebase;
   
   Py_INCREF(key);    /* XXX these become immortal */
   Py_INCREF(result); /* XXX                       */
@@ -92,25 +92,18 @@ inline void dictitem_check_change(PsycoObject* po,
   /* write code that quickly checks that the same
      object is still in place in the dictionary */
   LOAD_REG_FROM_IMMED(mprg, (long) dict);
-  DICT_ITEM_IFCHANGED(code, index, key, result, onchange_target, mprg);
+  codebase = code;
+  DICT_ITEM_KEYVALUE(code, index, key, result, mprg);
   END_CODE
+  return codebase;
 }
 
-inline code_t* dictitem_update_nochange(code_t* originalmacrocode,
-                                        PyDictObject* dict, PyDictEntry* new_ep)
+inline void dictitem_update_nochange(void* originalmacrocode,
+                                     PyDictObject* dict, PyDictEntry* new_ep)
 {
   int index = new_ep - dict->ma_table;
-  code_t* code = originalmacrocode;
-  DICT_ITEM_UPDCHANGED(index);
-  return originalmacrocode;
-}
-
-inline void dictitem_update_jump(code_t* originalmacrocode, code_t* target)
-{
-  code_t* code = originalmacrocode;
-  code -= DICT_ITEM_MACRO_SPACE;
-  extra_assert(target != code);
-  JUMP_TO(target);
+  code_t* code = (code_t*) originalmacrocode;
+  DICT_ITEM_UPDINDEX(index);
 }
 
 

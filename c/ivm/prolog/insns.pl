@@ -4,29 +4,31 @@
 
 unary_insn(not).
 unary_insn(inv).
-unary_insn(nego, '-').
-overflow_flag(nego).
-unary_insn(abso).
-overflow_flag(abso).
+unary_insn(neg_o, '-').
+overflow_flag(neg_o).
+unary_insn(abs_o).
+overflow_flag(abs_o).
 
-binary_insn(addo, '+').
-overflow_flag(addo).
-binary_insn(subo, '-').
-overflow_flag(subo).
-binary_insn(mulo, '*').
-overflow_flag(mulo).
+binary_insn(add, '+').
+binary_insn(add_o, '+').
+overflow_flag(add_o).
+binary_insn(sub_o, '-').
+overflow_flag(sub_o).
+binary_insn(mul_o, '*').
+overflow_flag(mul_o).
 binary_insn(or).
 binary_insn(and).
 binary_insn(xor).
 %binary_insn(div).
 binary_insn(lshift, '<<').
 binary_insn(rshift, '>>').
-insn(urshift, [], [out(0)=(unsigned(in(1))>>in(0))],   [stack(2->1)]).
-insn(cmpeq,   [], [out(0)=(in(1)=:=in(0))],            [stack(2->1)]).
-insn(cmplt,   [], [out(0)=(in(1) < in(0))],            [stack(2->1)]).
-insn(cmpltu,  [], [out(0)=(unsigned(in(1)) < unsigned(in(0)))], [stack(2->1)]).
+insn(urshift, [], [out(0)=(unsigned(in(1))>>in(0))],    [stack(2->1)]).
+insn(cmpeq,  [], [setflag=(in(1)=:=in(0))], [flag(set), stack(2->0)]).
+insn(cmplt,  [], [setflag=(in(1) < in(0))], [flag(set), stack(2->0)]).
+insn(cmpltu, [], [setflag=(unsigned(in(1)) < unsigned(in(0)))],
+                                            [flag(set), stack(2->0)]).
 
-insn(pop,    [],  [], [stack(pop(0))]).  % note: this is the same as s_pop(0)
+%insn(pop,    [],  [], [stack(pop(0))]).  % note: this is the same as s_pop(0)
 %insn(pop2nd, [],  [], [stack(pop(1))]).
 insn(settos, [s], [], [stack(settos), nonchainable]).
 insn(pushn,  [i], [], [stack(pushn), nonchainable]).
@@ -36,12 +38,16 @@ insn(s_push,   [s], [out(0) = arg(0)], [stack(push)]).
 insn(s_pop,    [s], [arg(0) = in(0)],  [stack(pop)]).
 insn(ref_push, [i], [out(0) = addr(stack_nth(arg(0)-stkshft))], [stack(push)]).
 insn(stackgrow, [], [impl_stackgrow('VM_EXTRA_STACK_SIZE')], []).
-insn(assertdepth, [i], [comment('debugging assertion')], []).
 
-insn(jcondnear,[b], [impl_jcond(in(0), nextip+arg(0))],
-                                                    [stack(pop), nonchainable]).
-insn(jcondfar, [l], [impl_jcond(in(0), arg(0))],    [stack(pop), nonchainable]).
-insn(jumpfar,  [l], [impl_jump(arg(0))],                        [nonchainable]).
+insn(assertdepth, [i], [comment('debugging assertion')], []).
+insn(dynamicfreq, [l], [impl_dynamicfreq], [nonchainable]).
+
+insn(flag_push, [], [out(0)=flag],   [stack(push), flag(get)]).
+insn(flag_pop,  [], [setflag=in(0)], [stack(pop), flag(set)]).
+insn(flag_forget, [],[], [flag(get), suffixonly]).
+insn(jcondnear,[b], [impl_jcond(flag, nextip+arg(0))],[nonchainable,flag(get)]).
+insn(jcondfar, [l], [impl_jcond(flag, arg(0))],       [nonchainable,flag(get)]).
+insn(jumpfar,  [l], [impl_jump(arg(0))],              [nonchainable]).
 
 insn(cbuild1, [l], [impl_cbuild1(arg(0))], [nonchainable]).
 insn(cbuild2, [l], [impl_cbuild2(arg(0), in(0))],
@@ -60,10 +66,10 @@ insn(incref,   [],  [impl_incref(in(0))],  [stack(1->0)]).
 insn(decref,   [],  [impl_decref(in(0))],  [stack(1->0)]).
 insn(decrefnz, [l], [impl_decrefnz(arg(0))], []).
 
-insn(exitframe, [],  [impl_exitframe(in(2), in(1), in(0))], [stack(3->0)]).
-insn(ret,      [s],  [impl_ret(in(0))], [stack(settos), nonchainable]).
-insn(retval,    [],  [retval=in(0)],  [stack(pop)]).
-insn(pushretval,[],  [out(0)=retval], [stack(push)]).
+insn(exitframe, [], [impl_exitframe(in(2), in(1), in(0))], [stack(3->0)]).
+insn(ret,      [s], [impl_ret(in(0))], [stack(settos), nonchainable]).
+insn(retval,    [], [retval=in(0)], [stack(pop)]).
+insn(pushretval,[], [out(0)=retval], [stack(push)]).
 
 insn(pyenter,  [l], [impl_pyenter(arg(0))], []).  % enter a Python sub-function
 insn(pyleave,  [],  [impl_pyleave], []).          % exit a Python sub-function
@@ -82,8 +88,8 @@ insn(CallInsn, [l], [out(0)=impl_ccall(N, arg(0), ArgDef)],     [stack(N->1)]) :
         ArgDef =.. [macro_args | Args],
         string_to_atom(SInsn, CallInsn).
 
-insn(checkdict, [l,l,l,l,l], [impl_checkdict(arg(0), arg(1), arg(2),
-        arg(3), arg(4))], [nonchainable]).
+insn(checkdict, [l,l,l,l], [setflag=impl_checkdict(arg(0), arg(1), arg(2),
+        arg(3))], [flag(set)]).
 
 
 % custom operand modes

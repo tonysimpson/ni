@@ -703,7 +703,7 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
      'extra' data. */
   calling_code = po->code;
   calling_limit = po->codelimit;
-  po->code = (code_t*) codebuf->codestart;
+  po->code = insn_code_label(codebuf->codestart);
   po->codelimit = limit;
   cp = (coding_pause_t*) psyco_call_code_builder(po, &do_resume_coding,
                                                  true, SOURCE_DUMMY);
@@ -783,7 +783,7 @@ code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
         psyco_codebuf_chained_list = codebuf;
 #endif
         /*Py_DECREF(codebuf); XXX cannot loose reference if mp == NULL*/
-        if (codebuf) ;  /* for unused variable warnings */
+        po->code = insn_code_label(codebuf->codestart);
       }
       
       if (cmp != NULL)   /* partial match */
@@ -812,7 +812,7 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
   PsycoObject* po2 = PsycoObject_Duplicate(po);
   vcompatible_t* cmp = mp==NULL ? NULL : psyco_compatible(po2, &mp->entries);
 
-  extra_assert(condition < CC_TOTAL);
+  extra_assert((int)condition < CC_TOTAL);
 
   if (cmp != NULL && cmp->diff == NullArray)  /* exact match */
     {
@@ -868,7 +868,7 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
   
   /* Normal case. Start a new buffer */
   codebuf = psyco_new_code_buffer(po, mp==NULL ? NULL : &mp->entries, &po->codelimit);
-  po->code = (code_t*) codebuf->codestart;
+  po->code = insn_code_label(codebuf->codestart);
 
   if (compile_now)
     {

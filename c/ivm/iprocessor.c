@@ -69,12 +69,12 @@ inline PyVMStack* vm_get_stack(PyObject* tdict)
  /***  Virtual machine interpreter                            ***/
 
 #define bytecode_nextopcode()   (*nextip++)
-#define bytecode_nextcode_t()   (*nextip++)
-#define bytecode_nextword_t()   (tmp = *(word_t*) nextip,	\
+#define bytecode_nx_code_t()    (*nextip++)
+#define bytecode_nx_word_t()    (tmp = *(word_t*) nextip,	\
 				 nextip += sizeof(word_t),	\
 				 tmp)
-#define bytecode_nextchar()     ((char)(*nextip++))
-#define bytecode_next(T)        bytecode_next##T()
+#define bytecode_nx_char()      ((char)(*nextip++))
+#define bytecode_next(T)        (bytecode_nx_##T())
 
 #define stack_nth(N)            sp[N]
 #define stack_shift(N)          (sp += (N),                     \
@@ -85,12 +85,12 @@ inline PyVMStack* vm_get_stack(PyObject* tdict)
 #define macro_args              /* nothing */
 #define macro_noarg             ()  /* macro call with no argument */
 
-inline long abso(long a) { return a < 0 ? -a : a; }
-#define ovf_checkabso(a)        (a == LONG_MIN)
-#define ovf_checknego(a)        (a == LONG_MIN)
-#define ovf_checkaddo(a, b)     (((a+b)^a) < 0 && (a^b) >= 0)
-#define ovf_checksubo(a, b)     (((a-b)^a) < 0 && ((a-b)^b) >= 0)
-#define ovf_checkmulo(a, b)     psyco_int_mul_ovf(a, b)
+inline long abs_o(long a) { return a < 0 ? -a : a; }
+#define ovf_checkabs_o(a)       (a == LONG_MIN)
+#define ovf_checkneg_o(a)       (a == LONG_MIN)
+#define ovf_checkadd_o(a, b)    (((a+b)^a) < 0 && (a^b) >= 0)
+#define ovf_checksub_o(a, b)    (((a-b)^a) < 0 && ((a-b)^b) >= 0)
+#define ovf_checkmul_o(a, b)    psyco_int_mul_ovf(a, b)
 #define ovf_check(INSN, ARGS)   ovf_check##INSN ARGS
 
 #define impl_stackgrow(sz)      if ((char*)sp - frame->limit <		\
@@ -146,13 +146,12 @@ typedef word_t (*ccalled_fn_t_6) (word_t,word_t,word_t,word_t,word_t,word_t);
 typedef word_t (*ccalled_fn_t_7) (word_t,word_t,word_t,word_t,word_t,word_t,word_t);
 #define impl_ccall(nbargs, fn, args)  (stack_savesp(),				\
                                        (((ccalled_fn_t_##nbargs)(fn)) args))
-#define impl_checkdict(dict, key, result, target, index)    do {        \
-	PyDictObject* d = (PyDictObject*) dict;                         \
-	if ((unsigned)d->ma_mask < (unsigned)index ||                   \
-	    d->ma_table[index].me_key != (PyObject*)key ||              \
-	    d->ma_table[index].me_value != (PyObject*)result)           \
-		nextip = (code_t*) target;                              \
-} while (0)
+#define impl_checkdict(dict, key, result, index)    (				\
+	(unsigned)((PyDictObject*)dict)->ma_mask < (unsigned)index ||		\
+	((PyDictObject*)dict)->ma_table[index].me_key != (PyObject*)key ||	\
+	((PyDictObject*)dict)->ma_table[index].me_value != (PyObject*)result)
+#define impl_dynamicfreq        (((word_t*) nextip)[-1] ++)
+
 inline vmstackframe_t* vm_pyenter(PyVMStack* vmst, vmstackframe_t* frame,
 				  word_t finfo, word_t* currentsp)
 {
@@ -257,13 +256,15 @@ static word_t* vm_stackgrow(vmstackframe_t* frame, word_t* currentsp)
 #endif
 
 
+#define retval  flag   /* same ivm register */
+
 static word_t vm_interpreter_main_loop(PyVMStack* vmst)
 {
 	/* virtual machine "registers" */
 	register word_t accum F_ACCUMREG; /* 1st stack item, for optimization */
 	register word_t* sp    F_SPREG;       /* stack pointer */
 	register code_t* nextip F_NEXTIPREG;   /* next instruction pointer */
-	word_t retval = 0;  /* return value, when known */
+	word_t flag;                            /* flags OR retval register */
 	word_t tmp;
 	vmstackframe_t* frame = vmst->topframe;
 
@@ -271,6 +272,7 @@ static word_t vm_interpreter_main_loop(PyVMStack* vmst)
 	nextip    = (code_t*) frame->limit; /* hack from psyco_processor_run() */
 	sp        = (word_t*) frame->sp;
 	accum     = 0xCDCDCDCD;  /* unused */
+	flag      = 0xCDCDCDCD;  /* unused */
 
 	/* Let's loop! */
 #	if VM_THREADED_INTERPRETER
@@ -291,6 +293,8 @@ static word_t vm_interpreter_main_loop(PyVMStack* vmst)
 	}
 #	endif
 }
+
+#undef retval
 
 
 /***************************************************************/
