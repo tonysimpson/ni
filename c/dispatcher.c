@@ -1249,7 +1249,7 @@ static void data_update_stack(vinfo_t* a, RunTimeSource bsource,
            executed as well. */
         RTVINFO_IN_REG(a);
         rg = RUNTIME_REG(a);
-        INC_OB_REFCNT(rg);
+        INC_OB_REFCNT_CC(rg);
       }
   }
   /* 'a' must no longer own a reference at this point.
@@ -1368,6 +1368,9 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   int sdepth = get_stack_depth(&target_codebuf->snapshot);
   int popsdepth;
   char pops[REG_TOTAL+2];
+#if PSYCO_DEBUG
+  bool has_ccreg = (po->ccreg != NULL);
+#endif
 
   extra_assert(lastmatch->diff == NullArray);  /* unify with exact match only */
   psyco_assert_coherent(po);
@@ -1476,6 +1479,9 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   STACK_CORRECTION(sdepth - po->stack_depth);
   if (code > dm.code_limit)  /* start a new buffer if we wrote past the end */
     code = data_new_buffer(code, &dm);
+#if PSYCO_DEBUG
+  extra_assert(has_ccreg == (po->ccreg != NULL));
+#endif
   JUMP_TO(target_codebuf->codeptr);
   
   /* start a new buffer if the last JUMP_TO overflowed,

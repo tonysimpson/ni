@@ -72,8 +72,18 @@
 
 /* emit the equivalent of the Py_INCREF() macro */
 /* the PyObject* is stored in the register 'rg' */
-#define INC_OB_REFCNT(rg)	do {                    \
+#define INC_OB_REFCNT(rg)			do {    \
   NEED_CC_REG(rg);                                      \
+  INC_OB_REFCNT_internal(rg);                           \
+} while (0)
+/* same as above, preserving the cc */
+#define INC_OB_REFCNT_CC(rg)			do {    \
+  bool _save_ccreg = po->ccreg != NULL;                 \
+  if (_save_ccreg) PUSH_CC_FLAGS();                     \
+  INC_OB_REFCNT_internal(rg);                           \
+  if (_save_ccreg) POP_CC_FLAGS();                      \
+} while (0)
+#define INC_OB_REFCNT_internal(rg)		do {    \
   code[0] = 0xFF;          /* INC [reg] */              \
   if ((EBP_IS_RESERVED || (rg) != REG_386_EBP) &&       \
       offsetof(PyObject, ob_refcnt) == 0)               \
