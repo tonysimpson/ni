@@ -4,7 +4,7 @@
 #define setlatestopcode(opcode)   (*code = (opcode))
 #define INSN_EMIT_opcode(opcode)  (*code++ = (opcode))
 #define INSN_EMIT_modified_opcode(opcode, totalargs)                    \
-                                  (code[-(totalargs)-1] = (opcode))
+                                  (code[-((int)(totalargs))-1] = (opcode))
 
 #define bytecode_size(T)      sizeof(T)
 #define INSN_EMIT_void(arg)   do { /*nothing*/ } while (0)

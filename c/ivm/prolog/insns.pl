@@ -52,8 +52,8 @@ unary_insn(load1u, mem1u).
 unary_insn(load2,  mem2).
 unary_insn(load2u, mem2u).
 unary_insn(load4,  mem4).
-insn(store1, [], [mem1(in(1)) = in(0)], [stack(2->0)]).
-insn(store2, [], [mem2(in(1)) = in(0)], [stack(2->0)]).
+insn(store1, [], [mem1(in(1)) = cast1(in(0))], [stack(2->0)]).
+insn(store2, [], [mem2(in(1)) = cast2(in(0))], [stack(2->0)]).
 insn(store4, [], [mem4(in(1)) = in(0)], [stack(2->0)]).
 
 insn(incref,   [],  [impl_incref(in(0))],  [stack(1->0)]).

@@ -559,7 +559,7 @@ continue;
 case 48:  /* [store1] */
 {
 word_t local1;
-*(char*)stack_nth(0) = accum;
+*(char*)stack_nth(0) = (char)accum;
 local1 = stack_nth(1);
 accum = local1;
 stack_shift_pos(2);
@@ -569,7 +569,7 @@ continue;
 case 49:  /* [store2] */
 {
 word_t local1;
-*(short*)stack_nth(0) = accum;
+*(short*)stack_nth(0) = (short)accum;
 local1 = stack_nth(1);
 accum = local1;
 stack_shift_pos(2);

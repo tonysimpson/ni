@@ -222,11 +222,12 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 } while (0)
 
 
-#define STACK_CORRECTION(stack_correction)   do {                       \
-  if ((stack_correction) < 0)                                           \
-    INSN_settos((-(stack_correction)) / sizeof(long));                  \
-  else if ((stack_correction) > 0)                                      \
-    INSN_pushn((stack_correction) / sizeof(long));                      \
+#define STACK_CORRECTION(stack_correction)   do {       \
+  int _stackcorr = (int)(stack_correction);             \
+  if (_stackcorr < 0)                                   \
+    INSN_settos((-_stackcorr) / sizeof(long));          \
+  else if (_stackcorr > 0)                              \
+    INSN_pushn(_stackcorr / sizeof(long));              \
 } while (0)
 
 #define FUNCTION_RET(popbytes)      do {                                        \

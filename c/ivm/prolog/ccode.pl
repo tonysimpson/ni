@@ -12,6 +12,8 @@ unary_prolog_to_C(mem1u, '*(unsigned char*)').
 unary_prolog_to_C(mem2,  '*(short*)').
 unary_prolog_to_C(mem2u, '*(unsigned short*)').
 unary_prolog_to_C(mem4,  '*(long*)').
+unary_prolog_to_C(cast1, '(char)').
+unary_prolog_to_C(cast2, '(short)').
 
 binary_prolog_to_C('=',   '=').
 binary_prolog_to_C('=<',  '<=').

@@ -146,12 +146,12 @@ typedef word_t (*ccalled_fn_t_6) (word_t,word_t,word_t,word_t,word_t,word_t);
 typedef word_t (*ccalled_fn_t_7) (word_t,word_t,word_t,word_t,word_t,word_t,word_t);
 #define impl_ccall(nbargs, fn, args)  (stack_savesp(),				\
                                        (((ccalled_fn_t_##nbargs)(fn)) args))
-#define impl_checkdict(dict, key, result, target, index)    do {	\
-	PyDictObject* d = (PyDictObject*) dict;				\
-	if (d->ma_mask < (unsigned)index ||				\
-	    d->ma_table[index].me_key != (PyObject*)key ||		\
-	    d->ma_table[index].me_value != (PyObject*)result)		\
-		nextip = (code_t*) target;				\
+#define impl_checkdict(dict, key, result, target, index)    do {        \
+	PyDictObject* d = (PyDictObject*) dict;                         \
+	if ((unsigned)d->ma_mask < (unsigned)index ||                   \
+	    d->ma_table[index].me_key != (PyObject*)key ||              \
+	    d->ma_table[index].me_value != (PyObject*)result)           \
+		nextip = (code_t*) target;                              \
 } while (0)
 inline vmstackframe_t* vm_pyenter(PyVMStack* vmst, vmstackframe_t* frame,
 				  word_t finfo, word_t* currentsp)
@@ -296,9 +296,9 @@ static word_t vm_interpreter_main_loop(PyVMStack* vmst)
 /***************************************************************/
  /***  Virtual machine entry point                            ***/
 
-#define VM_ENOUGH_STACK							\
-	    (top->origin - top->limit >= 4*sizeof(long)*argc +		\
-	     VM_INITIAL_MINIMAL_STACK_SIZE + VM_STACK_SIZE_MARGIN)
+#define VM_ENOUGH_STACK                                                 \
+	    (top->origin - top->limit >= (int)(4*sizeof(long)*argc +    \
+	     VM_INITIAL_MINIMAL_STACK_SIZE + VM_STACK_SIZE_MARGIN))
 
 DEFINEFN
 PyObject* psyco_processor_run(CodeBufferObject* codebuf,
