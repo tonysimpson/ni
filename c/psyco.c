@@ -2,6 +2,7 @@
 #include "psyfunc.h"
 #include "codemanager.h"
 #include "selective.h"
+#include "dispatcher.h"
 #include "Python/pycompiler.h"
 
 #define PSYCO_INITIALIZATION

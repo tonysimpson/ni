@@ -155,7 +155,11 @@ static const unsigned char other_opcodes[] = {
   SET_LINENO,
 #endif
   CALL_FUNCTION,
+  CALL_FUNCTION_VAR,
+  CALL_FUNCTION_KW,
+  CALL_FUNCTION_VAR_KW,
   MAKE_FUNCTION,
+  BUILD_SLICE,
   0 };
 
 #define SUPPORTED_COMPARE_ARG(oparg)  ( \

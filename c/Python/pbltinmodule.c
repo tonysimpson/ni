@@ -270,6 +270,8 @@ static vinfo_t* pbuiltin_apply(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 	vinfo_t* kwdict = NULL;
 	vinfo_t* retval;
 	int tuplesize = PsycoTuple_Load(vargs);  /* -1 if unknown */
+	PyTypeObject* argt;
+	vinfo_t* t = NULL;
 
 	switch (tuplesize) {
 	case 3:
@@ -281,16 +283,24 @@ static vinfo_t* pbuiltin_apply(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 		/* fall through */
 	case 2:
 		alist = PsycoTuple_GET_ITEM(vargs, 1);
-		if (Psyco_TypeSwitch(po, alist, &psyfs_tuple) != 0) {
+		argt = Psyco_NeedType(po, alist);
+		if (argt == NULL)
+			return NULL;
+		if (!PyType_TypeCheck(argt, &PyTuple_Type)) {
 			/* 'alist' is not a tuple */
-			/* XXX implement PsycoSequence_Tuple() */
-			break;
+			if (!PsycoSequence_Check(argt))
+				break;  /* give up */
+			t = PsycoSequence_Tuple(po, alist);
+			if (t == NULL)
+				break;  /* give up */
+			alist = t;
 		}
 		/* fall through */
 	case 1:
 		retval = PsycoEval_CallObjectWithKeywords(po,
 					PsycoTuple_GET_ITEM(vargs, 0),
 					alist, kwdict);
+		vinfo_xdecref(t, po);
 		return retval;
 	}
 

@@ -42,8 +42,9 @@ vinfo_t* PsycoObject_Call(PsycoObject* po, vinfo_t* callable_object,
 	return NULL;
 
 #else /* !NEW_STYLE_TYPES */
-	/* In older Python versions, the common types have to tp_call slot.
-	   Instead, we have check for common types as in ceval.c. */
+	/* In older Python versions, the common callable types have no
+           tp_call slot! See these versions' call_object() function in
+           ceval.c. */
 
 	if (tp == &PyMethod_Type)
 		return pinstancemethod_call(po, callable_object, args, kw);
@@ -351,6 +352,22 @@ vinfo_t* PsycoSequence_Contains(PsycoObject* po, vinfo_t* seq, vinfo_t* ob)
 				  CfReturnNormal|CfPyErrIfNeg,
 				  "vv", seq, ob);
 #endif
+}
+
+DEFINEFN
+vinfo_t* PsycoSequence_Tuple(PsycoObject* po, vinfo_t* seq)
+{
+	/* XXX implement me */
+	vinfo_t* v = psyco_generic_call(po, PySequence_Tuple,
+					CfReturnRef|CfPyErrIfNull,
+					"v", seq);
+	if (v == NULL)
+		return NULL;
+
+	/* the result is a tuple */
+	set_array_item(po, v, OB_TYPE,
+		       vinfo_new(CompileTime_New((long)(&PyTuple_Type))));
+	return v;
 }
 
 

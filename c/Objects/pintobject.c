@@ -271,7 +271,7 @@ static vinfo_t* pint_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 
 /* Careful, most operations might return a long if they overflow.
    Only list here the ones that cannot. Besides, all these operations
-   should sooner or later be implemented in Psyco. */
+   should sooner or later be implemented in Psyco. XXX */
 DEF_KNOWN_RET_TYPE_2(pint_lshift, PyInt_Type.tp_as_number->nb_lshift,
 		     CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)
 DEF_KNOWN_RET_TYPE_2(pint_rshift, PyInt_Type.tp_as_number->nb_rshift,

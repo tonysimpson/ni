@@ -1425,6 +1425,135 @@ static vinfo_t* psyco_loop_subscript(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 }
 #endif
 
+#define CALL_FLAG_VAR 1
+#define CALL_FLAG_KW 2
+static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
+				   vinfo_t** stack_top, int* stack_to_pop)
+{
+	int na = oparg & 0xff;
+	int nk = (oparg>>8) & 0xff;
+	int flags = (opcode - CALL_FUNCTION) & 3;
+	int n = na + 2 * nk;
+	vinfo_t** args;
+	vinfo_t* vargs = NULL;
+	vinfo_t* wdict = NULL;
+	vinfo_t* result = NULL;
+	
+	if (flags & CALL_FLAG_VAR)
+		n++;
+	if (flags & CALL_FLAG_KW)
+		n++;
+	args = stack_top - n;
+	*stack_to_pop = n+1;
+
+	/* reminder: the stack layout, top-to-bottom, is:
+
+	   - keyword dictionary (for '**kw' call syntax)
+	   - arguments tuple    (for '*args' call syntax)
+	   - kw value (nk-1)
+	   - kw key   (nk-1)
+	   ...
+	   - kw value (0)
+	   - kw key   (0)
+	   - argument value (na-1)
+	   ...
+	   - argument value (0)
+	   - callable object
+
+	   We use 'n' as the current stack depth (not including
+	   the callable object) while processing arguments.
+	*/
+
+	/* keyword arguments */
+	if (nk == 0 && !(flags & CALL_FLAG_KW))
+		wdict = psyco_vi_Zero();	/* no keyword arguments */
+	else {
+		int i;
+		if (flags & CALL_FLAG_KW) {   /*  '**kw' call syntax */
+			vinfo_t* w = args[--n];  /* pop keyword dictionary */
+			
+			/* check that it is a dictionary */
+			if (Psyco_TypeSwitch(po, w, &psyfs_dict) != 0) {
+				if (PycException_Occurred(po))
+					goto fail;
+				/* don't bother displaying the function name
+				   which might not be known yet */
+				PycException_SetString(po, PyExc_TypeError,
+						       "argument after ** "
+						       "must be a dictionary");
+				goto fail;
+			}
+			if (nk != 0) {
+				/* make a copy of the dictionary;
+				   the original one must not be modified */
+				wdict = PsycoDict_Copy(po, w);
+			}
+			else {
+				wdict = w;
+				vinfo_incref(wdict);
+			}
+		}
+		else
+			wdict = PsycoDict_New(po);
+		
+		if (wdict == NULL)
+			goto fail;
+
+		/* update 'wdict' with the explicit keyword arguments */
+		/* XXX do something closer to
+		   update_keyword_args() in ceval.c, e.g.
+		   check for duplicate keywords */
+		for (i = na + 2*nk; i > na; ) {
+			i -= 2;
+			if (!psyco_generic_call(po, PyDict_SetItem,
+					CfNoReturnValue|CfPyErrIfNonNull,
+					"vvv", wdict, args[i], args[i+1]))
+				break;
+		}
+	}
+
+	/* non-keyword arguments */
+	vargs = PsycoTuple_New(na, args);  /* virtual tuple */
+
+	if (flags & CALL_FLAG_VAR) {
+		vinfo_t* vtotal;
+		vinfo_t* v = args[--n];  /* pop argument tuple */
+		PyTypeObject* vt = Psyco_NeedType(po, v);
+		if (vt == NULL)
+			goto fail;
+		if (!PyType_TypeCheck(vt, &PyTuple_Type)) {
+			/* 'v' is not a tuple */
+			if (!PsycoSequence_Check(vt)) {
+				/* don't bother displaying the function name
+				   which might not be known yet */
+				PycException_SetFormat(po, PyExc_TypeError,
+						       "argument after * "
+						       "must be a sequence");
+				goto fail;
+			}
+			v = PsycoSequence_Tuple(po, v);
+			if (v == NULL)
+				goto fail;
+		}
+		else
+			vinfo_incref(v);
+		
+		vtotal = PsycoTuple_Concat(po, vargs, v);
+		vinfo_decref(v, po);
+		vinfo_decref(vargs, po);
+		vargs = vtotal;
+		if (vargs == NULL)
+			goto fail;
+	}
+
+	result = PsycoObject_Call(po, args[-1], vargs, wdict);
+	/* fall through */
+ fail:
+	vinfo_xdecref(vargs, po);
+	vinfo_xdecref(wdict, po);
+	return result;
+}
+
 
 /***************************************************************/
  /***   Run-time implementation of various opcodes            ***/
@@ -2836,55 +2965,24 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 #endif
 
 	case CALL_FUNCTION:
+	case CALL_FUNCTION_VAR:
+	case CALL_FUNCTION_KW:
+	case CALL_FUNCTION_VAR_KW:
 	{
-		int na = oparg & 0xff;
-		int nk = (oparg>>8) & 0xff;
-		int n = na + 2 * nk;
-		vinfo_t** args = STACK_POINTER() - n;
-		vinfo_t* func = args[-1];
-                
-		/* build a virtual tuple for apply() */
-		v = PsycoTuple_New(na, args);
-		if (nk != 0) {
-			/* XXX to do: PsycoDict_Virtual() */
-			int i;
-                        w = PsycoDict_New(po);
-			if (w != NULL) {
-				/* XXX do something closer to
-				   update_keyword_args() in ceval.c, e.g.
-				   check for duplicate keywords */
-				for (i=na; i<n; i+=2) {
-					if (!psyco_generic_call(po,
-					     PyDict_SetItem,
-					     CfNoReturnValue|CfPyErrIfNonNull,
-					     "vvv", w, args[i], args[i+1]))
-						break;
-				}
-			}
-		}
-		else
-			w = psyco_vi_Zero();
-		if (PycException_Occurred(po))
-			x = NULL;
-		else
-			x = PsycoObject_Call(po, func, v, w);
-		vinfo_decref(w, po);
-		vinfo_decref(v, po);
+		int i, stack_to_pop;
+		x = psyco_ext_do_calls(po, opcode, oparg, STACK_POINTER(),
+				       &stack_to_pop);
 		if (x == NULL)
 			break;
 
 		/* clean up the stack (remove args and func) */
-		while (n-- >= 0)
+		for (i=stack_to_pop; i--; )
 			POP_DECREF();
 		PUSH(x);
 		goto fine;
 	}
-	
-	/*MISSING_OPCODE(CALL_FUNCTION_VAR);
-	  MISSING_OPCODE(CALL_FUNCTION_KW);
-	  MISSING_OPCODE(CALL_FUNCTION_VAR_KW);
-	  MISSING_OPCODE(MAKE_CLOSURE);
-	  MISSING_OPCODE(BUILD_SLICE);*/
+
+	/*MISSING_OPCODE(MAKE_CLOSURE);*/
 
 	case MAKE_FUNCTION:
 		if (oparg > 0)
@@ -2899,6 +2997,31 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		/* clean up the stack (remove args and func) */
 		while (oparg-- >= 0)
 			POP_DECREF();
+		PUSH(x);
+		goto fine;
+
+	case BUILD_SLICE:
+		if (oparg == 3) {
+			w = NTOP(1);
+			v = NTOP(2);
+			u = NTOP(3);
+		}
+		else {
+			w = psyco_vi_Zero();
+			v = NTOP(1);
+			u = NTOP(2);
+		}
+		x = psyco_generic_call(po, PySlice_New,
+				       CfReturnRef|CfPyErrIfNull,
+				       "vvv", u, v, w);
+		if (oparg != 3)
+			vinfo_decref(w, po);
+		if (x == NULL)
+			break;
+		if (oparg == 3)
+			POP_DECREF();	/* w */
+		POP_DECREF();		/* v */
+		POP_DECREF();		/* u */
 		PUSH(x);
 		goto fine;
 

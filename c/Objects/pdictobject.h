@@ -43,6 +43,7 @@ struct _dictobject {
 
 
 EXTERNFN vinfo_t* PsycoDict_New(PsycoObject* po);
+EXTERNFN vinfo_t* PsycoDict_Copy(PsycoObject* po, vinfo_t* orig);
 
 
 #endif /* _PSY_LISTOBJECT_H */

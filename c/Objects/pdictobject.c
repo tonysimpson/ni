@@ -18,6 +18,21 @@ vinfo_t* PsycoDict_New(PsycoObject* po)
 	return v;
 }
 
+DEFINEFN
+vinfo_t* PsycoDict_Copy(PsycoObject* po, vinfo_t* orig)
+{
+	vinfo_t* v = psyco_generic_call(po, PyDict_Copy,
+					CfReturnRef|CfPyErrIfNull,
+					"v", orig);
+	if (v == NULL)
+		return NULL;
+
+	/* the result is a dict */
+	set_array_item(po, v, OB_TYPE,
+		       vinfo_new(CompileTime_New((long)(&PyDict_Type))));
+	return v;
+}
+
 static vinfo_t* psyco_dict_length(PsycoObject* po, vinfo_t* vi)
 {
 	return read_array_item(po, vi, DICT_MA_USED);

@@ -117,6 +117,58 @@ int PsycoTuple_Load(vinfo_t* tuple)
 	return size;
 }
 
+DEFINEFN
+vinfo_t* PsycoTuple_Concat(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
+{
+	vinfo_t* result;
+	int len1, len2;
+	
+	if (Psyco_TypeSwitch(po, v1, &psyfs_tuple) != 0 ||
+	    Psyco_TypeSwitch(po, v2, &psyfs_tuple) != 0)
+		return NULL;
+	
+	/* XXX a "virtual tuple concatenation" would be cool */
+	len1 = PsycoTuple_Load(v1);  /* -1 if unknown */
+	if (len1 == 0) {
+		vinfo_incref(v2);
+		return v2;
+	}
+	len2 = PsycoTuple_Load(v2);  /* -1 if unknown */
+	if (len2 == 0) {
+		vinfo_incref(v1);
+		return v1;
+	}
+
+	if (len1 == -1 || len2 == -1) {
+		/* cannot do it now. Fall back. */
+		result = psyco_generic_call(po,
+					PyTuple_Type.tp_as_sequence->sq_concat,
+					CfReturnRef|CfPyErrIfNull,
+					"vv", v1, v2);
+		if (result == NULL)
+			return NULL;
+
+		/* the result is a tuple */
+		set_array_item(po, result, OB_TYPE,
+			      vinfo_new(CompileTime_New((long)(&PyTuple_Type))));
+	}
+	else {
+		int i;
+		result = PsycoTuple_New(len1+len2, NULL);
+		for (i=0; i<len1; i++) {
+			vinfo_t* v = PsycoTuple_GET_ITEM(v1, i);
+			vinfo_incref(v);
+			result->array->items[TUPLE_OB_ITEM + i] = v;
+		}
+		for (i=0; i<len2; i++) {
+			vinfo_t* v = PsycoTuple_GET_ITEM(v2, i);
+			vinfo_incref(v);
+			result->array->items[TUPLE_OB_ITEM + len1 + i] = v;
+		}
+	}
+	return result;
+}
+
 
  /***************************************************************/
   /*** tuple objects meta-implementation                       ***/
