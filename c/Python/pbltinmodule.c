@@ -58,10 +58,8 @@ static PyObject* cimpl_range1(long start, long len)
   return lst;
 }
 
-static bool compute_range(PsycoObject* po, vinfo_t* rangelst, bool force)
+static bool compute_range(PsycoObject* po, vinfo_t* rangelst)
 {
-	/* also compute with forking (!force) because ranges are lists,
-           which are mutable */
 	vinfo_t* newobj;
 	vinfo_t* vstart;
 	vinfo_t* vlen;
@@ -170,6 +168,7 @@ static vinfo_t* pbuiltin_xrange(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
   return result;
 }
 
+#if NEW_STYLE_TYPES
 static vinfo_t* prange_new(PsycoObject* po, vinfo_t* vtype,
 			   vinfo_t* vargs, vinfo_t* vkw)
 {
@@ -182,6 +181,9 @@ static vinfo_t* prange_new(PsycoObject* po, vinfo_t* vtype,
                                 vargs, NULL);
   return result;
 }
+#else
+# define prange_new  NULL
+#endif
 
 static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 {
@@ -319,7 +321,9 @@ INITIALIZATIONFN
 void psyco_bltinmodule_init(void)
 {
 	PyObject* md = Psyco_DefineMetaModule("__builtin__");
-	psyco_computed_range.compute_fn = &compute_range;
+	/* ranges are lists, which are mutable;
+           they must be forced out of virtual-time across function calls */
+        INIT_SVIRTUAL(psyco_computed_range, compute_range, 0, NW_FORCE);
 
 #define DEFMETA(name, flags)							\
     cimpl_ ## name = Psyco_DefineModuleFn(md, #name, flags, &pbuiltin_ ## name)
@@ -333,7 +337,7 @@ void psyco_bltinmodule_init(void)
 	DEFMETA( apply,		METH_VARARGS );
 	DEFMETA( divmod,	METH_VARARGS );
 	cimpl_xrange = Psyco_DefineModuleC(md, "xrange", METH_VARARGS,
-                                           &pbuiltin_xrange, &prange_new);
+                                           &pbuiltin_xrange, prange_new);
 #undef META
 	Py_XDECREF(md);
 }

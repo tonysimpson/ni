@@ -15,11 +15,10 @@ static PyObject* cimpl_character(char c)
 	return PyString_FromStringAndSize(&c, 1);
 }
 
-static bool compute_char(PsycoObject* po, vinfo_t* v, bool force)
+static bool compute_char(PsycoObject* po, vinfo_t* v)
 {
 	vinfo_t* chrval;
 	vinfo_t* newobj;
-	if (!force) return true;
 
 	chrval = vinfo_getitem(v, CHARACTER_CHAR);
 	if (chrval == NULL)
@@ -106,7 +105,7 @@ static source_virtual_t psyco_computed_strslice;
 /* a virtual string obtained as a slice of a source string STRSLICE_SOURCE.
    The slice range is defined as [STRSLICE_START:STRSLICE_START+FIX_SIZE] */
 
-static bool compute_strslice(PsycoObject* po, vinfo_t* v, bool force)
+static bool compute_strslice(PsycoObject* po, vinfo_t* v)
 {
 	vinfo_t* newobj;
 	vinfo_t* ptr;
@@ -114,7 +113,6 @@ static bool compute_strslice(PsycoObject* po, vinfo_t* v, bool force)
 	vinfo_t* source;
 	vinfo_t* start;
 	vinfo_t* length;
-	if (!force) return true;
 	
 	source = vinfo_getitem(v, STRSLICE_SOURCE);
 	start = vinfo_getitem(v, STRSLICE_START);
@@ -213,9 +211,8 @@ static PyObject* cimpl_concatenate(int totallen, PyObject* lst)
 	return result;
 }
 
-static bool compute_catstr(PsycoObject* po, vinfo_t* v, bool force)
+static bool compute_catstr(PsycoObject* po, vinfo_t* v)
 {
-	/* compute upon forking (!force) too, to avoid code explosion. */
 	int count;
 	vinfo_t* s;
 	vinfo_t* t;
@@ -856,9 +853,11 @@ void psy_stringobject_init(void)
 		Psyco_DefineMeta(mm->mp_subscript, psyco_generic_subscript);
 	}
 
-	psyco_computed_char.compute_fn = &compute_char;
-	psyco_computed_strslice.compute_fn = &compute_strslice;
-	psyco_computed_catstr.compute_fn = &compute_catstr;
+        INIT_SVIRTUAL(psyco_computed_char, compute_char, 0, 0);
+        INIT_SVIRTUAL(psyco_computed_strslice, compute_strslice,
+                      NW_STRSLICES_NORMAL, NW_STRSLICES_FUNCALL);
+        INIT_SVIRTUAL(psyco_computed_catstr, compute_catstr,
+                      NW_CATSTRS_NORMAL, NW_CATSTRS_FUNCALL);
 
 	pempty_string = PyString_FromString("");
 }

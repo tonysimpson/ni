@@ -26,13 +26,12 @@ vinfo_t* PsycoMethod_New(PyObject* func, vinfo_t* self, PyObject* cls)
 }
 
 
-static bool compute_method(PsycoObject* po, vinfo_t* methobj, bool force)
+static bool compute_method(PsycoObject* po, vinfo_t* methobj)
 {
 	vinfo_t* newobj;
 	vinfo_t* im_func;
 	vinfo_t* im_self;
 	vinfo_t* im_class;
-        if (!force) return true;
 	
 	/* get the fields from the Python object 'methobj' */
 	im_func = vinfo_getitem(methobj, iMETHOD_IM_FUNC);
@@ -137,5 +136,5 @@ void psy_classobject_init(void)
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	Psyco_DefineMeta(PyMethod_Type.tp_call, pinstancemethod_call);
 #endif
-	psyco_computed_method.compute_fn = &compute_method;
+        INIT_SVIRTUAL(psyco_computed_method, compute_method, 0, 0);
 }

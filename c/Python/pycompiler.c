@@ -42,7 +42,10 @@ void Psyco_DefineMeta(void* c_function, void* psyco_function)
 		if (Psyco_Meta_Dict == NULL)
 			return;
 	}
-        psyco_assert(c_function != NULL);
+	if (c_function == NULL) {
+		debug_printf(2, ("init: C function pointer NULL in CPython\n"));
+		return;
+	}
 	key = PyInt_FromLong((long) c_function);
 	if (key != NULL) {
 		value = PyInt_FromLong((long) psyco_function);
@@ -3109,6 +3112,10 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		}
 #endif
 		SAVE_NEXT_INSTR(next_instr);
+                /* simplify the po->vlocals array */
+		if (!psyco_limit_nested_weight(po, &po->vlocals, NWI_NORMAL,
+					       NESTED_WEIGHT_END))
+			break;
 		psyco_delete_unused_vars(po, &mp->entries);
 		code1 = psyco_compile(po, mp, true);
 		if (code1 != NULL)

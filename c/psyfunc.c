@@ -266,7 +266,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
      including the processor condition codes */
   /* This is expected to have already been done on default arguments;
      see PsycoFunction_New() */
-  if (!psyco_forking(po, arg_tuple->array, false))
+  if (!psyco_forking(po, arg_tuple->array))
     return NULL;
   
   /* prepare a frame */

@@ -48,6 +48,7 @@ print >> expected, LASTLINE
 expected.close()
 err = childin.close()
 if err:
-    print >> sys.stderr, 'child process returned %d, %d' % (err/256, err%256)
+    print >> sys.stderr, 'child process returned %d, %d' % (err>>8, err&255)
 else:
-    os.system('diff -c %s %s' % (EXPECTEDFILE, BUFFERFILE))
+    err = os.system('diff -c %s %s' % (EXPECTEDFILE, BUFFERFILE))
+sys.exit(err>>8)

@@ -6,10 +6,9 @@
 
 static source_virtual_t psyco_computed_tuple;
 
-static bool compute_tuple(PsycoObject* po, vinfo_t* v, bool force)
+static bool compute_tuple(PsycoObject* po, vinfo_t* v)
 {
 	int i, tuple_end;
-	if (!force) return true;
 	tuple_end = v->array->count;
 	extra_assert(tuple_end == iTUPLE_OB_ITEM +
 		CompileTime_Get(v->array->items[iFIX_SIZE]->source)->value);
@@ -213,5 +212,6 @@ void psy_tupleobject_init(void)
 		Psyco_DefineMeta(mm->mp_subscript, psyco_generic_subscript);
 	}
 
-	psyco_computed_tuple.compute_fn = &compute_tuple;
+        INIT_SVIRTUAL(psyco_computed_tuple, compute_tuple,
+                      NW_TUPLES_NORMAL, NW_TUPLES_FUNCALL);
 }

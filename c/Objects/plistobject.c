@@ -22,9 +22,8 @@ inline int vlist_length(vinfo_t* v)
 	return len;
 }
 
-static bool compute_vlist(PsycoObject* po, vinfo_t* v, bool force)
+static bool compute_vlist(PsycoObject* po, vinfo_t* v)
 {
-	/* also compute with forking (!force) because lists are mutable */
 	int length = vlist_length(v);
 	vinfo_t* newobj;
         vinfo_t* ob_item;
@@ -322,7 +321,9 @@ void psy_listobject_init(void)
 		Psyco_DefineMeta(PyList_Type.tp_iter, &PsycoSeqIter_New);
 #endif
 
-	psyco_computed_vlist.compute_fn = &compute_vlist;
+        /* list object are mutable;
+           they must be forced out of virtual-time across function calls */
+        INIT_SVIRTUAL(psyco_computed_vlist, compute_vlist, NW_VLISTS, NW_FORCE);
 
 	/*psyco_empty_list = PsycoList_NEW(0);*/
 }

@@ -70,9 +70,8 @@ static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
 }
 
 
-static bool compute_seqiter(PsycoObject* po, vinfo_t* v, bool force)
+static bool compute_seqiter(PsycoObject* po, vinfo_t* v)
 {
-  	/* also compute with forking (!force) because iterators are mutable */
 	vinfo_t* seq;
 	vinfo_t* index;
 	vinfo_t* newobj;
@@ -117,11 +116,13 @@ DEFINEVAR source_virtual_t psyco_computed_seqiter;
 INITIALIZATIONFN
 void psy_iterobject_init(void)
 {
-	psyco_computed_seqiter.compute_fn = &compute_seqiter;
         Psyco_DefineMeta(PySeqIter_Type.tp_iter, &piter_getiter);
         Psyco_DefineMeta(PySeqIter_Type.tp_iternext, &piter_next);
-}
 
+        /* iterator object are mutable;
+           they must be forced out of virtual-time across function calls */
+        INIT_SVIRTUAL(psyco_computed_seqiter, compute_seqiter, 1, NW_FORCE);
+}
 
 #else /* !HAVE_GENERATORS */
 

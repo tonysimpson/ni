@@ -1858,34 +1858,6 @@ int psyco_simplify_array(vinfo_array_t* array, PsycoObject* po)
   return total;
 }
 
-DEFINEFN
-bool psyco_forking(PsycoObject* po, vinfo_array_t* array, bool force)
-{
-  /* Some virtual-time objects cannot remain virtualized across calls,
-     because if the called function pulls them out of virtual-time,
-     the caller will not know it.  This is unacceptable for
-     mutable Python objects.  We hope it does not hurt in other cases,
-     but could be defeated by the "is" operator. */
-  int i;
-  for (i=array->count; i--; )
-    {
-      vinfo_t* vi = array->items[i];
-      if (vi != NULL)
-        {
-          if (is_virtualtime(vi->source))
-            {
-              if (!VirtualTime_Get(vi->source)->compute_fn(po, vi, force))
-                return false;
-              /* vi->array may be modified by compute_fn() */
-            }
-          if (vi->array != NullArray)
-            if (!psyco_forking(po, vi->array, force))
-              return false;
-        }
-    }
-  return true;
-}
-
 static void remove_non_compiletime(vinfo_t* v, PsycoObject* po)
 {
   vinfo_array_t* array = v->array;

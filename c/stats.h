@@ -37,7 +37,9 @@ typedef struct {
 
 /* return the PyCodeStats for 'co' */
 EXTERNFN PyCodeStats* PyCodeStats_Get(PyCodeObject* co);
+#if HAVE_DYN_COMPILE
 EXTERNFN PyCodeStats* PyCodeStats_MaybeGet(PyCodeObject* co);
+#endif
 
 /* compute and return a Borrowed reference to st_mergepoints */
 inline PyObject* PyCodeStats_MergePoints(PyCodeStats* cs) {

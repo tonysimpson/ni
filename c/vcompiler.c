@@ -406,6 +406,38 @@ DEFINEFN void PsycoObject_Delete(PsycoObject* po)
   PyMem_FREE(po);
 }
 
+DEFINEFN
+bool psyco_limit_nested_weight(PsycoObject* po, vinfo_array_t* array,
+                               int nw_index, signed char nw_end)
+{
+  signed char nw;
+  int i;
+  for (i=array->count; i--; )
+    {
+      vinfo_t* vi = array->items[i];
+      if (vi != NULL)
+        {
+          nw = nw_end;
+          if (is_virtualtime(vi->source))
+            {
+              source_virtual_t* sv = VirtualTime_Get(vi->source);
+              nw -= sv->nested_weight[nw_index];
+              if (nw <= 0)
+                {
+                  /* maximum reached, force out of virtual-time */
+                  if (!sv->compute_fn(po, vi))
+                    return false;
+                  /* vi->array may be modified by compute_fn() */
+                  continue;
+                }
+            }
+          if (vi->array != NullArray)
+            if (!psyco_limit_nested_weight(po, vi->array, nw_index, nw))
+              return false;
+        }
+    }
+  return true;
+}
 
 /*****************************************************************/
 
@@ -704,7 +736,8 @@ static code_t* psyco_resume_compile(PsycoObject* po, void* extra)
 {
   mergepoint_t* mp = psyco_exact_merge_point(po->pr.merge_points,
                                              po->pr.next_instr);
-  extra_assert(psyco_locked_buffers() == 0);  /* we are not compiling yet */
+  /* check that we are not compiling recursively, or at least not too deeply */
+  extra_assert(psyco_locked_buffers() < WARN_TOO_MANY_BUFFERS-1);
   return (code_t*) psyco_compile_code(po, mp)->codestart;
   /* XXX don't know what to do with the reference returned by
      XXX psyco_compile_code() */
@@ -875,7 +908,7 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
       /* detected too many locked buffers. This occurs when compiling a
          function that calls a function that needs compiling, recursively.
          Delay compilation until run-time, when psyco_locked_buffers() will
-         be 0. */
+         be much smaller. */
       psyco_coding_pause(po, CC_ALWAYS_TRUE, &psyco_resume_compile, NULL, 0);
       code1 = po->code;
     }
@@ -890,9 +923,8 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
 
 /*****************************************************************/
 
-static bool computed_do_not_use(PsycoObject* po, vinfo_t* vi, bool force)
+static bool computed_do_not_use(PsycoObject* po, vinfo_t* vi)
 {
-  if (!force) return true;
   fprintf(stderr, "psyco: internal error (computed_do_not_use)\n");
   extra_assert(0);     /* stop if debugging */
   vi->source = SOURCE_DUMMY;
@@ -902,7 +934,7 @@ static bool computed_do_not_use(PsycoObject* po, vinfo_t* vi, bool force)
 INITIALIZATIONFN
 void psyco_compiler_init(void)
 {
-  psyco_vsource_not_important.compute_fn = &computed_do_not_use;
+  INIT_SVIRTUAL(psyco_vsource_not_important, computed_do_not_use, 0, 0);
 }
 
 

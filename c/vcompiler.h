@@ -188,10 +188,41 @@ inline bool is_nonneg(Source s) {
 /************************ Virtual-time sources *******************************
  *
  * if the last two bits of 'source' are VIRTUAL_TIME,
- * the rest of 'source' points to a 'source_virtual_t' structure.
- * See psyco.h for the definition of source_virtual_t.
+ * the rest of 'source' points to a 'source_virtual_t' structure (in psyco.h).
+ * Description of the fields of source_virtual_t:
  *
+ *  compute_fn_t compute_fn;
+ *     the function to be called to move the vinfo_t out of virtual-time.
+ *
+ *  signed char nested_weight[2];
+ *     a value > 0 prevents infinite nesting of virtual 'vinfo_t's inside
+ *     of other virtual 'vinfo_t's: the sum of all 'nested_weight' fields
+ *     of a chain of nested 'vinfo_t's should always be less than
+ *     NESTED_WEIGHT_END. There are two values because limiting some kind
+ *     of virtual 'vinfo_t's is more important across function calls than
+ *     inside the same function.
  **/
+#define NESTED_WEIGHT_END   15
+#define NWI_NORMAL          0  /* use nested_weight[0] */
+#define NWI_FUNCALL         1  /* use nested_weight[1] */
+#define INIT_SVIRTUAL(sv, fn, w_normal, w_funcall)   do {	\
+	(sv).compute_fn = &fn;					\
+	(sv).nested_weight[NWI_NORMAL] = w_normal;		\
+	(sv).nested_weight[NWI_FUNCALL] = w_funcall;		\
+} while (0)
+
+/* some weights for common virtual-time objects, grouped here to better
+   show their relative importance. A careful tuning is required to avoid
+   code size explosion. (The following figures are only a guess; some
+   real-code testing would be welcome.) */
+#define NW_VLISTS               5
+#define NW_TUPLES_NORMAL        4
+#define NW_TUPLES_FUNCALL       4
+#define NW_STRSLICES_NORMAL     5
+#define NW_STRSLICES_FUNCALL    9
+#define NW_CATSTRS_NORMAL       4  /* catstrs also have a vlist internally */
+#define NW_CATSTRS_FUNCALL      7
+#define NW_FORCE                NESTED_WEIGHT_END  /* always force */
 
 /* construction */
 inline VirtualTimeSource VirtualTime_New(source_virtual_t* sv) {
@@ -296,12 +327,14 @@ inline void vinfo_xdecref(vinfo_t* vi, PsycoObject* po) {
 /* promoting out of virtual-time */
 inline bool compute_vinfo(vinfo_t* vi, PsycoObject* po) {
 	if (is_virtualtime(vi->source)) {
-		if (!VirtualTime_Get(vi->source)->compute_fn(po, vi, true))
+		if (!VirtualTime_Get(vi->source)->compute_fn(po, vi))
 			return false;
 		extra_assert(!is_virtualtime(vi->source));
 	}
 	return true;
 }
+EXTERNFN bool psyco_limit_nested_weight(PsycoObject* po, vinfo_array_t* array,
+					int nw_index, signed char nw_end);
 
 inline bool vinfo_known_equal(vinfo_t* v, vinfo_t* w) {
 	return (v->source == w->source &&

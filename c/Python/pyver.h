@@ -8,7 +8,7 @@
 
 #include <Python.h>
 
-#define PSYCO_VERSION_HEX          0x00050000   /* 0.5.0 */
+#define PSYCO_VERSION_HEX          0x010000b1   /* 1.0.0b1 */
 #define HAVE_PYTHON_SUPPORT        (PY_VERSION_HEX>=0x02020200)   /* 2.2.2 */
 
 
@@ -57,7 +57,7 @@
 
 #if !HAVE_PyString_FromFormatV
 EXTERNFN PyObject *    /* re-implemented in pycompiler.c */
-PyString_FromFormatV(const char *format, va_list vargs)
+PyString_FromFormatV(const char *format, va_list vargs);
 #endif
 
 

@@ -686,21 +686,24 @@ bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr, long offset,
 /***************************************************************/
  /*** Condition Codes (a.k.a. the processor 'flags' register) ***/
 
-typedef struct {
-  source_virtual_t header;
-  code_t cc;
-} computed_cc_t;
+static source_virtual_t cc_functions_table[CC_TOTAL];
+
+inline condition_code_t cc_from_vsource(Source source)
+{
+	source_virtual_t* sv = VirtualTime_Get(source);
+	return (condition_code_t) (sv - cc_functions_table);
+}
 
 /* internal, see NEED_CC() */
 DEFINEFN
 code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 {
 	vinfo_t* v = po->ccreg;
-	computed_cc_t* cc = (computed_cc_t*) VirtualTime_Get(v->source);
+	condition_code_t cc = cc_from_vsource(v->source);
 	reg_t rg;
 
 	NEED_FREE_BYTE_REG(rg, reserved, REG_NONE);
-	LOAD_REG_FROM_CONDITION(rg, cc->cc);
+	LOAD_REG_FROM_CONDITION(rg, cc);
 
 	v->source = RunTime_New(rg, false, true);
 	REG_NUMBER(po, rg) = v;
@@ -708,7 +711,7 @@ code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
         return code;
 }
 
-static bool generic_computed_cc(PsycoObject* po, vinfo_t* v, bool force)
+static bool generic_computed_cc(PsycoObject* po, vinfo_t* v)
 {
 	/* also upon forking, because the condition codes cannot be
 	   sent as arguments (function calls typically require adds
@@ -719,8 +722,6 @@ static bool generic_computed_cc(PsycoObject* po, vinfo_t* v, bool force)
 	END_CODE
 	return true;
 }
-
-static computed_cc_t cc_functions_table[CC_TOTAL];
 
 
 DEFINEFN
@@ -747,8 +748,7 @@ vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc)
           END_CODE
         }
       extra_assert(po->ccreg == NULL);
-      po->ccreg = vinfo_new(VirtualTime_New
-                            (&cc_functions_table[(int)cc].header));
+      po->ccreg = vinfo_new(VirtualTime_New(cc_functions_table+(int)cc));
       result = po->ccreg;
     }
   else
@@ -761,10 +761,12 @@ condition_code_t psyco_vsource_cc(Source source)
 {
   if (is_virtualtime(source))
     {
-      computed_cc_t* s = (computed_cc_t*) VirtualTime_Get(source);
-      long result = s - cc_functions_table;
-      if (0 <= result && result < CC_TOTAL)
-        return (condition_code_t) result;
+      source_virtual_t* sv = VirtualTime_Get(source);
+      if (cc_functions_table <= sv  &&  sv < cc_functions_table+CC_TOTAL)
+        {
+          /* 'sv' points within the cc_functions_table */
+          return cc_from_vsource(source);
+        }
     }
   return CC_ALWAYS_FALSE;
 }
@@ -785,7 +787,7 @@ condition_code_t psyco_vsource_cc(Source source)
 #endif
 
 
-static bool computed_promotion(PsycoObject* po, vinfo_t* v, bool force);
+static bool computed_promotion(PsycoObject* po, vinfo_t* v);
 /* forward */
 
 INITIALIZATIONFN
@@ -802,8 +804,9 @@ void psyco_processor_init(void)
   COPY_CODE(psyco_call_var, glue_call_var, long(*)(void*, int, long[]));
   for (i=0; i<CC_TOTAL; i++)
     {
-      cc_functions_table[i].header.compute_fn = &generic_computed_cc;
-      cc_functions_table[i].cc = (condition_code_t) i;
+      /* the condition codes cannot be passed across function calls,
+         hence the NW_FORCE argument */
+      INIT_SVIRTUAL(cc_functions_table[i], generic_computed_cc, 0, NW_FORCE);
     }
   psyco_nonfixed_promotion.header.compute_fn = &computed_promotion;
 #if USE_RUNTIME_SWITCHES
@@ -821,11 +824,11 @@ void psyco_processor_init(void)
 /*****************************************************************/
  /***   run-time switches                                       ***/
 
-static bool computed_promotion(PsycoObject* po, vinfo_t* v, bool force)
+static bool computed_promotion(PsycoObject* po, vinfo_t* v)
 {
   /* uncomputable, but still use the address of computed_promotion() as a
      tag to figure out if a virtual source is a c_promotion_s structure. */
-  return psyco_vsource_not_important.compute_fn(po, v, force);
+  return psyco_vsource_not_important.compute_fn(po, v);
 }
 
 DEFINEVAR struct c_promotion_s psyco_nonfixed_promotion;

@@ -34,6 +34,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_threaded_import': 'Python hang-ups',
         'test_hotshot': "PyEval_SetProfile(NULL,NULL) doesn't allow Psyco to take control back",
         'test_coercion': 'uses eval() with locals',
+        'test_weakref': 'incompatible with early unused variable deletion',
         }
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'

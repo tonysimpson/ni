@@ -2,12 +2,11 @@
 #include "ptupleobject.h"
 
 
-static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj, bool force)
+static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj)
 {
 	vinfo_t* newobj;
 	vinfo_t* m_self;
 	vinfo_t* m_ml;
-	if (!force) return true;
 	
 	/* get the fields from the Python object 'methobj' */
 	m_self = vinfo_getitem(methobj, iCFUNC_M_SELF);
@@ -122,5 +121,5 @@ void psy_methodobject_init(void)
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	Psyco_DefineMeta(PyCFunction_Type.tp_call, PsycoCFunction_Call);
 #endif
-	psyco_computed_cfunction.compute_fn = &compute_cfunction;
+        INIT_SVIRTUAL(psyco_computed_cfunction, compute_cfunction, 1, 1);
 }

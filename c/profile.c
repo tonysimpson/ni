@@ -317,21 +317,21 @@ static PyObject* trace_or_profile_wrapper(PyObject* self, PyObject* args)
 		break;
 
 	case 'l':  /* "line" */
-		what = Pytrace_LINE;
+		what = PyTrace_LINE;
 		break;
 
 	default:
 		goto leave;
 	}
 	frame = (PyFrameObject*) PyTuple_GET_ITEM(args, 0);
-	if (!call_ceval_hooks(get_cevent(frame->f_tstate), what, frame))
+	if (!call_ceval_hooks(get_cevents(frame->f_tstate), what, frame))
 		return NULL;
 
  leave:
 	Py_INCREF(obj_pwrapper);
 	return obj_pwrapper;
 }
-static PyMethodDef def_profile_wrapper = { "wrapper", &profile_wrapper,
+static PyMethodDef def_profile_wrapper = { "wrapper", &trace_or_profile_wrapper,
                                            METH_VARARGS };
 #define SET_PYTHON_HOOKS(name, fn)  {			\
 	PyObject* fun = tstate->sys_ ## name ## func;	\
@@ -440,8 +440,7 @@ void psyco_profile_threads(int start)
 	if (!profile_function)
 		return;
 	istate = PyThreadState_Get()->interp;
-	tstate = PyInterpreterState_ThreadHead(istate);
-	for (; tstate; tstate = PyThreadState_Next(tstate)) {
+	for (tstate=istate->tstate_head; tstate; tstate=tstate->next) {
 		ceval_events_t* cev;
 		if (!measuring_state(tstate))
 			continue;
@@ -747,8 +746,8 @@ void psyco_turbo_frames(PyCodeObject* code)
 	/* search all reachable Python frames
 	   (this might overlook pending generators) */
 	PyInterpreterState* istate = PyThreadState_Get()->interp;
-	PyThreadState* tstate = PyInterpreterState_ThreadHead(istate);
-	for (; tstate; tstate = PyThreadState_Next(tstate)) {
+	PyThreadState* tstate;
+	for (tstate=istate->tstate_head; tstate; tstate=tstate->next) {
 		PyFrameObject* f = tstate->frame;
 		for (; f; f = f->f_back) {
 			if (f->f_code == code)

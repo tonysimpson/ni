@@ -58,19 +58,20 @@ atexit.register(go, 1)
 
 
 def buildfncache(globals, cache):
-    fntypes = (types.MethodType, types.FunctionType)
     if hasattr(types.IntType, '__dict__'):
         clstypes = (types.ClassType, types.TypeType)
     else:
         clstypes = types.ClassType
     for x in globals.values():
-        if isinstance(x, fntypes):
-            x = getattr(x, 'im_func', x)
+        if isinstance(x, types.MethodType):
+            x = x.im_func
+        if isinstance(x, types.FunctionType):
             cache[x.func_code] = x
         elif isinstance(x, clstypes):
             for x in x.__dict__.values():
-                if isinstance(x, fntypes):
-                    x = getattr(x, 'im_func', x)
+                if isinstance(x, types.MethodType):
+                    x = x.im_func
+                if isinstance(x, types.FunctionType):
                     cache[x.func_code] = x
 
 # code-to-function mapping (cache)
@@ -261,7 +262,7 @@ class ActiveProfiler(ChargeProfiler):
     def do_start(self):
         self.init_charges()
         self.active_start()
-        _psyco.write(callback = self.charge_callback)
+        _psyco.statwrite(callback = self.charge_callback)
 
     def charge_callback(self, frame, charge):
         tag(frame.f_code, frame.f_globals)

@@ -1,14 +1,10 @@
 import sys, test.regrtest
 
 import psyco
-psyco.log()
-psyco.full()
-
 #import time; print "Break!"; time.sleep(0.5)
+psyco.log()
+execfile('regrtester.incl')
 
-
-# known to fail:
-#   test_inspect --- uses sys.exc_traceback.tb_frame.f_back
 
 #################################################################################
 SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's limited frames",
@@ -22,6 +18,13 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_hotshot': "PyEval_SetProfile(NULL,NULL) doesn't allow Psyco to take control back",
         'test_coercion': 'uses eval() with locals',
         'test_longexp': 'run it separately if you want, but it takes time and memory',
+        'test_weakref': 'incompatible with early unused variable deletion',
+        'test_gettext': 'gettext mutates _ in the builtins!',
+        'test_richcmp': 'uses exec with locals',
+        'test_inspect': 'uses sys.exc_traceback.tb_frame.f_back',
+        'test_exceptions': 'uses sys.exc_traceback.tb_frame.f_back',
+        'test_largefile': 'fails on Python on my old Linux box',
+        'test_popen2': 'log file descriptor messed up in Python < 2.2.2',
         }
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'
@@ -37,7 +40,8 @@ if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
 
 # the tests that don't work with Psyco
 test.regrtest.NOTTESTS += SKIP.keys()
-try:
-    test.regrtest.main(randomize=1)
-finally:
-    psyco.dumpcodebuf()
+if __name__ == '__main__':
+    try:
+        test.regrtest.main(randomize=1)
+    finally:
+        psyco.dumpcodebuf()

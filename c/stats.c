@@ -43,11 +43,13 @@ PyCodeStats* PyCodeStats_Get(PyCodeObject* co)
 	return cs;
 }
 
+#if HAVE_DYN_COMPILE
 DEFINEFN
 PyCodeStats* PyCodeStats_MaybeGet(PyCodeObject* co)
 {
 	return (PyCodeStats*) PyCStruct_DictGet(codestats_dict, (PyObject*) co);
 }
+#endif
 
 
 /***************************************************************/
@@ -236,8 +238,8 @@ void psyco_stats_collect(void)
 {
 	/* collect statistics for all registered threads */
 	PyInterpreterState* istate = PyThreadState_Get()->interp;
-	PyThreadState* tstate = PyInterpreterState_ThreadHead(istate);
-	for (; tstate; tstate = PyThreadState_Next(tstate)) {
+	PyThreadState* tstate;
+	for (tstate=istate->tstate_head; tstate; tstate=tstate->next) {
 		psyco_stats_append(tstate, tstate->frame);
 	}
 }
@@ -272,9 +274,10 @@ void psyco_stats_reset(void)
 	{
 #if MEASURE_ALL_THREADS
 		PyInterpreterState* istate = PyThreadState_Get()->interp;
-		PyThreadState* tstate = PyInterpreterState_ThreadHead(istate);
-		for (; tstate; tstate = PyThreadState_Next(tstate))
+		PyThreadState* tstate;
+		for (tstate=istate->tstate_head; tstate; tstate=tstate->next) {
 			(void) get_measure(tstate);
+		}
 #else
 		(void) get_measure(NULL);
 #endif

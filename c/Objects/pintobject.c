@@ -37,11 +37,10 @@ vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v)
 	return result;
 }
 
-static bool compute_int(PsycoObject* po, vinfo_t* intobj, bool force)
+static bool compute_int(PsycoObject* po, vinfo_t* intobj)
 {
 	vinfo_t* newobj;
 	vinfo_t* x;
-	if (!force) return true;
 	
 	/* get the field 'ob_ival' from the Python object 'intobj' */
 	x = vinfo_getitem(intobj, iINT_OB_IVAL);
@@ -315,6 +314,6 @@ void psy_intobject_init(void)
 	Psyco_DefineMeta(m->nb_multiply, pint_mul);
 	Psyco_DefineMeta(m->nb_lshift,   pint_lshift);
 	Psyco_DefineMeta(m->nb_rshift,   pint_rshift);
-	
-	psyco_computed_int.compute_fn = &compute_int;
+
+	INIT_SVIRTUAL(psyco_computed_int, compute_int, 0, 0);
 }

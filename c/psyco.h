@@ -232,10 +232,12 @@ EXTERNVAR PyObject* PyExc_PsycoError;
 EXTERNVAR long psyco_memory_usage;   /* approximative */
 
 
-/* moved here from vcompiler.h because needed by numerous header files */
-typedef bool (*compute_fn_t)(PsycoObject* po, vinfo_t* vi, bool force);
+/* moved here from vcompiler.h because needed by numerous header files.
+   See vcompiler.h for comments */
+typedef bool (*compute_fn_t)(PsycoObject* po, vinfo_t* vi);
 typedef struct {
   compute_fn_t compute_fn;
+  signed char nested_weight[2];
 } source_virtual_t;
 
 
