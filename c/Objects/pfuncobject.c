@@ -1,7 +1,7 @@
 #include "pfuncobject.h"
 
 
-static vinfo_t* function_call(PsycoObject* po, vinfo_t* func,
+static vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
                               vinfo_t* arg, vinfo_t* kw)
 {
 	/* calling a Python function: compile the called function if
@@ -24,5 +24,5 @@ static vinfo_t* function_call(PsycoObject* po, vinfo_t* func,
 DEFINEFN
 void psy_funcobject_init()
 {
-	Psyco_DefineMeta(PyFunction_Type.tp_call, function_call);
+	Psyco_DefineMeta(PyFunction_Type.tp_call, pfunction_call);
 }

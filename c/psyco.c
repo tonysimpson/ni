@@ -308,8 +308,9 @@ static int psycofunction_traverse(PsycoFunctionObject *f,
 }
 
 static PyObject *
-psy_descr_get(PsycoFunctionObject *self, PyObject *obj, PyObject *type)
+psy_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
+	/* 'self' is actually a PsycoFunctionPObject* */
 	return PyMethod_New(self, obj, type);
 }
 

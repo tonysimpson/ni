@@ -3,8 +3,8 @@
 ###  Fix the Python include path for your system.
 #
 # PY_INCLUDE = /home/arigo/cvs/python/dist/src/Include
-PY_INCLUDE = /usr/include/python2.2
-# PY_INCLUDE = /users/arigo/include/python2.2
+# PY_INCLUDE = /usr/include/python2.2
+PY_INCLUDE = /users/arigo/include/python2.2
 # PY_INCLUDE = /home/arigo/include/python2.1
 #
 #
