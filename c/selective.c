@@ -1,4 +1,6 @@
 #include "selective.h"
+#include "psyfunc.h"
+#include <compile.h>
 #include <frameobject.h>
 
 /*#define FUN_BOUND -1*/

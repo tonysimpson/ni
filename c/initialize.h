@@ -39,6 +39,7 @@
 # include "processor.c"
 # include "dispatcher.c"
 # include "vcompiler.c"
+# include "psyfunc.c"
 # include "codemanager.c"
 # include "mergepoints.c"
 # include "pycencoding.c"

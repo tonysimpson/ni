@@ -8,7 +8,6 @@
 
 #include <Python.h>
 #include <structmember.h>   /* for offsetof() */
-#include <compile.h>        /* for PyCodeObject */
 
 
 /*****************************************************************/
@@ -198,6 +197,10 @@ typedef int bool;
 # define true    1
 #endif
 
+#ifndef PyObject_TypeCheck
+# define PyObject_TypeCheck(o,t)   ((o)->ob_type == (t))
+#endif
+
 
 typedef unsigned char code_t;
 
@@ -208,14 +211,9 @@ typedef struct FrozenPsycoObject_s FrozenPsycoObject; /* def in dispatcher.h */
 typedef struct CodeBufferObject_s CodeBufferObject;  /* def in codemanager.h */
 typedef struct global_entries_s global_entries_t;  /* def in dispatcher.h */
 typedef struct mergepoint_s mergepoint_t;   /* defined in mergepoint.h */
+typedef struct stack_frame_info_s stack_frame_info_t; /* def in pycompiler.h */
 
 EXTERNVAR PyObject* PyExc_PsycoError;
-
-
-/*#undef PY_PSYCO_MODULE*/   /* nothing useful in psyco.py right now */
-#ifdef PY_PSYCO_MODULE
-EXTERNVAR PyObject* PyPsycoModule;
-#endif
 
 
 /* moved here from vcompiler.h because needed by numerous header files */
@@ -223,49 +221,6 @@ typedef bool (*compute_fn_t)(PsycoObject* po, vinfo_t* vi);
 typedef struct {
   compute_fn_t compute_fn;
 } source_virtual_t;
-
-
-/* Encode a call to the given Python function, compiling it as needed. */
-EXTERNFN vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
-                                    vinfo_t* vglobals, vinfo_t* vdefaults,
-                                    vinfo_t* arg_tuple, int recursion);
-
-
-/* Psyco proxies for Python functions. Calling a proxy has the same effect
-   as calling the function it has been built from, except that the function
-   is compiled first. As proxies are real Python objects, calling them is
-   the only way to go from Python's base level to Psyco's meta-level.
-   Note that (unlike in previous versions of Psyco) proxies should not be
-   seen by user Python code. Use _psyco.proxycode() to build a proxy and
-   emcompass it in a code object. */
-typedef struct {
-  PyObject_HEAD
-  PyCodeObject* psy_code;  /*                                     */
-  PyObject* psy_globals;   /*  same as in Python function object  */
-  PyObject* psy_defaults;  /*                                     */
-  int psy_recursion;    /* # levels to automatically compile called functions */
-  PyObject* psy_fastcall;       /* cache mapping arg count to code bufs */
-} PsycoFunctionObject;
-
-EXTERNVAR PyTypeObject PsycoFunction_Type;
-
-#ifndef PyObject_TypeCheck
-# define PyObject_TypeCheck(o,t)   ((o)->ob_type == (t))
-#endif
-#define PsycoFunction_Check(op)	PyObject_TypeCheck(op, &PsycoFunction_Type)
-
-
-EXTERNFN PyObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec);
-EXTERNFN PsycoFunctionObject* psyco_PsycoFunction_NewEx(PyCodeObject* code,
-                                                PyObject* globals,
-                                                PyObject* defaults, /* or NULL */
-                                                int rec);
-EXTERNFN PyObject* psyco_proxycode(PyFunctionObject* func, int rec);
-
-inline bool is_proxycode(PyCodeObject* code) {
-  return PyTuple_Size(code->co_consts) > 1 &&
-    PsycoFunction_Check(PyTuple_GET_ITEM(code->co_consts, 1));
-}
 
 
 #if CODE_DUMP
@@ -292,6 +247,7 @@ EXTERNFN code_t* psyco_pycompiler_mainloop(PsycoObject* po);
    middle of writing code, when the beginning is already executing. When
    should we report the exception? */
 #define OUT_OF_MEMORY()      Py_FatalError("psyco: out of memory")
+
 
 /* Thread-specific state */
 EXTERNFN PyObject* psyco_thread_dict(void);

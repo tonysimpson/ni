@@ -28,6 +28,7 @@ SRC = [
     Source('dispatcher.c'),
     Source('vcompiler.c',	'psyco_compiler_init'),
     Source('psyco.c'),
+    Source('psyfunc.c'),
     Source('codemanager.c'),
     Source('mergepoints.c'),
     Source('pycencoding.c'),

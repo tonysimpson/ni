@@ -1,3 +1,4 @@
+#include "../psyfunc.h"
 #include "pfuncobject.h"
 #include "pclassobject.h"
 

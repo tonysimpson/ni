@@ -383,11 +383,11 @@ inline void pyc_data_delete(pyc_data_t* pyc) {
 }
 
 /* to keep a trace of the Psyco stack frames */
-typedef struct stack_frame_info_s {
+struct stack_frame_info_s {
 	int stack_depth;
 	PyCodeObject* co;
 	PyObject* globals;  /* NULL if not compile-time */
-} stack_frame_info_t;
+};
 
 EXTERNFN stack_frame_info_t* psyco_finfo(PsycoObject* callee);
      

@@ -2267,6 +2267,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		PycException_Raise(po, vinfo_new(VirtualTime_New(&EReturn)), v);
 		break;
 
+	/*MISSING_OPCODE(YIELD_VALUE);*/
 	/*MISSING_OPCODE(EXEC_STMT);*/
 
 	case POP_BLOCK:

@@ -1,3 +1,4 @@
+#include "../psyfunc.h"
 #include "pdescrobject.h"
 #include "pstructmember.h"
 #include "pmethodobject.h"
