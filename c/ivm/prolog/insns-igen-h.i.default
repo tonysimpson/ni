@@ -1,4 +1,4 @@
-#define LAST_DEFINED_OPCODE 71
+#define LAST_DEFINED_OPCODE 255
 
 #define INSN_not() (code = psyco_insn_not(code))
 EXTERNFN code_t* psyco_insn_not(code_t* code);

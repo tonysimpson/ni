@@ -1,0 +1,184 @@
+mode_combine([s_push(0), jcondfar(indirect(word_t))]).  % 72
+mode_combine([immed(char), addo]).  % 73
+mode_combine([immed(char), addo, pop]).  % 74
+mode_combine([pop, load4]).  % 75
+mode_combine([cmpeq, s_push(0)]).  % 76
+mode_combine([s_push(1:255), decref]).  % 77
+mode_combine([s_push(0), immed(0)]).  % 78
+mode_combine([s_push(0), not]).  % 79
+mode_combine([s_push(0), not, jcondfar(indirect(word_t))]).  % 80
+mode_combine([immed(char), addo, pop, load4]).  % 81
+mode_combine([s_push(0), immed(0), cmpeq]).  % 82
+mode_combine([decref, s_push(0:255)]).  % 83
+mode_combine([s_push(1:255), immed(char)]).  % 84
+mode_combine([ccall2(indirect(word_t)), s_push(0)]).  % 85
+mode_combine([s_push(0), immed(0), cmpeq, s_push(0)]).  % 86
+mode_combine([s_push(1:255), immed(char), addo]).  % 87
+mode_combine([s_push(1:255), immed(char), addo, pop]).  % 88
+mode_combine([incref, s_push(0:255)]).  % 89
+mode_combine([immed(char), addo, pop, load4, s_push(0)]).  % 90
+mode_combine([s_push(0), incref]).  % 91
+mode_combine([s_push(0), immed(0), cmpeq, s_push(0), jcondfar(indirect(word_t))]).  % 92
+mode_combine([s_push(1:255), immed(char), addo, pop, load4]).  % 93
+mode_combine([s_push(1:255), ccall2(indirect(word_t))]).  % 94
+mode_combine([s_push(1:255), decref, s_push(1:255)]).  % 95
+mode_combine([immed(int), incref]).  % 96
+mode_combine([s_push(1:255), immed(char), addo, pop, load4, s_push(0)]).  % 97
+mode_combine([s_push(1:255), ccall2(indirect(word_t)), s_push(0)]).  % 98
+mode_combine([s_push(1:255), decref, s_push(1:255), decref]).  % 99
+mode_combine([immed(int), s_push(1)]).  % 100
+mode_combine([immed(int), immed(int)]).  % 101
+mode_combine([incref, s_push(0:255), immed(char)]).  % 102
+mode_combine([incref, s_push(0:255), immed(char), addo]).  % 103
+mode_combine([incref, s_push(0:255), immed(char), addo, pop]).  % 104
+mode_combine([immed(int), s_push(1), ccall2(indirect(word_t))]).  % 105
+mode_combine([ccall2(indirect(word_t)), s_push(0), immed(0)]).  % 106
+mode_combine([ccall2(indirect(word_t)), s_push(0), immed(0), cmpeq]).  % 107
+mode_combine([ccall1(indirect(word_t)), s_push(0)]).  % 108
+mode_combine([immed(int), s_push(1), ccall2(indirect(word_t)), s_push(0)]).  % 109
+mode_combine([immed(char), addo, pop, load4, s_push(0), not]).  % 110
+mode_combine([immed(char), addo, pop, load4, s_push(0), not, jcondfar(indirect(word_t))]).  % 111
+mode_combine([ccall1(indirect(word_t)), s_push(0), immed(0)]).  % 112
+mode_combine([ccall1(indirect(word_t)), s_push(0), immed(0), cmpeq]).  % 113
+mode_combine([s_push(1:255), immed(char), addo, pop, load4, s_push(0), cbuild2(indirect(word_t))]).  % 114
+mode_combine([immed(0), cmplt]).  % 115
+mode_combine([s_push(0), immed(char)]).  % 116
+mode_combine([ccall2(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0)]).  % 117
+mode_combine([ccall2(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0), jcondfar(indirect(word_t))]).  % 118
+mode_combine([ccall1(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0)]).  % 119
+mode_combine([s_push(1:255), immed(int)]).  % 120
+mode_combine([pyleave, s_push(1:255)]).  % 121
+mode_combine([s_push(1:255), s_pop(2:255)]).  % 122
+mode_combine([immed(int), s_push(2:255)]).  % 123
+mode_combine([incref, immed(0)]).  % 124
+mode_combine([s_push(1:255), decref, s_push(1:255), decref, s_push(1:255)]).  % 125
+mode_combine([immed(char), addo, pop, s_push(1:255)]).  % 126
+mode_combine([s_push(1:255), s_push(2:255)]).  % 127
+mode_combine([immed(int), ccall4(indirect(word_t))]).  % 128
+mode_combine([immed(int), cmpeq]).  % 129
+mode_combine([ccall1(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0), jcondfar(indirect(word_t))]).  % 130
+mode_combine([s_push(1:255), immed(char), addo, pop, load4, s_push(0), not]).  % 131
+mode_combine([s_push(0), immed(char), addo]).  % 132
+mode_combine([s_push(0), immed(char), addo, pop]).  % 133
+mode_combine([immed(0), retval]).  % 134
+mode_combine([decref, s_push(0:255), immed(char)]).  % 135
+mode_combine([pyleave, s_push(1:255), decref]).  % 136
+mode_combine([decref, s_push(0:255), immed(char), addo]).  % 137
+mode_combine([decref, s_push(0:255), immed(char), addo, pop]).  % 138
+mode_combine([immed(int), s_push(1), ccall2(indirect(word_t)), s_push(0), jcondfar(indirect(word_t))]).  % 139
+mode_combine([immed(int), ccall3(indirect(word_t))]).  % 140
+mode_combine([immed(char), addo, pop, s_push(1:255), store4]).  % 141
+mode_combine([immed(char), addo, pop, s_push(1:255), store4, s_push(0:255)]).  % 142
+mode_combine([cmpltu, s_push(0)]).  % 143
+mode_combine([immed(char), addo, pop, immed(int)]).  % 144
+mode_combine([s_push(1:255), immed(char), addo, pop, s_push(2:255)]).  % 145
+mode_combine([s_push(1:255), immed(char), addo, pop, s_push(2:255), store4]).  % 146
+mode_combine([immed(char), addo, pop, immed(int), store4]).  % 147
+mode_combine([immed(char), addo, pop, immed(int), store4, immed(int)]).  % 148
+mode_combine([immed(int), ccall3(indirect(word_t)), s_push(0)]).  % 149
+mode_combine([immed(int), incref, immed(int)]).  % 150
+mode_combine([immed(int), incref, immed(int), retval]).  % 151
+mode_combine([s_push(0), incref, s_push(0)]).  % 152
+mode_combine([s_push(1:255), decref, s_push(1:255), decref, s_push(1:255), decref]).  % 153
+mode_combine([s_pop(1:255), s_push(0:255)]).  % 154
+mode_combine([immed(0), immed(int)]).  % 155
+mode_combine([decref, s_push(0:255), immed(char), addo, pop, load4]).  % 156
+mode_combine([decref, immed(0)]).  % 157
+mode_combine([incref, s_push(0:255), immed(char), addo, pop, load4]).  % 158
+mode_combine([immed(char), ccall1(indirect(word_t))]).  % 159
+mode_combine([s_push(1:255), immed(0)]).  % 160
+mode_combine([immed(0), s_push(2:255)]).  % 161
+mode_combine([pushretval, s_push(0)]).  % 162
+mode_combine([pyleave, pushretval]).  % 163
+mode_combine([immed(int), ccall3(indirect(word_t)), s_push(0), immed(0)]).  % 164
+mode_combine([immed(int), ccall3(indirect(word_t)), s_push(0), immed(0), cmpeq]).  % 165
+mode_combine([s_push(1:255), ccall3(indirect(word_t))]).  % 166
+mode_combine([immed(char), addo, pop, s_push(1:255), store4, s_push(0:255), incref]).  % 167
+mode_combine([pyenter(indirect(word_t)), s_push(1:255)]).  % 168
+mode_combine([immed(0), cmplt, s_push(0)]).  % 169
+mode_combine([immed(0), cmplt, s_push(0), jcondfar(indirect(word_t))]).  % 170
+mode_combine([s_push(1:255), ccall2(indirect(word_t)), s_push(0), immed(0)]).  % 171
+mode_combine([immed(0), ccall2(indirect(word_t))]).  % 172
+mode_combine([s_push(1:255), decref, s_push(1:255), immed(char)]).  % 173
+mode_combine([immed(int), immed(int), ccall2(indirect(word_t))]).  % 174
+mode_combine([pop, load4, immed(0)]).  % 175
+mode_combine([immed(char), ccall1(indirect(word_t)), s_push(0)]).  % 176
+mode_combine([s_push(1:255), ccall2(indirect(word_t)), s_push(0), immed(0), cmpeq]).  % 177
+mode_combine([s_push(0), incref, s_push(1:255)]).  % 178
+mode_combine([s_push(0), immed(0), cmplt]).  % 179
+mode_combine([immed(char), addo, pop, immed(int), store4, immed(int), incref]).  % 180
+mode_combine([s_push(1:255), immed(char), addo, pop, s_push(2:255), store4, s_push(1:255)]).  % 181
+mode_combine([s_push(0), immed(char), addo, pop, load4]).  % 182
+mode_combine([addo, pop]).  % 183
+mode_combine([immed(0), cmpeq]).  % 184
+mode_combine([immed(0), cmpeq, s_push(0)]).  % 185
+mode_combine([immed(0), cmpeq, s_push(0), not]).  % 186
+mode_combine([decref, s_push(0:255), immed(char), addo, pop, load4, s_push(0)]).  % 187
+mode_combine([load4, s_push(0)]).  % 188
+mode_combine([immed(0), cmpeq, s_push(0), not, jcondfar(indirect(word_t))]).  % 189
+mode_combine([cmpeq, s_push(0), jcondfar(indirect(word_t))]).  % 190
+mode_combine([incref, s_push(0:255), immed(char), addo, pop, load4, s_push(0)]).  % 191
+mode_combine([immed(int), immed(int), ccall4(indirect(word_t))]).  % 192
+mode_combine([s_push(1:255), cmpltu]).  % 193
+mode_combine([s_push(1:255), decref, s_push(1:255), immed(char), addo]).  % 194
+mode_combine([s_push(1:255), decref, s_push(1:255), immed(char), addo, pop]).  % 195
+mode_combine([s_push(1:255), ccall3(indirect(word_t)), s_push(0)]).  % 196
+mode_combine([s_push(1:255), decref, immed(int)]).  % 197
+mode_combine([immed(int), cmpeq, s_push(0)]).  % 198
+mode_combine([cmpltu, s_push(0), not]).  % 199
+mode_combine([pushretval, s_push(0), immed(0)]).  % 200
+mode_combine([pushretval, s_push(0), immed(0), cmpeq]).  % 201
+mode_combine([pyleave, pushretval, s_push(0)]).  % 202
+mode_combine([s_push(1:255), ccall2(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0)]).  % 203
+mode_combine([immed(int), immed(int), ccall2(indirect(word_t)), s_push(0)]).  % 204
+mode_combine([addo, pop, s_push(1:255)]).  % 205
+mode_combine([addo, pop, s_push(1:255), store4]).  % 206
+mode_combine([addo, pop, s_push(1:255), store4, s_push(0:255)]).  % 207
+mode_combine([addo, pop, s_push(1:255), store4, s_push(0:255), incref]).  % 208
+mode_combine([addo, pop, s_push(1:255), store4, s_push(0:255), incref, s_push(0:255)]).  % 209
+mode_combine([immed(char), ccall1(indirect(word_t)), s_push(0), immed(0)]).  % 210
+mode_combine([immed(char), ccall1(indirect(word_t)), s_push(0), immed(0), cmpeq]).  % 211
+mode_combine([addo, pop, immed(int)]).  % 212
+mode_combine([addo, pop, immed(int), store4]).  % 213
+mode_combine([addo, pop, immed(int), store4, immed(int)]).  % 214
+mode_combine([addo, pop, immed(int), store4, immed(int), incref]).  % 215
+mode_combine([addo, pop, immed(int), store4, immed(int), incref, s_push(0:255)]).  % 216
+mode_combine([immed(int), s_push(1), ccall2(indirect(word_t)), s_push(0), not]).  % 217
+mode_combine([incref, s_push(0:255), immed(char), addo, pop, immed(int)]).  % 218
+mode_combine([immed(int), ccall4(indirect(word_t)), s_push(0)]).  % 219
+mode_combine([immed(int), ccall4(indirect(word_t)), s_push(0), immed(0)]).  % 220
+mode_combine([s_push(0), immed(char), addo, pop, load4, s_push(0)]).  % 221
+mode_combine([s_push(0), incref, s_push(0), immed(char)]).  % 222
+mode_combine([s_push(1:255), decref, s_push(1:255), immed(char), addo, pop, load4]).  % 223
+mode_combine([immed(int), retval]).  % 224
+mode_combine([immed(int), retval, settos(1:255)]).  % 225
+mode_combine([pop, s_push(0:255)]).  % 226
+mode_combine([immed(char), addo, pop, load4, s_push(0), cbuild2(indirect(word_t))]).  % 227
+mode_combine([immed(int), ccall3(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0)]).  % 228
+mode_combine([decref, immed(char)]).  % 229
+mode_combine([decref, s_push(0:255), decref]).  % 230
+mode_combine([decref, s_push(0:255), decref, s_push(0:255)]).  % 231
+mode_combine([decref, s_push(0:255), decref, s_push(0:255), decref]).  % 232
+mode_combine([decref, s_push(0:255), decref, s_push(0:255), decref, s_push(0:255)]).  % 233
+mode_combine([decref, immed(int)]).  % 234
+mode_combine([decref, immed(int), incref]).  % 235
+mode_combine([decref, immed(int), incref, immed(int)]).  % 236
+mode_combine([s_push(0), immed(0), cmplt, s_push(0)]).  % 237
+mode_combine([s_push(1:255), s_push(1)]).  % 238
+mode_combine([immed(int), ccall3(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0), jcondfar(indirect(word_t))]).  % 239
+mode_combine([immed(int), ccall2(indirect(word_t))]).  % 240
+mode_combine([immed(int), ccall2(indirect(word_t)), s_push(0)]).  % 241
+mode_combine([immed(int), ccall2(indirect(word_t)), s_push(0), not]).  % 242
+mode_combine([immed(int), ccall2(indirect(word_t)), s_push(0), not, jcondfar(indirect(word_t))]).  % 243
+mode_combine([incref, s_push(0:255), immed(char), addo, pop, immed(int), store4]).  % 244
+mode_combine([immed(char), ccall1(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0)]).  % 245
+mode_combine([store4, s_push(0:255)]).  % 246
+mode_combine([store4, s_push(0:255), incref]).  % 247
+mode_combine([store4, s_push(0:255), incref, s_push(0:255)]).  % 248
+mode_combine([store4, s_push(0:255), incref, s_push(0:255), immed(char)]).  % 249
+mode_combine([immed(int), s_push(1), ccall2(indirect(word_t)), s_push(0), not, jcondfar(indirect(word_t))]).  % 250
+mode_combine([s_push(0), immed(0), cmpeq, s_push(0), not]).  % 251
+mode_combine([cmpeq, s_push(0), not]).  % 252
+mode_combine([store4, immed(int)]).  % 253
+mode_combine([store4, immed(int), incref]).  % 254
+mode_combine([store4, immed(int), incref, s_push(0:255)]).  % 255

@@ -19,7 +19,7 @@ user_error(Msg, Object) :-
         nl,
         write(Msg),
         nl,
-        writeq(Object),
+        write_term(Object, [quoted(true), max_depth(8)]),
         nl,
         throw(user_error).
 

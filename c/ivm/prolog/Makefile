@@ -20,7 +20,7 @@ all: $(GENERATED)
 clean:
 	-rm $(GENERATED)
 
-default: $(addsuffix .default,$(GENERATED))
+default: $(addsuffix .default,$(GENERATED) mode_combine.pl)
 
 
 %-switch.i: %.pl $(VMWRITER)
