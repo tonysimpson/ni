@@ -947,27 +947,49 @@ Additionally, the \code{exec} statement is not supported yet, as seen in section
 
 \section{Unsupported Python constructs}\label{unsupported}
 
-The following constructs are not supported by Psyco.  It does not mean that code containing them will fail; it merely means that any function using them cannot be compiled, and will thus be entierely run by the standard interpreter.
+Psyco only compiles functions.  It will not accelerate any code that runs outside any function, like:
 
 \begin{itemize}
-
-\item \samp{from xx import *}
-
-\item the \code{exec} statement --- in some cases you can use \function{eval} and/or \function{compile} instead, under the restrictions described in section \ref{patchedfunctions}
-
-\item all top-level module code (including e.g.\ test scripts run from the command-line): all code to accelerate should be inside functions.  (Support for top-level module code is possible but disabled by default in recent versions of Psyco; contact me for more information.)
-
-\item the code defining a class\footnote{The methods themselves are fine; this only concerns the code that runs in order to define the class (generally only a bunch of \code{def} statements)}
-  
-\item functions with free or cell vars, which occur with Python's new nested scopes (as enabled by \samp{from __future__ import nested_scopes}); this concerns both the function whose local variable is made visible to a subfunction, and the subfunction using such a local variable
-
-\item generators
-
-\item generator expressions (Python 2.4).  Warning!  The function containing generator expressions will be compiled by Psyco, but not the generator expression itself.  If the latter calls other functions compiled by Psyco, then performance will be very bad: calling from Psyco to Python to Psyco comes with a significant overhead.
-
+\item top-level module code\footnote{Support for top-level module code is possible but disabled by default in recent versions of Psyco; contact me for more information.}
+\item the code defining a class --- i.e.\ the execution of the \code{class} statement.  Methods themselves are accelerated just fine when you actually call them.
+\item the code run by an \code{exec} statement or \function{execfile} or \function{eval}.
 \end{itemize}
 
-Log files report unsupported constructs by giving the corresponding bytecode instruction number, which you can look up in the following table:
+You can always work around the above limitations by creating functions and calling them instead of directly executing a time-consuming source.  For example, instead of writing a short test script like
+%
+\begin{verbatim}
+some_big_list = ...
+for x in some_big_list:
+    do_something()
+\end{verbatim}
+%
+write instead
+%
+\begin{verbatim}
+def process_list(lst):
+    for x in lst:
+        do_something()
+process_list(...)
+\end{verbatim}
+
+As another example, a function like
+%
+\begin{verbatim}
+def f(some_expr):
+    for x in range(100):
+        print eval(some_expr)   # where some_expr can depend on x
+\end{verbatim}
+%
+should instead be written
+%
+\begin{verbatim}
+def f(some_expr):
+    my_func = eval("lambda x: " + some_expr)   # -> a function object
+    for x in range(100):
+        print my_func(x)
+\end{verbatim}
+
+In addition, inside a function, some syntactic constructs are not supported by Psyco.  It does not mean that a function using them will fail; it merely means that the whole function will not be accelerated.  The following table lists the unsupported constructs, along with the corresponding bytecode instruction name and number.  Log files only report the bytecode instruction number, which you need to look up here.
 
 \begin{tableiii}{cl|l}{code}{Bytecode}{Instruction name}{Appears in}
   \lineiii{ 82}{\code{LOAD_LOCALS  }}{(1) class definitions}
@@ -992,7 +1014,7 @@ Notes:
 \item[(2)]
   Functions using this construct cannot be accelerated.
 \item[(3)]
-  Generators (i.e.\ any function using the \code{yield} keyword) cannot be accelerated currently.  If there is enough interest I can consider implementing them.
+  Generators (i.e.\ any function using the \code{yield} keyword) cannot be accelerated currently.  If there is enough interest I can consider implementing them.  This includes generator expressions (Python 2.4).  Warning!  The function containing a generator expression will be compiled by Psyco, but not the generator expression itself.  If the latter calls other functions compiled by Psyco, then performance will be very bad: calling from Psyco to Python to Psyco comes with a significant overhead.
 \item[(4)]
   Using nested scopes (i.e.\ variables shared by a function and an inner sub-function) will prevent both the outer and the inner function to be accelerated.  This too could be worked around if there is enough interest, at least for accelerating the unrelated parts of the functions -- the accesses to the shared variables themselves might be difficult to optimize.
 \item[(5)]
