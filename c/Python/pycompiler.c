@@ -9,6 +9,7 @@
 
 #include "../Objects/pobject.h"
 #include "../Objects/pabstract.h"
+#include "../Objects/pclassobject.h"
 #include "../Objects/pdescrobject.h"
 #include "../Objects/pdictobject.h"
 #include "../Objects/pfuncobject.h"
@@ -576,6 +577,7 @@ void psyco_pycompiler_init()
 
         psy_object_init();
         psy_abstract_init();
+        psy_classobject_init();
         psy_descrobject_init();
         psy_dictobject_init();
         psy_funcobject_init();

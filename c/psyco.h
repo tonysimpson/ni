@@ -15,7 +15,7 @@
 # define ALL_CHECKS
 
  /* define for a few debugging outputs */
-# define VERBOSE
+# define VERBOSE_LEVEL   2   /* 0, 1 or 2 */
 
  /* define for *heavy* memory checking */
 # define HEAVY_MEM_CHECK
@@ -25,7 +25,7 @@
  /* define to write produced blocks of code into a file
     See 'xam.py' */
 # define CODE_DUMP_FILE    "psyco.dump"
-# define CODE_DUMP_AT_END_ONLY
+//# define CODE_DUMP_AT_END_ONLY
 # define SPEC_DICT_SIGNATURE   0x98247b9d   /* arbitrary */
 
 #endif  /* !DISABLE_DEBUG */
@@ -77,13 +77,19 @@
 # include <assert.h>
 # define extra_assert(x)  assert(x)
 #else
-# define extra_assert(x)  1  /* nothing */
+# define extra_assert(x)  (void)0  /* nothing */
+#endif
+
+#ifndef VERBOSE_LEVEL
+# define VERBOSE_LEVEL   0
+#else
+# define VERBOSE
 #endif
 
 #ifdef VERBOSE
-# define debug_printf(args)   printf args
+# define debug_printf(args)   (printf args, fflush(stdout))
 #else
-# define debug_printf(args)   1  /* nothing */
+# define debug_printf(args)   (void)0  /* nothing */
 #endif
 
 #ifdef ALL_STATIC
@@ -183,7 +189,7 @@ EXTERNFN PsycoFunctionObject* psyco_PsycoFunction_New(PyFunctionObject* func,
 
 
 #if defined(CODE_DUMP_FILE) && !defined(CODE_DUMP_AT_END_ONLY)
-EXTERNFN void psyco_dump_code_buffers();
+EXTERNFN void psyco_dump_code_buffers(void);
 #else
 # define psyco_dump_code_buffers()    do { } while (0) /* nothing */
 #endif

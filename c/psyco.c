@@ -330,6 +330,8 @@ static PyObject *
 psy_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
 	/* 'self' is actually a PsycoFunctionObject* */
+	if (obj == Py_None)
+		obj = NULL;
 	return PyMethod_New(self, obj, type);
 }
 

@@ -269,6 +269,10 @@ static vinfo_t* compatible_array(vinfo_array_t* aa, vinfo_array_t* bb)
      they must also do so in 'aa' because the code compiled from 'bb' might
      have used this fact. Conversely, shared pointers in 'aa' need *not* be
      shared any more in 'bb'.
+
+     The sharing rule only applies to run-time values: for compile-time and
+     virtual-time values, being shared or not is irrelevant to the compilation
+     process.
      
      Return value of compatible_array(): as in psyco_compatible().
   */
@@ -296,6 +300,7 @@ static vinfo_t* compatible_array(vinfo_array_t* aa, vinfo_array_t* bb)
       vinfo_t* b = bb->items[i];
       if (b != NULL)     /* if b == NULL, any value in 'a' is ok. */
 	{
+          long diff;
           vinfo_t* a = aa->items[i];
           /* we store in the 'tmp' fields of the 'bb' arrays pointers to the
              vinfo_t that matched in 'aa'. We assume that all 'tmp' fields
@@ -305,56 +310,61 @@ static vinfo_t* compatible_array(vinfo_array_t* aa, vinfo_array_t* bb)
 	  if (b->tmp != NULL)
 	    {
               /* This 'b' has already be seen. */
-	      if (b->tmp != a)
-		goto incompatible;  /* not a quotient graph */
+	      if (b->tmp == a)
+                continue;  /* quotient graph */
+
+              /* at this point, the graph 'bb' is not a quotient of the
+                 graph 'aa', i.e. two nodes are shared in 'aa' but not
+                 in 'bb'. This is not acceptable if it is a run-time
+                 value. */
+              if (is_runtime(b->source))
+		goto incompatible;
 	    }
-	  else
-            {                /* A new 'b', let's check if its 'a' matches. */
-              long diff;
-              if (a == NULL)
-                goto incompatible;  /* NULL not compatible with non-NULL */
-              b->tmp = a;
-              diff = ((long)a->source) ^ ((long)b->source);
-              if (diff != 0)
+          
+          /* A new 'b', let's check if its 'a' matches. */
+          if (a == NULL)
+            goto incompatible;  /* NULL not compatible with non-NULL */
+          b->tmp = a;
+          diff = ((long)a->source) ^ ((long)b->source);
+          if (diff != 0)
+            {
+              if ((diff & TimeMask) != 0)
+                goto incompatible;  /* not the same TIME_MASK */
+              if (is_runtime(a->source))
                 {
-                  if ((diff & TimeMask) != 0)
-                    goto incompatible;  /* not the same TIME_MASK */
-                  if (is_runtime(a->source))
+                  if ((diff & RunTime_NoRef) != 0)
                     {
-                      if ((diff & RunTime_NoRef) != 0)
-                        {
-                          /* from 'with ref' to 'without ref' or vice-versa:
-                             a source in 'a' with reference cannot pass for
-                             a source in 'b' without reference */
-                          if ((a->source & RunTime_NoRef) == 0)
-                            goto incompatible;
-                        }
-                    }
-                  else
-                    {
-                      if (is_virtualtime(a->source))
-                        goto incompatible;  /* different virtual sources */
-                      if (KNOWN_SOURCE(a)->value != KNOWN_SOURCE(b)->value)
-                        {
-                          if ((KNOWN_SOURCE(b)->refcount1_flags &
-                               SkFlagFixed) != 0)
-                            goto incompatible;  /* b's value is fixed */
-                          /* approximative match, might un-promote 'a' from
-                             compile-time to run-time. */
-                          //fprintf(stderr, "psyco: compatible_array() with vinfo_t* a=%p, b=%p\n", a, b);
-                          if (result == COMPATIBLE)
-                            result = a;
-                        }
+                      /* from 'with ref' to 'without ref' or vice-versa:
+                         a source in 'a' with reference cannot pass for
+                         a source in 'b' without reference */
+                      if ((a->source & RunTime_NoRef) == 0)
+                        goto incompatible;
                     }
                 }
-              if (a->array != b->array)
-                {                     /* can only be equal if both ==NullArray */
-                  vinfo_t* subresult = compatible_array(a->array, b->array);
-                  if (subresult == INCOMPATIBLE)
-                    goto incompatible;
-                  if (result == COMPATIBLE)
-                    result = subresult;
+              else
+                {
+                  if (is_virtualtime(a->source))
+                    goto incompatible;  /* different virtual sources */
+                  if (KNOWN_SOURCE(a)->value != KNOWN_SOURCE(b)->value)
+                    {
+                      if ((KNOWN_SOURCE(b)->refcount1_flags &
+                           SkFlagFixed) != 0)
+                        goto incompatible;  /* b's value is fixed */
+                      /* approximative match, might un-promote 'a' from
+                         compile-time to run-time. */
+                      //fprintf(stderr, "psyco: compatible_array() with vinfo_t* a=%p, b=%p\n", a, b);
+                      if (result == COMPATIBLE)
+                        result = a;
+                    }
                 }
+            }
+          if (a->array != b->array)
+            {                     /* can only be equal if both ==NullArray */
+              vinfo_t* subresult = compatible_array(a->array, b->array);
+              if (subresult == INCOMPATIBLE)
+                goto incompatible;
+              if (result == COMPATIBLE)
+                result = subresult;
             }
         }
     }

@@ -19,6 +19,7 @@
 #include "Python/pbltinmodule.c"
 
 #include "Objects/pabstract.c"
+#include "Objects/pclassobject.c"
 #include "Objects/pdescrobject.c"
 #include "Objects/pdictobject.c"
 #include "Objects/pfuncobject.c"

@@ -20,7 +20,8 @@
   b = (CodeBufferObject*) PyObject_INIT(o, &CodeBuffer_Type);   \
   b->codeptr = (codepointer);                                   \
   SET_CODE_END(!setcodelimit);                                  \
-  debug_printf(("psyco: %s code buffer %p\n",                   \
+  if (VERBOSE_LEVEL > 1)                                        \
+    debug_printf(("psyco: %s code buffer %p\n",                 \
          extrasize ? "new" : "proxy", b->codeptr));             \
                                                                 \
   fpo_mark_new(&b->snapshot);                                   \
@@ -66,7 +67,8 @@ CodeBufferObject* psyco_new_code_buffer_size(int size)
   b = (CodeBufferObject*) PyObject_INIT(o, &CodeBuffer_Type);
   b->codeptr = (code_t*) (b + 1);
   b->po = NULL;
-  debug_printf(("psyco: new_code_buffer_size(%d) %p\n", size, b->codeptr));
+  if (VERBOSE_LEVEL > 1)
+    debug_printf(("psyco: new_code_buffer_size(%d) %p\n", size, b->codeptr));
   return b;
 }
 #endif
@@ -82,8 +84,11 @@ void psyco_shrink_code_buffer(CodeBufferObject* obj, int nsize)
   extra_assert(0 < nsize && nsize <= BIG_BUFFER_SIZE - GUARANTEED_MINIMUM);
   ndata = PyObject_REALLOC(obj, sizeof(CodeBufferObject) + nsize);
   //printf("psyco: shrink_code_buffer %p to %d\n", obj->codeptr, nsize);
-  debug_printf(("psyco: disassemble %p %p    (%d bytes)\n", obj->codeptr,
-                obj->codeptr + nsize, nsize));
+  if (VERBOSE_LEVEL > 1)
+    debug_printf(("psyco: disassemble %p %p    (%d bytes)\n", obj->codeptr,
+                  obj->codeptr + nsize, nsize));
+  else
+    debug_printf(("[%d]", nsize));
   assert(ndata == obj);   /* don't know what to do if this is not the case */
 #ifdef STORE_CODE_END
   extra_assert(obj->codeend == NULL);
@@ -143,7 +148,9 @@ static void codebuf_dealloc(CodeBufferObject* self)
       ptr = &((*ptr)->chained_list);
     }
 #endif
-  debug_printf(("psyco: releasing code buffer %p at %p\n", self->codeptr, self));
+  if (VERBOSE_LEVEL > 1)
+    debug_printf(("psyco: releasing code buffer %p at %p\n",
+                  self->codeptr, self));
   fpo_release(&self->snapshot);
   PyObject_Del(self);
 }

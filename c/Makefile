@@ -36,6 +36,7 @@ OBJECTS2   = Python/pycompiler.o    \
 	     Python/pbltinmodule.o
 
 HEADERS3   = Objects/pabstract.h     \
+	     Objects/pclassobject.h    \
 	     Objects/pdescrobject.h    \
 	     Objects/pdictobject.h    \
 	     Objects/pfuncobject.h    \
@@ -51,6 +52,7 @@ HEADERS3   = Objects/pabstract.h     \
 	     Objects/ptupleobject.h
 
 SOURCES3   = Objects/pabstract.c     \
+	     Objects/pclassobject.c    \
 	     Objects/pdescrobject.c    \
 	     Objects/pdictobject.c    \
 	     Objects/pfuncobject.c    \
@@ -66,6 +68,7 @@ SOURCES3   = Objects/pabstract.c     \
 	     Objects/ptupleobject.c
 
 OBJECTS3   = Objects/pabstract.o     \
+	     Objects/pclassobject.o    \
 	     Objects/pdescrobject.o    \
 	     Objects/pdictobject.o    \
 	     Objects/pfuncobject.o    \
