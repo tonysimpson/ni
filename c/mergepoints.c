@@ -141,6 +141,8 @@ static const unsigned char other_opcodes[] = {
                               (oparg) == Py_GE ||  \
                               (oparg) == IS        ||  \
                               (oparg) == IS_NOT    ||  \
+                              (oparg) == IN        ||  \
+                              (oparg) == NOT_IN    ||  \
                               (oparg) == EXC_MATCH ||  \
                               0)
 
@@ -225,23 +227,23 @@ inline PyObject* build_merge_points(PyCodeObject* co)
 	    Py_INCREF(Py_None);
 	    return Py_None;
 	  }
-      if (HAS_JREL_INSTR(op) && paths[i+oparg] < 2)
+      if ((flags & MP_HAS_JREL) && paths[i+oparg] < 2)
 	{
-	  if (HAS_J_MULTIPLE(op))
+	  if (flags & MP_HAS_J_MULTIPLE)
 	    paths[i+oparg] = 2;
 	  else
 	    paths[i+oparg]++;
 	}
-      if (HAS_JABS_INSTR(op) && paths[oparg] < 2)
+      if ((flags & MP_HAS_JABS) && paths[oparg] < 2)
 	{
-	  if (HAS_J_MULTIPLE(op))
+	  if (flags & MP_HAS_J_MULTIPLE)
 	    paths[oparg] = 2;
 	  else
 	    paths[oparg]++;
 	}
-      if (IS_CTXDEP_INSTR(op))
+      if (flags & MP_IS_CTXDEP)
 	paths[i] = 2;
-      else if (!IS_JUMP_INSTR(op))
+      else if (!(flags & MP_IS_JUMP))
 	paths[i]++;
     }
 
