@@ -90,6 +90,7 @@ goal_in_range(V, A, B, G) :-
         ;
         G = fail).
 
+condition_test(indirect(_), _) :- !.
 condition_test(Cond, V) :-
         condition_range(Cond, A:B),
         goal_in_range(V, A, B, G),
