@@ -2,7 +2,7 @@
 #if HAVE_COMPACT_OBJECT
 #include "pcompactobject.h"
 #include "../Python/pycompiler.h"
-
+#include "ptupleobject.h"
 
 #define IMMUT_COMPACT_impl DEF_FIELD(PyCompactObject, compact_impl_t*, \
 							k_impl, OB_type)
@@ -433,7 +433,7 @@ static vinfo_t* pcompact_new(PsycoObject* po, PyTypeObject* type,
 					"ll", type, 0);
 		if (vk != NULL) {
 			Psyco_AssertType(po, vk, type);
-			vimpl = vinfo_new(CompileTime_New((long) &k_empty_impl));
+			vimpl = vinfo_new(CompileTime_New((long) PyCompact_EmptyImpl));
 			ok = psyco_put_field(po, vk, COMPACT_impl, vimpl);
 			vinfo_decref(vimpl, po);
 			if (!ok) {

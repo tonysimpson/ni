@@ -946,7 +946,7 @@ static PyMethodDef PsycoMethods[] = {
 };
 
 /* Initialization */
-void init_psyco(void)
+PyMODINIT_FUNC init_psyco(void)
 {
   PsycoFunction_Type.ob_type = &PyType_Type;
   CodeBuffer_Type.ob_type = &PyType_Type;

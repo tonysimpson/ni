@@ -8,6 +8,17 @@ tmpfile = '~tmpfile.tmp'
 # 'ndisasm' uses Intel syntax.
 
 objdump = 'objdump -b binary -m i386 --adjust-vma=%(origin)d -D %(file)s'
+if sys.platform == "win32":
+    try:
+        from xam import __file__ as _xamfile
+    except ImportError:
+        raise ImportError, "could not import xam module"
+    _win32_path = os.path.join(os.path.split(_xamfile)[0], "win32")
+    objdump = os.path.join(_win32_path, objdump)
+    _objdumpexe = objdump.split()[0]+".exe"
+    # test whether it works:
+    if os.system(_objdumpexe + " -v"):
+        raise IOError, "file %s and cygwin1.dll must exist" % _objdumpexe
 #objdump = 'ndisasm -o %(origin)d -u %(file)s'
 
 # the files from which symbols are loaded.
@@ -23,6 +34,52 @@ except ImportError:
 # the program that lists symbols, and the output it gives
 symbollister = 'nm %s'
 re_symbolentry = re.compile(r'([0-9a-fA-F]+)\s\w\s(.*)')
+
+if sys.platform == "win32":
+    # no way to get full info into the executables by
+    # VC7. /PDB:NONE no longer supported.
+    # so we have to read the map files.
+    if sys.executable.lower().endswith("_d.exe"):
+        _mapfiles = ("python23_d.map", "_psyco_d.map")
+    else:
+        _mapfiles = ("python23.map", "_psyco.map")
+    symbolfiles = [os.path.join(_win32_path, x) for x in _mapfiles]
+    for _filepath in symbolfiles:
+        if not os.path.exists(_filepath):
+            raise IOError, "please make sure that '%s' exists" % _filepath
+        
+    class symbollister:
+        def __init__(self, filename):
+            self.file = file(filename)
+            self.generator = self._readline()
+
+        def _readline(self):
+            for line in self.file:
+                #  0001:000661e0       _PyEval_CallFunction       1e0671e0 f   modsupport.obj
+                #  0003:0000e770       _PyClass_Type              1e0d8770     classobject.obj
+                pieces = line.split()
+                if len(pieces) == 5:
+                    colonadr, name, adr, dummy, obj = pieces
+                elif len(pieces) == 4:
+                    colonadr, name, adr, obj = pieces
+                    dummy = "d"
+                else:
+                    continue
+                if colonadr.count(":") == 1 and obj.endswith(".obj"):
+                    yield "%s %s %s\n" % (adr, dummy, name[1:])
+
+        def readline(self):
+            try:
+                return self.generator.next()
+            except StopIteration:
+                return ""
+
+        def close(self):
+            self.file.close()
+            
+        def __iter__(self):
+            return self.generator
+
 
 re_addr = re.compile(r'[\s,$]0x([0-9a-fA-F]+)')
 re_lineaddr = re.compile(r'\s*0?x?([0-9a-fA-F]+)')
@@ -60,7 +117,10 @@ def machine_code_dump(data, originaddr, format):
 
 def load_symbol_file(filename, symb1, addr1):
     d = {}
-    g = os.popen(symbollister % filename, "r")
+    if type(symbollister) is str:
+        g = os.popen(symbollister % filename, "r")
+    else:
+        g = symbollister(filename)
     while 1:
         line = g.readline()
         if not line:
