@@ -263,11 +263,17 @@ def xrangetest(n):
         print i,
     print
 
+def longrangetest():
+    L = 1234567890123456789L
+    if sys.hexversion >= 0x02030000:
+        print range(L, L+2)
+    else:
+        print [L, L+1]
+
 if __name__ == '__main__':
     import time
     print "break!"
     time.sleep(0.5)
     psyco.full()
-    #rangetypetest(15)
-    rangetest(15)
+    longrangetest()
     psyco.dumpcodebuf()

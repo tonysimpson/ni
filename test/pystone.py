@@ -32,8 +32,8 @@ Version History:
 
 """
 
-LOOPS = 10000
-LOOPS1 = 10000  # number of loops for the first run of Psyco
+LOOPS = 100000
+LOOPS1 = 100000  # number of loops for the first run of Psyco
 
 from time import clock
 
@@ -113,16 +113,16 @@ def main():
 
 def pystones_psycho(*loopslist):
     import psyco
-    old_dict = Record.__dict__.copy()
-    try:
+    #old_dict = Record.__dict__.copy()
+    #try:
         # replace all methods of Record by proxies
         #for key, value in old_dict.items():
         #    if type(value) is type(main):
         #        Record.__dict__[key] = _psyco.proxy(value, 99)
-        f = psyco.proxy(Proc0)
-        return map(f, loopslist)
-    finally:
-        Record.__dict__.update(old_dict)
+    f = psyco.proxy(Proc0)
+    return map(f, loopslist)
+    #finally:
+    #    Record.__dict__.update(old_dict)
 
 def pystones_reg(*loopslist):
     return map(Proc0, loopslist)

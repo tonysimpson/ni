@@ -1,4 +1,5 @@
 #include "pintobject.h"
+#include "plongobject.h"
 
 
 /* Division and Modulo code follows Python's intobject.c */
@@ -49,7 +50,8 @@ vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v)
 
 	if (PsycoInt_Check(tp)) {
 		result = PsycoInt_AS_LONG(po, v);
-		vinfo_incref(result);
+		if (result != NULL)
+			vinfo_incref(result);
 		return result;
 	}
 
@@ -59,17 +61,38 @@ vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v)
 		return NULL;
 	}
 
+	return psyco_generic_call(po, PyInt_AsLong,
+				  CfReturnNormal|CfPyErrCheckMinus1,
+				  "v", v);
+#if 0
+	---  DISABLED: cannot promote the type of a returned object :-(  ---
 	v = Psyco_META1(po, nb->nb_int,
 			CfReturnRef|CfPyErrIfNull,
 			"v", v);
 	if (v == NULL)
 		return NULL;
-	
-	/* silently assumes the result is an integer object */
-	result = PsycoInt_AS_LONG(po, v);
-	vinfo_incref(result);
+
+	/* check the returned type */
+	result = NULL;
+	tp = Psyco_NeedType(po, v);
+	if (tp != NULL) {
+		if (PsycoInt_Check(tp)) {
+			result = PsycoInt_AS_LONG(po, v);
+			if (result != NULL)
+				vinfo_incref(result);
+		}
+		else if (PsycoLong_Check(tp)) {
+			result = PsycoLong_AsLong(po, v);
+		}
+		else {  /* fall back */
+			result = psyco_generic_call(po, PyInt_AsLong,
+					CfReturnNormal|CfPyErrCheckMinus1,
+					"v", v);
+		}
+	}
 	vinfo_decref(v, po);
 	return result;
+#endif
 }
 
 static bool compute_int(PsycoObject* po, vinfo_t* intobj)

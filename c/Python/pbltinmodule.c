@@ -45,6 +45,14 @@ static vinfo_t* get_len_of_range(PsycoObject* po, vinfo_t* lo, vinfo_t* hi
 		return psyco_vi_Zero();
 }
 
+static vinfo_t* intobj_as_long(PsycoObject* po, vinfo_t* v)
+{
+	if (Psyco_VerifyType(po, v, &PyInt_Type) == 1)
+		return PsycoInt_AS_LONG(po, v);
+	else
+		return NULL;
+}
+
 static bool parse_range_args(PsycoObject* po, vinfo_t* vargs,
 			     vinfo_t** iistart, vinfo_t** iilen)
 {
@@ -54,27 +62,30 @@ static bool parse_range_args(PsycoObject* po, vinfo_t* vargs,
 	
 	switch (tuplesize) {
 	case 1:
-		ihigh = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 0));
+		ihigh = intobj_as_long(po, PsycoTuple_GET_ITEM(vargs, 0));
 		if (ihigh == NULL) return false;
 		ilow = psyco_vi_Zero();
 		break;
 	/*case 3:
-		istep = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 2));
+		istep = intobj_as_long(po, PsycoTuple_GET_ITEM(vargs, 2));
 		if (istep == NULL) return NULL;*/
 		/* fall through */
 	case 2:
-		ilow  = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 0));
+		ilow  = intobj_as_long(po, PsycoTuple_GET_ITEM(vargs, 0));
 		if (ilow == NULL) return false;
-		ihigh = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 1));
+		ihigh = intobj_as_long(po, PsycoTuple_GET_ITEM(vargs, 1));
 		if (ihigh == NULL) return false;
+		vinfo_incref(ilow);
 		break;
 	default:
 		return false;
 	}
 	*iilen = get_len_of_range(po, ilow, ihigh);
-	if (*iilen == NULL) return false;
+	if (*iilen == NULL) {
+		vinfo_decref(ilow, po);
+		return false;
+	}
 	*iistart = ilow;
-	vinfo_decref(ihigh, po);
 	return true;
 }
 

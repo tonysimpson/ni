@@ -157,12 +157,11 @@ static vinfo_t* prange_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 	vinfo_t* vdelta;
 	vinfo_t* result;
 
-	vlen = psyco_get_field(po, a, RANGEOBJECT_len);
+	vlen = psyco_get_const(po, a, RANGEOBJECT_len);
 	if (vlen == NULL)
 		return NULL;
 	
 	cc = integer_cmp(po, i, vlen, Py_GE|COMPARE_UNSIGNED);
-	vinfo_decref(vlen, po);
 	if (cc == CC_ERROR)
 		return NULL;
 
@@ -173,23 +172,19 @@ static vinfo_t* prange_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 	}
         assert_nonneg(i);
 
-	vstep = psyco_get_field(po, a, RANGEOBJECT_step);
+	vstep = psyco_get_const(po, a, RANGEOBJECT_step);
 	if (vstep == NULL)
 		return NULL;
-	
+
+	vstart = psyco_get_const(po, a, RANGEOBJECT_start);
+	if (vstart == NULL)
+		return NULL;
+
 	vdelta = integer_mul(po, vstep, i, false);
-	vinfo_decref(vstep, po);
 	if (vdelta == NULL)
 		return NULL;
 
-        vstart = psyco_get_field(po, a, RANGEOBJECT_start);
-	if (vstart == NULL) {
-		vinfo_decref(vdelta, po);
-		return NULL;
-	}
-
 	result = integer_add(po, vstart, vdelta, false);
-	vinfo_decref(vstart, po);
 	vinfo_decref(vdelta, po);
 	if (result == NULL)
 		return NULL;
