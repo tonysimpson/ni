@@ -21,8 +21,17 @@ static vinfo_t* meta_psycofunction_call(PsycoObject* po, vinfo_t* func,
 }
 
 
+static vinfo_t* meta_psy_descr_get(PsycoObject* po, PyObject* func,
+                                   vinfo_t* obj, PyObject* type)
+{
+	/* see comments of pmember_get() in pdescrobject.c. */
+	return PsycoMethod_New(func, obj, type);
+}
+
+
 DEFINEFN
 void psy_psycofuncobject_init()
 {
 	Psyco_DefineMeta(PsycoFunction_Type.tp_call, meta_psycofunction_call);
+	Psyco_DefineMeta(PsycoFunction_Type.tp_descr_get, meta_psy_descr_get);
 }

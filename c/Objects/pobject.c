@@ -7,6 +7,7 @@ DEFINEVAR fixed_switch_t psyfs_int;
 DEFINEVAR fixed_switch_t psyfs_int_long;
 DEFINEVAR fixed_switch_t psyfs_tuple_list;
 DEFINEVAR fixed_switch_t psyfs_string_unicode;
+DEFINEVAR fixed_switch_t psyfs_none;
 
 
 DEFINEFN
@@ -250,34 +251,50 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 	dictofsbase = getdictoffset(po, obj, &dictofs);
 	if (dictofsbase == -1) {
 		if (PycException_Occurred(po))
-			return NULL;
+			goto done;
 		/* no __dict__ slot */
 	}
 	else {
 		int cond;
+		condition_code_t cc;
 		vinfo_t* dict;
 		if (dictofs == NULL)
-			dict = read_array_item(po, obj, dictofsbase);
+			dict = read_array_item(po, obj, QUARTER(dictofsbase));
 		else
 			dict = read_array_item_var(po, obj,
-						   dictofsbase, dictofs, false);
+						   QUARTER(dictofsbase),
+                                                   dictofs, false);
 		if (dict == NULL)
-			return NULL;
-		cond = runtime_condition_t(po, integer_non_null(po, dict));
-		vinfo_decref(dict, po);
-		if (cond) {
+			goto done;
+		if (runtime_condition_t(po, integer_non_null(po, dict))) {
 			/* the __dict__ slot contains a non-NULL value */
 			res = psyco_generic_call(po, PyDict_GetItem,
 						 CfReturnNormal,
 						 "vl", dict, name);
+			vinfo_decref(dict, po);
 			if (res == NULL)
-				return NULL;
+				goto done;
 			Py_INCREF(name);  /* XXX ref hold by the code buf */
-			if (runtime_condition_t(po, integer_non_null(po, res))) {
+
+			/* if there is a method descriptor of the same name,
+			   then it is likely that we don't find an attribute
+			   with that name; otherwise, it is likely that we
+			   do find it. */
+			cc = integer_non_null(po, res);
+			if (f != NULL)
+				cond = runtime_condition_f(po, cc);
+			else
+				cond = runtime_condition_t(po, cc);
+			
+			if (cond) {
 				need_reference(po, res);
 				goto done;
 			}
+			vinfo_decref(res, po);
+			res = NULL;
 		}
+		else
+			vinfo_decref(dict, po);
 	}
 	
 	if (f != NULL) {

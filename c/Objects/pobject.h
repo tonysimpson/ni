@@ -121,6 +121,14 @@ EXTERNVAR fixed_switch_t psyfs_int;
 EXTERNVAR fixed_switch_t psyfs_int_long;
 EXTERNVAR fixed_switch_t psyfs_tuple_list;
 EXTERNVAR fixed_switch_t psyfs_string_unicode;
+EXTERNVAR fixed_switch_t psyfs_none;
+
+
+/* To check whether an object is Py_None. Return 0 if it is,
+   and -1 otherwise (use PycException_Occurred() to check for exceptions) */
+inline int Psyco_IsNone(PsycoObject* po, vinfo_t* vi) {
+	return Psyco_TypeSwitch(po, vi, &psyfs_none);
+}
 
 
 inline void psy_object_init(void)
@@ -148,6 +156,9 @@ inline void psy_object_init(void)
 #endif
         psyco_build_run_time_switch(&psyfs_string_unicode, SkFlagFixed,
                                     values, cnt);
+
+	values[0] = (long)(Py_None->ob_type);
+	psyco_build_run_time_switch(&psyfs_none, SkFlagFixed, values, 1);
 
         /* associate the Python implementation of some functions with
            the one from Psyco */

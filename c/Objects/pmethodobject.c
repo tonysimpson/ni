@@ -2,6 +2,39 @@
 #include "ptupleobject.h"
 
 
+static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj)
+{
+	vinfo_t* newobj;
+	vinfo_t* m_self;
+	vinfo_t* m_ml;
+	
+	/* get the fields from the Python object 'methobj' */
+	m_self = get_array_item(po, methobj, CFUNC_M_SELF);
+	if (m_self == NULL)
+		return false;
+	m_ml = get_array_item(po, methobj, CFUNC_M_ML);
+	if (m_ml == NULL)
+		return false;
+
+	/* call PyCFunction_New() */
+	newobj = psyco_generic_call(po, PyCFunction_New,
+				    CfPure|CfReturnRef|CfPyErrIfNull,
+				    "vv", m_ml, m_self);
+	if (newobj == NULL)
+		return false;
+
+	/* move the resulting non-virtual Python object back into 'methobj' */
+	vinfo_move(po, methobj, newobj);
+	return true;
+}
+
+
+DEFINEVAR source_virtual_t psyco_computed_cfunction;
+
+
+ /***************************************************************/
+  /*** C method objects meta-implementation                    ***/
+
 static vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 				    vinfo_t* tuple, vinfo_t* kw)
 {
@@ -66,4 +99,6 @@ DEFINEFN
 void psy_methodobject_init()
 {
 	Psyco_DefineMeta(PyCFunction_Type.tp_call, PsycoCFunction_Call);
+
+	psyco_computed_cfunction.compute_fn = &compute_cfunction;
 }
