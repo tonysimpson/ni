@@ -319,7 +319,7 @@ vinfo_t* psyco_get_array_item(PsycoObject* po, vinfo_t* vi, int index)
 }
 
 #define READ_ARRAY_ITEM_1(rg, _v, offset, _byte)     do {       \
-  char _modrm;                                                  \
+  code_t _modrm;                                                \
   long _value = (offset);                                       \
   if (!is_compiletime(_v->source))                              \
     {                                                           \
@@ -346,7 +346,7 @@ vinfo_t* psyco_get_array_item(PsycoObject* po, vinfo_t* vi, int index)
     code[0] = 0x8B;   /* MOV */                                 \
   code[1] = _modrm | ((rg)<<3);                                 \
   if (COMPACT_ENCODING && (_modrm & 0x40) != 0) {               \
-    code[2] = _value;                                           \
+    code[2] = (char) _value;                                    \
     code += 3;                                                  \
   }                                                             \
   else {                                                        \
@@ -481,7 +481,7 @@ bool psyco_write_array_item(PsycoObject* po, vinfo_t* src, vinfo_t* v, int index
         }
       code[1] = modrm;
       if (COMPACT_ENCODING && (modrm & 0x40) != 0) {
-        code[2] = value;
+        code[2] = (char) value;
         code += 3;
       }
       else {
@@ -779,7 +779,7 @@ static code_t* fx_writecases(code_t* code, code_t** lastcmp,
       if (offset < 128)
         {
           code[-2] = 0xEB;   /* JMP rel8 */
-          code[-1] = offset;
+          code[-1] = (char) offset;
         }
       else
         {
@@ -810,7 +810,7 @@ static code_t* fx_writecases(code_t* code, code_t** lastcmp,
           if (offset < 128)
             {
               code[-2] = 0x7F;    /* JG rel8 */
-              code[-1] = offset;
+              code[-1] = (char) offset;
             }
           else
             {
@@ -952,7 +952,7 @@ int psyco_switch_lookup(fixed_switch_t* rts, long value)
 }
 
 DEFINEFN
-code_t* psyco_write_run_time_switch(fixed_switch_t* rts, code_t* code, char reg)
+code_t* psyco_write_run_time_switch(fixed_switch_t* rts, code_t* code, reg_t reg)
 {
   /* Write the code that does a 'switch' on the prepared 'values'. */
   memcpy(code, rts->switchcode, rts->switchcodesize);

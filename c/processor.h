@@ -396,7 +396,7 @@ EXTERNFN int psyco_switch_lookup(fixed_switch_t* rts, long value);
    are initially at the end of the written code; see
    psyco_fix_switch_target(). */
 EXTERNFN code_t* psyco_write_run_time_switch(fixed_switch_t* rts,
-                                             code_t* code, char reg);
+                                             code_t* code, reg_t reg);
 
 /* Fix the target corresponding to the given case ('item' is a value
    returned by psyco_switch_lookup()). 'code' is the *end* of the

@@ -87,7 +87,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
     (extra_assert((offsetof(struct, field) & 3) == 0),  \
      offsetof(struct, field))
 
-#define QUARTER(n)   (extra_assert(((n)&3)==0), (n)/4)
+#define QUARTER(n)   (extra_assert(((n)&3)==0), (long)((n)/4))
 
 
 /*****************************************************************/
@@ -224,7 +224,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   code[1] = 0xC0 | (group<<3) | (rg);                   \
   _v = value;                                           \
   if (COMPACT_ENCODING && -128 <= _v && _v < 128) {     \
-    code[2] = _v;                                       \
+    code[2] = (char) _v;                                \
     code[0] = 0x83;                                     \
     code += 3;                                          \
   }                                                     \
@@ -320,7 +320,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
       CHECK_NONZERO_REG(RSOURCE_REG(source));                                   \
     else*/ {                                                                    \
       INSTR_MODRM_FROM_RT(source, 0x83, 7<<3);  /* CMP (source), imm8 */        \
-      *code++ = _value;                                                         \
+      *code++ = (char) _value;                                                         \
     }                                                                           \
   else {                                                                        \
     INSTR_MODRM_FROM_RT(source, 0x81, 7<<3);    /* CMP (source), imm32 */       \
@@ -345,7 +345,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
     code += 4;                                                          \
   }                                                                     \
   else                                                                  \
-    *code++ = _value;                                                   \
+    *code++ = (char) _value;                                                   \
 } while (0)
 
 /* Shitfs. The counters must never be >=32. */
@@ -482,7 +482,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define PUSH_IMMED(immed)     do {                              \
   if (COMPACT_ENCODING && -128 <= (immed) && (immed) < 128) {   \
     code[0] = 0x6A;    /* PUSH imm8 */                          \
-    code[1] = (immed);                                          \
+    code[1] = (char) (immed);                                   \
     code += 2;                                                  \
   }                                                             \
   else {                                                        \
@@ -561,7 +561,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   code[0] = 0x8D;   /* LEA dst,[rg1+immed] */                   \
   if (COMPACT_ENCODING && -128 <= _value && _value < 128) {     \
     code[1] = 0x40 | (dst)<<3 | (rg1);                          \
-    code[2] = _value;                                           \
+    code[2] = (char) _value;                                    \
     code += 3;                                                  \
   }                                                             \
   else {                                                        \
@@ -837,7 +837,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   long _ofs = (addr) - (code+2);                        \
   extra_assert(-128 <= _ofs && _ofs < 128);             \
   code[0] = 0x70 | (char)(condition);                   \
-  code[1] = _ofs;                                       \
+  code[1] = (char) _ofs;                                \
   code += 2;                                            \
 } while (0)
 

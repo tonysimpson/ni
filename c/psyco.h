@@ -199,7 +199,7 @@ typedef int bool;
 #endif
 
 
-typedef char code_t;
+typedef unsigned char code_t;
 
 typedef struct vinfo_s vinfo_t;             /* defined in compiler.h */
 typedef struct vinfo_array_s vinfo_array_t; /* defined in compiler.h */

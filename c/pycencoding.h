@@ -74,9 +74,9 @@
 /* the PyObject* is stored in the register 'rg' */
 #define INC_OB_REFCNT(rg)	do {                    \
   NEED_CC_REG(rg);                                      \
-  extra_assert(offsetof(PyObject, ob_refcnt) == 0);     \
   code[0] = 0xFF;          /* INC [reg] */              \
-  if (EBP_IS_RESERVED || (rg) != REG_386_EBP)           \
+  if ((EBP_IS_RESERVED || (rg) != REG_386_EBP) &&       \
+      offsetof(PyObject, ob_refcnt) == 0)               \
     {                                                   \
       extra_assert((rg) != REG_386_EBP);                \
       code[1] = (rg);                                   \
@@ -84,52 +84,54 @@
   else                                                  \
     {                                                   \
       code++;                                           \
-      code[0] = 0x45;                                   \
-      code[1] = 0;                                      \
+      extra_assert(offsetof(PyObject, ob_refcnt) < 128);\
+      code[0] = 0x40 | (rg);                            \
+      code[1] = (char) offsetof(PyObject, ob_refcnt);   \
     }                                                   \
   code += 2;                                            \
 } while (0)
 
 /* Py_INCREF() for a compile-time-known 'pyobj' */
-#define INC_KNOWN_OB_REFCNT(pyobj)    do {      \
-  NEED_CC();                                    \
-  code[0] = 0xFF;  /* INC [address] */          \
-  code[1] = 0x05;                               \
-  *(int**)(code+2) = &(pyobj)->ob_refcnt;       \
-  code += 6;                                    \
+#define INC_KNOWN_OB_REFCNT(pyobj)    do {              \
+  NEED_CC();                                            \
+  code[0] = 0xFF;  /* INC [address] */                  \
+  code[1] = 0x05;                                       \
+  *(int**)(code+2) = &(pyobj)->ob_refcnt;               \
+  code += 6;                                            \
  } while (0)
 
 /* Py_DECREF() for a compile-time 'pyobj' assuming counter cannot reach zero */
-#define DEC_KNOWN_OB_REFCNT_NZ(pyobj)    do {   \
-  NEED_CC();                                    \
-  code[0] = 0xFF;  /* DEC [address] */          \
-  code[1] = (1<<3) | 0x05;                      \
-  *(int**)(code+2) = &(pyobj)->ob_refcnt;       \
-  code += 6;                                    \
+#define DEC_KNOWN_OB_REFCNT_NZ(pyobj)    do {           \
+  NEED_CC();                                            \
+  code[0] = 0xFF;  /* DEC [address] */                  \
+  code[1] = (1<<3) | 0x05;                              \
+  *(int**)(code+2) = &(pyobj)->ob_refcnt;               \
+  code += 6;                                            \
  } while (0)
 
 /* like DEC_OB_REFCNT() but assume the reference counter cannot reach zero */
-#define DEC_OB_REFCNT_NZ(rg)    do {            \
-  NEED_CC_REG(rg);                              \
-  code[0] = 0xFF;          /* DEC [reg] */      \
-  if (EBP_IS_RESERVED || (rg) != REG_386_EBP)   \
-    {                                           \
-      extra_assert((rg) != REG_386_EBP);        \
-      code[1] = 0x08 | (rg);                    \
-    }                                           \
-  else                                          \
-    {                                           \
-      code++;                                   \
-      code[0] = 0x4D;                           \
-      code[1] = 0;                              \
-    }                                           \
-  code += 2;                                    \
+#define DEC_OB_REFCNT_NZ(rg)    do {                    \
+  NEED_CC_REG(rg);                                      \
+  code[0] = 0xFF;          /* DEC [reg] */              \
+  if ((EBP_IS_RESERVED || (rg) != REG_386_EBP) &&       \
+      offsetof(PyObject, ob_refcnt) == 0)               \
+    {                                                   \
+      extra_assert((rg) != REG_386_EBP);                \
+      code[1] = 0x08 | (rg);                            \
+    }                                                   \
+  else                                                  \
+    {                                                   \
+      code++;                                           \
+      extra_assert(offsetof(PyObject, ob_refcnt) < 128);\
+      code[0] = 0x48 | (rg);                            \
+      code[1] = (char) offsetof(PyObject, ob_refcnt);   \
+    }                                                   \
+  code += 2;                                            \
 } while (0)
 
 /* the equivalent of Py_DECREF() */
 #define DEC_OB_REFCNT(rg)	do {                                            \
   DEC_OB_REFCNT_NZ(rg);                                                         \
-  extra_assert(offsetof(PyObject, ob_refcnt) == 0);                             \
   extra_assert(offsetof(PyObject, ob_type) < 128);                              \
   extra_assert(offsetof(PyTypeObject, tp_dealloc) < 128);                       \
   CODE_FOUR_BYTES(code,                                                         \
@@ -180,7 +182,6 @@
    (assuming that tp_dealloc never changes for a given type) */
 #define DEC_OB_REFCNT_T(rg, type)     do {                                      \
   DEC_OB_REFCNT_NZ(rg);                                                         \
-  extra_assert(offsetof(PyObject, ob_refcnt) == 0);                             \
   CODE_FOUR_BYTES(code,                                                         \
             0x75,          /* JNZ rel8 */                                       \
             15 - 2,        /* to the end of this code block */                  \
