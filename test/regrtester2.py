@@ -17,6 +17,9 @@ assert 0 <= n < m
 import test.regrtest
 import regrtester
 
+def confirm_still_in_psyco():
+    return __in_psyco__
+
 tests = [s for s in test.regrtest.findtests()
          if hash(s) % m == n and s not in test.regrtest.NOTTESTS]
 if __name__ == '__main__':
@@ -34,9 +37,12 @@ if __name__ == '__main__':
     print 'Random seed is %r' % seed
     random.seed(seed)
     random.shuffle(tests)
-    
+
+    fully_in_psyco = confirm_still_in_psyco()
     try:
         test.regrtest.main(tests)  #, verbose=1)
     finally:
         if dump:
             psyco.dumpcodebuf()
+        if fully_in_psyco:
+            assert confirm_still_in_psyco()

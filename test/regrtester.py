@@ -39,7 +39,9 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_atexit': "windows: tired to work around w9xpopen magic",
         'test_popen': "windows: tired to work around w9xpopen magic",
         'test_mimetypes': 'fail in 2.3 if run after test_urllib',
-        }
+        'test_doctest': 'doctest uses the debugger!?',
+        'test_subprocess': 'suspect subprocess messes up stdout with Psyco messages',
+	}
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'
 #    SKIP['test_operator'] = NO_SYS_EXC
