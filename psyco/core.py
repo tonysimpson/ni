@@ -137,10 +137,14 @@ up to the given depth of indirection."""
             x.func_code = _psyco.proxycode(x, rec)
         return
     if hasattr(x, '__dict__'):
-        for o in x.__dict__.values():
-            if isinstance(o, (types.MethodType,
-                              types.FunctionType)):
-                bind(o, rec)
+        funcs = [o for o in x.__dict__.values()
+                 if isinstance(o, (types.MethodType,
+                                   types.FunctionType))]
+        if not funcs:
+            raise TypeError, ("nothing bindable found in %s object" %
+                              type(x).__name__)
+        for o in funcs:
+            bind(o, rec)
         return
     raise TypeError, "cannot bind %s objects" % type(x).__name__
 
