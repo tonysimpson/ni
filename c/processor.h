@@ -200,7 +200,7 @@ inline long reference_from_code(PsycoObject* po, CompileTimeSource source)
    'a' means that the C function gets a pointer to a buffer capable of
    containing as many words as specified by the array count.
    psyco_generic_call() fills the array with run-time vinfo_ts
-   representing the output values. Incompatible with CfPure.
+   representing the output values.
 */
 EXTERNFN vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
                                      int flags, const char* arguments, ...);
@@ -215,7 +215,7 @@ EXTERNFN vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 /* if the C function returns a new reference */
 #define CfReturnRef      0x01
 
-/* if the C function does not return anything (incompatible with CfPure)
+/* if the C function does not return anything
    or if you are not interested in getting the result in a vinfo_t.
    psyco_generic_call() returns anything non-NULL (unless there is an error)
    in this case. */

@@ -934,8 +934,8 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
                             int flags, const char* arguments, ...)
 {
 	char argtags[MAX_ARGUMENTS_COUNT];
-	long args[MAX_ARGUMENTS_COUNT];
-	int count, i;
+	long raw_args[MAX_ARGUMENTS_COUNT], args[MAX_ARGUMENTS_COUNT];
+	int count, i, j;
 	vinfo_t* vresult;
 	bool has_refs = false;
 
@@ -954,7 +954,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		vinfo_t* vi;
 		
 		extra_assert(count <= MAX_ARGUMENTS_COUNT);
-		arg = va_arg(vargs, long);
+		raw_args[count] = arg = va_arg(vargs, long);
 		tag = arguments[count];
 
 		switch (tag) {
@@ -1012,20 +1012,44 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 	}
 	va_end(vargs);
 
-	if (flags & CfPure) {
-		/* calling a pure function with no run-time argument */
-		long result;
+        if (flags & CfPure) {
+                /* calling a pure function with no run-time argument */
+                long result;
+
+                if (has_refs) {
+                    for (i = 0; i < count; i++) {
+                        if (argtags[i] == 'a' || argtags[i] == 'A')
+                            args[i] = (long)malloc( ((vinfo_array_t*)args[i])->count );
+                        
 #ifdef ALL_CHECKS
-		if (has_refs)
-			Py_FatalError("psyco_generic_call(): arg mode "
-				      "incompatible with CfPure");
+                        if (argtags[i] == 'r')
+                            Py_FatalError("psyco_generic_call(): arg mode "
+                            "incompatible with CfPure");
+                        
 #endif
-		result = psyco_call_var(c_function, count, args);
-		if (PyErr_Occurred()) {
-			psyco_virtualize_exception(po);
-			return NULL;
-		}
-		
+                    }
+                }
+                result = psyco_call_var(c_function, count, args);
+                if (PyErr_Occurred()) {
+                    if (has_refs)
+                        for (i = 0; i < count; i++) 
+                            if (argtags[i] == 'a' || argtags[i] == 'A')
+                                free((void*)args[i]);
+                    psyco_virtualize_exception(po);
+                    return NULL;
+                }
+                if (has_refs) {
+                    for (i = 0; i < count; i++)
+                        if (argtags[i] == 'a' || argtags[i] == 'A') {
+                            vinfo_array_t* array = (vinfo_array_t*)raw_args[i];
+                            long sk_flag = (argtags[i] == 'a') ? 0 : SkFlagPyObj;
+                            for (j = 0; j < array->count; j++) {
+                                array->items[j] = vinfo_new(CompileTime_NewSk(
+                                    sk_new( ((long*)args[i])[j], sk_flag)));
+                            }
+                            free((void*)args[i]);
+                        }
+                }
 		switch (flags & CfReturnMask) {
 
 		case CfReturnNormal:
@@ -1038,8 +1062,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 			break;
 
 		default:
-			Py_FatalError("psyco_generic_call(): bad flags");
-                        return NULL;
+			vresult = (vinfo_t*) 1;   /* anything non-NULL */
 		}
 		return vresult;
 	}

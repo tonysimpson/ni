@@ -151,7 +151,7 @@ DEFINEVAR source_virtual_t psyco_computed_float;
     }                           \
     else if (PsycoInt_Check(tp)) { \
 		vinfo_array_t* result = array_new(2); \
-		psyco_generic_call(po, cimpl_fp_from_long, CfNoReturnValue, "va", PsycoInt_AS_LONG(po, vobj), result); \
+		psyco_generic_call(po, cimpl_fp_from_long, CfPure|CfNoReturnValue, "va", PsycoInt_AS_LONG(po, vobj), result); \
 		v1 = result->items[0]; \
 		v2 = result->items[1]; \
 		array_release(result); \
@@ -208,7 +208,7 @@ static vinfo_t* pfloat_neg(PsycoObject* po, vinfo_t* v)
     PyTypeObject* tp;
     CONVERT_TO_DOUBLE(v, a1, a2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_neg, CfNoReturnValue,
+    x = psyco_generic_call(po, cimpl_fp_neg, CfPure|CfNoReturnValue,
                            "vva", a1, a2, result);
     vinfo_decref(a2, po);
     vinfo_decref(a1, po);
@@ -228,7 +228,7 @@ static vinfo_t* pfloat_abs(PsycoObject* po, vinfo_t* v)
     PyTypeObject* tp;
     CONVERT_TO_DOUBLE(v, a1, a2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_abs, CfNoReturnValue,
+    x = psyco_generic_call(po, cimpl_fp_abs, CfPure|CfNoReturnValue,
                            "vva", a1, a2, result);
     vinfo_decref(a2, po);
     vinfo_decref(a1, po);
@@ -249,7 +249,7 @@ static vinfo_t* pfloat_add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
     CONVERT_TO_DOUBLE(v, a1, a2);
     CONVERT_TO_DOUBLE(w, b1, b2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_add, CfNoReturnValue|CfPyErrIfNonNull,
+    x = psyco_generic_call(po, cimpl_fp_add, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
     vinfo_decref(b2, po);
     vinfo_decref(b1, po);
@@ -272,7 +272,7 @@ static vinfo_t* pfloat_sub(PsycoObject* po, vinfo_t* v, vinfo_t* w)
     CONVERT_TO_DOUBLE(v, a1, a2);
     CONVERT_TO_DOUBLE(w, b1, b2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_sub, CfNoReturnValue|CfPyErrIfNonNull,
+    x = psyco_generic_call(po, cimpl_fp_sub, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
     vinfo_decref(b2, po);
     vinfo_decref(b1, po);
@@ -295,7 +295,7 @@ static vinfo_t* pfloat_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
     CONVERT_TO_DOUBLE(v, a1, a2);
     CONVERT_TO_DOUBLE(w, b1, b2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_mul, CfNoReturnValue|CfPyErrIfNonNull,
+    x = psyco_generic_call(po, cimpl_fp_mul, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
     vinfo_decref(b2, po);
     vinfo_decref(b1, po);
@@ -318,7 +318,7 @@ static vinfo_t* pfloat_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
     CONVERT_TO_DOUBLE(v, a1, a2);
     CONVERT_TO_DOUBLE(w, b1, b2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_div, CfNoReturnValue|CfPyErrIfNonNull,
+    x = psyco_generic_call(po, cimpl_fp_div, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
                            "vvvva", a1, a2, b1, b2, result);
     vinfo_decref(b2, po);
     vinfo_decref(b1, po);
