@@ -217,6 +217,9 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 		vinfo_incref(psyco_viNone);
 		PycException_SetVInfo(po, PyExc_StopIteration, psyco_viNone);
 		return NULL;
+
+	default:
+		return vi;
 	}
 	
 	if (cc == CC_ERROR || runtime_condition_f(po, cc)) {
@@ -1892,7 +1895,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 	case COMPARE_OP:
 	{
-		condition_code_t cc;
+		condition_code_t cc = CC_ERROR;
 		w = TOP();
 		v = NTOP(2);
 		switch (oparg) {

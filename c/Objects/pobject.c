@@ -122,28 +122,29 @@ static vinfo_t* try_rich_compare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int op
 	bool swap;
 	PyTypeObject* vtp = Psyco_FastType(v);
 	PyTypeObject* wtp = Psyco_FastType(w);
-	richcmpfunc f;
+	richcmpfunc fv = RICHCOMPARE(vtp);
+	richcmpfunc fw = RICHCOMPARE(wtp);
 	vinfo_t* res;
 
 	swap = (vtp != wtp &&
 		PyType_IsSubtype(wtp, vtp) &&
-		(f = RICHCOMPARE(wtp)) != NULL);
+		fw != NULL);
 	if (swap) {
-		res = Psyco_META3(po, f, CfReturnRef|CfPyErrNotImplemented,
+		res = Psyco_META3(po, fw, CfReturnRef|CfPyErrNotImplemented,
 				  "vvl", w, v, swapped_op[op]);
 		if (res != psyco_viNotImplemented)
 			return res;
 		vinfo_decref(res, po);
 	}
-	if ((f = RICHCOMPARE(vtp)) != NULL) {
-		res = Psyco_META3(po, f, CfReturnRef|CfPyErrNotImplemented,
+	if (fv != NULL) {
+		res = Psyco_META3(po, fv, CfReturnRef|CfPyErrNotImplemented,
 				  "vvl", v, w, op);
 		if (res != psyco_viNotImplemented)
 			return res;
 		vinfo_decref(res, po);
 	}
-	if (!swap && (f = RICHCOMPARE(wtp)) != NULL) {
-		return Psyco_META3(po, f, CfReturnRef|CfPyErrNotImplemented,
+	if (!swap && fw != NULL) {
+		return Psyco_META3(po, fw, CfReturnRef|CfPyErrNotImplemented,
 				   "vvl", w, v, swapped_op[op]);
 	}
 	res = psyco_viNotImplemented;
