@@ -131,7 +131,18 @@ import psyco
 psyco.full()
 \end{verbatim}
 
-This instructs Psyco to compile and run as much of your application code as possible.  This is the simplest interface to Psyco.  In good cases you can just add these two lines and enjoy the speed-up.  If your application does a lot of initialization stuff before the real work begins, you can put the above two lines after this initialization -- e.g. after importing modules, creating constant global objects, etc.  Psyco usually doesn't speed up the initialization of a program; it rather tends to make start-up slower.
+This instructs Psyco to compile and run as much of your application code as possible.  This is the simplest interface to Psyco.  In good cases you can just add these two lines and enjoy the speed-up.  If your application does a lot of initialization stuff before the real work begins, you can put the above two lines after this initialization -- e.g. after importing modules, creating constant global objects, etc.  Psyco usually doesn't speed up the initialization of a program; it rather tends to make start-up slower.  A good place to put these lines is at the beginning of the \code{__main__} part of the script:
+
+\begin{verbatim}
+if __name__ == '__main__':
+    # Import Psyco if available
+    try:
+        import psyco
+        psyco.full()
+    except ImportError:
+        pass
+    # ...your code here...
+\end{verbatim}
 
 For larger applications, try:
 
