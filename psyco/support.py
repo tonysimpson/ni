@@ -24,7 +24,7 @@ def warn(msg):
 #
 # Version checks
 #
-__version__ = 0x010200f0
+__version__ = 0x010300f0
 if _psyco.PSYVER != __version__:
     raise error, "version mismatch between Psyco parts, reinstall it"
 
@@ -32,7 +32,8 @@ if _psyco.PSYVER != __version__:
 VERSION_LIMITS = [0x02010000,   # 2.1
                   0x02020000,   # 2.2
                   0x02020200,   # 2.2.2
-                  0x02030000]   # 2.3
+                  0x02030000,   # 2.3
+                  0x02040000]   # 2.4
 
 if ([v for v in VERSION_LIMITS if v <= sys.hexversion] !=
     [v for v in VERSION_LIMITS if v <= _psyco.PYVER  ]):

@@ -141,6 +141,7 @@ def test():
              for psyco_mode in PSYCO_MODES
              for running_mode in RUNNING_MODES]
     tests.sort()
+    tests.reverse()
     later_tests = []
     for mode in tests:
         if mode in tests_passed:

@@ -2581,6 +2581,11 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		break;
 #endif
 
+#ifdef NOP
+	case NOP:
+		goto fine;
+#endif
+
 	/*MISSING_OPCODE(YIELD_VALUE);*/
 	/*MISSING_OPCODE(EXEC_STMT);*/
 

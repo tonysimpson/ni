@@ -3,7 +3,7 @@
 ======================================================================
 
 
-                              VERSION 1.2
+                              VERSION 1.3
                               -----------
 
 Psyco is a Python extension module which can massively speed up the
@@ -13,7 +13,7 @@ execution of any Python code.
 REQUIREMENTS
 ------------
 
-Psyco works on any recent version of Python (currently 2.1 to 2.3).
+Psyco works on any recent version of Python (currently 2.1 to 2.4).
 At present it *requires* a *PC* (i.e. a 386-compatible processor),
 but it is OS-independant.
 

@@ -70,6 +70,7 @@
                              HAS_JREL_INSTR(op) ||      \
                              HAS_JABS_INSTR(op) ||      \
                              IS_SET_LINENO(op) ||       \
+                             IS_NOP(op) ||              \
                              op == POP_TOP ||           \
                              op == ROT_TWO ||           \
                              op == ROT_THREE ||         \
@@ -200,6 +201,12 @@
 # define IS_SET_LINENO(op)      (op == SET_LINENO)
 #else
 # define IS_SET_LINENO(op)       0
+#endif
+
+#ifdef NOP
+# define IS_NOP(op)             (op == NOP)
+#else
+# define IS_NOP(op)              0
 #endif
 
 #ifdef BINARY_FLOOR_DIVIDE
@@ -513,6 +520,26 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
       Py_INCREF(Py_None);
       return Py_None;
     }
+#ifdef CO_GENERATOR
+  /* check for this flag -- it is not enough to check for the presence of
+     a YIELD_VALUE instruction because such an instruction might exist but
+     be unreachable. */
+  if (co->co_flags & CO_GENERATOR)
+    {
+#if PY_VERSION_HEX < 0x02040000
+      debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
+                   ("generator not supported at %s\n",
+                    PyCodeObject_NAME(co)));
+#else
+      debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
+                   ("generator or generator expression not supported at %s\n",
+                    PyCodeObject_NAME(co)));
+#endif
+      Py_INCREF(Py_None);
+      return Py_None;
+    }
+#endif  /* CO_GENERATOR */
+
   instrnodes = (struct instrnode_s*) PyMem_MALLOC(ibytes);
   if (instrnodes == NULL)
     OUT_OF_MEMORY();
