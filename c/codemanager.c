@@ -91,7 +91,8 @@ void psyco_shrink_code_buffer(CodeBufferObject* obj, int nsize)
                   obj->codeptr + nsize, nsize));
   else if (VERBOSE_LEVEL > 1)
     debug_printf(("[%d]", nsize));
-  assert(ndata == obj);   /* don't know what to do if this is not the case */
+  if (ndata != obj)   /* don't know what to do if this fails */
+    Py_FatalError("psyco: realloc() moved code memory");
 #ifdef STORE_CODE_END
   extra_assert(obj->codeend == NULL);
   obj->codeend = obj->codeptr + nsize;
