@@ -83,5 +83,9 @@ PyString_FromFormatV(const char *format, va_list vargs);
 # define BOOLEAN_TYPE              0
 #endif
 
+#ifndef PyString_CHECK_INTERNED
+# define PyString_CHECK_INTERNED(op) (((PyStringObject*)(op))->ob_sinterned)
+#endif
+
 
 #endif /* _PYVER_H */

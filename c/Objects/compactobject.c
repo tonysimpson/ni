@@ -6,7 +6,7 @@
 #include "pintobject.h"
 
 
-#define DEBUG_K_IMPL   1
+#define DEBUG_K_IMPL   0
 
 
 BLOCKALLOC_STATIC(kimpl, compact_impl_t, 4096)
@@ -71,14 +71,13 @@ compact_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 DEFINEFN
 PyObject* PyCompact_New(void)
 {
-	PyObject* o = _PyObject_GC_Malloc(sizeof(PyCompactObject));
+	PyCompactObject* o = PyObject_GC_New(PyCompactObject, &PyCompact_Type);
 	if (o != NULL) {
-		o = PyObject_INIT(o, &PyCompact_Type);
-		((PyCompactObject*) o)->k_impl = &k_empty_impl;
-		((PyCompactObject*) o)->k_data = NULL;
+		o->k_impl = &k_empty_impl;
+		o->k_data = NULL;
 		PyObject_GC_Track(o);
 	}
-	return o;
+	return (PyObject*) o;
 }
 
 static bool k_same_vinfo(vinfo_t* a, vinfo_t* b)
