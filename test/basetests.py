@@ -12,6 +12,7 @@ SEPARATOR = """
 LASTLINE = "Tests completed."
 BUFFERFILE = "buffer-basetests.txt"
 EXPECTEDFILE = "expected-basetests.txt"
+INPUTSCRIPT = "input-basetexts.py"
 
 TESTS = open('btrun.py', 'r').read()
 
@@ -27,8 +28,7 @@ tests_again = tests[:]
 random.shuffle(tests_again)
 all_tests = tests + tests_again   # then run them all again in any other order
 
-# run in a child process
-childin = os.popen('%s > %s' % (sys.executable, BUFFERFILE), 'w')
+childin = open(INPUTSCRIPT, 'w')
 expected = open(EXPECTEDFILE, 'w')
 
 print >> childin, 'import sys'
@@ -44,11 +44,20 @@ for inp, outp, line in all_tests:
 
 print >> childin, 'print %r' % LASTLINE
 print >> expected, LASTLINE
-
 expected.close()
-err = childin.close()
+childin.close()
+
+# run in a child process
+err = os.system('"%s" %s > %s' % (sys.executable, INPUTSCRIPT, BUFFERFILE))
 if err:
     print >> sys.stderr, 'child process returned %d, %d' % (err>>8, err&255)
 else:
-    err = os.system('diff -c %s %s' % (EXPECTEDFILE, BUFFERFILE))
+    if sys.argv[1:2] == ['-q']:
+        data1 = open(EXPECTEDFILE, 'r').read()
+        data2 = open(BUFFERFILE, 'r').read()
+        err = (data1 != data2) << 8
+        if err:
+            print >> sys.stderr, 'there are differences'
+    else:
+        err = os.system('diff -c %s %s' % (EXPECTEDFILE, BUFFERFILE))
 sys.exit(err>>8)

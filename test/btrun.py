@@ -10,7 +10,7 @@
 
 >>> def g1(f):
 ...     prep()
-...     d = f(['file1-basetests', 'file2-basetests'])
+...     d = f(['file1-basetests', 'BIN:file2-basetests'])
 ...     return [d[chr(n)] for n in range(256)]
 
 >>> def protect(f, *args):
@@ -295,7 +295,7 @@ None
 
 >>> print hash(test5.f('file1-basetests'))
 33961417
->>> prep(); print hash(test5.f('file2-basetests'))
+>>> prep(); print hash(test5.f('file2-basetests', 'rb'))
 2034921519
 
 >>> print test5.f2(4,5,6)

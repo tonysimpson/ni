@@ -45,7 +45,10 @@ def f4(filelist):
     "Count all characters of all files whose names are in filelist."
     result = [0]*256
     for filename in filelist:
-        f = open(filename, 'r')
+        if filename[:4] == 'BIN:': 
+            f = open(filename[4:], 'rb')
+        else:
+            f = open(filename, 'r')
         for line in f:
             for c in line:
                 k = ord(c)
@@ -61,7 +64,10 @@ def f5(filelist):
     "Same as f4() but completely loads the files in memory."
     result = [0]*256
     for filename in filelist:
-        f = open(filename, 'r')
+        if filename[:4] == 'BIN:': 
+            f = open(filename[4:], 'rb')
+        else:
+            f = open(filename, 'r')
         for c in f.read():
             k = ord(c)
             result[k] += 1

@@ -1,8 +1,8 @@
 import psyco, dis, types
 
-def f(filename):
+def f(filename, mode='r'):
     s = ""
-    for line in open(filename).readlines():
+    for line in open(filename, mode).readlines():
         s += "! " + line  # extreme optimization case
     return s
 
