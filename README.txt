@@ -6,7 +6,8 @@
                               VERSION 1.2
                               -----------
 
-Psyco transparently accelerates the execution of Python code.
+Psyco is a Python extension module which can massively speed up the
+execution of any Python code.
 
 
 REQUIREMENTS
