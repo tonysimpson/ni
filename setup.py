@@ -4,7 +4,6 @@
 
 """Setup script for Psyco, the Python specializing compiler"""
 
-import os, sys
 from distutils.core import setup
 from distutils.extension import Extension
 
