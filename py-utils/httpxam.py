@@ -1,4 +1,4 @@
-import sys, re, cStringIO, os, dis, types
+import sys, re, cStringIO, os, dis, types, traceback
 import xam, psyco
 from SimpleHTTPServer import SimpleHTTPRequestHandler, test
 
@@ -34,17 +34,26 @@ def show_vinfos(array, d, co=None, path=[]):
 re_codebuf = re.compile(r'[/]0x([0-9A-Fa-f]+)$')
 re_proxy = re.compile(r'[/]proxy(\d+)$')
 
-def cache_load(filename, cache={}):
+def cache_load(filename):
+    if not filename.endswith('.py'):
+        return 0, "Not a module name"
+    path = filename[:-3].split(os.sep)
+    while '.' in path:
+        path.remove('.')
+    while '..' in path:
+        i = path.index('..')
+        if i == 0:
+            return 0, "Outside of the current directory"
+        path.remove(i)
+        path.remove(i-1)
+    modulename = '.'.join(path)
     try:
-        return cache[filename]
-    except KeyError:
-        data = {}
-        try:
-            f = execfile(filename, data)
-        except:
-            data = None
-        cache[filename] = data
-        return data
+        mod = __import__(modulename, globals(), locals(), ['__doc__'])
+        return 1, mod.__dict__
+    except:
+        f = cStringIO.StringIO()
+        traceback.print_exc(file=f)
+        return 0, f.getvalue()
 
 class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
 
@@ -145,9 +154,9 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
                 if match:
                     title = 'Snapshot'
                     proxy = codebufs[int(match.group(1))]
-                    filename = os.path.join(DIRECTORY, proxy.co_filename)
-                    moduledata = cache_load(filename)
-                    if moduledata is None:
+                    filename = proxy.co_filename
+                    ok, moduledata = cache_load(filename)
+                    if not ok:
                         co = None
                     else:
                         co = moduledata.get(proxy.co_name)
@@ -163,9 +172,9 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
                     data += show_vinfos(proxy.vlocals, {}, co)
                     data += '<hr><p>Disassembly of %s:%s:%s:</p>\n' % (
                         proxy.co_filename, proxy.co_name, proxy.get_next_instr())
-                    if moduledata is None:
-                        txt = "(exception while loading the file '%s')\n" % (
-                            filename)
+                    if not ok:
+                        txt = "While loading the file '%s':\n%s\n" % (
+                            filename, moduledata)
                     else:
                         if not hasattr(co, 'co_code'):
                             txt = "(no function object '%s' in file '%s')\n" % (
@@ -197,7 +206,7 @@ if __name__ == '__main__':
         print "  psyco.dump and any .py files containing code objects"
         print "  are loaded from the <directory>."
         sys.exit(1)
-    DIRECTORY = sys.argv[1]
+    os.chdir(sys.argv[1])
     del sys.argv[1]
-    codebufs = xam.readdump(os.path.join(DIRECTORY, 'psyco.dump'))
+    codebufs = xam.readdump('psyco.dump')
     test(CodeBufHTTPHandler)
