@@ -137,12 +137,17 @@
 #endif
 
 #if VERBOSE_LEVEL
-# define debug_printf(args)     do {            \
-   FILE* __stdout_copy = stdout;                \
-   stdout = stderr;                             \
-   printf args;                                 \
-   stdout = __stdout_copy;                      \
- } while (0)
+# if defined(stdout)
+/* cannot use the version below if stdout is a macro */
+#  define debug_printf(args)    (printf args, fflush(stdout))
+# else
+#  define debug_printf(args)     do {       \
+        FILE* __stdout_copy = stdout;       \
+        stdout = stderr;                    \
+        printf args;                        \
+        stdout = __stdout_copy;             \
+      } while (0)
+# endif
 #else
 # define debug_printf(args)     do { } while (0) /* nothing */
 #endif
