@@ -864,18 +864,18 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
 
   /* convenience macros */
 #define COPY_IN_REG(vi, rg)   do {                      \
-   if ((((vi)->source & TimeMask) == RunTime) &&        \
-       RUNTIME_STACK(vi) == RUNTIME_STACK_NONE) {       \
-     char _rg2;                                         \
+   NEED_FREE_REG(rg);                                   \
+   if (((vi)->source & (TimeMask|RunTime_StackMask)) == \
+       (RunTime|RunTime_StackNone)) {                   \
+     char _rg2 = rg;                                    \
      rg = RUNTIME_REG(vi);                              \
-     NEED_FREE_REG(_rg2);                               \
+     extra_assert(rg!=_rg2);                            \
      LOAD_REG_FROM_REG(_rg2, rg);                       \
      SET_RUNTIME_REG_TO(vi, _rg2);                      \
      REG_NUMBER(po, _rg2) = vi;                         \
      REG_NUMBER(po, rg) = NULL;                         \
    }                                                    \
    else {                                               \
-     NEED_FREE_REG(rg);                                 \
      LOAD_REG_FROM(vi->source, rg);                     \
    }                                                    \
 } while (0)
