@@ -629,7 +629,7 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	/* over the current Python frame, a lightweight chained list of
 	   Psyco frames will be built. Mark the current Python frame as
 	   the starting point of this chained list. */
-	f = PyEval_GetFrame();
+	f = (PyObject*) PyEval_GetFrame();
 	if (f == NULL) {
 		debug_printf(1, ("warning: empty Python frame stack\n"));
 		goto unsupported;

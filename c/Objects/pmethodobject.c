@@ -17,9 +17,15 @@ static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj)
 		return false;
 
 	/* call PyCFunction_New() */
+#ifdef PyCFunction_New   /* Python >= 2.3 introduced PyCFunction_NewEx() */
+	newobj = psyco_generic_call(po, PyCFunction_NewEx,
+				    CfPure|CfReturnRef|CfPyErrIfNull,
+				    "vvl", m_ml, m_self, NULL);
+#else
 	newobj = psyco_generic_call(po, PyCFunction_New,
 				    CfPure|CfReturnRef|CfPyErrIfNull,
 				    "vv", m_ml, m_self);
+#endif
 	if (newobj == NULL)
 		return false;
 

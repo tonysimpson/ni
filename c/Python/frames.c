@@ -498,6 +498,10 @@ INITIALIZATIONFN
 void psyco_frames_init(void)
 {
 #if HAVE_PYTHON_SUPPORT
-	_PyThreadState_GetFrame = (unaryfunc)psyco_threadstate_getframe;
+	_PyThreadState_GetFrame =
+#  if PYTHON_API_VERSION < 1012
+		(unaryfunc)
+#  endif
+		psyco_threadstate_getframe;
 #endif
 }
