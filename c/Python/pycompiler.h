@@ -26,7 +26,9 @@
 #else
 # define NEW_STYLE_TYPES       0
 # define PyString_CheckExact       PyString_Check
-# define PyObject_TypeCheck(o,t)   ((o)->ob_type == (t))
+#endif
+
+#ifndef Py_USING_UNICODE
 # define Py_USING_UNICODE          1   /* always true in Python 2.1 */
 #endif
 

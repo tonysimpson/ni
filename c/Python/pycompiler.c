@@ -203,24 +203,23 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 		return vi;
 	}
 	
-	if (cc == CC_ERROR || runtime_condition_f(po, cc)) {
+	if (cc != CC_ERROR && !runtime_condition_f(po, cc))
+		return vi;   /* no error */
 
-	   Error:
-		if ((flags & CfReturnMask) == CfReturnRef) {
-			/* in case of error, 'vi' is not a real
-			   reference, so forget it */
-			FORGET_REF;
-		}
-		vinfo_decref(vi, po);
-		vi = NULL;
-		
-		/* We have detected that a Python exception must be set at
-		   this point. */
-	   PythonError:
-		PycException_Raise(po, vinfo_new(VirtualTime_New(&ERtPython)),
-				   NULL);
+   Error:
+	if ((flags & CfReturnMask) == CfReturnRef) {
+		/* in case of error, 'vi' is not a real
+		   reference, so forget it */
+		FORGET_REF;
 	}
-	return vi;
+	vinfo_decref(vi, po);
+		
+	/* We have detected that a Python exception must be set at
+	   this point. */
+   PythonError:
+	PycException_Raise(po, vinfo_new(VirtualTime_New(&ERtPython)),
+			   NULL);
+	return NULL;
 }
 #undef FORGET_REF
 

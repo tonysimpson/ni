@@ -247,8 +247,13 @@ typedef struct {
   PyObject* psy_fastcall;       /* cache mapping arg count to code bufs */
 } PsycoFunctionObject;
 
-#define PsycoFunction_Check(v)	((v)->ob_type == &PsycoFunction_Type)
 EXTERNVAR PyTypeObject PsycoFunction_Type;
+
+#ifndef PyObject_TypeCheck
+# define PyObject_TypeCheck(o,t)   ((o)->ob_type == (t))
+#endif
+#define PsycoFunction_Check(op)	PyObject_TypeCheck(op, &PsycoFunction_Type)
+
 
 EXTERNFN PsycoFunctionObject* psyco_PsycoFunction_New(PyFunctionObject* func,
                                                       int rec);

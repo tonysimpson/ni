@@ -765,13 +765,8 @@ static int psycofunction_traverse(PsycoFunctionObject *f,
 				  visitproc visit, void *arg)
 {
 	int err;
-	if (f->psy_code) {
-		err = visit((PyObject*) f->psy_code, arg);
-		if (err)
-			return err;
-	}
-	if (f->psy_globals) {
-		err = visit(f->psy_globals, arg);
+	if (f->psy_fastcall) {
+		err = visit(f->psy_fastcall, arg);
 		if (err)
 			return err;
 	}
@@ -780,6 +775,29 @@ static int psycofunction_traverse(PsycoFunctionObject *f,
 		if (err)
 			return err;
 	}
+	err = visit(f->psy_globals, arg);
+	if (err)
+		return err;
+	return 0;
+}
+
+static int psycofunction_clear(PsycoFunctionObject *f)
+{
+	PyObject* o;
+	o = f->psy_fastcall;
+	if (o) {
+		f->psy_fastcall = NULL;
+		Py_DECREF(o);
+	}
+	o = f->psy_defaults;
+	if (o) {
+		f->psy_defaults = NULL;
+		Py_DECREF(o);
+	}
+	o = f->psy_globals;
+	f->psy_globals = Py_None;
+	Py_INCREF(Py_None);
+	Py_DECREF(o);
 	return 0;
 }
 #endif /* Py_TPFLAGS_HAVE_GC */
@@ -825,18 +843,7 @@ PyTypeObject PsycoFunction_Type = {
 	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,/* tp_flags */
 	0,					/* tp_doc */
 	(traverseproc)psycofunction_traverse,	/* tp_traverse */
-	0,					/* tp_clear */
-	0,					/* tp_richcompare */
-	0,					/* tp_weaklistoffset */
-	0,					/* tp_iter */
-	0,					/* tp_iternext */
-	0,					/* tp_methods */
-	0,					/* tp_members */
-	0,					/* tp_getset */
-	0,					/* tp_base */
-	0,					/* tp_dict */
-	0,					/* tp_descr_get */
-	0,					/* tp_descr_set */
+	(inquiry)psycofunction_clear,		/* tp_clear */
 #endif /* Py_TPFLAGS_HAVE_GC */
 };
 
