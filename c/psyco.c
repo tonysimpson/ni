@@ -321,6 +321,67 @@ PsycoFunctionObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec)
 					 rec);
 }
 
+DEFINEFN
+PyObject* psyco_PsycoFunction_New2(PyFunctionObject* func, int rec)
+{
+  PsycoFunctionObject *psyco_fun;
+  PyCodeObject *code, *newcode;
+  PyObject *consts, *varnames, *proxy_cobj, *tmp;
+  int size, i;
+  unsigned char proxy_bytecode[] = {
+    LOAD_CONST, 1, 0,
+    LOAD_FAST, 0, 0,
+    LOAD_FAST, 1, 0,
+    CALL_FUNCTION_VAR_KW, 0, 0,
+    RETURN_VALUE
+  };
+
+  psyco_fun = psyco_PsycoFunction_NewEx((PyCodeObject*) func->func_code,
+					func->func_globals,
+					func->func_defaults,
+					rec);
+  assert(psyco_fun != NULL);
+  Py_INCREF(psyco_fun);
+
+  code = (PyCodeObject *)func->func_code;
+  size = PyTuple_Size(code->co_consts) + 1;
+  assert(code != NULL);
+  assert(size >= 0 && size <= 255);
+
+  consts = PyTuple_New(size);
+  assert(consts != NULL);
+  for (i = 0; i < size-1; i++) {
+    tmp = PyTuple_GetItem(code->co_consts, i);
+    Py_INCREF(tmp);
+    PyTuple_SetItem(consts, i, tmp);
+  }
+  PyTuple_SetItem(consts, size-1, (PyObject *)psyco_fun);
+  proxy_bytecode[1] = (unsigned char) size-1;
+  
+  varnames = PyTuple_New(2);
+  assert(varnames != NULL);
+  PyTuple_SetItem(varnames, 0, PyString_FromString("args"));
+  PyTuple_SetItem(varnames, 1, PyString_FromString("kwargs"));
+
+  proxy_cobj = PyString_FromStringAndSize(proxy_bytecode,
+					  sizeof(proxy_bytecode));
+  assert(proxy_cobj != NULL);
+
+  newcode = PyCode_New(0, 2, 1, 15, proxy_cobj, consts,
+		       code->co_names, varnames, code->co_freevars,
+		       code->co_cellvars, code->co_filename,
+		       code->co_name, code->co_firstlineno,
+		       code->co_lnotab);
+  assert(newcode != NULL);
+
+  Py_DECREF(func->func_code);
+  func->func_code = (PyObject *)newcode;
+  Py_INCREF(func->func_code);
+  
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
 static void psycofunction_dealloc(PsycoFunctionObject* self)
 {
 	PyObject_GC_UnTrack(self);
@@ -598,6 +659,21 @@ static PyObject* Psyco_proxy(PyObject* self, PyObject* args)
 	return (PyObject*) psyco_PsycoFunction_New(function, recursion);
 }
 
+
+static PyObject* Psyco_proxy2(PyObject* self, PyObject* args)
+{
+	int recursion = 0;
+	PyFunctionObject* function;
+	
+	if (!PyArg_ParseTuple(args, "O!|i",
+			      &PyFunction_Type, &function,
+			      &recursion))
+		return NULL;
+
+	return (PyObject*) psyco_PsycoFunction_New2(function, recursion);
+}
+
+
 #if CODE_DUMP
 static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
 {
@@ -790,6 +866,7 @@ static PyObject* Psyco_selective(PyObject* self, PyObject* args)
 
 static PyMethodDef PsycoMethods[] = {
 	{"proxy",	&Psyco_proxy,		METH_VARARGS},
+	{"proxy2",	&Psyco_proxy2,          METH_VARARGS},
 	{"selective",   &Psyco_selective,	METH_VARARGS},
 #if CODE_DUMP
 	{"dumpcodebuf",	&Psyco_dumpcodebuf,	METH_VARARGS},
