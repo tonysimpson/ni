@@ -1,6 +1,6 @@
 :- consult(insns).
 :- dynamic psycodump/1, stackpush/2.
-:- dynamic frequency/3.
+:- dynamic frequency/2.
 
 
 %%% interactive usage %%%
@@ -18,27 +18,25 @@ load(DumpDir) :-
         seen.
 
 measure(MaxLength) :-
-        retractall(frequency(_,_,_)),
-        tell(user_error),
+        tell(pipe('python samelines.py "frequency(%s, %d)." > optimize.tmp')),
         (
             L1 = [_,_|_],
             codeslice(L1, MaxLength),
             generalize(L1, L),
-            (retract(frequency(L, Freq, Cost)) -> true ;
-                Freq = 0,
-                mode_operate(L, Code),
-                codecost(Code, Cost),
-                write('.')
-            ),
-            F is Freq+1,
-            assert(frequency(L, F, Cost)),
+            write(L), nl,
             fail
         ) ;
-        nl,
-        told.
+        told,
+        retractall(frequency(_,_)),
+        loadmeasures.
+
+loadmeasures :-
+        see('optimize.tmp'),
+        load_rec,
+        seen.
 
 show :-
-        findall(F, (F=(Rank,L), frequency(L, Freq, Cost),
+        findall(F, (F=(Rank,L), frequency(L, Freq), modecost(L, Cost),
                     Rank is Freq/Cost), Results),
         sort(Results, Sorted),
         (
@@ -49,7 +47,7 @@ show :-
         true.
 
 emitmodes(HighestOpcode) :-
-        findall(F, (F=(Rank,L), frequency(L, Freq, Cost),
+        findall(F, (F=(Rank,L), frequency(L, Freq), modecost(L, Cost),
                     Rank is Cost/Freq), Results),
         sort(Results, Sorted),
         initial_stack(InitialStack),
@@ -102,19 +100,21 @@ subchainable1([X1,X2|Xs], [X1,X2|Ys], MaxLength) :-
         subchainable1([X2|Xs], [X2|Ys], N).
 
 generalize(L, G) :-
-        initial_stack(Stack),
-        chainlist(generalize1, L, G, '='(Stack), _).
+        initial_stack(InitialStack),
+        chainlist(generalize1, L, G, ([], InitialStack), _).
 
-:- det(generalize1/4).
-generalize1(Term, Mode, LazyStack1, LazyStack2) :-
-        call(LazyStack1, Stack1),
+%:- det(generalize1/4).
+generalize1(Term, Mode, (OldOptions, OldStack), (Options, Stack1)) :-
+        (memberchk(stack(StackOp), OldOptions) ->
+            insn_stack(StackOp, OldStack, Stack1, dummy) ;
+            Stack1 = OldStack
+        ),
         Term =.. [Insn | Args],
-        insn(Insn, FormalArgs, _, _),
+        insn(Insn, FormalArgs, _, Options),
         maplist(generalize_arg(Stack1), FormalArgs, Args, ArgModes),
-        Mode =.. [Insn | ArgModes],
-        LazyStack2 = insn_operate_stack(Insn, Stack1).
+        Mode =.. [Insn | ArgModes].
 
-:- det(generalize_arg/4).
+%:- det(generalize_arg/4).
 generalize_arg(Stack, FormalArg, RealArg, ArgMode) :-
         standard_mode(_, Stack, FormalArg, ArgMode),
         condition_test(ArgMode, RealArg),
@@ -129,6 +129,11 @@ complexity(Term, P, Q) :-
 codecost(block_locals(_, L), Cost) :-
         closelist(L, FlatL),
         countsuccesses((member(X, FlatL), \+trivial_c_op(X)), Cost).
+
+modecost(Mode, Cost) :-
+        mode_operate(Mode, Code),
+        codecost(Code, Cost1),
+        (Cost1 == 0 -> Cost = 1 ; Cost = Cost1).
 
 trivial_c_arg(Term) :- var(Term).
 trivial_c_arg(Term) :- Term =.. [_].
