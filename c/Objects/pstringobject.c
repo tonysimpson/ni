@@ -943,20 +943,12 @@ static PyStringObject* cimpl_cb_normalize(stringlike_t* a, int a_size)
 
 	if (a->ob_type == &PsycoBufStr_Type) {
 
-		/* this checks that no one else uses this buffer past a_size */
-		if (a->ob_shash == a_size) {
-		
-			if (a_size < a->ob_size-BUFSTR_ACCEPT_OVERALLOCATED &&
-			    a->ob_refcnt == 1) {
-				/* this is the case where 'a' is too
-				   overallocated but can be reduced in-place */
-				a = (PyStringObject*) PyObject_REALLOC(
-					(void*) a,
-					sizeof(PyStringObject) +
-					                a_size * sizeof(char));
-				extra_assert(a != NULL);  /* shrinking */
-			}
-
+		/* this checks that no one else uses this buffer past a_size
+		   and limit the wasted overallocated space */
+		/* XXX try using PyObject_REALLOC if we are 100% sure that
+		       nobody else has a pointer to the area */
+		if (a->ob_shash == a_size &&
+		    a_size >= a->ob_size-BUFSTR_ACCEPT_OVERALLOCATED) {
 			a->ob_type = &PyString_Type;
 			a->ob_size = a_size;
 			a->ob_shash = -1;
@@ -971,7 +963,6 @@ static PyStringObject* cimpl_cb_normalize(stringlike_t* a, int a_size)
 			Py_INCREF(a);
 			return a;
 		}
-		
 	}
 	else if (a->ob_size == a_size) {
 		/* 'a' is already a string, and it has the expected size */
