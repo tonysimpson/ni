@@ -24,20 +24,20 @@
 
 
 typedef enum {
-        REG_EAX    = 0,
-        REG_ECX    = 1,
-        REG_EDX    = 2,
-        REG_EBX    = 3,
-        REG_ESP    = 4,
-        REG_EBP    = 5,
-        REG_ESI    = 6,
-        REG_EDI    = 7,
-#define REG_TOTAL    8
+        REG_386_EAX    = 0,
+        REG_386_ECX    = 1,
+        REG_386_EDX    = 2,
+        REG_386_EBX    = 3,
+        REG_386_ESP    = 4,
+        REG_386_EBP    = 5,
+        REG_386_ESI    = 6,
+        REG_386_EDI    = 7,
+#define REG_TOTAL        8
         
-        REG_NONE   = -1} reg_t;
+        REG_NONE       = -1} reg_t;
 
-#define REG_FUNCTIONS_RETURN       REG_EAX
-#define REG_ANY_CALLER_SAVED       REG_EAX  /* just any "trash" register */
+#define REG_FUNCTIONS_RETURN       REG_386_EAX
+#define REG_ANY_CALLER_SAVED       REG_386_EAX  /* just any "trash" register */
 
 typedef enum {
         CC_O         = 0,    /* overflow */
@@ -81,7 +81,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 
 /* the first register in RegistersLoop that Psyco will use.
    The best choice is probably the first callee-saved register */
-#define REG_LOOP_START      REG_EBX
+#define REG_LOOP_START      REG_386_EBX
 
 #define INITIAL_STACK_DEPTH  4 /* anything >0 and a multiple of 4 */
 
@@ -373,9 +373,9 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 )
 
 #define XCHG_REGS(rg1, rg2)   do {                      \
-  if (COMPACT_ENCODING && ((rg1) == REG_EAX))           \
+  if (COMPACT_ENCODING && ((rg1) == REG_386_EAX))       \
     *code++ = 0x90 | (rg2);                             \
-  else if (COMPACT_ENCODING && ((rg2) == REG_EAX))      \
+  else if (COMPACT_ENCODING && ((rg2) == REG_386_EAX))  \
     *code++ = 0x90 | (rg1);                             \
   else {                                                \
     code[0] = 0x87;                                     \
@@ -480,7 +480,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define RESERVE_STACK_SPACE(cnt, rg)     do {   \
   STACK_CORRECTION(4*(cnt));                    \
   po->stack_depth += 4*(cnt);                   \
-  LOAD_REG_FROM_REG(rg, REG_ESP);               \
+  LOAD_REG_FROM_REG(rg, REG_386_ESP);           \
 } while (0)
 
 /* load the 'dst' register with the run-time address of 'source'
@@ -494,9 +494,9 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   code[0] = 0x8D;                                               \
   code[1] = 0x04 | ((dst)<<3);  /* LEA dst, [rg1+rg2] */        \
   code[2] = ((rg1)<<3) | (rg2);                                 \
-  if (!EBP_IS_RESERVED && (rg2) == REG_EBP)                     \
+  if (!EBP_IS_RESERVED && (rg2) == REG_386_EBP)                 \
     {                                                           \
-      if ((rg1) != REG_EBP)                                     \
+      if ((rg1) != REG_386_EBP)                                 \
         code[2] = ((rg2)<<3) | (rg1);                           \
       else                                                      \
         {                                                       \
@@ -511,78 +511,78 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 
 /* saving and restoring the registers currently in use (see also
    SAVE_REGS_FN_CALLS) */
-#define TEMP_SAVE_REGS_FN_CALLS       do {                      \
-  if (COMPACT_ENCODING) {                                       \
-    if (REG_NUMBER(po, REG_EAX) != NULL) PUSH_REG(REG_EAX);     \
-    if (REG_NUMBER(po, REG_ECX) != NULL) PUSH_REG(REG_ECX);     \
-    if (REG_NUMBER(po, REG_EDX) != NULL) PUSH_REG(REG_EDX);     \
-    if (po->ccreg != NULL)               PUSH_CC_FLAGS();       \
-  }                                                             \
-  else {                                                        \
-    CODE_FOUR_BYTES(code,                                       \
-                    PUSH_REG_INSTR(REG_EAX),                    \
-                    PUSH_REG_INSTR(REG_ECX),                    \
-                    PUSH_REG_INSTR(REG_EDX),                    \
-                    PUSH_CC_FLAGS_INSTR);                       \
-    code += 4;                                                  \
-  }                                                             \
+#define TEMP_SAVE_REGS_FN_CALLS       do {                              \
+  if (COMPACT_ENCODING) {                                               \
+    if (REG_NUMBER(po, REG_386_EAX) != NULL) PUSH_REG(REG_386_EAX);     \
+    if (REG_NUMBER(po, REG_386_ECX) != NULL) PUSH_REG(REG_386_ECX);     \
+    if (REG_NUMBER(po, REG_386_EDX) != NULL) PUSH_REG(REG_386_EDX);     \
+    if (po->ccreg != NULL)               PUSH_CC_FLAGS();               \
+  }                                                                     \
+  else {                                                                \
+    CODE_FOUR_BYTES(code,                                               \
+                    PUSH_REG_INSTR(REG_386_EAX),                        \
+                    PUSH_REG_INSTR(REG_386_ECX),                        \
+                    PUSH_REG_INSTR(REG_386_EDX),                        \
+                    PUSH_CC_FLAGS_INSTR);                               \
+    code += 4;                                                          \
+  }                                                                     \
 } while (0)
 
-#define TEMP_RESTORE_REGS_FN_CALLS    do {                      \
-  if (COMPACT_ENCODING) {                                       \
-    if (po->ccreg != NULL)               POP_CC_FLAGS();        \
-    if (REG_NUMBER(po, REG_EDX) != NULL) POP_REG(REG_EDX);      \
-    if (REG_NUMBER(po, REG_ECX) != NULL) POP_REG(REG_ECX);      \
-    if (REG_NUMBER(po, REG_EAX) != NULL) POP_REG(REG_EAX);      \
-  }                                                             \
-  else {                                                        \
-    CODE_FOUR_BYTES(code,                                       \
-                    POP_CC_FLAGS_INSTR,                         \
-                    POP_REG_INSTR(REG_EDX),                     \
-                    POP_REG_INSTR(REG_ECX),                     \
-                    POP_REG_INSTR(REG_EAX));                    \
-    code += 4;                                                  \
-  }                                                             \
+#define TEMP_RESTORE_REGS_FN_CALLS    do {                              \
+  if (COMPACT_ENCODING) {                                               \
+    if (po->ccreg != NULL)               POP_CC_FLAGS();                \
+    if (REG_NUMBER(po, REG_386_EDX) != NULL) POP_REG(REG_386_EDX);      \
+    if (REG_NUMBER(po, REG_386_ECX) != NULL) POP_REG(REG_386_ECX);      \
+    if (REG_NUMBER(po, REG_386_EAX) != NULL) POP_REG(REG_386_EAX);      \
+  }                                                                     \
+  else {                                                                \
+    CODE_FOUR_BYTES(code,                                               \
+                    POP_CC_FLAGS_INSTR,                                 \
+                    POP_REG_INSTR(REG_386_EDX),                         \
+                    POP_REG_INSTR(REG_386_ECX),                         \
+                    POP_REG_INSTR(REG_386_EAX));                        \
+    code += 4;                                                          \
+  }                                                                     \
 } while (0)
 
 /* same as above, but concludes with a JMP *EAX */
-#define TEMP_RESTORE_REGS_FN_CALLS_AND_JUMP   do {              \
-  if (COMPACT_ENCODING) {                                       \
-    if (po->ccreg != NULL)               POP_CC_FLAGS();        \
-    if (REG_NUMBER(po, REG_EDX) != NULL) POP_REG(REG_EDX);      \
-    if (REG_NUMBER(po, REG_ECX) != NULL) POP_REG(REG_ECX);      \
-  }                                                             \
-  else {                                                        \
-    CODE_FOUR_BYTES(code,                                       \
-                    POP_CC_FLAGS_INSTR,                         \
-                    POP_REG_INSTR(REG_EDX),                     \
-                    POP_REG_INSTR(REG_ECX),                     \
-                    0   /* dummy */);                           \
-    code += 3;                                                  \
-  }                                                             \
-  if (!COMPACT_ENCODING || REG_NUMBER(po, REG_EAX) != NULL) {   \
-    /* must restore EAX, but it contains the jump target... */  \
-    CODE_FOUR_BYTES(code,                                       \
-                    0x87,                                       \
-                    0x04,                                       \
-                    0x24,           /* XCHG EAX, [ESP] */       \
-                    0xC3);          /* RET             */       \
-    code += 4;                                                  \
-  }                                                             \
-  else {                                                        \
-    code[0] = 0xFF;                                             \
-    code[1] = 0xE0;     /* JMP *EAX */                          \
-    code += 2;                                                  \
-  }                                                             \
+#define TEMP_RESTORE_REGS_FN_CALLS_AND_JUMP   do {                      \
+  if (COMPACT_ENCODING) {                                               \
+    if (po->ccreg != NULL)               POP_CC_FLAGS();                \
+    if (REG_NUMBER(po, REG_386_EDX) != NULL) POP_REG(REG_386_EDX);      \
+    if (REG_NUMBER(po, REG_386_ECX) != NULL) POP_REG(REG_386_ECX);      \
+  }                                                                     \
+  else {                                                                \
+    CODE_FOUR_BYTES(code,                                               \
+                    POP_CC_FLAGS_INSTR,                                 \
+                    POP_REG_INSTR(REG_386_EDX),                         \
+                    POP_REG_INSTR(REG_386_ECX),                         \
+                    0   /* dummy */);                                   \
+    code += 3;                                                          \
+  }                                                                     \
+  if (!COMPACT_ENCODING || REG_NUMBER(po, REG_386_EAX) != NULL) {       \
+    /* must restore EAX, but it contains the jump target... */          \
+    CODE_FOUR_BYTES(code,                                               \
+                    0x87,                                               \
+                    0x04,                                               \
+                    0x24,           /* XCHG EAX, [ESP] */               \
+                    0xC3);          /* RET             */               \
+    code += 4;                                                          \
+  }                                                                     \
+  else {                                                                \
+    code[0] = 0xFF;                                                     \
+    code[1] = 0xE0;     /* JMP *EAX */                                  \
+    code += 2;                                                          \
+  }                                                                     \
 } while (0)
 
 
 /* put an immediate value in memory */
 #define SET_REG_ADDR_TO_IMMED(rg, immed)    do {        \
   code[0] = 0xC7;               /* MOV [reg], immed */  \
-  if (EBP_IS_RESERVED || (rg) != REG_EBP)               \
+  if (EBP_IS_RESERVED || (rg) != REG_386_EBP)           \
     {                                                   \
-      extra_assert((rg) != REG_EBP);                    \
+      extra_assert((rg) != REG_386_EBP);                \
       code[1] = (rg);                                   \
     }                                                   \
   else                                                  \
@@ -657,9 +657,9 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
 /* save all registers that might be clobbered by a call to a C function */
 #define SAVE_REGS_FN_CALLS   do {               \
   NEED_CC();                                    \
-  NEED_REGISTER(REG_EAX);                       \
-  NEED_REGISTER(REG_ECX);                       \
-  NEED_REGISTER(REG_EDX);                       \
+  NEED_REGISTER(REG_386_EAX);                   \
+  NEED_REGISTER(REG_386_ECX);                   \
+  NEED_REGISTER(REG_386_EDX);                   \
 } while (0)
 
 /* like NEED_REGISTER but 'targ' is an output argument which will
@@ -675,12 +675,12 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
 #define NEED_FREE_BYTE_REG(rg)   do {                                           \
   /* test some registers only --                                                \
      cannot access the other registers as a single byte */                      \
-  if (REG_NUMBER(po, REG_EDX) == NULL)       rg = REG_EDX;  /* a.k.a REG_DL */  \
-  else if (REG_NUMBER(po, REG_ECX) == NULL)  rg = REG_ECX;  /* a.k.a REG_CL */  \
-  else if (REG_NUMBER(po, REG_EAX) == NULL)  rg = REG_EAX;  /* a.k.a REG_AL */  \
+  if (REG_NUMBER(po, REG_386_EDX) == NULL)       rg = REG_386_EDX;  /* DL */    \
+  else if (REG_NUMBER(po, REG_386_ECX) == NULL)  rg = REG_386_ECX;  /* CL */    \
+  else if (REG_NUMBER(po, REG_386_EAX) == NULL)  rg = REG_386_EAX;  /* AL */    \
   else {                                                                        \
-    NEED_REGISTER(REG_EBX);                                                     \
-    rg = REG_EBX;  /* a.k.a REG_BL */                                           \
+    NEED_REGISTER(REG_386_EBX);                                                 \
+    rg = REG_386_EBX;  /* BL */                                                 \
   }                                                                             \
 } while (0)
 

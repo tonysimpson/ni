@@ -23,14 +23,14 @@
 
 DEFINEVAR
 reg_t RegistersLoop[REG_TOTAL] = {
-  /* following REG_EAX: */  REG_ECX,
-  /* following REG_ECX: */  REG_EDX,
-  /* following REG_EDX: */  REG_EBX,
-  /* following REG_EBX: */  EBP_IS_RESERVED ? REG_ESI : REG_EBP,
-  /* following REG_ESP: */  REG_NONE,
-  /* following REG_EBP: */  EBP_IS_RESERVED ? REG_NONE : REG_ESI,
-  /* following REG_ESI: */  REG_EDI,
-  /* following REG_EDI: */  REG_EAX };
+  /* following EAX: */  REG_386_ECX,
+  /* following ECX: */  REG_386_EDX,
+  /* following EDX: */  REG_386_EBX,
+  /* following EBX: */  EBP_IS_RESERVED ? REG_386_ESI : REG_386_EBP,
+  /* following ESP: */  REG_NONE,
+  /* following EBP: */  EBP_IS_RESERVED ? REG_NONE : REG_386_ESI,
+  /* following ESI: */  REG_386_EDI,
+  /* following EDI: */  REG_386_EAX };
 
 
 /* glue code for psyco_processor_run(). */
@@ -38,10 +38,10 @@ static code_t glue_run_code[] = {
   0x8B, 0x44, 0x24, 4,          /*   MOV EAX, [ESP+4]  (code target)   */
   0x8B, 0x4C, 0x24, 8,          /*   MOV ECX, [ESP+8]  (stack end)     */
   0x8B, 0x54, 0x24, 12,         /*   MOV EDX, [ESP+12] (initial stack) */
-  PUSH_REG_INSTR(REG_EBP),      /*   PUSH EBP        */
-  PUSH_REG_INSTR(REG_EBX),      /*   PUSH EBX        */
-  PUSH_REG_INSTR(REG_ESI),      /*   PUSH ESI        */
-  PUSH_REG_INSTR(REG_EDI),      /*   PUSH EDI        */
+  PUSH_REG_INSTR(REG_386_EBP),  /*   PUSH EBP        */
+  PUSH_REG_INSTR(REG_386_EBX),  /*   PUSH EBX        */
+  PUSH_REG_INSTR(REG_386_ESI),  /*   PUSH ESI        */
+  PUSH_REG_INSTR(REG_386_EDI),  /*   PUSH EDI        */
   0xEB, +5,                     /*   JMP Label2      */
                                 /* Label1:           */
   0x83, 0xE9, 4,                /*   SUB ECX, 4      */
@@ -50,10 +50,10 @@ static code_t glue_run_code[] = {
   0x39, 0xCA,                   /*   CMP EDX, ECX    */
   0x75, -9,                     /*   JNE Label1      */
   0xFF, 0xD0,                   /*   CALL *EAX     (callee removes args)  */
-  POP_REG_INSTR(REG_EDI),       /*   POP EDI         */
-  POP_REG_INSTR(REG_ESI),       /*   POP ESI         */
-  POP_REG_INSTR(REG_EBX),       /*   POP EBX         */
-  POP_REG_INSTR(REG_EBP),       /*   POP EBP         */
+  POP_REG_INSTR(REG_386_EDI),   /*   POP EDI         */
+  POP_REG_INSTR(REG_386_ESI),   /*   POP ESI         */
+  POP_REG_INSTR(REG_386_EBX),   /*   POP EBX         */
+  POP_REG_INSTR(REG_386_EBP),   /*   POP EBP         */
   0xC3,                         /*   RET             */
 };
 
@@ -338,7 +338,7 @@ vinfo_t* psyco_read_array_item_var(PsycoObject* po, vinfo_t* v0,
       else
         {
           code += 3;
-          if (ofsbase != 0 || (!EBP_IS_RESERVED && src0 == REG_EBP))
+          if (ofsbase != 0 || (!EBP_IS_RESERVED && src0 == REG_386_EBP))
             {
               extra_assert(0 <= ofsbase);
               if (COMPACT_ENCODING && ofsbase < 128)
@@ -476,7 +476,7 @@ bool psyco_write_array_item_var(PsycoObject* po, vinfo_t* src,
       else
         {
           code += 3;
-          if (ofsbase != 0 || (!EBP_IS_RESERVED && src0 == REG_EBP))
+          if (ofsbase != 0 || (!EBP_IS_RESERVED && src0 == REG_386_EBP))
             {
               extra_assert(0 <= ofsbase);
               if (COMPACT_ENCODING && ofsbase < 128)
@@ -1010,6 +1010,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 
 		default:
 			Py_FatalError("psyco_generic_call(): bad flags");
+                        return NULL;
 		}
 		return vresult;
 	}

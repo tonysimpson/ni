@@ -61,9 +61,9 @@
   NEED_CC();                                            \
   extra_assert(offsetof(PyObject, ob_refcnt) == 0);     \
   code[0] = 0xFF;          /* INC [reg] */              \
-  if (EBP_IS_RESERVED || (rg) != REG_EBP)               \
+  if (EBP_IS_RESERVED || (rg) != REG_386_EBP)           \
     {                                                   \
-      extra_assert((rg) != REG_EBP);                    \
+      extra_assert((rg) != REG_386_EBP);                \
       code[1] = (rg);                                   \
     }                                                   \
   else                                                  \
@@ -97,9 +97,9 @@
 #define DEC_OB_REFCNT_NZ(rg)    do {            \
   NEED_CC();                                    \
   code[0] = 0xFF;          /* DEC [reg] */      \
-  if (EBP_IS_RESERVED || (rg) != REG_EBP)       \
+  if (EBP_IS_RESERVED || (rg) != REG_386_EBP)   \
     {                                           \
-      extra_assert((rg) != REG_EBP);            \
+      extra_assert((rg) != REG_386_EBP);        \
       code[1] = 0x08 | (rg);                    \
     }                                           \
   else                                          \
@@ -112,31 +112,31 @@
 } while (0)
 
 /* the equivalent of Py_DECREF() */
-#define DEC_OB_REFCNT(rg)	do {                                    \
-  DEC_OB_REFCNT_NZ(rg);                                                 \
-  extra_assert(offsetof(PyObject, ob_refcnt) == 0);                     \
-  extra_assert(offsetof(PyObject, ob_type) < 128);                      \
-  extra_assert(offsetof(PyTypeObject, tp_dealloc) < 128);               \
-  CODE_FOUR_BYTES(code,                                                 \
-            0x75,          /* JNZ rel8 */                               \
-            16 - 2,        /* to the end of this code block */          \
-            PUSH_REG_INSTR(REG_EAX),   /* XXX if COMPACT_ENCODING, */   \
-            PUSH_REG_INSTR(REG_ECX));  /* XXX  avoid these PUSH    */   \
-  code[4] = PUSH_REG_INSTR(REG_EDX);   /* XXX  when unnecessary    */   \
-  code[5] = PUSH_REG_INSTR(rg);                                         \
-  code[6] = 0x8B;          /* MOV EAX, [reg+ob_type] */                 \
-  code[7] = 0x40 | (rg);                                                \
-  CODE_FOUR_BYTES(code+8,                                               \
-            offsetof(PyObject, ob_type),                                \
-            0xFF,         /* CALL [EAX+tp_dealloc] */                   \
-            0x50,                                                       \
-            offsetof(PyTypeObject, tp_dealloc));                        \
-  CODE_FOUR_BYTES(code+12,                                              \
-            POP_REG_INSTR(REG_EDX),                                     \
-            POP_REG_INSTR(REG_EDX),                                     \
-            POP_REG_INSTR(REG_ECX),                                     \
-            POP_REG_INSTR(REG_EAX));                                    \
-  code += 16;                                                           \
+#define DEC_OB_REFCNT(rg)	do {                                            \
+  DEC_OB_REFCNT_NZ(rg);                                                         \
+  extra_assert(offsetof(PyObject, ob_refcnt) == 0);                             \
+  extra_assert(offsetof(PyObject, ob_type) < 128);                              \
+  extra_assert(offsetof(PyTypeObject, tp_dealloc) < 128);                       \
+  CODE_FOUR_BYTES(code,                                                         \
+            0x75,          /* JNZ rel8 */                                       \
+            16 - 2,        /* to the end of this code block */                  \
+            PUSH_REG_INSTR(REG_386_EAX),   /* XXX if COMPACT_ENCODING, */       \
+            PUSH_REG_INSTR(REG_386_ECX));  /* XXX  avoid these PUSH    */       \
+  code[4] = PUSH_REG_INSTR(REG_386_EDX);   /* XXX  when unnecessary    */       \
+  code[5] = PUSH_REG_INSTR(rg);                                                 \
+  code[6] = 0x8B;          /* MOV EAX, [reg+ob_type] */                         \
+  code[7] = 0x40 | (rg);                                                        \
+  CODE_FOUR_BYTES(code+8,                                                       \
+            offsetof(PyObject, ob_type),                                        \
+            0xFF,         /* CALL [EAX+tp_dealloc] */                           \
+            0x50,                                                               \
+            offsetof(PyTypeObject, tp_dealloc));                                \
+  CODE_FOUR_BYTES(code+12,                                                      \
+            POP_REG_INSTR(REG_386_EDX),                                         \
+            POP_REG_INSTR(REG_386_EDX),                                         \
+            POP_REG_INSTR(REG_386_ECX),                                         \
+            POP_REG_INSTR(REG_386_EAX));                                        \
+  code += 16;                                                                   \
 } while (0)
 
 /* the same as above, when we know that the reference counter is
@@ -162,25 +162,25 @@
 
 /* the equivalent of Py_DECREF() when we know the type of the object
    (assuming that tp_dealloc never changes for a given type) */
-#define DEC_OB_REFCNT_T(rg, type)     do {                              \
-  DEC_OB_REFCNT_NZ(rg);                                                 \
-  extra_assert(offsetof(PyObject, ob_refcnt) == 0);                     \
-  CODE_FOUR_BYTES(code,                                                 \
-            0x75,          /* JNZ rel8 */                               \
-            15 - 2,        /* to the end of this code block */          \
-            PUSH_REG_INSTR(REG_EAX),   /* XXX if COMPACT_ENCODING, */   \
-            PUSH_REG_INSTR(REG_ECX));  /* XXX  avoid these PUSH    */   \
-  code[4] = PUSH_REG_INSTR(REG_EDX);   /* XXX  when unnecessary    */   \
-  code[5] = PUSH_REG_INSTR(rg);                                         \
-  code[6] = 0xE8;    /* CALL */                                         \
-  code += 11;                                                           \
-  *(long*)(code-4) = (code_t*)((type)->tp_dealloc) - code;              \
-  CODE_FOUR_BYTES(code,                                                 \
-            POP_REG_INSTR(REG_EDX),                                     \
-            POP_REG_INSTR(REG_EDX),                                     \
-            POP_REG_INSTR(REG_ECX),                                     \
-            POP_REG_INSTR(REG_EAX));                                    \
-  code += 4;                                                            \
+#define DEC_OB_REFCNT_T(rg, type)     do {                                      \
+  DEC_OB_REFCNT_NZ(rg);                                                         \
+  extra_assert(offsetof(PyObject, ob_refcnt) == 0);                             \
+  CODE_FOUR_BYTES(code,                                                         \
+            0x75,          /* JNZ rel8 */                                       \
+            15 - 2,        /* to the end of this code block */                  \
+            PUSH_REG_INSTR(REG_386_EAX),   /* XXX if COMPACT_ENCODING, */       \
+            PUSH_REG_INSTR(REG_386_ECX));  /* XXX  avoid these PUSH    */       \
+  code[4] = PUSH_REG_INSTR(REG_386_EDX);   /* XXX  when unnecessary    */       \
+  code[5] = PUSH_REG_INSTR(rg);                                                 \
+  code[6] = 0xE8;    /* CALL */                                                 \
+  code += 11;                                                                   \
+  *(long*)(code-4) = (code_t*)((type)->tp_dealloc) - code;                      \
+  CODE_FOUR_BYTES(code,                                                         \
+            POP_REG_INSTR(REG_386_EDX),                                         \
+            POP_REG_INSTR(REG_386_EDX),                                         \
+            POP_REG_INSTR(REG_386_ECX),                                         \
+            POP_REG_INSTR(REG_386_EAX));                                        \
+  code += 4;                                                                    \
 } while (0)
 
 
