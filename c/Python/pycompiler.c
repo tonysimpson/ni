@@ -81,8 +81,8 @@ PyObject* Psyco_GetModuleObject(PyObject* module, char* name,
 		return NULL;
 	}
 	if (expected_type != NULL && !PyObject_TypeCheck(fobj, expected_type)) {
-		debug_printf(("psyco: note: %s.%s is of type %200s instead of "
-			      "%200s\n", PyModule_GetName(module), name,
+		debug_printf(("psyco: note: %s.%s is of type %.200s instead of "
+			      "%.200s\n", PyModule_GetName(module), name,
 			      fobj->ob_type->tp_name, expected_type->tp_name));
 		Py_DECREF(fobj);
 		fobj = NULL;

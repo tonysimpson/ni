@@ -1,5 +1,5 @@
 import sys, re, cStringIO, os, dis, types
-import xam
+import xam, psyco
 from SimpleHTTPServer import SimpleHTTPRequestHandler, test
 
 #
@@ -103,17 +103,32 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
         return data
 
     def send_head(self):
-        if self.path == '/':
-            title = 'List of all named code objects'
+        if self.path == '/' or self.path == '/all':
+            all = self.path == '/all'
+            if all:
+                title = 'List of ALL code objects'
+            else:
+                title = 'List of all named code objects'
             data = '<ul>'
+            named = 0
+            proxies = 0
             for codebuf in codebufs:
                 if codebuf.data and codebuf.co_name:
-                    data += '<li>%s:\t%s:\t%s:\t%s\t(%d bytes)</li>\n' % (
-                        codebuf.co_filename, codebuf.co_name,
-                        codebuf.get_next_instr(),
-                        self.symhtml(codebuf, codebuf.addr),
-                        len(codebuf.data))
+                    named += 1
+                else:
+                    if not codebuf.data:
+                        proxies += 1
+                    if not all:
+                        continue
+                data += '<li>%s:\t%s:\t%s:\t%s\t(%d bytes)</li>\n' % (
+                    codebuf.co_filename, codebuf.co_name,
+                    codebuf.get_next_instr(),
+                    self.symhtml(codebuf, codebuf.addr),
+                    len(codebuf.data))
             data += '</ul>\n'
+            data += ('<br><a href="/">%d named buffers</a>; ' % named +
+                     '<a href="/all">%d buffers in total</a>, ' % len(codebufs) +
+                     'including %d proxies' % proxies)
         else:
             match = re_codebuf.match(self.path)
             if match:
@@ -136,6 +151,10 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
                         co = None
                     else:
                         co = moduledata.get(proxy.co_name)
+                        try:
+                            co = psyco.unproxy(co)
+                        except TypeError:
+                            pass
                         if hasattr(co, 'func_code'):
                             co = co.func_code
                     data = '<p>PsycoObject structure at this point:</p>\n'

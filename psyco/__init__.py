@@ -38,6 +38,7 @@ from types import FunctionType, MethodType
 
 
 __all__ = ['error', 'jit', 'bind', 'proxy', 'dumpcodebuf']
+__version__ = (0,5,0)
 
 error = _psyco.error
 
