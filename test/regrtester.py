@@ -49,6 +49,9 @@ if sys.version_info[:2] < (2,2):
 #if sys.version_info[:2] >= (2,3):
 #    SKIP['test_threadedtempfile'] = 'Python bug: Python test just hangs up'
 
+if sys.version_info[:3] == (2,4,0):
+    SKIP['test_distutils'] = 'distutils/tests/* not copied by the installer'
+
 if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
     SKIP['test_popen2'] = 'gets confused by Psyco debugging output to stderr'
 
