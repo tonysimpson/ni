@@ -28,6 +28,18 @@ struct rangeobject {
 
 static source_virtual_t psyco_computed_xrange;
 
+static PyObject* cimpl_xrange_new(long start, long len)
+{
+	struct rangeobject *obj;
+	obj = PyObject_New(struct rangeobject, &PyRange_Type);
+	if (obj == NULL)
+		return NULL;
+	obj->start = start;
+	obj->len   = len;
+	obj->step  = 1;
+	return (PyObject *) obj;
+}
+
 static bool compute_xrange(PsycoObject* po, vinfo_t* v)
 {
 	vinfo_t* vstart;
@@ -44,9 +56,9 @@ static bool compute_xrange(PsycoObject* po, vinfo_t* v)
 		return false;
 
 	/* call PyRange_New() */
-	newobj = psyco_generic_call(po, PyRange_New,
+	newobj = psyco_generic_call(po, cimpl_xrange_new,
 				    CfPure|CfReturnRef|CfPyErrIfNull,
-				    "vvll", vstart, vlen, 1, 1);
+				    "vv", vstart, vlen);
 	if (newobj == NULL)
 		return false;
 

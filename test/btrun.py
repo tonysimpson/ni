@@ -618,6 +618,25 @@ xrange
 >>> test5.longrangetest()
 [1234567890123456789L, 1234567890123456790L]
 
+>>> print list(xrange(10))
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+>>> x = xrange(10); print sys.getrefcount(x); print list(x)
+2
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+>>> print list(xrange(-2, 5))
+[-2, -1, 0, 1, 2, 3, 4]
+
+>>> print list(xrange(-2, 5, 2))
+[-2, 0, 2, 4]
+
+>>> print list(xrange(-2, 5, -2))
+[]
+
+>>> print list(xrange(5, -2, -2))
+[5, 3, 1, -1]
+
 
                          ###########################
                          ####   COMPACTOBJECT   ####
