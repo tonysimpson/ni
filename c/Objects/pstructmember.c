@@ -9,7 +9,7 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 	condition_code_t cc;
 	vinfo_t* v;
 	vinfo_t* w1;
-	/*vinfo_t* w2;*/
+	vinfo_t* w2;
         vinfo_t* zero;
 	if (l->flags & READ_RESTRICTED)
 		goto fallback;
@@ -36,7 +36,7 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 			v = PsycoInt_FROM_LONG(v);
 		break;
 #if 0
-		XXX implement pfloatobject.c first
+		XXX implement PsycoFloat_FromFloat()
 	case T_FLOAT:  /* read a long, turn it into a float */
 		zero = psyco_vi_Zero();
 		w1 = psyco_read_array_item_var(po, addr, zero,
@@ -47,6 +47,7 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 		v = PsycoFloat_FromFloat(w1);
 		vinfo_decref(w1, po);
 		break;
+#endif
 	case T_DOUBLE:  /* read two longs, turn them into a double */
 		zero = psyco_vi_Zero();
 		w1 = psyco_read_array_item_var(po, addr, zero,
@@ -63,11 +64,8 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 			vinfo_decref(w1, po);
 			return NULL;
 		}
-		v = PsycoFloat_FromDouble(w1, w2);
-		vinfo_decref(w2, po);
-		vinfo_decref(w1, po);
+		v = PsycoFloat_FROM_DOUBLE(w1, w2);
 		break;
-#endif
 	case T_CHAR:  /* read a byte, turn it into a char */
 		zero = psyco_vi_Zero();
 		w1 = psyco_read_array_item_var(po, addr, zero,
