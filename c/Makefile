@@ -9,19 +9,22 @@ PY_INCLUDE = /usr/include/python2.2
 #
 #
 CC         = gcc
-C_FLAGS    = -g -Wall  # -O3
+C_FLAGS    = -g -Wall -Wstrict-prototypes  # -O3 -DDISABLE_DEBUG
 LINK_FLAGS = -shared
 #
 ##############################################################################
 
 HEADERS1   = psyco.h      codemanager.h  dispatcher.h   processor.h    \
-	     vcompiler.h  mergepoints.h  encoding.h     pycencoding.h
+	     vcompiler.h  mergepoints.h  encoding.h     pycencoding.h  \
+	     linuxmemchk.h
 
 SOURCES1   = psyco.c      codemanager.c  dispatcher.c   processor.c    \
-	     vcompiler.c  mergepoints.c  pycencoding.c
+	     vcompiler.c  mergepoints.c  pycencoding.c                 \
+	     linuxmemchk.c
 
 OBJECTS1   = psyco.o      codemanager.o  dispatcher.o   processor.o    \
-	     vcompiler.o  mergepoints.o  pycencoding.o
+	     vcompiler.o  mergepoints.o  pycencoding.o                 \
+	     linuxmemchk.o
 
 HEADERS2   = Python/pycompiler.h    Python/pycheader.h     \
 	     Python/pbltinmodule.h
@@ -33,6 +36,7 @@ OBJECTS2   = Python/pycompiler.o    \
 	     Python/pbltinmodule.o
 
 HEADERS3   = Objects/pabstract.h     \
+	     Objects/pdescrobject.h    \
 	     Objects/pdictobject.h    \
 	     Objects/pfuncobject.h    \
 	     Objects/pintobject.h    \
@@ -41,11 +45,13 @@ HEADERS3   = Objects/pabstract.h     \
 	     Objects/plongobject.h    \
 	     Objects/pmethodobject.h    \
 	     Objects/pobject.h    \
-	     Objects/psycofuncobject.h    \
 	     Objects/pstringobject.h    \
+	     Objects/pstructmember.h    \
+	     Objects/psycofuncobject.h    \
 	     Objects/ptupleobject.h
 
 SOURCES3   = Objects/pabstract.c     \
+	     Objects/pdescrobject.c    \
 	     Objects/pdictobject.c    \
 	     Objects/pfuncobject.c    \
 	     Objects/pintobject.c    \
@@ -54,11 +60,13 @@ SOURCES3   = Objects/pabstract.c     \
 	     Objects/plongobject.c    \
 	     Objects/pmethodobject.c    \
 	     Objects/pobject.c    \
-	     Objects/psycofuncobject.c    \
 	     Objects/pstringobject.c    \
+	     Objects/pstructmember.c    \
+	     Objects/psycofuncobject.c    \
 	     Objects/ptupleobject.c
 
 OBJECTS3   = Objects/pabstract.o     \
+	     Objects/pdescrobject.o    \
 	     Objects/pdictobject.o    \
 	     Objects/pfuncobject.o    \
 	     Objects/pintobject.o    \
@@ -67,8 +75,9 @@ OBJECTS3   = Objects/pabstract.o     \
 	     Objects/plongobject.o    \
 	     Objects/pmethodobject.o    \
 	     Objects/pobject.o    \
-	     Objects/psycofuncobject.o    \
 	     Objects/pstringobject.o    \
+	     Objects/pstructmember.o    \
+	     Objects/psycofuncobject.o    \
 	     Objects/ptupleobject.o
 
 EXTRAS = linuxmemchk.h  linuxmemchk.c  hack.c  Makefile
@@ -81,6 +90,9 @@ hack:  ${HEADERS1} ${HEADERS2} ${HEADERS3} ${SOURCES1} ${SOURCES2} ${SOURCES3} h
 
 _psycomodule.so:  ${OBJECTS1} ${OBJECTS2} ${OBJECTS3}
 	${CC} ${LINK_FLAGS} ${OBJECTS1} ${OBJECTS2} ${OBJECTS3} -o _psycomodule.so
+
+O3:  ${HEADERS1} ${HEADERS2} ${HEADERS3} ${SOURCES1} ${SOURCES2} ${SOURCES3} hack.c
+	${CC} ${C_FLAGS} -O3 -DDISABLE_DEBUG hack.c -o _psycomodule.so -I${PY_INCLUDE} ${LINK_FLAGS}
 
 ${OBJECTS1}: %.o: %.c ${HEADERS1} ${HEADERS2}
 	${CC} ${C_FLAGS} -c $< -o $@ -I${PY_INCLUDE}

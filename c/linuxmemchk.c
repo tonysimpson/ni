@@ -1,4 +1,7 @@
 /* custom checking allocators a la Electric Fence */
+#include "psyco.h"
+#ifdef HEAVY_MEM_CHECK
+
 
 #include <assert.h>
 #include <sys/mman.h>
@@ -88,3 +91,6 @@ void* memchk_ef_realloc(void* data, int nsize)
   PyCore_FREE(data);
   return ndata;
 }
+
+
+#endif  /* LINUXMEMCHK */

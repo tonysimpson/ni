@@ -255,11 +255,17 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 
 /* Encodes "INSTR reg" for the following instructions:
      NOT    (group 2)
-     NEG    (group 3)  */
+     NEG    (group 3)
+     IDIV   (group 7) */
 #define UNARY_INSTR_ON_REG(group, rg)              do { \
   code[0] = 0xF7;                                       \
   code[1] = 0xC0 | (group<<3) | (rg);                   \
   code += 2;                                            \
+} while (0)
+
+/* Encodes "INSTR source" for the same instructions as above */
+#define UNARY_INSTR_FROM_RT(group, source)         do { \
+  INSTR_MODRM_FROM_RT(0xF7, source, (group)<<3);        \
 } while (0)
 
 /* Encodes "INC rg" and "DEC rg" */
@@ -326,6 +332,52 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
     code += 4;                                                                  \
   }                                                                             \
 } while (0)
+
+/* Signed integer multiplications */
+#define IMUL_REG_FROM_RT(source, rg)   do {             \
+  *code++ = 0x0F;            /* IMUL rg, source */      \
+  INSTR_MODRM_FROM_RT(source, 0xAF, (rg)<<3);           \
+} while (0)
+
+#define IMUL_IMMED_FROM_RT(source, immed, dstrg)   do {                 \
+  long _value = (immed);                                                \
+  code_t opcode = (COMPACT_ENCODING && -128 <= _value && _value < 128)  \
+    ? 0x6B : 0x69;    /* IMUL dstrg, source, immed */                   \
+  INSTR_MODRM_FROM_RT(source, opcode, (dstrg)<<3);                      \
+  if (opcode == 0x69) {                                                 \
+    *(long*)code = _value;                                              \
+    code += 4;                                                          \
+  }                                                                     \
+  else                                                                  \
+    *code++ = _value;                                                   \
+} while (0)
+
+/* Shitfs. The counters must never be >=32. */
+#define SHIFT_GENERIC1(rg, cnt, middle)   do {  \
+  code[1] = 0xC0 | ((middle)<<3) | (rg);        \
+  if (COMPACT_ENCODING && cnt==1) {             \
+    code[0] = 0xD1;                             \
+    code += 2;                                  \
+  }                                             \
+  else {                                        \
+    code[0] = 0xC1;                             \
+    code[2] = (cnt);                            \
+    code += 3;                                  \
+  }                                             \
+} while (0)
+#define SHIFT_COUNTER    REG_ECX  /* must be in range(0,32) */
+#define SHIFT_GENERICCL(rg, middle)       do {  \
+  code[0] = 0xD3;                               \
+  code[1] = 0xC0 | ((middle)<<3) | (rg);        \
+  code += 2;                                    \
+} while (0)
+
+#define SHIFT_LEFT_BY(rg, cnt)           SHIFT_GENERIC1(rg, cnt, 4)
+#define SHIFT_LEFT_CL(rg)                SHIFT_GENERIC2(rg, 4)
+#define SHIFT_RIGHT_BY(rg, cnt)          SHIFT_GENERIC1(rg, cnt, 5)
+#define SHIFT_RIGHT_CL(rg)               SHIFT_GENERIC2(rg, 5)
+#define SHIFT_SIGNED_RIGHT_BY(rg, cnt)   SHIFT_GENERIC1(rg, cnt, 7)
+#define SHIFT_SIGNED_RIGHT_CL(rg)        SHIFT_GENERIC2(rg, 7)
 
 
 /* PUSH the value described in the 'source' of a run-time vinfo_t */
@@ -506,6 +558,21 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
         }                                                       \
     }                                                           \
   code += 3;                                                    \
+} while (0)
+
+#define LOAD_REG_FROM_REG_PLUS_IMMED(dst, rg1, immed)   do {    \
+  long _value = (immed);                                        \
+  code[0] = 0x8D;   /* LEA dst,[rg1+immed] */                   \
+  if (COMPACT_ENCODING && -128 <= _value && _value < 128) {     \
+    code[1] = 0x40 | (dst)<<3 | (rg1);                          \
+    code[2] = _value;                                           \
+    code += 3;                                                  \
+  }                                                             \
+  else {                                                        \
+    code[1] = 0x80 | (dst)<<3 | (rg1);                          \
+    *(long*)(code+2) = _value;                                  \
+    code += 6;                                                  \
+  }                                                             \
 } while (0)
 
 

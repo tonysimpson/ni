@@ -99,6 +99,22 @@ static code_t glue_call_var[] = {
 	0xC3,			/*   RET                           */
 };
 
+/* check for signed integer multiplication overflow */
+static code_t glue_int_mul[] = {
+  0x8B, 0x44, 0x24, 8,          /*   MOV  EAX, [ESP+8]  (a)   */
+  0x0F, 0xAF, 0x44, 0x24, 4,    /*   IMUL EAX, [ESP+4]  (b)   */
+  0x0F, 0x90, 0xC0,             /*   SETO AL                  */
+  0xC3,                         /*   RET                      */
+};
+
+typedef char (*glue_int_mul_fn) (long a, long b);
+
+#ifdef COPY_CODE_IN_HEAP
+static glue_int_mul_fn glue_int_mul_1;
+#else
+# define glue_int_mul_1 ((glue_int_mul_fn) glue_int_mul)
+#endif
+
 
 DEFINEFN
 code_t* psyco_finish_return(PsycoObject* po, NonVirtualSource retval)
@@ -594,6 +610,7 @@ void psyco_processor_init()
   int i;
 #ifdef COPY_CODE_IN_HEAP
   COPY_CODE(glue_run_code_1, glue_run_code, glue_run_code_fn);
+  COPY_CODE(glue_int_mul_1,  glue_int_mul,  glue_int_mul_fn);
 #endif
   COPY_CODE(psyco_call_var, glue_call_var, long(*)(void*, int, long[]));
   for (i=0; i<CC_TOTAL; i++)
@@ -746,6 +763,7 @@ static bool computed_promotion(PsycoObject* po, vinfo_t* v)
 }
 
 DEFINEVAR struct c_promotion_s psyco_nonfixed_promotion;
+DEFINEVAR struct c_promotion_s psyco_nonfixed_pyobj_promotion;
 
 DEFINEFN
 bool psyco_vsource_is_promotion(VirtualTimeSource source)
@@ -1166,33 +1184,37 @@ condition_code_t integer_non_null(PsycoObject* po, vinfo_t* vi)
 }
 
 
-#define GENERIC_BINARY_INSTR_1(group, c_code, ovf, c_ovf)	\
-{								\
-  NonVirtualSource v1s, v2s;					\
-  v2s = vinfo_compute(v2, po);					\
-  if (v2s == SOURCE_ERROR) return NULL;				\
-  v1s = vinfo_compute(v1, po);					\
-  if (v1s == SOURCE_ERROR) return NULL;				\
-  if (is_compiletime(v1s) && is_compiletime(v2s))		\
-    {								\
-      long a = CompileTime_Get(v1s)->value;			\
-      long b = CompileTime_Get(v2s)->value;			\
-      long c = (c_code);					\
-      if (!((ovf) && (c_ovf)))     /* if not overflow */	\
-        return vinfo_new(CompileTime_New(c));			\
-    }								\
-  else								\
-    {								\
-      reg_t rg;							\
-      BEGIN_CODE						\
-      NEED_CC();						\
-      COPY_IN_REG(v1, rg);                   /* MOV rg, (v1) */	\
-      COMMON_INSTR_FROM(group, rg, v2s);     /* XXX rg, (v2) */	\
-      END_CODE							\
-      if (!((ovf) && runtime_condition_f(po, CC_O)))		\
-        return new_rtvinfo(po, rg, false);			\
-    }								\
-  return NULL;							\
+#define GENERIC_BINARY_HEADER                   \
+  NonVirtualSource v1s, v2s;                    \
+  v2s = vinfo_compute(v2, po);                  \
+  if (v2s == SOURCE_ERROR) return NULL;         \
+  v1s = vinfo_compute(v1, po);                  \
+  if (v1s == SOURCE_ERROR) return NULL;
+
+#define GENERIC_BINARY_HEADER_i                 \
+  NonVirtualSource v1s;                         \
+  v1s = vinfo_compute(v1, po);                  \
+  if (v1s == SOURCE_ERROR) return NULL;
+
+#define GENERIC_BINARY_CT_CT(c_code)                    \
+  if (is_compiletime(v1s) && is_compiletime(v2s))       \
+    {                                                   \
+      long a = CompileTime_Get(v1s)->value;             \
+      long b = CompileTime_Get(v2s)->value;             \
+      long c = (c_code);                                \
+      return vinfo_new(CompileTime_New(c));             \
+    }
+
+#define GENERIC_BINARY_COMMON_INSTR(group, ovf)   {             \
+  reg_t rg;                                                     \
+  BEGIN_CODE                                                    \
+  NEED_CC();                                                    \
+  COPY_IN_REG(v1, rg);                   /* MOV rg, (v1) */     \
+  COMMON_INSTR_FROM(group, rg, v2s);     /* XXX rg, (v2) */     \
+  END_CODE                                                      \
+  if ((ovf) && runtime_condition_f(po, CC_O))                   \
+    return NULL;  /* if overflow */                             \
+  return new_rtvinfo(po, rg, false);                            \
 }
 
 #define GENERIC_BINARY_INSTR_2(group, c_code)                           \
@@ -1218,27 +1240,305 @@ condition_code_t integer_non_null(PsycoObject* po, vinfo_t* vi)
     }                                                                   \
 }
 
+static vinfo_t* int_add_i(PsycoObject* po, RunTimeSource v1s, long value2)
+{
+  reg_t rg, dst;
+  BEGIN_CODE
+  NEED_FREE_REG(dst);
+  rg = getreg(v1s);
+  if (rg == REG_NONE)
+    {
+      rg = dst;
+      LOAD_REG_FROM(v1s, rg);
+    }
+  LOAD_REG_FROM_REG_PLUS_IMMED(dst, rg, value2);
+  END_CODE
+  return new_rtvinfo(po, dst, false);
+}
+
 DEFINEFN
 vinfo_t* integer_add(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
-  GENERIC_BINARY_INSTR_1(0, a+b, ovf, (c^a) < 0 && (c^b) < 0)
+{
+  GENERIC_BINARY_HEADER
+  if (is_compiletime(v1s))
+    {
+      long a = CompileTime_Get(v1s)->value;
+      if (a == 0)
+        {
+          /* adding zero to v2 */
+          vinfo_incref(v2);
+          return v2;
+        }
+      if (is_compiletime(v2s))
+        {
+          long b = CompileTime_Get(v2s)->value;
+          long c = a + b;
+          if (ovf && (c^a) < 0 && (c^b) < 0)
+            return NULL;   /* overflow */
+          return vinfo_new(CompileTime_New(c));
+        }
+      if (!ovf)
+        return int_add_i(po, v2s, a);
+    }
+  else
+    if (is_compiletime(v2s))
+      {
+        long b = CompileTime_Get(v2s)->value;
+        if (b == 0)
+          {
+            /* adding zero to v1 */
+            vinfo_incref(v1);
+            return v1;
+          }
+        if (!ovf)
+          return int_add_i(po, v1s, b);
+      }
+
+  GENERIC_BINARY_COMMON_INSTR(0, ovf)   /* ADD */
+}
+
 DEFINEFN
 vinfo_t* integer_add_i(PsycoObject* po, vinfo_t* v1, long value2)
-  GENERIC_BINARY_INSTR_2(0, a+b)
+{
+  if (value2 == 0)
+    {
+      /* adding zero to v1 */
+      vinfo_incref(v1);
+      return v1;
+    }
+  else
+    {
+      GENERIC_BINARY_HEADER_i
+      if (is_compiletime(v1s))
+        {
+          long c = CompileTime_Get(v1s)->value + value2;
+          return vinfo_new(CompileTime_New(c));
+        }
+      return int_add_i(po, v1s, value2);
+    }
+}
 
 DEFINEFN
 vinfo_t* integer_sub(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
-  GENERIC_BINARY_INSTR_1(5, a-b, ovf, (c^a) < 0 && (c^~b) < 0)
-DEFINEFN
-vinfo_t* integer_sub_i(PsycoObject* po, vinfo_t* v1, long value2)
-  GENERIC_BINARY_INSTR_2(5, a-b)
+{
+  GENERIC_BINARY_HEADER
+  if (is_compiletime(v1s))
+    {
+      long a = CompileTime_Get(v1s)->value;
+      if (is_compiletime(v2s))
+        {
+          long b = CompileTime_Get(v2s)->value;
+          long c = a - b;
+          if (ovf && (c^a) < 0 && (c^~b) < 0)
+            return NULL;   /* overflow */
+          return vinfo_new(CompileTime_New(c));
+        }
+    }
+  else
+    if (is_compiletime(v2s))
+      {
+        long b = CompileTime_Get(v2s)->value;
+        if (b == 0)
+          {
+            /* subtracting zero from v1 */
+            vinfo_incref(v1);
+            return v1;
+          }
+        if (!ovf)
+          return int_add_i(po, v1s, -b);
+      }
+
+  GENERIC_BINARY_COMMON_INSTR(5, ovf)   /* SUB */
+}
 
 DEFINEFN
 vinfo_t* integer_or(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
-  GENERIC_BINARY_INSTR_1(1, a|b, false, false)
+{
+  GENERIC_BINARY_HEADER
+  GENERIC_BINARY_CT_CT(a | b)
+  GENERIC_BINARY_COMMON_INSTR(1, false)   /* OR */
+}
 
 DEFINEFN
 vinfo_t* integer_and(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
-  GENERIC_BINARY_INSTR_1(4, a&b, false, false)
+{
+  GENERIC_BINARY_HEADER
+  GENERIC_BINARY_CT_CT(a & b)
+  GENERIC_BINARY_COMMON_INSTR(4, false)   /* AND */
+}
+
+DEFINEFN
+vinfo_t* integer_and_i(PsycoObject* po, vinfo_t* v1, long value2)
+     GENERIC_BINARY_INSTR_2(4, a & b)    /* AND */
+
+#define GENERIC_SHIFT_BY(rtmacro)                       \
+  {                                                     \
+    reg_t rg;                                           \
+    extra_assert(0 < counter && counter < LONG_BIT);    \
+    BEGIN_CODE                                          \
+    NEED_CC();                                          \
+    COPY_IN_REG(v1, rg);                                \
+    rtmacro(rg, counter);                               \
+    END_CODE                                            \
+    return new_rtvinfo(po, rg, false);                  \
+  }
+
+static vinfo_t* int_lshift_i(PsycoObject* po, vinfo_t* v1, int counter)
+     GENERIC_SHIFT_BY(SHIFT_LEFT_BY)
+
+static vinfo_t* int_rshift_i(PsycoObject* po, vinfo_t* v1, int counter)
+     GENERIC_SHIFT_BY(SHIFT_SIGNED_RIGHT_BY)
+
+static vinfo_t* int_urshift_i(PsycoObject* po, vinfo_t* v1, int counter)
+     GENERIC_SHIFT_BY(SHIFT_RIGHT_BY)
+
+static vinfo_t* int_mul_i(PsycoObject* po, vinfo_t* v1, long value2,
+                          bool ovf)
+{
+  switch (value2) {
+  case 0:
+    return vinfo_new(CompileTime_New(0));
+  case 1:
+    vinfo_incref(v1);
+    return v1;
+  }
+  if (((value2-1) & value2) == 0 && value2 >= 0 && !ovf)
+    {
+      /* value2 is a power of two */
+      return int_lshift_i(po, v1, intlog2(value2));
+    }
+  else
+    {
+      reg_t rg;
+      RunTimeSource v1s = v1->source;
+      BEGIN_CODE
+      NEED_CC();
+      NEED_FREE_REG(rg);
+      IMUL_IMMED_FROM_RT(v1s, value2, rg);
+      END_CODE
+      if (ovf && runtime_condition_f(po, CC_O))
+        return NULL;
+      return new_rtvinfo(po, rg, false);
+    }
+}
+
+DEFINEFN
+vinfo_t* integer_mul(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf)
+{
+  reg_t rg;
+  GENERIC_BINARY_HEADER
+  if (is_compiletime(v1s))
+    {
+      long a = CompileTime_Get(v1s)->value;
+      if (is_compiletime(v2s))
+        {
+          long b = CompileTime_Get(v2s)->value;
+          /* unlike Python, we use a function written in assembly
+             to perform the product overflow checking */
+          if (ovf && glue_int_mul_1(a, b))
+            return NULL;   /* overflow */
+          return vinfo_new(CompileTime_New(a * b));
+        }
+      return int_mul_i(po, v2, a, ovf);
+    }
+  else
+    if (is_compiletime(v2s))
+      {
+        long b = CompileTime_Get(v2s)->value;
+        return int_mul_i(po, v1, b, ovf);
+      }
+  
+  BEGIN_CODE
+  NEED_CC();
+  COPY_IN_REG(v1, rg);              /* MOV rg, (v1) */
+  IMUL_REG_FROM_RT(v2s, rg);        /* IMUL rg, (v2) */
+  END_CODE
+  if (ovf && runtime_condition_f(po, CC_O))
+    return NULL;  /* if overflow */
+  return new_rtvinfo(po, rg, false);
+}
+
+DEFINEFN
+vinfo_t* integer_mul_i(PsycoObject* po, vinfo_t* v1, long value2)
+{
+  GENERIC_BINARY_HEADER_i
+  if (is_compiletime(v1s))
+    {
+      long c = CompileTime_Get(v1s)->value * value2;
+      return vinfo_new(CompileTime_New(c));
+    }
+  return int_mul_i(po, v1, value2, false);
+}
+
+DEFINEFN
+vinfo_t* integer_lshift_i(PsycoObject* po, vinfo_t* v1, long counter)
+{
+  GENERIC_BINARY_HEADER_i
+  if (0 < counter && counter < LONG_BIT)
+    {
+      if (is_compiletime(v1s))
+        {
+          long c = CompileTime_Get(v1s)->value << counter;
+          return vinfo_new(CompileTime_New(c));
+        }
+      else
+        return int_lshift_i(po, v1, counter);
+    }
+  else if (counter == 0)
+    {
+      vinfo_incref(v1);
+      return v1;
+    }
+  else if (counter >= LONG_BIT)
+    return vinfo_new(CompileTime_New(0));
+  else
+    {
+      PycException_SetString(po, PyExc_ValueError, "negative shift count");
+      return NULL;
+    }
+}
+
+DEFINEFN
+vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter)
+{
+  GENERIC_BINARY_HEADER_i
+  if (0 < counter && counter < LONG_BIT)
+    {
+      if (is_compiletime(v1s))
+        {
+          long c = ((unsigned long)(CompileTime_Get(v1s)->value)) >> counter;
+          return vinfo_new(CompileTime_New(c));
+        }
+      else
+        return int_urshift_i(po, v1, counter);
+    }
+  else if (counter == 0)
+    {
+      vinfo_incref(v1);
+      return v1;
+    }
+  else if (counter >= LONG_BIT)
+    return vinfo_new(CompileTime_New(0));
+  else
+    {
+      PycException_SetString(po, PyExc_ValueError, "negative shift count");
+      return NULL;
+    }
+}
+
+/* DEFINEFN */
+/* vinfo_t* integer_lshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2) */
+/* { */
+/*   NonVirtualSource v1s, v2s; */
+/*   v2s = vinfo_compute(v2, po); */
+/*   if (v2s == SOURCE_ERROR) return NULL; */
+/*   if (is_compiletime(v2s)) */
+/*     return integer_lshift_i(po, v1, CompileTime_Get(v2s)->value); */
+  
+/*   v1s = vinfo_compute(v1, po); */
+/*   if (v1s == SOURCE_ERROR) return NULL; */
+/*   XXX implement me */
+/* } */
 
 
 #define GENERIC_UNARY_INSTR(rtmacro, c_code, ovf, c_ovf, cond_ovf)      \

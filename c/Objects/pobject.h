@@ -57,7 +57,17 @@ inline int Psyco_TypeSwitch(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) {
 	 return psyco_switch_index(po, vtp, fs);
 }
 
+/* Use this to assert the type of an object. Do not use unless you are
+   sure about it! (e.g. don't use this for integer-computing functions
+   if they might return a long in case of overflow) */
+inline void Psyco_AssertType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
+	vinfo_setitem(po, vi, OB_TYPE,
+		      vinfo_new(CompileTime_New((long) tp)));
+}
 
+
+/* The following functions are Psyco implementations of common functions
+   of the standard interpreter. */
 EXTERNFN condition_code_t PsycoObject_IsTrue(PsycoObject* po, vinfo_t* vi);
 EXTERNFN vinfo_t* PsycoObject_Repr(PsycoObject* po, vinfo_t* vi);
 
@@ -67,6 +77,8 @@ EXTERNFN vinfo_t* PsycoObject_GetAttr(PsycoObject* po, vinfo_t* o,
                                       vinfo_t* attr_name);
 EXTERNFN bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
                                   vinfo_t* attr_name, vinfo_t* v);
+EXTERNFN vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
+                                             vinfo_t* vname);
 
 EXTERNFN vinfo_t* PsycoObject_RichCompare(PsycoObject* po, vinfo_t* v,
 					  vinfo_t* w, int op);
@@ -136,6 +148,10 @@ inline void psy_object_init(void)
 #endif
         psyco_build_run_time_switch(&psyfs_string_unicode, SkFlagFixed,
                                     values, cnt);
+
+        /* associate the Python implementation of some functions with
+           the one from Psyco */
+        Psyco_DefineMeta(PyObject_GenericGetAttr, PsycoObject_GenericGetAttr);
 }
 
 #endif /* _PSY_OBJECT_H */

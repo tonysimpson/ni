@@ -329,7 +329,7 @@ static int psycofunction_traverse(PsycoFunctionObject *f,
 static PyObject *
 psy_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
-	/* 'self' is actually a PsycoFunctionPObject* */
+	/* 'self' is actually a PsycoFunctionObject* */
 	return PyMethod_New(self, obj, type);
 }
 
@@ -442,24 +442,46 @@ void psyco_dump_code_buffers(void)
     {
       CodeBufferObject* obj;
       PyObject *exc, *val, *tb;
+#ifdef CODE_DUMP_SYMBOLS
+      int i1;
+      PyObject* global_addrs = PyDict_New();
+      assert(global_addrs);
+#endif
       PyErr_Fetch(&exc, &val, &tb);
       debug_printf(("psyco: writing " CODE_DUMP_FILE "\n"));
+
+      /* give the address of an arbitrary symbol from the Python interpreter
+         and from the Psyco module */
+      fprintf(f, "PyInt_FromLong: %p\n", &PyInt_FromLong);
+      fprintf(f, "psyco_dump_code_buffers: %p\n", &psyco_dump_code_buffers);
+      
       for (obj=psyco_codebuf_chained_list; obj != NULL; obj=obj->chained_list)
         {
           PyObject* d;
           int nsize = obj->codeend - obj->codeptr;
           PyCodeObject* co = obj->snapshot.fz_pyc_data ?
 		  obj->snapshot.fz_pyc_data->co : NULL;
-          fprintf(f, "CodeBufferObject %p %d %d '%s' '%s' '%s'\n",
+          fprintf(f, "CodeBufferObject %p %d %d '%s' '%s' %d '%s'\n",
                   obj->codeptr, nsize, get_stack_depth(&obj->snapshot),
                   co?PyString_AsString(co->co_filename):"",
                   co?PyString_AsString(co->co_name):"",
+                  co?obj->snapshot.fz_pyc_data->next_instr:-1,
                   obj->codemode);
           d = PyDict_New();
           assert(d);
           vinfo_array_dump(obj->snapshot.fz_vlocals, f, d);
           Py_DECREF(d);
           fwrite(obj->codeptr, 1, nsize, f);
+#ifdef CODE_DUMP_SYMBOLS
+          /* look-up all potential 'void*' pointers appearing in the code */
+          for (i1=0; i1+sizeof(void*)<=nsize; i1++)
+            {
+              PyObject* key = PyInt_FromLong(*(long*)(obj->codeptr+i1));
+              assert(key);
+              PyDict_SetItem(global_addrs, key, Py_None);
+              Py_DECREF(key);
+            }
+#endif
           if (nsize > sizeof(struct sd_s) &&
               ((struct sd_s*)(obj->codeptr+nsize))[-1].signature ==
               SPEC_DICT_SIGNATURE)   /* unelegant hack */
@@ -472,9 +494,22 @@ void psyco_dump_code_buffers(void)
                 {
                   PyObject* repr;
                   if (PyInt_Check(key))
-                    repr = (key->ob_type->tp_as_number->nb_hex)(key);
+                    {
+#ifdef CODE_DUMP_SYMBOLS
+                      PyDict_SetItem(global_addrs, key, Py_None);
+#endif
+                      repr = (key->ob_type->tp_as_number->nb_hex)(key);
+                    }
                   else
-                    repr = PyObject_Repr(key);
+                    {
+#ifdef CODE_DUMP_SYMBOLS
+                      PyObject* key = PyInt_FromLong((long) key);
+                      assert(key);
+                      PyDict_SetItem(global_addrs, key, Py_None);
+                      Py_DECREF(key);
+#endif
+                      repr = PyObject_Repr(key);
+                    }
                   assert(!PyErr_Occurred());
                   assert(PyString_Check(repr));
                   assert(CodeBuffer_Check(value));
@@ -485,6 +520,22 @@ void psyco_dump_code_buffers(void)
               fprintf(f, "\n");
             }
         }
+#ifdef CODE_DUMP_SYMBOLS
+      {
+        int i = 0;
+        PyObject *key, *value;
+        fprintf(f, "symbol table\n");
+        while (PyDict_Next(global_addrs, &i, &key, &value))
+          {
+            Dl_info info;
+            void* ptr = (void*) PyInt_AS_LONG(key);
+            if (dladdr(ptr, &info) && ptr == info.dli_saddr)
+              fprintf(f, "%p %s\n", ptr, info.dli_sname);
+          }
+        Py_DECREF(global_addrs);
+      }
+#endif
+      assert(!PyErr_Occurred());
       fclose(f);
       PyErr_Restore(exc, val, tb);
     }

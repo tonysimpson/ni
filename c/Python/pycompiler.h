@@ -22,6 +22,12 @@ EXTERNFN void psyco_pycompiler_init(void);
 # define PyString_CheckExact   PyString_Check
 #endif
 
+#if !NEW_STYLE_TYPES
+# error "Sorry, Psyco requires Python 2.2."
+/* Some parts could work without NEW_STYLE_TYPES but this is largely untested
+   and would require a number of fixes in the source. */
+#endif
+
 
 /*****************************************************************/
  /***   Compile-time Pseudo exceptions                          ***/

@@ -210,6 +210,54 @@ static vinfo_t* pint_and(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	return x;
 }
 
+static vinfo_t* pint_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+{
+	vinfo_t* a;
+	vinfo_t* b;
+	vinfo_t* x;
+	PyTypeObject* tp;
+
+	tp = Psyco_NeedType(po, v);
+	if (tp == NULL)
+		return NULL;
+
+	if (!PsycoInt_Check(tp) &&
+	    tp->tp_as_sequence &&
+	    tp->tp_as_sequence->sq_repeat) {
+		/* sequence * int */
+		a = PsycoInt_AsLong(po, w);
+		return Psyco_META2(po, tp->tp_as_sequence->sq_repeat,
+				   CfReturnRef|CfPyErrIfNull,
+				   "vv", v, a);
+	}
+	
+	tp = Psyco_NeedType(po, w);
+	if (tp == NULL)
+		return NULL;
+
+	if (!PsycoInt_Check(tp) &&
+	    tp->tp_as_sequence &&
+	    tp->tp_as_sequence->sq_repeat) {
+		/* int * sequence */
+		a = PsycoInt_AsLong(po, v);
+		return Psyco_META2(po, tp->tp_as_sequence->sq_repeat,
+				   CfReturnRef|CfPyErrIfNull,
+				   "vv", w, a);
+	}
+	
+	CONVERT_TO_LONG(v, a);
+	CONVERT_TO_LONG(w, b);
+	x = integer_mul(po, a, b, true);
+	if (x != NULL)
+		return PsycoInt_FROM_LONG(x);
+	if (PycException_Occurred(po))
+		return NULL;
+	/* overflow */
+	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_multiply,
+				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  "vv", v, w);
+}
+
 
 DEFINEFN
 void psy_intobject_init()
@@ -226,6 +274,7 @@ void psy_intobject_init()
 	Psyco_DefineMeta(m->nb_subtract, pint_sub);
 	Psyco_DefineMeta(m->nb_or,       pint_or);
 	Psyco_DefineMeta(m->nb_and,      pint_and);
+	Psyco_DefineMeta(m->nb_multiply, pint_mul);
 
 	psyco_computed_int.compute_fn = &compute_int;
 }

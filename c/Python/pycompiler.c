@@ -9,6 +9,7 @@
 
 #include "../Objects/pobject.h"
 #include "../Objects/pabstract.h"
+#include "../Objects/pdescrobject.h"
 #include "../Objects/pdictobject.h"
 #include "../Objects/pfuncobject.h"
 #include "../Objects/pintobject.h"
@@ -16,8 +17,9 @@
 #include "../Objects/plistobject.h"
 #include "../Objects/plongobject.h"
 #include "../Objects/pmethodobject.h"
-#include "../Objects/psycofuncobject.h"
 #include "../Objects/pstringobject.h"
+#include "../Objects/pstructmember.h"
+#include "../Objects/psycofuncobject.h"
 #include "../Objects/ptupleobject.h"
 
 #include <eval.h>
@@ -574,6 +576,7 @@ void psyco_pycompiler_init()
 
         psy_object_init();
         psy_abstract_init();
+        psy_descrobject_init();
         psy_dictobject_init();
         psy_funcobject_init();
         psy_intobject_init();
@@ -581,8 +584,9 @@ void psyco_pycompiler_init()
         psy_listobject_init();
         psy_longobject_init();
         psy_methodobject_init();
-        psy_psycofuncobject_init();
         psy_stringobject_init();
+        psy_structmember_init();
+        psy_psycofuncobject_init();
         psy_tupleobject_init();
 
 	psy_bltinmodule_init();
@@ -708,6 +712,8 @@ static code_t* do_changed_global(changed_global_t* cg)
 	   reference; indeed, we cannot be sure how long we will need the
 	   object so we must own a reference. dict_subscript() could be
 	   inlined too (but be careful about the overflow problem above!)
+
+           XXX what occurs if the global has been deleted ?
 	*/
 	SAVE_REGS_FN_CALLS;
 	CALL_SET_ARG_IMMED((long) key,         1, 2);

@@ -19,6 +19,7 @@
 #include "Python/pbltinmodule.c"
 
 #include "Objects/pabstract.c"
+#include "Objects/pdescrobject.c"
 #include "Objects/pdictobject.c"
 #include "Objects/pfuncobject.c"
 #include "Objects/pintobject.c"
@@ -27,8 +28,9 @@
 #include "Objects/plongobject.c"
 #include "Objects/pmethodobject.c"
 #include "Objects/pobject.c"
-#include "Objects/psycofuncobject.c"
 #include "Objects/pstringobject.c"
+#include "Objects/pstructmember.c"
+#include "Objects/psycofuncobject.c"
 #include "Objects/ptupleobject.c"
 
 #include "codemanager.c"
@@ -37,12 +39,8 @@
 #include "vcompiler.c"
 #include "mergepoints.c"
 #include "pycencoding.c"
+#include "linuxmemchk.c"
 #include "psyco.c"   /* must be the last one for CODE_DUMP_AT_END_ONLY to work */
-
-
-#ifdef HEAVY_MEM_CHECK
-# include "linuxmemchk.c"
-#endif
 
 
  /***************************************************************/

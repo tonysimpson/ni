@@ -11,6 +11,15 @@
 EXTERNFN void psyco_processor_init(void);
 
 
+#define SIZE_OF_LONG_BITS   2
+#if (1<<SIZE_OF_LONG_BITS) != SIZEOF_LONG
+# error "fix SIZE_OF_LONG_BITS"
+#endif
+#if SIZEOF_LONG != SIZEOF_VOID_P
+# error "oops, Psyco cannot be compiled on such a platform"
+#endif
+
+
 /***************************************************************/
  /*** Utilities                                               ***/
 
@@ -251,12 +260,26 @@ EXTERNFN
 vinfo_t* integer_add_i(PsycoObject* po, vinfo_t* v1, long value2);
 EXTERNFN
 vinfo_t* integer_sub  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf);
+/*EXTERNFN XXX implement me
+  vinfo_t* integer_sub_i(PsycoObject* po, vinfo_t* v1, long value2);*/
 EXTERNFN
-vinfo_t* integer_sub_i(PsycoObject* po, vinfo_t* v1, long value2);
+vinfo_t* integer_mul  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2, bool ovf);
+EXTERNFN
+vinfo_t* integer_mul_i(PsycoObject* po, vinfo_t* v1, long value2);
 EXTERNFN
 vinfo_t* integer_or   (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
 EXTERNFN
 vinfo_t* integer_and  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+EXTERNFN
+vinfo_t* integer_and_i(PsycoObject* po, vinfo_t* v1, long value2);
+/*EXTERNFN XXX implement me
+  vinfo_t* integer_lshift  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);*/
+EXTERNFN
+vinfo_t* integer_lshift_i(PsycoObject* po, vinfo_t* v1, long counter);
+/*EXTERNFN              signed XXX implement me
+  vinfo_t* integer_rshift_i(PsycoObject* po, vinfo_t* v1, long counter); */
+EXTERNFN              /* unsigned */
+vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter);
 EXTERNFN
 vinfo_t* integer_not  (PsycoObject* po, vinfo_t* v1);
 EXTERNFN
@@ -283,6 +306,13 @@ EXTERNFN vinfo_t* integer_seqindex(PsycoObject* po, vinfo_t* vi,
 
 /* make a run-time copy of a vinfo_t */
 EXTERNFN vinfo_t* make_runtime_copy(PsycoObject* po, vinfo_t* v);
+
+inline int intlog2(long value) {
+  int counter = 0;
+  while ((1<<counter) < value)
+    counter++;
+  return counter;
+}
 
 
 /*****************************************************************/

@@ -4,7 +4,9 @@
 
 
 DEFINEVAR fixed_switch_t psyfs_int;
+DEFINEVAR fixed_switch_t psyfs_int_long;
 DEFINEVAR fixed_switch_t psyfs_tuple_list;
+DEFINEVAR fixed_switch_t psyfs_string_unicode;
 
 
 DEFINEFN
@@ -107,6 +109,194 @@ bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
 		return psyco_flag_call(po, PyObject_SetAttr,
 				       CfReturnFlag|CfPyErrIfNonNull,
 				       "vvl", o, attr_name, NULL) != CC_ERROR;
+}
+
+/* Helper to get the offset an object's __dict__ slot, if any.
+   Return the base offset, or -1 if there is no __dict__ slot.
+   A variable offset may be computed and stored in *varindex;
+   the variable offset is a number of longs (i.e. the quarter
+   of a byte offset) */
+
+static long getdictoffset(PsycoObject* po, vinfo_t* obj, vinfo_t** varindex)
+{
+	long dictoffset;
+	PyTypeObject *tp = Psyco_FastType(obj);
+
+	if (!(tp->tp_flags & Py_TPFLAGS_HAVE_CLASS))
+		return -1;
+	dictoffset = tp->tp_dictoffset;
+	if (dictoffset == 0)
+		return -1;
+	if (dictoffset > 0)
+		return dictoffset;
+        else {
+		vinfo_t* ob_size = read_array_item(po, obj, VAR_OB_SIZE);
+		if (ob_size == NULL)
+			return -1;
+		extra_assert(dictoffset % SIZEOF_VOID_P == 0);
+		/* the following code emulates _PyObject_VAR_SIZE() */
+		if ((tp->tp_itemsize & (SIZEOF_VOID_P-1)) == 0 &&
+		    (tp->tp_basicsize & (SIZEOF_VOID_P-1)) == 0) {
+			/* the result is automatically aligned */
+			vinfo_t* a;
+			a = integer_mul_i(po, ob_size,
+					  tp->tp_itemsize / SIZEOF_VOID_P);
+			vinfo_decref(ob_size, po);
+			if (a == NULL)
+				return -1;
+			*varindex = a;
+			return tp->tp_basicsize + dictoffset;
+		}
+		else {
+			/* need to align the result to the next
+			   SIZEOF_VOID_P boundary */
+			vinfo_t* a;
+			vinfo_t* b;
+			vinfo_t* c;
+			a = integer_mul_i(po, ob_size, tp->tp_itemsize);
+			vinfo_decref(ob_size, po);
+			if (a == NULL)
+				return -1;
+			c = integer_add_i(po, a, tp->tp_basicsize + dictoffset +
+						 SIZEOF_VOID_P - 1);
+			vinfo_decref(a, po);
+			if (c == NULL)
+				return -1;
+			b = integer_urshift_i(po, c, SIZE_OF_LONG_BITS);
+			vinfo_decref(c, po);
+			if (b == NULL)
+				return -1;
+			*varindex = b;
+			return 0;
+		}
+	}
+}
+
+DEFINEFN
+vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
+				    vinfo_t* vname)
+{
+	PyTypeObject* tp;
+	PyObject *descr;
+	vinfo_t* res = NULL;
+	descrgetfunc f;
+	PyObject* name;
+	long dictofsbase;
+	vinfo_t* dictofs;
+
+	/* 'name' is generally known at compile-time.
+	   We could promote it at compile-time with
+	   
+		name = psyco_pyobj_atcompiletime(po, vname);
+		if (name == NULL)
+			return NULL;
+
+	   but we don't, because run-time names generally
+	   mean that the Python code uses functions like getattr(),
+	   probably inside of a loop, with a lot of various
+	   attributes. Let's emit a call to PyObject_GenericGetAttr
+	   instead. */
+	if (!is_compiletime(vname->source))
+		return psyco_generic_call(po, PyObject_GenericGetAttr,
+					  CfReturnRef|CfPyErrIfNull,
+					  "vv", obj, vname);
+	name = (PyObject*) CompileTime_Get(vname->source)->value;
+
+#ifdef Py_USING_UNICODE
+	/* The Unicode to string conversion is done here because the
+	   existing tp_setattro slots expect a string object as name
+	   and we wouldn't want to break those. */
+	if (PyUnicode_Check(name)) {
+		name = PyUnicode_AsEncodedString(name, NULL, NULL);
+		if (name == NULL) {
+			psyco_virtualize_exception(po);
+			return NULL;
+		}
+	}
+	else
+#endif
+	if (!PyString_Check(name)){
+		PycException_SetString(po, PyExc_TypeError,
+				"attribute name must be string");
+		return NULL;
+	}
+	else
+		Py_INCREF(name);
+
+	/* we need the type of 'obj' at compile-time */
+	tp = (PyTypeObject*) Psyco_NeedType(po, obj);
+	if (tp == NULL)
+		goto done;
+
+	if (tp->tp_dict == NULL) {
+		if (PyType_Ready(tp) < 0) {
+			psyco_virtualize_exception(po);
+			goto done;
+		}
+	}
+
+	descr = _PyType_Lookup(tp, name);
+	f = NULL;
+	if (descr != NULL) {
+		f = descr->ob_type->tp_descr_get;
+		if (f != NULL && PyDescr_IsData(descr)) {
+			res = Psyco_META3(po, f, CfReturnRef|CfPyErrIfNull,
+					  "lvl", descr, obj, tp);
+			goto done;
+		}
+	}
+
+	dictofs = NULL;
+	dictofsbase = getdictoffset(po, obj, &dictofs);
+	if (dictofsbase == -1) {
+		if (PycException_Occurred(po))
+			return NULL;
+		/* no __dict__ slot */
+	}
+	else {
+		int cond;
+		vinfo_t* dict;
+		if (dictofs == NULL)
+			dict = read_array_item(po, obj, dictofsbase);
+		else
+			dict = read_array_item_var(po, obj,
+						   dictofsbase, dictofs, false);
+		if (dict == NULL)
+			return NULL;
+		cond = runtime_condition_t(po, integer_non_null(po, dict));
+		vinfo_decref(dict, po);
+		if (cond) {
+			/* the __dict__ slot contains a non-NULL value */
+			res = psyco_generic_call(po, PyDict_GetItem,
+						 CfReturnNormal,
+						 "vl", dict, name);
+			if (res == NULL)
+				return NULL;
+			Py_INCREF(name);  /* XXX ref hold by the code buf */
+			if (runtime_condition_t(po, integer_non_null(po, res))) {
+				need_reference(po, res);
+				goto done;
+			}
+		}
+	}
+	
+	if (f != NULL) {
+		res = Psyco_META3(po, f, CfReturnRef|CfPyErrIfNull,
+				  "lvl", descr, obj, tp);
+		goto done;
+	}
+
+	if (descr != NULL) {
+		res = vinfo_new(CompileTime_New((long) descr));
+		goto done;
+	}
+
+	PycException_SetFormat(po, PyExc_AttributeError,
+			       "'%.50s' object has no attribute '%.400s'",
+			       tp->tp_name, PyString_AS_STRING(name));
+  done:
+	Py_DECREF(name);
+	return res;
 }
 
 

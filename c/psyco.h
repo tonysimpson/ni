@@ -34,6 +34,14 @@
     (should be enabled unless you want to trade code size for speed) */
 #define INLINE_COMMON_FUNCTIONS
 
+#if defined(CODE_DUMP_FILE) && defined(HAVE_DLFCN_H)
+ /* define to locate shared symbols and write them in CODE_DUMP_FILE
+    requires the GNU extension dladdr() in <dlfcn.h>
+    Not really useful, only finds non-static symbols. */
+/*# include <dlfcn.h>
+  # define CODE_DUMP_SYMBOLS*/
+#endif
+
 
 /*****************************************************************/
 
