@@ -1,8 +1,11 @@
 #include "processor.h"
 #include "vcompiler.h"
+#include "dispatcher.h"
 #include "codemanager.h"
 #include "pycencoding.h"
 #include "Python/pycompiler.h"  /* for exception handling stuff */
+#include "Python/frames.h"
+#include "timing.h"
 
 
 /* define to copy static machine code in the heap before running it.
@@ -73,10 +76,11 @@ static glue_run_code_fn glue_run_code_1;
 
 DEFINEFN
 PyObject* psyco_processor_run(CodeBufferObject* codebuf,
-                              long initial_stack[], int argc,
+                              long initial_stack[],
                               struct stack_frame_info_s*** finfo)
 {
-  return glue_run_code_1(codebuf->codeptr, initial_stack + argc,
+  int argc = RUN_ARGC(codebuf);
+  return glue_run_code_1(codebuf->codestart, initial_stack + argc,
                          initial_stack, finfo);
 }
 
@@ -118,6 +122,17 @@ static glue_int_mul_fn glue_int_mul_1;
 #else
 # define glue_int_mul_1 ((glue_int_mul_fn) glue_int_mul)
 #endif
+
+
+#define DEFINE_TSC  (TIMING_WITH == TIMING_WITH_PENTIUM_TSC)
+
+#if DEFINE_TSC
+static code_t glue_pentium_tsc[] = {
+  0x0F, 0x31,                   /*   RDTSC   */
+  0xC3,                         /*   RET     */
+};
+DEFINEVAR psyco_pentium_tsc_fn psyco_pentium_tsc;
+#endif /* DEFINE_TSC */
 
 
 DEFINEFN
@@ -282,307 +297,397 @@ void psyco_stack_space_array(PsycoObject* po, vinfo_t** args,
 /* } */
 
 
+#if 0
+  -- XXX remove me --
 DEFINEFN
-vinfo_t* psyco_get_array_item(PsycoObject* po, vinfo_t* vi, int index)
+vinfo_t* psyco_mem_read(PsycoObject* po, vinfo_t* ptr, long offset)
 {
-  vinfo_t* result;
-  NonVirtualSource source = vinfo_compute(vi, po);
+  reg_t src, rg;
+  NonVirtualSource source = vinfo_compute(ptr, po);
   if (source == SOURCE_ERROR) return NULL;
+  
+  BEGIN_CODE
   if (is_runtime(source))
     {
-      reg_t src, rg;
-      BEGIN_CODE
-      RTVINFO_IN_REG(vi);
-      src = RUNTIME_REG(vi);
+      RTVINFO_IN_REG(ptr);
+      src = RUNTIME_REG(ptr);
       DELAY_USE_OF(src);
       NEED_FREE_REG(rg);
-      code[0] = 0x8B;        /* MOV rg, [src + 4*index] */
-      if (COMPACT_ENCODING && index < 128/4) {
-        code[1] = 0x40 | (rg<<3) | src;
-        code[2] = index*4;
-        code += 3;
-      }
-      else {
-        code[1] = 0x80 | (rg<<3) | src;
-        *(long*)(code+2) = index*4;
-        code += 6;
-      }
-      END_CODE
-      result = new_rtvinfo(po, rg, false, false);
+      code[0] = 0x8B;        /* MOV rg, [src + offset] */
+      code = write_modrm(code+1, rg<<3,
+                         src, true,
+                         REG_NONE, false, 0,
+                         offset);
     }
-  else {
-    long value = ((long*)(CompileTime_Get(source)->value))[index];
-    result = vinfo_new(CompileTime_New(value));
-  }
-  vinfo_setitem(po, vi, index, result);
-  return result;
-}
-
-#define READ_ARRAY_ITEM_1(rg, _v, offset, _byte)     do {       \
-  code_t _modrm;                                                \
-  long _value = (offset);                                       \
-  if (!is_compiletime(_v->source))                              \
-    {                                                           \
-      reg_t _src;                                               \
-      DELAY_USE_OF(rg);                                         \
-      RTVINFO_IN_REG(_v);                                       \
-      _src = RUNTIME_REG(_v);                                   \
-      extra_assert(_value >= 0);                                \
-      if (COMPACT_ENCODING && _value < 128)                     \
-        _modrm = 0x40 | _src;    /* MOV rg, [src + offset] */   \
-      else                                                      \
-        _modrm = 0x80 | _src;    /* MOV rg, [src + offset] */   \
-    }                                                           \
-  else                                                          \
-    {                                                           \
-      _modrm = 0x05;           /* MOV rg, [immed] */            \
-      _value += KNOWN_SOURCE(_v)->value;                        \
-    }                                                           \
-  if (_byte) {                                                  \
-    *code++ = 0x0F;                                             \
-    code[0] = 0xB6;   /* MOVZX instead of MOV */                \
-  }                                                             \
-  else                                                          \
-    code[0] = 0x8B;   /* MOV */                                 \
-  code[1] = _modrm | ((rg)<<3);                                 \
-  if (COMPACT_ENCODING && (_modrm & 0x40) != 0) {               \
-    code[2] = (code_t) _value;                                  \
-    code += 3;                                                  \
-  }                                                             \
-  else {                                                        \
-    *(long*)(code+2) = _value;                                  \
-    code += 6;                                                  \
-  }                                                             \
-} while (0)
-
-DEFINEFN
-vinfo_t* psyco_read_array_item(PsycoObject* po, vinfo_t* vi, int index)
-{
-  reg_t rg;
-  if (vinfo_compute(vi, po) == SOURCE_ERROR) return NULL;
-  BEGIN_CODE
-  NEED_FREE_REG(rg);
-  READ_ARRAY_ITEM_1(rg, vi, index*4, 0);
+  else
+    {
+      offset += CompileTime_Get(source)->value;
+      NEED_FREE_REG(rg);
+      code[0] = 0x8B;        /* MOV rg, [offset] */
+      code = write_modrm(code+1, rg<<3,
+                         REG_NONE, false,
+                         REG_NONE, false, 0,
+                         offset);
+    }
   END_CODE
   return new_rtvinfo(po, rg, false, false);
 }
 
 DEFINEFN
-vinfo_t* psyco_read_array_item_var(PsycoObject* po, vinfo_t* v0,
-                                   vinfo_t* v1, int ofsbase, int shift)
+vinfo_t* psyco_mem_read2(PsycoObject* po, vinfo_t* ptr, long offset1,
+                         vinfo_t* offset2, int scale)
 {
-  reg_t rg1;
-  NonVirtualSource v0_source;
-  NonVirtualSource v1_source;
-  v0_source = vinfo_compute(v0, po);
-  if (v0_source == SOURCE_ERROR) return NULL;
-  v1_source = vinfo_compute(v1, po);
-  if (v0_source == SOURCE_ERROR) return NULL;
+  reg_t src, src2, rg;
+  int shift;
+  NonVirtualSource source = vinfo_compute(offset2, po);
+  if (source == SOURCE_ERROR) return NULL;
+
+  if (is_compiletime(source))
+    {
+      offset1 += CompileTime_Get(source)->value * scale;
+      return psyco_mem_read(po, ptr, offset1);
+    }
+  switch (scale) {
+  case 1: shift = 0; break;
+  case 2: shift = 1; break;
+  case 4: shift = 2; break;
+  case 8: shift = 3; break;
+  default:
+    {
+      vinfo_t* noffset2 = integer_mul_i(po, offset2, scale);
+      if (noffset2 == NULL)
+        return NULL;
+      return psyco_mem_read2(po, ptr, offset1, noffset2, 1);
+    }
+  }
+
+  source = vinfo_compute(ptr, po);
+  if (source == SOURCE_ERROR) return NULL;
+  
   BEGIN_CODE
-  NEED_FREE_REG(rg1);
-  if (is_compiletime(v1_source))
-    READ_ARRAY_ITEM_1(rg1, v0,
-                      (CompileTime_Get(v1_source)->value << shift) + ofsbase,
-                      !shift);
+  RTVINFO_IN_REG(offset2);
+  src2 = RunTIME_REG(offset2);
+  DELAY_USE_OF(src2);
+  if (is_runtime(source))
+    {
+      RTVINFO_IN_REG(ptr);
+      src = RUNTIME_REG(ptr);
+      DELAY_USE_OF_2(src2, src);
+      NEED_FREE_REG(rg);
+      code[0] = 0x8B;        /* MOV rg, [src + offset1 + src2*scale] */
+      code = write_modrm(code+1, rg<<3,
+                         src, true,
+                         src2, true, shift,
+                         offset1);
+    }
   else
     {
-      reg_t src0, src1;
-      DELAY_USE_OF(rg1);
-      RTVINFO_IN_REG(v1);
-      src1 = RUNTIME_REG(v1);
-      
-      if (!is_compiletime(v0_source))
-        {
-          DELAY_USE_OF_2(rg1, src1);
-          RTVINFO_IN_REG(v0);
-          src0 = RUNTIME_REG(v0);
-        }
-      else
-        src0 = 0x05;
-
-      if (shift)
-        code[0] = 0x8B;     /* MOV rg1, [ofsbase+(src0-or-immed)+src1<<shift] */
-      else
-        {
-          *code++ = 0x0F;
-          code[0] = 0xB6;   /* MOVZX instead of MOV */
-        }
-      code[1] = 0x04 | (rg1<<3);
-      code[2] = (shift<<6) | (src1<<3) | src0;
-      
-      if (is_compiletime(v0_source))
-        {
-          /* MOV(ZX)  rg1, [base+src1<<shift] */
-          *(long*)(code+3) = CompileTime_Get(v0_source)->value + ofsbase;
-          code += 7;
-        }
-      else
-        {
-          code += 3;
-          if (ofsbase != 0 || (!EBP_IS_RESERVED && src0 == REG_386_EBP))
-            {
-              extra_assert(0 <= ofsbase);
-              if (COMPACT_ENCODING && ofsbase < 128)
-                {
-                  code[-2] |= 0x40;
-                  *code++ = ofsbase;
-                }
-              else
-                {
-                  code[-2] |= 0x80;
-                  *(long*)code = ofsbase;
-                  code += 4;
-                }
-            }
-        }
+      offset1 += CompileTime_Get(source)->value;
+      NEED_FREE_REG(rg);
+      code[0] = 0x8B;        /* MOV rg, [offset1 + src2*scale] */
+      code = write_modrm(code+1, rg<<3,
+                         REG_NONE, false,
+                         src2, true, shift,
+                         offset1);
     }
   END_CODE
-  return new_rtvinfo(po, rg1, false, false);
+  return new_rtvinfo(po, rg, false, false);
 }
 
 DEFINEFN
-bool psyco_write_array_item(PsycoObject* po, vinfo_t* src, vinfo_t* v, int index)
+vinfo_t* psyco_mem_write(PsycoObject* po, vinfo_t* ptr, long offset,
+                         vinfo_t* value)
 {
-  reg_t rg;
-  code_t modrm;
-  long value = index*4;
-  if (is_virtualtime(v->source))
+  reg_t src, rg;
+  NonVirtualSource svalue;
+  NonVirtualSource source = vinfo_compute(ptr, po);
+  if (source == SOURCE_ERROR) return NULL;
+
+  svalue = vinfo_compute(value, po);
+  if (svalue == SOURCE_ERROR) return NULL;
+  
+  BEGIN_CODE
+  if (is_runtime(source))
     {
-      vinfo_incref(src);   /* done, bypass compute() */
-      set_array_item(po, v, index, src);
+      RTVINFO_IN_REG(ptr);
+      src = RUNTIME_REG(ptr);
     }
   else
     {
-      if (vinfo_compute(src, po) == SOURCE_ERROR) return false;
-      BEGIN_CODE
-      if (!is_compiletime(v->source))
+      offset += CompileTime_Get(source)->value;
+      src = REG_NONE;
+    }
+  if (is_runtime(svalue))
+    {
+      DELAY_USE_OF(src);
+      NEED_FREE_REG(rg);
+      code[0] = 0x89;   /* MOV [...], rg */
+    }
+  else
+    {
+      rg = REG_NONE;
+      code[0] = 0xC7;   /* MOV [...], imm32 */
+    }
+  
+      code[0] = 0x8B;        /* MOV rg, [src + offset] */
+      code = write_modrm(code+1, rg<<3,
+                         src, true,
+                         REG_NONE, false, 0,
+                         offset);
+      //    }
+  else
+    {
+      offset += CompileTime_Get(source)->value;
+      NEED_FREE_REG(rg);
+      code[0] = 0x8B;        /* MOV rg, [offset] */
+      code = write_modrm(code+1, rg<<3,
+                         REG_NONE, false,
+                         REG_NONE, false, 0,
+                         offset);
+    }
+  END_CODE
+}
+
+DEFINEFN
+vinfo_t* psyco_mem_write2(PsycoObject* po, vinfo_t* ptr, long offset1,
+                          vinfo_t* offset2, int scale, vinfo_t* value)
+{
+}
+#endif /* 0 */
+
+
+inline code_t* write_modrm(code_t* code, code_t middle,
+                           reg_t base, reg_t index, int shift,
+                           long offset)
+{
+  /* write a mod/rm encoding. */
+  extra_assert(index != REG_386_ESP);
+  extra_assert(0 <= shift && shift < 4);
+  if (base == REG_NONE)
+    {
+      if (index == REG_NONE)
         {
-          reg_t srcrg;
-          RTVINFO_IN_REG(v);
-          srcrg = RUNTIME_REG(v);
-          DELAY_USE_OF(srcrg);
-          if (COMPACT_ENCODING && value < 128)
-            modrm = 0x40 | srcrg;    /* MOV [src + 4*item], ... */
+          code[0] = middle | 0x05;
+          *(long*)(code+1) = offset;
+          return code+5;
+        }
+      else
+        {
+          code[0] = middle | 0x04;
+          code[1] = (shift<<6) | (index<<3) | 0x05;
+          *(long*)(code+2) = offset;
+          return code+6;
+        }
+    }
+  else if (index == REG_NONE)
+    {
+      if (base == REG_386_ESP)
+        {
+          code[0] = 0x84 | middle;
+          code[1] = 0x24;
+          *(long*)(code+2) = offset;
+          return code+6;
+        }
+      else if (COMPACT_ENCODING && offset == 0 && base!=REG_386_EBP)
+        {
+          code[0] = middle | base;
+          return code+1;
+        }
+      else if (COMPACT_ENCODING && offset < 128)
+        {
+          extra_assert(offset >= 0);
+          code[0] = 0x40 | middle | base;
+          code[1] = offset;
+          return code+2;
+        }
+      else
+        {
+          code[0] = 0x80 | middle | base;
+          *(long*)(code+1) = offset;
+          return code+5;
+        }
+    }
+  else
+    {
+      code[1] = (shift<<6) | (index<<3) | base;
+      if (COMPACT_ENCODING && offset == 0 && base!=REG_386_EBP)
+        {
+          code[0] = middle | 0x04;
+          return code+2;
+        }
+      else if (COMPACT_ENCODING && offset < 128)
+        {
+          extra_assert(offset >= 0);
+          code[0] = middle | 0x44;
+          code[2] = offset;
+          return code+3;
+        }
+      else
+        {
+          code[0] = middle | 0x84;
+          *(long*)(code+2) = offset;
+          return code+6;
+        }
+    }
+}
+
+#define NewOutputRegister  ((vinfo_t*) 1)
+
+static reg_t mem_access(PsycoObject* po, code_t opcodes[], vinfo_t* nv_ptr,
+                        long offset, vinfo_t* rt_vindex, int size2,
+                        vinfo_t* rt_extra)
+{
+  int i;
+  reg_t basereg, indexreg, extrareg;
+
+  BEGIN_CODE
+  if (is_runtime(nv_ptr->source))
+    {
+      RTVINFO_IN_REG(nv_ptr);
+      basereg = RUNTIME_REG(nv_ptr);
+    }
+  else
+    {
+      offset += CompileTime_Get(nv_ptr->source)->value;
+      basereg = REG_NONE;
+    }
+  
+  if (rt_vindex != NULL)
+    {
+      DELAY_USE_OF(basereg);
+      RTVINFO_IN_REG(rt_vindex);
+      indexreg = RUNTIME_REG(rt_vindex);
+    }
+  else
+    indexreg = REG_NONE;
+
+  if (rt_extra == NULL)
+    extrareg = 0;
+  else
+    {
+      DELAY_USE_OF_2(basereg, indexreg);
+      if (rt_extra == NewOutputRegister)
+        NEED_FREE_REG(extrareg);
+      else
+        {
+          if (size2==0)
+            RTVINFO_IN_BYTE_REG(rt_extra, basereg, indexreg);
           else
-            modrm = 0x80 | srcrg;    /* MOV [src + 4*item], ... */
+            RTVINFO_IN_REG(rt_extra);
+          extrareg = RUNTIME_REG(rt_extra);
         }
-      else
-        {
-          modrm = 0x05;           /* MOV [immed], ... */
-          value += KNOWN_SOURCE(v)->value;
-        }
-      if (is_compiletime(src->source))
-        code[0] = 0xC7;   /* MOV [...], imm32 */
-      else
-        {
-          RTVINFO_IN_REG(src);
-          rg = RUNTIME_REG(src);
-          code[0] = 0x89;   /* MOV [...], rg */
-          modrm |= (rg<<3);
-        }
-      code[1] = modrm;
-      if (COMPACT_ENCODING && (modrm & 0x40) != 0) {
-        code[2] = (code_t) value;
-        code += 3;
-      }
-      else {
-        *(long*)(code+2) = value;
-        code += 6;
-      }
-      if (is_compiletime(src->source)) {
-        *(long*)code = KNOWN_SOURCE(src)->value;
-        code += 4;
-      }
-      END_CODE
     }
-  return true;
+  
+  for (i = *opcodes++; i--; ) *code++ = *opcodes++;
+  code = write_modrm(code, extrareg<<3, basereg, indexreg, size2, offset);
+  for (i = *opcodes++; i--; ) *code++ = *opcodes++;
+  END_CODE
+  return extrareg;
 }
 
 DEFINEFN
-bool psyco_write_array_item_var(PsycoObject* po, vinfo_t* src,
-                                vinfo_t* v0, vinfo_t* v1, int ofsbase)
+vinfo_t* psyco_memory_read(PsycoObject* po, vinfo_t* nv_ptr, long offset,
+                           vinfo_t* rt_vindex, int size2, bool nonsigned)
 {
-  NonVirtualSource v1_source = vinfo_compute(v1, po);
-  if (v1_source == SOURCE_ERROR) return false;
-  if (is_compiletime(v1_source))
-    psyco_write_array_item(po, src, v0,
-                           CompileTime_Get(v1_source)->value + QUARTER(ofsbase));
+  code_t opcodes[4];
+  reg_t targetreg;
+  switch (size2) {
+  case 0:
+    /* reading only one byte */
+    opcodes[0] = 2;
+    opcodes[1] = 0x0F;
+    opcodes[2] = nonsigned
+      ? 0xB6       /* MOVZX reg, byte [...] */
+      : 0xBE;      /* MOVSX reg, byte [...] */
+    opcodes[3] = 0;
+    break;
+  case 1:
+    /* reading only two bytes */
+    opcodes[0] = 2;
+    opcodes[1] = 0x0F;
+    opcodes[2] = nonsigned
+      ? 0xB7       /* MOVZX reg, short [...] */
+      : 0xBF;      /* MOVSX reg, short [...] */
+    opcodes[3] = 0;
+    break;
+  default:
+    /* reading a long */
+    opcodes[0] = 1;
+    opcodes[1] = 0x8B;  /* MOV reg, long [...] */
+    opcodes[2] = 0;
+    break;
+  }
+  targetreg = mem_access(po, opcodes, nv_ptr, offset, rt_vindex,
+                         size2, NewOutputRegister);
+  return new_rtvinfo(po, targetreg, false, false);
+}
+
+DEFINEFN
+bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr, long offset,
+                        vinfo_t* rt_vindex, int size2, vinfo_t* value)
+{
+  code_t opcodes[8];
+  NonVirtualSource svalue = vinfo_compute(value, po);
+  if (svalue == SOURCE_ERROR) return false;
+
+  if (is_runtime(svalue))
+    {
+      switch (size2) {
+      case 0:
+        /* writing only one byte */
+        opcodes[0] = 1;
+        opcodes[1] = 0x88;   /* MOV byte [...], reg */
+        /* 'reg' is forced in mem_access to be an 8-bit register */
+        opcodes[2] = 0;
+        break;
+      case 1:
+        /* writing only two bytes */
+        opcodes[0] = 2;
+        opcodes[1] = 0x66;
+        opcodes[2] = 0x89;   /* MOV short [...], reg */
+        opcodes[3] = 0;
+        break;
+      default:
+        /* writing a long */
+        opcodes[0] = 1;
+        opcodes[1] = 0x89;   /* MOV long [...], reg */
+        opcodes[2] = 0;
+        break;
+      }
+    }
   else
     {
-      reg_t src0, src1, rg1;
-      NonVirtualSource src_source, v0_source;
-      src_source = vinfo_compute(src, po);
-      if (src_source == SOURCE_ERROR) return false;
-      v0_source  = vinfo_compute(v0, po);
-      if (v0_source == SOURCE_ERROR) return false;
-
-      BEGIN_CODE
-      if (!is_compiletime(src_source))
-        {
-          RTVINFO_IN_REG(src);
-          rg1 = RUNTIME_REG(src);
-          DELAY_USE_OF(rg1);
-        }
-      else
-        rg1 = REG_NONE;
-      
-      RTVINFO_IN_REG(v1);
-      src1 = RUNTIME_REG(v1);
-      
-      if (!is_compiletime(v0_source))
-        {
-          DELAY_USE_OF_2(rg1, src1);
-          RTVINFO_IN_REG(v0);
-          src0 = RUNTIME_REG(v0);
-        }
-      else
-        src0 = 0x05;
-
-      if (rg1 != REG_NONE)
-        {
-          code[0] = 0x89;    /* MOV [ofsbase+(src0-or-immed)+src1<<shift], rg1 */
-          code[1] = 0x04 | (rg1<<3);
-        }
-      else
-        {
-          code[0] = 0xC7;    /* MOV [ the same as above ], immed */
-          code[1] = 0x04 | (0<<3);
-        }
-      code[2] = (2<<6) | (src1<<3) | src0;
-      if (is_compiletime(v0_source))
-        {
-          /* MOV  [base+src1<<shift], ... */
-          *(long*)(code+3) = CompileTime_Get(v0_source)->value + ofsbase;
-          code += 7;
-        }
-      else
-        {
-          code += 3;
-          if (ofsbase != 0 || (!EBP_IS_RESERVED && src0 == REG_386_EBP))
-            {
-              extra_assert(0 <= ofsbase);
-              if (COMPACT_ENCODING && ofsbase < 128)
-                {
-                  code[-2] |= 0x40;
-                  *code++ = ofsbase;
-                }
-              else
-                {
-                  code[-2] |= 0x80;
-                  *(long*)code = ofsbase;
-                  code += 4;
-                }
-            }
-        }
-      
-      if (is_compiletime(src_source))
-        {
-          /* MOV  [...], immed */
-          *(long*)code = CompileTime_Get(src_source)->value;
-          code += 4;
-        }
-      END_CODE
+      code_t* code1;
+      long immed = CompileTime_Get(svalue)->value;
+      value = NULL;  /* not run-time */
+      switch (size2) {
+      case 0:
+        /* writing an immediate byte */
+        opcodes[0] = 1;
+        opcodes[1] = 0xC6;
+        opcodes[2] = 1;
+        opcodes[3] = (code_t) immed;
+        break;
+      case 1:
+        /* writing an immediate short */
+        opcodes[0] = 2;
+        opcodes[1] = 0x66;
+        opcodes[2] = 0xC7;
+        opcodes[3] = 2;
+        opcodes[4] = (code_t) immed;
+        opcodes[5] = (code_t) (immed >> 8);
+        break;
+      default:
+        /* writing an immediate long */
+        code1 = opcodes;  /* workaround for a GCC overoptimization */
+        code1[0] = 1;
+        code1[1] = 0xC7;
+        code1[2] = 4;
+        *(long*)(code1+3) = immed;
+        break;
+      }
     }
+  mem_access(po, opcodes, nv_ptr, offset, rt_vindex, size2, value);
   return true;
 }
 
@@ -603,7 +708,7 @@ code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 	computed_cc_t* cc = (computed_cc_t*) VirtualTime_Get(v->source);
 	reg_t rg;
 
-	NEED_FREE_BYTE_REG(rg, reserved);
+	NEED_FREE_BYTE_REG(rg, reserved, REG_NONE);
 	LOAD_REG_FROM_CONDITION(rg, cc->cc);
 
 	v->source = RunTime_New(rg, false, true);
@@ -612,8 +717,9 @@ code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
         return code;
 }
 
-static bool generic_computed_cc(PsycoObject* po, vinfo_t* v)
+static bool generic_computed_cc(PsycoObject* po, vinfo_t* v, bool forking)
 {
+	if (forking) return true;
 	extra_assert(po->ccreg == v);
         BEGIN_CODE
 	code = psyco_compute_cc(po, code, REG_NONE);
@@ -686,15 +792,19 @@ condition_code_t psyco_vsource_cc(Source source)
 #endif
 
 
-static bool computed_promotion(PsycoObject* po, vinfo_t* v);  /* forward */
+static bool computed_promotion(PsycoObject* po, vinfo_t* v, bool forking);
+/* forward */
 
 INITIALIZATIONFN
 void psyco_processor_init(void)
 {
   int i;
 #ifdef COPY_CODE_IN_HEAP
-  COPY_CODE(glue_run_code_1, glue_run_code, glue_run_code_fn);
-  COPY_CODE(glue_int_mul_1,  glue_int_mul,  glue_int_mul_fn);
+  COPY_CODE(glue_run_code_1,    glue_run_code,     glue_run_code_fn);
+  COPY_CODE(glue_int_mul_1,     glue_int_mul,      glue_int_mul_fn);
+#endif
+#if DEFINE_TSC
+  COPY_CODE(psyco_pentium_tsc,  glue_pentium_tsc,  psyco_pentium_tsc_fn);
 #endif
   COPY_CODE(psyco_call_var, glue_call_var, long(*)(void*, int, long[]));
   for (i=0; i<CC_TOTAL; i++)
@@ -718,11 +828,11 @@ void psyco_processor_init(void)
 /*****************************************************************/
  /***   run-time switches                                       ***/
 
-static bool computed_promotion(PsycoObject* po, vinfo_t* v)
+static bool computed_promotion(PsycoObject* po, vinfo_t* v, bool forking)
 {
   /* uncomputable, but still use the address of computed_promotion() as a
      tag to figure out if a virtual source is a c_promotion_s structure. */
-  return psyco_vsource_not_important.compute_fn(po, v);
+  return psyco_vsource_not_important.compute_fn(po, v, forking);
 }
 
 DEFINEVAR struct c_promotion_s psyco_nonfixed_promotion;
@@ -1017,7 +1127,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 #else
 	va_start(vargs);
 #endif
-        extra_assert(c_function != NULL);
+	extra_assert(c_function != NULL);
 
 	for (count=0; arguments[count]; count++) {
 		long arg;
@@ -1070,8 +1180,8 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 			has_refs = true;
 			break;
 
-                case 'a':
-                case 'A':
+		case 'a':
+		case 'A':
 			has_refs = true;
 			totalstackspace += 4*((vinfo_array_t*) arg)->count;
 			break;
@@ -1091,9 +1201,10 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 
                 if (has_refs) {
                     for (i = 0; i < count; i++) {
-                        if (argtags[i] == 'a' || argtags[i] == 'A')
-                            args[i] = (long)malloc( ((vinfo_array_t*)args[i])->count );
-                        
+                        if (argtags[i] == 'a' || argtags[i] == 'A') {
+							int cnt = ((vinfo_array_t*)args[i])->count;
+                            args[i] = (long)malloc(cnt*sizeof(long));
+                        }
 #if ALL_CHECKS
                         if (argtags[i] == 'r')
                             Py_FatalError("psyco_generic_call(): arg mode "
@@ -1123,6 +1234,15 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
                             free((void*)args[i]);
                         }
                 }
+
+		if (flags & CfPyErrMask) {
+			/* such functions are rarely pure, but there are
+			   exceptions with CfPyErrNotImplemented */
+			vresult = generic_call_ct(flags, result);
+			if (vresult != NULL)
+				return vresult;
+		}
+		
 		switch (flags & CfReturnMask) {
 
 		case CfReturnNormal:
@@ -1283,7 +1403,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	p = argsources;
 	for (i=argcount; i--; p++)
 		CALL_SET_ARG_FROM_RT(*p, i, argcount+1);
-	CALL_C_FUNCTION(codebuf->codeptr,   argcount+1);
+	CALL_C_FUNCTION(codebuf->codestart, argcount+1);
 	po->stack_depth = initial_depth;  /* callee removes arguments */
 	SAVE_IMM8_TO_EBP_BASE(-1, INITIAL_STACK_DEPTH);
 	if (ccflags)
@@ -1535,6 +1655,15 @@ vinfo_t* integer_or(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 }
 
 DEFINEFN
+vinfo_t* integer_xor(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
+{
+  GENERIC_BINARY_HEADER
+  GENERIC_BINARY_CT_CT(a ^ b)
+  GENERIC_BINARY_COMMON_INSTR(6, false,   /* XOR */
+			      is_nonneg(v1s) && is_nonneg(v2s));
+}
+
+DEFINEFN
 vinfo_t* integer_and(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 {
   GENERIC_BINARY_HEADER
@@ -1543,10 +1672,12 @@ vinfo_t* integer_and(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 			      is_nonneg(v1s) || is_nonneg(v2s));
 }
 
-DEFINEFN
+#if 0
+DEFINEFN   -- unused --
 vinfo_t* integer_and_i(PsycoObject* po, vinfo_t* v1, long value2)
      GENERIC_BINARY_INSTR_2(4, a & b,    /* AND */
 			    value2>=0 || is_rtnonneg(v1s))
+#endif
 
 #define GENERIC_SHIFT_BY(rtmacro, nonneg)               \
   {                                                     \
@@ -1559,6 +1690,23 @@ vinfo_t* integer_and_i(PsycoObject* po, vinfo_t* v1, long value2)
     END_CODE                                            \
     return new_rtvinfo(po, rg, false, nonneg);          \
   }
+     
+#define GENERIC_RT_SHIFT(rtmacro, nonneg)       \
+  {                                             \
+    reg_t rg;                                   \
+    BEGIN_CODE                                  \
+    if (RSOURCE_REG(v2s) != SHIFT_COUNTER) {    \
+      NEED_REGISTER(SHIFT_COUNTER);             \
+      LOAD_REG_FROM(v2s, SHIFT_COUNTER);        \
+    }                                           \
+    NEED_CC_REG(SHIFT_COUNTER);                 \
+    DELAY_USE_OF(SHIFT_COUNTER);                \
+    COPY_IN_REG(v1, rg);                        \
+    rtmacro(rg);      /* XXX rg, CL */          \
+    END_CODE                                    \
+    return new_rtvinfo(po, rg, false, nonneg);  \
+  }
+
 
 static vinfo_t* int_lshift_i(PsycoObject* po, vinfo_t* v1, int counter)
      GENERIC_SHIFT_BY(SHIFT_LEFT_BY, false)
@@ -1649,6 +1797,37 @@ vinfo_t* integer_mul_i(PsycoObject* po, vinfo_t* v1, long value2)
   return int_mul_i(po, v1, value2, false);
 }
 
+/* forward */
+static condition_code_t int_cmp_i(PsycoObject* po, RunTimeSource v1s,
+                                  long immed2, condition_code_t result);
+
+DEFINEFN
+vinfo_t* integer_lshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
+{
+  condition_code_t cc;
+  GENERIC_BINARY_HEADER
+  if (is_compiletime(v2s))
+    return integer_lshift_i(po, v1, CompileTime_Get(v2s)->value);
+
+  cc = int_cmp_i(po, v2s, LONG_BIT, CC_uGE);
+  if (cc == CC_ERROR)
+    return NULL;
+
+  if (runtime_condition_f(po, cc))
+    {
+      cc = int_cmp_i(po, v2s, 0, CC_L);
+      if (cc == CC_ERROR)
+        return NULL;
+      if (runtime_condition_f(po, cc))
+        {
+          PycException_SetString(po, PyExc_ValueError, "negative shift count");
+          return NULL;
+        }
+      return vinfo_new(CompileTime_New(0));
+    }
+  GENERIC_RT_SHIFT(SHIFT_LEFT_CL, false);
+}
+
 DEFINEFN
 vinfo_t* integer_lshift_i(PsycoObject* po, vinfo_t* v1, long counter)
 {
@@ -1670,6 +1849,65 @@ vinfo_t* integer_lshift_i(PsycoObject* po, vinfo_t* v1, long counter)
     }
   else if (counter >= LONG_BIT)
     return vinfo_new(CompileTime_New(0));
+  else
+    {
+      PycException_SetString(po, PyExc_ValueError, "negative shift count");
+      return NULL;
+    }
+}
+
+DEFINEFN      /* signed */
+vinfo_t* integer_rshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
+{
+  condition_code_t cc;
+  GENERIC_BINARY_HEADER
+  if (is_compiletime(v2s))
+    return integer_rshift_i(po, v1, CompileTime_Get(v2s)->value);
+
+  cc = int_cmp_i(po, v2s, LONG_BIT, CC_uGE);
+  if (cc == CC_ERROR)
+    return NULL;
+
+  if (runtime_condition_f(po, cc))
+    {
+      cc = int_cmp_i(po, v2s, 0, CC_L);
+      if (cc == CC_ERROR)
+        return NULL;
+      if (runtime_condition_f(po, cc))
+        {
+          PycException_SetString(po, PyExc_ValueError, "negative shift count");
+          return NULL;
+        }
+      return integer_rshift_i(po, v1, LONG_BIT-1);
+    }
+  GENERIC_RT_SHIFT(SHIFT_SIGNED_RIGHT_CL, false);
+}
+
+DEFINEFN      /* signed */
+vinfo_t* integer_rshift_i(PsycoObject* po, vinfo_t* v1, long counter)
+{
+  GENERIC_BINARY_HEADER_i
+  if (counter >= LONG_BIT-1)
+    {
+      if (is_nonneg(v1s))
+        return vinfo_new(CompileTime_New(0));
+      counter = LONG_BIT-1;
+    }
+  if (counter > 0)
+    {
+      if (is_compiletime(v1s))
+        {
+          long c = ((long)(CompileTime_Get(v1s)->value)) >> counter;
+          return vinfo_new(CompileTime_New(c));
+        }
+      else
+        return int_rshift_i(po, v1, counter);
+    }
+  else if (counter == 0)
+    {
+      vinfo_incref(v1);
+      return v1;
+    }
   else
     {
       PycException_SetString(po, PyExc_ValueError, "negative shift count");
@@ -1720,10 +1958,11 @@ vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter)
 /* } */
 
 
-#define GENERIC_UNARY_INSTR(rtmacro, c_code, ovf, c_ovf, cond_ovf, nonneg) \
+#define GENERIC_UNARY_INSTR(rtmacro, c_code, ovf, c_ovf, cond_ovf, nonneg, XTR) \
 {                                                                       \
   NonVirtualSource v1s = vinfo_compute(v1, po);                         \
   if (v1s == SOURCE_ERROR) return NULL;				        \
+  XTR                                                                   \
   if (is_compiletime(v1s))                                              \
     {                                                                   \
       long a = CompileTime_Get(v1s)->value;                             \
@@ -1748,18 +1987,19 @@ vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter)
 DEFINEFN
 vinfo_t* integer_not(PsycoObject* po, vinfo_t* v1)
   GENERIC_UNARY_INSTR(UNARY_INSTR_ON_REG(2, rg), ~a,
-                           false, false, CC_ALWAYS_FALSE, false)
+                           false, false, CC_ALWAYS_FALSE, false, ;)
 
 DEFINEFN
 vinfo_t* integer_neg(PsycoObject* po, vinfo_t* v1, bool ovf)
   GENERIC_UNARY_INSTR(UNARY_INSTR_ON_REG(3, rg), -a,
-                           ovf, c == (-LONG_MAX-1), CC_O, false)
+                           ovf, c == (-LONG_MAX-1), CC_O, false, ;)
 
 DEFINEFN
 vinfo_t* integer_abs(PsycoObject* po, vinfo_t* v1, bool ovf)
   GENERIC_UNARY_INSTR(INT_ABS(rg, v1->source), a<0 ? -a : a,
-                           ovf, c == (-LONG_MAX-1), CHECK_ABS_OVERFLOW, ovf)
-
+                           ovf, c == (-LONG_MAX-1), CHECK_ABS_OVERFLOW,
+                           /*ovf*/ true  /* assert no overflow */,
+                      if (is_nonneg(v1s)) { vinfo_incref(v1); return v1; })
 
 static const condition_code_t direct_results[16] = {
 	  /*****   signed comparison      **/

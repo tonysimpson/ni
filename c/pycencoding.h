@@ -208,13 +208,13 @@ inline bool psyco_incref_v(PsycoObject* po, vinfo_t* v)
    run-time vinfo_t holding a reference to a Python object. */
 inline void psyco_decref_rt(PsycoObject* po, vinfo_t* v)
 {
-  vinfo_t* vtp = vinfo_getitem(v, OB_TYPE);
+  PyTypeObject* tp = Psyco_KnownType(v);
   reg_t rg;
   BEGIN_CODE
   RTVINFO_IN_REG(v);
   rg = RUNTIME_REG(v);
-  if (vtp != NULL && is_compiletime(vtp->source))
-    DEC_OB_REFCNT_T(rg, (PyTypeObject*) (CompileTime_Get(vtp->source)->value));
+  if (tp != NULL)
+    DEC_OB_REFCNT_T(rg, tp);
   else
     DEC_OB_REFCNT(rg);
   END_CODE
@@ -266,38 +266,21 @@ inline void need_reference(PsycoObject* po, vinfo_t* vi)
 }
 
 
-/* internal utilities for the next two functions */
-EXTERNFN void decref_create_new_ref(PsycoObject* po, vinfo_t* w);
-EXTERNFN void decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
+/* to store a new reference to a Python object into a memory structure,
+   use psyco_put_field() or psyco_put_field_array() to store the value
+   proper and then one of the following two functions to adjust the
+   reference counter: */
 
-/* write 'newitem' into the array of 'v' at position 'index',
-   creating a new Python reference. If 'lastref', 'newitem' is supposed to
-   be freed soon; this allows an eventual Python reference owned by 'newitem'
-   to be moved to the array without having to emit any actual
-   Py_INCREF()/Py_DECREF() code. */
-inline bool write_array_item_ref(PsycoObject* po, vinfo_t* v, int index,
-                                 vinfo_t* newitem, bool lastref)
-{
-	if (!write_array_item(po, v, index, newitem))
-		return false;
-	if (lastref)
-		decref_create_new_lastref(po, newitem);
-	else
-		decref_create_new_ref(po, newitem);
-	return true;
-}
-inline bool write_array_item_var_ref(PsycoObject* po, vinfo_t* vi,
-				     int baseindex, vinfo_t* varindex,
-				     vinfo_t* newitem, bool lastref)
-{
-	if (!write_array_item_var(po, vi, baseindex, varindex, newitem))
-		return false;
-	if (lastref)
-		decref_create_new_lastref(po, newitem);
-	else
-		decref_create_new_ref(po, newitem);
-	return true;
-}
+/* normal case */
+EXTERNFN void decref_create_new_ref(PsycoObject* po, vinfo_t* w);
+
+/* if 'w' is supposed to be freed soon, this function tries (if possible)
+   to move an eventual Python reference owned by 'w' to the memory
+   structure.  This avoids a Py_INCREF()/Py_DECREF() pair.
+   Returns 'true' if the reference was successfully transfered;
+   'false' does not mean failure. */
+EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
+
 
 /* called by psyco_emit_header() */
 #define INITIALIZE_FRAME_LOCALS(nframelocal)   do {     \

@@ -100,14 +100,17 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
  * Convenience macros to start/end a code-emitting instruction block:
  */
 #define BEGIN_CODE         { code_t* code = po->code;
-#define UPDATE_CODE          po->code = code;
-#define END_CODE             po->code = code; }
+#define END_CODE             po->code = code;                           \
+                             if (code >= po->codelimit)                 \
+                               PsycoObject_EmergencyCodeRoom(po);       \
+                           }
+
 
 /* Written as a large set of macro. */
 
-#define RSOURCE_REG(src)         (CHKTIME(src, RunTime), getreg(src))
-#define RSOURCE_REG_IS_NONE(src) (CHKTIME(src, RunTime), is_reg_none(src))
-#define RSOURCE_STACK(src)       (CHKTIME(src, RunTime), getstack(src))
+#define RSOURCE_REG(src)         getreg(src)
+#define RSOURCE_REG_IS_NONE(src) is_reg_none(src)
+#define RSOURCE_STACK(src)       getstack(src)
 
 #define RUNTIME_STACK_MAX        RunTime_StackMax
 #define RUNTIME_STACK_NONE       RunTime_StackNone
@@ -124,7 +127,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define SET_RUNTIME_STACK_TO_NONE(vi)   ((vi)->source =                         \
                                          set_rtstack_to_none((vi)->source))
 
-#define KSOURCE_SOURCE(src)     (CHKTIME(src, CompileTime), CompileTime_Get(src))
+#define KSOURCE_SOURCE(src)     CompileTime_Get(src)
 #define KNOWN_SOURCE(vi)        KSOURCE_SOURCE((vi)->source)
 
 #define NEXT_FREE_REG()         next_free_reg(po)
@@ -361,7 +364,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
     code += 3;                                  \
   }                                             \
 } while (0)
-#define SHIFT_COUNTER    REG_ECX  /* must be in range(0,32) */
+#define SHIFT_COUNTER    REG_386_ECX  /* must be in range(0,32) */
 #define SHIFT_GENERICCL(rg, middle)       do {  \
   code[0] = 0xD3;                               \
   code[1] = 0xC0 | ((middle)<<3) | (rg);        \
@@ -369,11 +372,11 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 } while (0)
 
 #define SHIFT_LEFT_BY(rg, cnt)           SHIFT_GENERIC1(rg, cnt, 4)
-#define SHIFT_LEFT_CL(rg)                SHIFT_GENERIC2(rg, 4)
+#define SHIFT_LEFT_CL(rg)                SHIFT_GENERICCL(rg, 4)
 #define SHIFT_RIGHT_BY(rg, cnt)          SHIFT_GENERIC1(rg, cnt, 5)
-#define SHIFT_RIGHT_CL(rg)               SHIFT_GENERIC2(rg, 5)
+#define SHIFT_RIGHT_CL(rg)               SHIFT_GENERICCL(rg, 5)
 #define SHIFT_SIGNED_RIGHT_BY(rg, cnt)   SHIFT_GENERIC1(rg, cnt, 7)
-#define SHIFT_SIGNED_RIGHT_CL(rg)        SHIFT_GENERIC2(rg, 7)
+#define SHIFT_SIGNED_RIGHT_CL(rg)        SHIFT_GENERICCL(rg, 7)
 
 
 /* PUSH the value described in the 'source' of a run-time vinfo_t */
@@ -730,29 +733,23 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   NEED_REGISTER(REG_386_EDX);                   \
 } while (0)
 
-/* like NEED_REGISTER but 'targ' is an output argument which will
-   receive the number of a now-free register */
-#define NEED_FREE_REG(targ)    do {             \
-  targ = po->last_used_reg;                     \
-  if (REG_NUMBER(po, targ) != NULL) {           \
-    targ = NEXT_FREE_REG();                     \
-    NEED_REGISTER(targ);                        \
-  }                                             \
+#define NEED_FREE_REG_COND(targ, cond)   do {           \
+  targ = po->last_used_reg;                             \
+  if (!(cond) || REG_NUMBER(po, targ) != NULL) {        \
+    do {                                                \
+      targ = NEXT_FREE_REG();                           \
+    } while (!(cond));                                  \
+    NEED_REGISTER(targ);                                \
+  }                                                     \
 } while (0)
 
-#define NEED_FREE_BYTE_REG(rg, reserved)   do {                                 \
-  /* test some registers only --                                                \
-     cannot access the other registers as a single byte */                      \
-  /* 'reserved' is a register that will not be used */                          \
-  if (REG_NUMBER(po, REG_386_EDX) == NULL)       rg = REG_386_EDX;  /* DL */    \
-  else if (REG_NUMBER(po, REG_386_ECX) == NULL)  rg = REG_386_ECX;  /* CL */    \
-  else if (REG_NUMBER(po, REG_386_EAX) == NULL)  rg = REG_386_EAX;  /* AL */    \
-  else if (REG_NUMBER(po, REG_386_EBX) == NULL)  rg = REG_386_EBX;  /* BL */    \
-  else {                                                                        \
-    if ((reserved) == REG_386_EBX) rg = REG_386_ECX; else rg = REG_386_EBX;     \
-    NEED_REGISTER(rg);                                                          \
-  }                                                                             \
-} while (0)
+/* like NEED_REGISTER but 'targ' is an output argument which will
+   receive the number of a now-free register */
+#define NEED_FREE_REG(targ)      NEED_FREE_REG_COND(targ, 1)
+#define IS_BYTE_REG(rg)          (REG_386_EAX <= (rg) && (rg) <= REG_386_EBX)
+#define NEED_FREE_BYTE_REG(targ, resrv1, resrv2)                        \
+           NEED_FREE_REG_COND(targ, IS_BYTE_REG(targ) &&                \
+                                    targ!=(resrv1) && targ!=(resrv2))
 
 /* make sure that the register 'reg' will not
    be returned by the next call to NEED_FREE_REG() */
@@ -780,21 +777,31 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 /*****************************************************************/
  /***   vinfo_t restoring                                       ***/
 
-/* reload a vinfo from the stack */
-#define STACK_VINFO_IN_REG(vi)	do {            \
-  reg_t _rg;                                    \
-  long _stack;                                  \
-  NEED_FREE_REG(_rg);                           \
-  REG_NUMBER(po, _rg) = (vi);                   \
-  _stack = RUNTIME_STACK(vi);                   \
-  SET_RUNTIME_REG_TO(vi, _rg);                  \
-  LOAD_REG_FROM_EBP_BASE(_rg, _stack);          \
-} while (0)
-
 /* ensure that a run-time vinfo is in a register */
 #define RTVINFO_IN_REG(vi)	  do {          \
-  if (RUNTIME_REG_IS_NONE(vi))                  \
-    STACK_VINFO_IN_REG(vi);                     \
+  if (RUNTIME_REG_IS_NONE(vi)) {                \
+    /* reload the vinfo from the stack */       \
+    reg_t _rg;                                  \
+    long _stack;                                \
+    NEED_FREE_REG(_rg);                         \
+    REG_NUMBER(po, _rg) = (vi);                 \
+    _stack = RUNTIME_STACK(vi);                 \
+    SET_RUNTIME_REG_TO(vi, _rg);                \
+    LOAD_REG_FROM_EBP_BASE(_rg, _stack);        \
+  }                                             \
+} while (0)
+
+#define RTVINFO_IN_BYTE_REG(vi, resrv1, resrv2)   do {  \
+  reg_t _currg = RUNTIME_REG(vi);                       \
+  if (!IS_BYTE_REG(_currg)) {                           \
+    reg_t _rg;                                          \
+    NEED_FREE_BYTE_REG(_rg, resrv1, resrv2);            \
+    if (_currg != REG_NONE)                             \
+      REG_NUMBER(po, _currg) = NULL;                    \
+    REG_NUMBER(po, _rg) = (vi);                         \
+    LOAD_REG_FROM_RT((vi)->source, _rg);                \
+    SET_RUNTIME_REG_TO(vi, _rg);                        \
+  }                                                     \
 } while (0)
 
 /* load register 'dst' from the given non-virtual source vinfo */
@@ -821,7 +828,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   (code[0]==(code_t)0xE9 && (targetaddr=code+5+*(long*)(code+1), 1))
 
 #define IS_A_SINGLE_JUMP(code, codeend, targetaddr)             \
-  ((codeend)-(code) == 5 && IS_A_JUMP(code, targetaddr))
+  ((codeend)-(code) == SIZE_OF_FAR_JUMP && IS_A_JUMP(code, targetaddr))
 
 #define FAR_COND_JUMP_TO(addr, condition)   do {        \
   code[0] = 0x0F;    /* Jcond rel32 */                  \
@@ -830,6 +837,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   *(long*)(code-4) = (addr) - code;                     \
 } while (0)
 
+#define SIZE_OF_FAR_JUMP                   5
 #define SIZE_OF_SHORT_CONDITIONAL_JUMP     2    /* Jcond rel8 */
 #define RANGE_OF_SHORT_CONDITIONAL_JUMP  127    /* max. positive offset */
 

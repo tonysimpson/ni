@@ -42,9 +42,7 @@ static vinfo_t* ptype_call(PsycoObject* po, vinfo_t* vtype,
 		nb_args = PsycoTuple_Load(varg);
 		if (nb_args == 1) {
 			vinfo_t* v = PsycoTuple_GET_ITEM(varg, 0);
-			v = get_array_item(po, v, OB_TYPE);
-			vinfo_incref(v);
-			return v;
+                        return psyco_get_field(po, v, OB_type);
 		}
 		if (nb_args < 0)
 			goto fallback;

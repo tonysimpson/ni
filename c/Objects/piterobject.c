@@ -6,17 +6,17 @@ DEFINEFN vinfo_t* PsycoSeqIter_NEW(PsycoObject* po, vinfo_t* seq)
 {
 	vinfo_t* zero;
 	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_seqiter));
-	result->array = array_new(SEQITER_IT_MAX+1);
-	result->array->items[OB_TYPE] =
+	result->array = array_new(SEQITER_TOTAL);
+	result->array->items[iOB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PySeqIter_Type)));
 	/* the iterator index is immediately run-time because it is
 	   very likely to be unpromoted to run-time anyway */
 	zero = psyco_vi_Zero();
-	result->array->items[SEQITER_IT_INDEX] = make_runtime_copy(po, zero);
+	result->array->items[iSEQITER_IT_INDEX] = make_runtime_copy(po, zero);
 	vinfo_decref(zero, po);
 	/*result->array->items[SEQITER_IT_INDEX] =
 		vinfo_new(CompileTime_New(0));*/
-	result->array->items[SEQITER_IT_SEQ] = seq;
+	result->array->items[iSEQITER_IT_SEQ] = seq;
 	return result;
 }
 
@@ -33,11 +33,11 @@ static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
 	vinfo_t* index;
 	vinfo_t* result;
 	
-	seq = get_array_item(po, v, SEQITER_IT_SEQ);
+	seq = psyco_get_const(po, v, SEQITER_it_seq);
 	if (seq == NULL)
 		return NULL;
 
-	index = read_array_item(po, v, SEQITER_IT_INDEX);
+	index = psyco_get_field(po, v, SEQITER_it_index);
 	if (index == NULL)
 		return NULL;
 
@@ -58,31 +58,30 @@ static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
 		   muting an object we iterate over is generally considered
 		   as DDIWWY (Don't Do It -- We Warned You.) */
 		vinfo_t* index_plus_1 = integer_add_i(po, index, 1, true);
-		if (index_plus_1 == NULL) {
+		if (index_plus_1 == NULL ||
+		    !psyco_put_field(po, v, SEQITER_it_index, index_plus_1)) {
 			vinfo_decref(result, po);
 			result = NULL;
 		}
-		else {
-			write_array_item(po, v, SEQITER_IT_INDEX, index_plus_1);
-			vinfo_decref(index_plus_1, po);
-		}
+		vinfo_xdecref(index_plus_1, po);
 	}
 	vinfo_decref(index, po);
 	return result;
 }
 
 
-static bool compute_seqiter(PsycoObject* po, vinfo_t* v)
+static bool compute_seqiter(PsycoObject* po, vinfo_t* v, bool forking)
 {
+  	/* also compute with forking because iterators are mutable */
 	vinfo_t* seq;
 	vinfo_t* index;
 	vinfo_t* newobj;
 
-	index = vinfo_getitem(v, SEQITER_IT_INDEX);
+	index = vinfo_getitem(v, iSEQITER_IT_INDEX);
 	if (index == NULL)
 		return false;
 
-	seq = vinfo_getitem(v, SEQITER_IT_SEQ);
+	seq = vinfo_getitem(v, iSEQITER_IT_SEQ);
 	if (seq == NULL)
 		return false;
 
@@ -97,7 +96,7 @@ static bool compute_seqiter(PsycoObject* po, vinfo_t* v)
 	   PyIter_Next() n times but obviously that's not too
 	   good a solution */
 	if (!psyco_knowntobe(index, 0)) {
-		if (!write_array_item(po, v, SEQITER_IT_INDEX, index)) {
+		if (!psyco_put_field(po, v, SEQITER_it_index, index)) {
 			vinfo_decref(newobj, po);
 			return false;
 		}
@@ -106,8 +105,7 @@ static bool compute_seqiter(PsycoObject* po, vinfo_t* v)
 	/* Remove the SEQITER_IT_INDEX entry from v->array because it
 	   is a mutable field now, and could be changed at any time by
 	   anybody .*/
-	v->array->items[SEQITER_IT_INDEX] = NULL;
-	vinfo_decref(index, po);
+	psyco_forget_field(po, v, SEQITER_it_index);
 
 	vinfo_move(po, v, newobj);
 	return true;

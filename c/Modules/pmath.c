@@ -4,9 +4,10 @@
  * TODO: 
  * - raise python exceptions on math errors (domain error etc)
  * - implement:
- *   - ldexp()
- *   - log10()
  *   - frexp()
+ *   - ldexp()
+ *   - log()
+ *   - log10()
  *   - modf()
  */
 

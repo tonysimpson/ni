@@ -10,7 +10,9 @@
 #include "pabstract.h"
 
 
-#define INT_OB_IVAL         QUARTER(offsetof(PyIntObject, ob_ival))
+#define INT_ob_ival    DEF_FIELD(PyIntObject, long, ob_ival, OB_type)
+#define iINT_OB_IVAL   FIELD_INDEX(INT_ob_ival)
+#define INT_TOTAL      FIELDS_TOTAL(INT_ob_ival)
 
 
 #define PsycoInt_Check(tp) PyType_TypeCheck(tp, &PyInt_Type)
@@ -26,10 +28,10 @@ EXTERNVAR source_virtual_t psyco_computed_int;
 inline vinfo_t* PsycoInt_FROM_LONG(vinfo_t* vlong)
 {
 	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_int));
-	result->array = array_new(INT_OB_IVAL+1);
-	result->array->items[OB_TYPE] =
+	result->array = array_new(INT_TOTAL);
+	result->array->items[iOB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyInt_Type)));
-	result->array->items[INT_OB_IVAL] = vlong;
+	result->array->items[iINT_OB_IVAL] = vlong;
 	return result;
 }
 inline vinfo_t* PsycoInt_FromLong(vinfo_t* vlong)
@@ -40,7 +42,7 @@ inline vinfo_t* PsycoInt_FromLong(vinfo_t* vlong)
 
 inline vinfo_t* PsycoInt_AS_LONG(PsycoObject* po, vinfo_t* v)
 {	/* no type check; does not return a new reference. */
-	return get_array_item(po, v, INT_OB_IVAL);
+	return psyco_get_const(po, v, INT_ob_ival);
 }
 
 /* return a new ref */

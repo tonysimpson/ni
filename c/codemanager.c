@@ -11,6 +11,7 @@ typedef struct codemanager_buf_s {
 } codemanager_buf_t;
 
 static codemanager_buf_t* big_buffers = NULL;
+static codemanager_buf_t* completed_big_buffers = NULL;
 
 
 inline void check_signature(codemanager_buf_t* b)
@@ -19,7 +20,7 @@ inline void check_signature(codemanager_buf_t* b)
     Py_FatalError("psyco: code buffer overwrite detected");
 }
 
-inline code_t* get_next_buffer(code_t** limit)
+static code_t* get_next_buffer(code_t** limit)
 {
   char* p;
   codemanager_buf_t* b;
@@ -38,11 +39,12 @@ inline code_t* get_next_buffer(code_t** limit)
   /* no more free buffer, allocate a new one */
   p = (char*) PyMem_MALLOC(BIG_BUFFER_SIZE);
   if (!p)
-    return (code_t*) PyErr_NoMemory();
+    OUT_OF_MEMORY();
 
   /* the codemanager_buf_t structure is put at the end of the buffer,
      with its signature to detect overflows (just in case) */
-  b = (codemanager_buf_t*) (p + BIG_BUFFER_SIZE - sizeof(codemanager_buf_t));
+#define BUFFER_START_OFFSET  (BIG_BUFFER_SIZE - sizeof(codemanager_buf_t))
+  b = (codemanager_buf_t*) (p + BUFFER_START_OFFSET);
   b->signature = BUFFER_SIGNATURE;
   b->position = p;
   b->inuse = true;
@@ -69,7 +71,7 @@ DEFINEFN int psyco_locked_buffers(void)
   return count;
 }
 
-inline void close_buffer_use(code_t* code)
+static void close_buffer_use(code_t* code)
 {
   codemanager_buf_t* b;
   for (b=big_buffers; b!=NULL; b=b->next)
@@ -79,10 +81,11 @@ inline void close_buffer_use(code_t* code)
         {
           extra_assert(b->inuse);
           ALIGN_NO_FILL();
-          if (code < ((code_t*) b) - BUFFER_MARGIN)
+          if (code <= ((code_t*) b) - (BUFFER_MARGIN+2*GUARANTEED_MINIMUM))
             {
               /* unlock the buffer */
-              b->position = code;
+              psyco_memory_usage += (char*) code - b->position;
+              b->position = (char*) code;
               b->inuse = false;
             }
           else
@@ -92,6 +95,9 @@ inline void close_buffer_use(code_t* code)
               for (bb=&big_buffers; *bb!=b; bb=&(*bb)->next)
                 ;
               *bb = b->next;
+              /* add it to the list of completed buffers */
+              b->next = completed_big_buffers;
+              completed_big_buffers = b;
             }
           return;
         }
@@ -101,42 +107,32 @@ inline void close_buffer_use(code_t* code)
 
 
 static CodeBufferObject* new_code_buffer(PsycoObject* po, global_entries_t* ge,
-                                         code_t* proxy_to)
+                                         code_t* proxy_to, code_t** plimit)
 {
   CodeBufferObject* b;
   code_t* limit;
   psyco_trash_object(NULL);
+  if (plimit == NULL)
+    plimit = &limit;
 
   b = PyObject_New(CodeBufferObject, &CodeBuffer_Type);
   if (b == NULL)
-    return NULL;
+    OUT_OF_MEMORY();
   if (proxy_to != NULL)
     {
-      limit = NULL;
-      b->codeptr = proxy_to;  /* points inside another code buffer */
-#ifdef STORE_CODE_END
-      b->codeend = proxy_to;
-      b->codemode = "proxy";
-#endif
+      *plimit = NULL;
+      b->codestart = proxy_to;  /* points inside another code buffer */
+      SET_CODEMODE(b, "proxy");
     }
   else
     {
       /* start a new code buffer */
-      b->codeptr = get_next_buffer(&limit);
-      if (b->codeptr == NULL)
-        {
-          Py_DECREF(b);
-          return NULL;
-        }
-#ifdef STORE_CODE_END
-      b->codeend = NULL;
-      b->codemode = "(compiling)";
-#endif
+      b->codestart = get_next_buffer(plimit);
+      SET_CODEMODE(b, "(compiling)");
     }
   
-  if (VERBOSE_LEVEL > 2)
-    debug_printf(("psyco: %s code buffer %p\n",
-                  proxy_to==NULL ? "new" : "proxy", b->codeptr));
+  debug_printf(3, ("%s code buffer %p\n",
+                   proxy_to==NULL ? "new" : "proxy", b->codestart));
   
   fpo_mark_new(&b->snapshot);
   if (po == NULL)
@@ -148,8 +144,6 @@ static CodeBufferObject* new_code_buffer(PsycoObject* po, global_entries_t* ge,
       fpo_build(&b->snapshot, po);
       if (ge != NULL)
         register_codebuf(ge, b);
-      if (limit != NULL)
-        po->codelimit = limit;
       po->respawn_cnt = 0;
       po->respawn_proxy = b;
     }
@@ -157,15 +151,15 @@ static CodeBufferObject* new_code_buffer(PsycoObject* po, global_entries_t* ge,
 }
 
 DEFINEFN
-CodeBufferObject* psyco_new_code_buffer(PsycoObject* po, global_entries_t* ge)
+CodeBufferObject* psyco_new_code_buffer(PsycoObject* po, global_entries_t* ge, code_t** plimit)
 {
-  return new_code_buffer(po, ge, NULL);
+  return new_code_buffer(po, ge, NULL, plimit);
 }
 
 DEFINEFN
 CodeBufferObject* psyco_proxy_code_buffer(PsycoObject* po, global_entries_t* ge)
 {
-  return new_code_buffer(po, ge, po->code);
+  return new_code_buffer(po, ge, po->code, NULL);
 }
 
 #if 0    /* not used in this version */
@@ -180,10 +174,9 @@ CodeBufferObject* psyco_new_code_buffer_size(int size)
   if (o == NULL)
     return (CodeBufferObject*) PyErr_NoMemory();
   b = (CodeBufferObject*) PyObject_INIT(o, &CodeBuffer_Type);
-  b->codeptr = (code_t*) (b + 1);
+  b->codestart = (code_t*) (b + 1);
   b->po = NULL;
-  if (VERBOSE_LEVEL > 2)
-    debug_printf(("psyco: new_code_buffer_size(%d) %p\n", size, b->codeptr));
+  debug_printf(3, ("new_code_buffer_size(%d) %p\n", size, b->codestart));
   return b;
 }
 #endif
@@ -194,23 +187,18 @@ DEFINEVAR void** psyco_codebuf_spec_dict_list = NULL;
 #endif
 
 DEFINEFN
-void psyco_shrink_code_buffer(CodeBufferObject* obj, int nsize)
+void psyco_shrink_code_buffer(CodeBufferObject* obj, code_t* codeend)
 {
-  code_t* codeend = obj->codeptr + nsize;
-  
-  if (VERBOSE_LEVEL > 2)
-    debug_printf(("psyco: disassemble %p %p    (%d bytes)\n", obj->codeptr,
-                  codeend, nsize));
-  else if (VERBOSE_LEVEL > 1)
-    debug_printf(("[%d]", nsize));
+  /* Note: "disassemble" will give a wrong size estimation if the buffer has
+     been split by END_CODE (which occurs very rarely) */
+  debug_printf(3, ("disassemble %p %p    (%d bytes)\n", obj->codestart,
+                   codeend, codeend - ((code_t*)obj->codestart)));
+  if (VERBOSE_LEVEL == 2)
+    fprintf(stderr, "[%d]", codeend - ((code_t*)obj->codestart));
   
   close_buffer_use(codeend);
+  SET_CODEMODE(obj, "normal");
 
-#ifdef STORE_CODE_END
-  extra_assert(obj->codeend == NULL);
-  obj->codeend = codeend;
-  obj->codemode = "normal";
-#endif
 #if CODE_DUMP
   obj->chained_list = psyco_codebuf_chained_list;
   psyco_codebuf_chained_list = obj;
@@ -226,6 +214,44 @@ void psyco_shrink_code_buffer(CodeBufferObject* obj, int nsize)
 /*   po->respawn_cnt = 0; */
 /*   return 0; */
 /* } */
+
+DEFINEFN
+void psyco_emergency_enlarge_buffer(code_t** pcode, code_t** pcodelimit)
+{
+  code_t* code = *pcode;
+  code_t* nextcode;
+  if (code - *pcodelimit > GUARANTEED_MINIMUM - SIZE_OF_FAR_JUMP)
+    Py_FatalError("psyco: code buffer overflowing");
+
+  nextcode = get_next_buffer(pcodelimit);
+  debug_printf(2, ("emergency enlarge buffer %p -> %p\n", code, nextcode));
+  JUMP_TO(nextcode);
+  close_buffer_use(code);
+
+  *pcode = nextcode;
+}
+
+#if CODE_DUMP
+DEFINEFN
+void psyco_dump_bigbuffers(FILE* f)
+{
+  codemanager_buf_t* b;
+  for (b = completed_big_buffers; b; b = b->next)
+    {
+      char* start = ((char*) b) - BUFFER_START_OFFSET;
+      size_t size = b->position-start;
+      fprintf(f, "BigBuffer 0x%lx %d\n", (long) start, size);
+      fwrite(start, 1, size, f);
+    }
+  for (b = big_buffers; b; b = b->next)
+    {
+      char* start = ((char*) b) - BUFFER_START_OFFSET;
+      size_t size = b->position-start;
+      fprintf(f, "BigBuffer 0x%lx %d\n", (long) start, size);
+      fwrite(start, 1, size, f);
+    }
+}
+#endif
 
 
 /*****************************************************************/
@@ -246,7 +272,7 @@ static PyObject* codebuf_repr(CodeBufferObject* self)
 {
   char buf[100];
   sprintf(buf, "<code buffer ptr %p at %p>",
-	  self->codeptr, self);
+	  self->codestart, self);
   return PyString_FromString(buf);
 }
 
@@ -254,7 +280,7 @@ static void codebuf_dealloc(CodeBufferObject* self)
 {
 #if CODE_DUMP
   CodeBufferObject** ptr = &psyco_codebuf_chained_list;
-  void** chain;
+/*void** chain;*/
   while (*ptr != NULL)
     {
       if (*ptr == self)
@@ -264,24 +290,23 @@ static void codebuf_dealloc(CodeBufferObject* self)
         }
       ptr = &((*ptr)->chained_list);
     }
-  for (chain = psyco_codebuf_spec_dict_list; chain; chain=(void**)*chain)
-    if (self->codeptr < (code_t*)chain && (code_t*)chain <= self->codeend)
-      assert(!"releasing a code buffer with a spec_dict");
+/*   for (chain = psyco_codebuf_spec_dict_list; chain; chain=(void**)*chain) */
+/*     if (self->codestart < (code_t*)chain && (code_t*)chain <= self->codeend) */
+/*       assert(!"releasing a code buffer with a spec_dict"); */
 #endif
-  if (VERBOSE_LEVEL > 2)
-    debug_printf(("psyco: releasing code buffer %p at %p\n",
-                  self->codeptr, self));
+  debug_printf(3, ("releasing code buffer %p at %p\n",
+                   self->codestart, self));
   fpo_release(&self->snapshot);
   
-#if defined(ALL_CHECKS) && defined(STORE_CODE_END)
-  if (self->codeend != NULL)
-    {
-      /* do not actully release, to detect calls to released code */
-      /* 0xCC is the breakpoint instruction (INT 3) */
-      memset(self->codeptr, 0xCC, self->codeend - self->codeptr);
-      return;
-    }
-#endif
+/* #if defined(ALL_CHECKS) && defined(STORE_CODE_END) */
+/*   if (self->codeend != NULL) */
+/*     { */
+/*       * do not actully release, to detect calls to released code * */
+/*       * 0xCC is the breakpoint instruction (INT 3) * */
+/*       memset(self->codestart, 0xCC, self->codeend - self->codeptr); */
+/*       return; */
+/*     } */
+/* #endif */
     
   PyObject_Del(self);
 }

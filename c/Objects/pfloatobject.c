@@ -102,6 +102,26 @@ cimpl_fp_from_long(long value, double* result)
     *result = value; 
 }
 
+DEFINEFN void
+cimpl_fp_from_float(float value, double* result)
+{
+    *result = value;
+}
+
+
+DEFINEFN
+vinfo_t* PsycoFloat_FromFloat(PsycoObject* po, vinfo_t* vfloat)
+{
+    vinfo_t* x;
+    vinfo_array_t* result = array_new(2);
+    x = psyco_generic_call(po, cimpl_fp_from_float, CfNoReturnValue|CfPure,
+                           "va", vfloat, result);
+    if (x != NULL) {
+        x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
+    }
+    array_release(result);
+    return x;
+}
 
 DEFINEFN
 bool PsycoFloat_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** result_1, vinfo_t** result_2)
@@ -142,15 +162,16 @@ bool PsycoFloat_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** result_1, vinfo_
     return true;
 }
 
-static bool compute_float(PsycoObject* po, vinfo_t* floatobj)
+static bool compute_float(PsycoObject* po, vinfo_t* floatobj, bool forking)
 {
     vinfo_t* newobj;
     vinfo_t* first_half;
     vinfo_t* second_half;
+    if (forking) return true;
     
     /* get the field 'ob_fval' from the Python object 'floatobj' */
-    first_half = vinfo_getitem(floatobj, FLOAT_OB_FVAL);
-    second_half = vinfo_getitem(floatobj, FLOAT_OB_FVAL+1);
+    first_half = vinfo_getitem(floatobj, iFLOAT_OB_FVAL+0);
+    second_half = vinfo_getitem(floatobj, iFLOAT_OB_FVAL+1);
     if (first_half == NULL || second_half == NULL)
         return false;
 

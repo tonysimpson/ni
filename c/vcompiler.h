@@ -74,28 +74,32 @@ inline RunTimeSource RunTime_New(reg_t reg, bool ref, bool nonneg) {
 inline bool has_rtref(Source s) {
 	return (s & (TimeMask|RunTime_NoRef)) == RunTime;
 }
-inline reg_t getreg(RunTimeSource s)     { return (reg_t)(s >> 28); }
-inline bool is_reg_none(RunTimeSource s) { return s < 0; }
-inline int getstack(RunTimeSource s)     { return s & RunTime_StackMask; }
+inline reg_t getreg(RunTimeSource s)     { CHKTIME(s, RunTime); return (reg_t)(s >> 28); }
+inline bool is_reg_none(RunTimeSource s) { CHKTIME(s, RunTime); return s < 0; }
+inline int getstack(RunTimeSource s)     { CHKTIME(s, RunTime); return s & RunTime_StackMask; }
 inline bool is_runtime_with_reg(Source s) {
   return (s & (TimeMask|(1<<31))) == 0;
 }
-inline bool is_rtnonneg(Source s)        { return s & RunTime_NonNeg; }
+inline bool is_rtnonneg(RunTimeSource s) { CHKTIME(s, RunTime); return s & RunTime_NonNeg; }
 
 /* mutation */
-inline RunTimeSource remove_rtref(RunTimeSource s) { return s | RunTime_NoRef; }
-inline RunTimeSource add_rtref(RunTimeSource s)    { return s & ~RunTime_NoRef; }
+inline RunTimeSource remove_rtref(RunTimeSource s) { CHKTIME(s, RunTime); return s | RunTime_NoRef; }
+inline RunTimeSource add_rtref(RunTimeSource s)    { CHKTIME(s, RunTime); return s & ~RunTime_NoRef; }
 inline RunTimeSource set_rtreg_to(RunTimeSource s, reg_t newreg) {
+	CHKTIME(s, RunTime);
 	return (s & ~RunTime_RegMask) | ((long) newreg << 28);
 }
 inline RunTimeSource set_rtreg_to_none(RunTimeSource s) {
+	CHKTIME(s, RunTime);
 	return s | ((long) REG_NONE << 28);
 }
 inline RunTimeSource set_rtstack_to(RunTimeSource s, int stack) {
+	CHKTIME(s, RunTime);
 	extra_assert(getstack(s) == RunTime_StackNone);
 	return s | stack;
 }
 inline RunTimeSource set_rtstack_to_none(RunTimeSource s) {
+	CHKTIME(s, RunTime);
 	return s & ~RunTime_StackMask;
 }
 
@@ -157,6 +161,7 @@ inline CompileTimeSource CompileTime_New(long value) {
 
 /* inspection */
 inline source_known_t* CompileTime_Get(CompileTimeSource s) {
+	CHKTIME(s, CompileTime);
 	return (source_known_t*)(((char*) s) - CompileTime);
 }
 inline CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
@@ -173,8 +178,11 @@ inline CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
 	}
 }
 inline bool is_nonneg(Source s) {
-  return is_runtime(s) ? is_rtnonneg(s) :
-     is_compiletime(s) ? (CompileTime_Get(s)->value >= 0) : false;
+	switch (gettime(s)) {
+	case RunTime:     return is_rtnonneg(s);
+	case CompileTime: return CompileTime_Get(s)->value >= 0;
+	default:          return false;
+	}
 }
 
 
@@ -194,6 +202,7 @@ inline VirtualTimeSource VirtualTime_New(source_virtual_t* sv) {
 
 /* inspection */
 inline source_virtual_t* VirtualTime_Get(VirtualTimeSource s) {
+	CHKTIME(s, VirtualTime);
 	return (source_virtual_t*)(((char*) s) - VirtualTime);
 }
 
@@ -272,9 +281,13 @@ inline vinfo_t* vinfo_new_skref(Source src) {
 EXTERNFN vinfo_t* vinfo_copy(vinfo_t* vi);
 
 /* refcounting */
+#define VINFO_CHECKREF						\
+	extra_assert(vi->refcount >= 1);			\
+	extra_assert(vi->refcount < 0x1000000 /* arbitrary */);
 EXTERNFN void vinfo_release(vinfo_t* vi, PsycoObject* po);
-inline void vinfo_incref(vinfo_t* vi) { ++vi->refcount; }
+inline void vinfo_incref(vinfo_t* vi) { VINFO_CHECKREF ++vi->refcount; }
 inline void vinfo_decref(vinfo_t* vi, PsycoObject* po) {
+	VINFO_CHECKREF
 	if (!--vi->refcount) vinfo_release(vi, po);
 }
 inline void vinfo_xdecref(vinfo_t* vi, PsycoObject* po) {
@@ -284,18 +297,19 @@ inline void vinfo_xdecref(vinfo_t* vi, PsycoObject* po) {
 /* promoting out of virtual-time */
 inline NonVirtualSource vinfo_compute(vinfo_t* vi, PsycoObject* po) {
 	if (is_virtualtime(vi->source)) {
-		if (!VirtualTime_Get(vi->source)->compute_fn(po, vi))
+		if (!VirtualTime_Get(vi->source)->compute_fn(po, vi, false))
 			return SOURCE_ERROR;
 		extra_assert(!is_virtualtime(vi->source));
 	}
 	return (NonVirtualSource) vi->source;
 }
 
-/* sub-array (see also processor.h, get_array_item()&co.) */
+/* sub-array (see also processor.h, psyco_get_field()&co.) */
 inline void vinfo_array_grow(vinfo_t* vi, int ncount) {
 	if (ncount > vi->array->count)
 		vi->array = array_grow1(vi->array, ncount);
 }
+EXTERNFN void vinfo_array_shrink(PsycoObject* po, vinfo_t* vi, int ncount);
 inline vinfo_t* vinfo_getitem(vinfo_t* vi, int index) {
 	if (index < vi->array->count)
 		return vi->array->items[index];
@@ -309,6 +323,10 @@ inline vinfo_t* vinfo_needitem(vinfo_t* vi, int index) {
 inline void vinfo_setitem(PsycoObject* po, vinfo_t* vi, int index,
                           vinfo_t* newitem) {
 	/* consumes a reference to 'newitem' */
+	if (newitem != NULL) {
+		extra_assert(!(is_compiletime(vi->source) &&
+			       !is_compiletime(newitem->source)));
+	}
 	vinfo_array_grow(vi, index+1);
 	vinfo_xdecref(vi->array->items[index], po);
 	vi->array->items[index] = newitem;
@@ -332,6 +350,200 @@ inline void array_delete(vinfo_array_t* array, PsycoObject* po) {
 	deallocate_array(array, po);
 	array_release(array);
 }
+
+
+/*****************************************************************/
+ /***   read and write fields of structures in memory           ***/
+
+/* Implementation of defield_t as a single packed bitfield,
+   stored as a pointer to enable type checks in the C compiler */
+/* [This is internal stuff: see comments below for an introduction.] */
+/* type is defined by its size (given as the nth power of two)
+   and a handful of flags */
+typedef struct undefined_fld_s* defield_t;
+EXTERNFN vinfo_t* psyco_internal_getfld(PsycoObject* po, int findex,
+					defield_t df, vinfo_t* vi, long offset);
+EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
+				    vinfo_t* vi, long offset, vinfo_t* value);
+#define FIELD_INDEX_MASK  0x00FF
+#define FIELD_MUTABLE     0x0100
+#define FIELD_ARRAY       0x0200
+#define FIELD_UNSIGNED    0x0400
+#define FIELD_PYOBJ_REF   0x0800
+#define FIELD_SIZE2_SHIFT 12
+#define FIELD_INTL_NOREF  0x8000
+#define FIELD_OFS_SHIFT   16
+#define NO_PREV_FIELD     ((defield_t) -1)
+#define FIELD_RESERVED_INDEX  0xCC
+#define SIZE2_FROM_CTYPE(ctype) \
+	(sizeof(ctype)==1 ? 0 : \
+	 sizeof(ctype)==2 ? 1 : \
+	 sizeof(ctype)==4 ? 2 : \
+	 sizeof(ctype)==8 ? 3 : \
+	 (extra_assert(!"field size is not a small power of two"), 0))
+/*#define FIELD_NTH(df, n)
+	(extra_assert(FIELD_INDEX(df)+(n) == FIELD_INDEX((df)+(n))),
+	((df) + (n) + (((n) << FIELD_SIZE2(df)) << FIELD_OFS_SHIFT))*/
+#define STRUCT_FIELD_BUILD(cstruct, ctype, cfield, prevf, flags)	\
+	((defield_t) ((offsetof(cstruct, cfield) << FIELD_OFS_SHIFT) |	\
+		      (SIZE2_FROM_CTYPE(ctype) << FIELD_SIZE2_SHIFT) |	\
+		      field_next_index(prevf, true) |			\
+		      flags))
+#define ARRAY_FIELD_BUILD(ctype, baseofs, flags)			\
+	((defield_t) (((baseofs) << FIELD_OFS_SHIFT) | 			\
+		      (SIZE2_FROM_CTYPE(ctype) << FIELD_SIZE2_SHIFT) | 	\
+		      FIELD_RESERVED_INDEX | FIELD_ARRAY |		\
+		      flags))
+
+
+/*****************************************************************
+ * You must describe the fields of each C structure of the interpreter
+ * that you want Psyco to work with.  Use the following macros field
+ * by field.  Each macro returns a defield_t which contains the
+ * definition of the field. */
+
+/* build the field definition corresponding to:
+    - the C structure whose name is in 'cstruct';
+    - the C type given by 'ctype';
+    - the field name given by 'cfield'.
+   For the field order you must give in 'prevf' the defield_t
+   corresponding to the previous field of the C structure,
+   or NO_PREV_FIELD if you are defining the first field. */
+#define DEF_FIELD(cstruct, ctype, cfield, prevf) \
+	STRUCT_FIELD_BUILD(cstruct, ctype, cfield, prevf, 0)
+
+/* special case: use the following macro instead of DEF_FIELD
+   if 'ctype' is an unsigned numeric type. */
+#define UNSIGNED_FIELD(cstruct, ctype, cfield, prevf) \
+	STRUCT_FIELD_BUILD(cstruct, ctype, cfield, prevf, FIELD_UNSIGNED)
+
+/* the same, for pure arrays instead of structures */
+#define DEF_ARRAY(ctype, baseofs) \
+	ARRAY_FIELD_BUILD(ctype, baseofs, 0)
+#define UNSIGNED_ARRAY(ctype, baseofs) \
+	ARRAY_FIELD_BUILD(ctype, baseofs, FIELD_UNSIGNED)
+
+/* you can surround DEF_FIELD() by FARRAY(), FMUT(), FPYREF():
+    - FARRAY() means that the field is actually an array in the
+      structure, as for example 'ob_items' in PyTupleObject;
+    - FMUT() means that the field is mutable;
+    - FPYREF() means that we want to read or store a PyObject* reference */
+#define FARRAY(df)  ((defield_t) ((long)(df) | FIELD_ARRAY))
+#define FMUT(df)    ((defield_t) ((long)(df) | FIELD_MUTABLE))
+#define FPYREF(df)  (extra_assert(1<<FIELD_SIZE2(df) == sizeof(PyObject*)), \
+                     (defield_t) ((long)(df) | FIELD_PYOBJ_REF))
+
+/* inspection of a defield_t:
+    - FIELDS_TOTAL(df) returns the number of fields of the structure
+      defined so far, if 'df' is the defield_t of the last field;
+    - FIELD_INDEX(df) returns the 0-based index of 'df' in vinfo->array;
+    - 1<<FIELD_SIZE2(df) computes the size of the field 'df';
+    - FIELD_OFFSET(df) is the offset of 'df' in the C structure. */
+#define FIELDS_TOTAL(lastdf)  (field_next_index(lastdf, false))
+#define FIELD_INDEX(df)    ((long)(df) & FIELD_INDEX_MASK)
+#define FIELD_SIZE2(df)   (((long)(df) >> FIELD_SIZE2_SHIFT) & 3)
+#define FIELD_OFFSET(df)   ((long)(df) >> FIELD_OFS_SHIFT)
+#define FIELD_HAS_REF(df)  ((long)(df) & FIELD_PYOBJ_REF)
+
+/* functions to read or write a field from or to the structure 
+   pointed to by 'vi': */
+inline vinfo_t* psyco_get_field(PsycoObject* po, vinfo_t* vi, defield_t df) {
+	return psyco_internal_getfld(po, FIELD_INDEX(df), df,
+				     vi, FIELD_OFFSET(df));
+}
+inline vinfo_t* psyco_get_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df,
+				    int index) {
+	long ofs = index << FIELD_SIZE2(df);
+	return psyco_internal_getfld(po, FIELD_INDEX(df) + index, df,
+				     vi, FIELD_OFFSET(df) + ofs);
+}
+inline vinfo_t* psyco_get_field_offset(PsycoObject* po, vinfo_t* vi,
+				       defield_t df, long offset) {
+	extra_assert((long)df & FIELD_MUTABLE);
+	return psyco_internal_getfld(po, FIELD_RESERVED_INDEX, df,
+				     vi, FIELD_OFFSET(df) + offset);
+}
+EXTERNFN vinfo_t* psyco_get_field_array(PsycoObject* po, vinfo_t* vi,
+					defield_t df, vinfo_t* vindex);
+inline bool psyco_put_field(PsycoObject* po, vinfo_t* vi, defield_t df,
+			    vinfo_t* value) {
+	return psyco_internal_putfld(po, FIELD_INDEX(df), df,
+				     vi, FIELD_OFFSET(df), value);
+}
+inline bool psyco_put_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df, 
+				int index, vinfo_t* value) {
+	long ofs = index << FIELD_SIZE2(df);
+	return psyco_internal_putfld(po, FIELD_INDEX(df) + index, df,
+				     vi, FIELD_OFFSET(df) + ofs, value);
+}
+EXTERNFN bool psyco_put_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
+                                    vinfo_t* vindex, vinfo_t* value);
+
+/* fields of size 8 (like those of type 'double') are accessed as two
+   vinfo_t's, for the second of which we use the following macro */
+#define FIELD_PART2(df)  ((defield_t) ((long)(df) + 1 +     /* next index */  \
+			    (sizeof(long)<<FIELD_OFS_SHIFT))) /* next ofs */
+
+/* these special-case convenient functions do not return a new
+   vinfo_t* reference that you have to worry about and eventually release;
+   but they only work for immutable fields. */
+inline vinfo_t* psyco_get_const(PsycoObject* po, vinfo_t* vi, defield_t df) {
+	return psyco_internal_getfld(po, FIELD_INDEX(df),
+                                     (defield_t) ((long)df | FIELD_INTL_NOREF),
+				     vi, FIELD_OFFSET(df));
+}
+inline vinfo_t* psyco_get_nth_const(PsycoObject* po, vinfo_t* vi, defield_t df,
+				    int index) {
+	long ofs = index << FIELD_SIZE2(df);
+	return psyco_internal_getfld(po, FIELD_INDEX(df) + index,
+                                     (defield_t) ((long)df | FIELD_INTL_NOREF),
+				     vi, FIELD_OFFSET(df) + ofs);
+}
+
+/* "forgets" the saved value for the field 'df' in 'vi'.  Used when an
+   immutable field changes after all, or when a virtual-time structure that
+   stores mutable fields is computed (because the mutable fields can actually
+   be mutated by anyone after the structure is computed). */
+inline void psyco_forget_field(PsycoObject* po, vinfo_t* vi, defield_t df) {
+	vinfo_setitem(po, vi, FIELD_INDEX(df), NULL);
+}
+inline void psyco_forget_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df,
+				   int index) {
+	vinfo_setitem(po, vi, FIELD_INDEX(df) + index, NULL);
+}
+
+/* to tell Psyco you are sure you know the value of a given field */
+EXTERNFN void psyco_assert_field(PsycoObject* po, vinfo_t* vi, defield_t df,
+                                 long value);
+
+
+/* internal */
+#if PSYCO_DEBUG
+/* in debugging mode, use the function;  while optimizing, we favour
+   the macro version below because GCC does not completely optimize out
+   recursive calls to functions with completely constant arguments. */
+inline int field_next_index(defield_t df, bool ovf) {
+	if (df == NO_PREV_FIELD)
+		return 0;
+	else {
+		int n = FIELD_INDEX(df);
+		int field_size = 1 << FIELD_SIZE2(df);
+		/* arrays are variable-sized */
+		extra_assert(!((long)df & FIELD_ARRAY));
+		/* round up */
+		n += (field_size + sizeof(long)-1) / sizeof(long);
+		if (ovf)  /* check for index overflow */
+			extra_assert(n == FIELD_INDEX(n));
+		return n;
+	}
+}
+#else
+/*  this macro seriously slows down compilation because it expands 'df'
+    three times, producing exponential explosion in the preprocessor --
+    still, the result is generally a constant. */
+#  define field_next_index(df, ovf)    ((df) == NO_PREV_FIELD ? 0 :		\
+     FIELD_INDEX(df) + ((1 << FIELD_SIZE2(df)) + sizeof(long)-1) / sizeof(long))
+#endif
 
 
 /*****************************************************************/
@@ -377,13 +589,7 @@ inline vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonneg) {
    to 'vsource', which is freed. 'vsource' must have no array, and
    'vtarget->source' must hold no reference to anything. In short, this
    function must not be used except by virtual-time computers. */
-inline void vinfo_move(PsycoObject* po, vinfo_t* vtarget, vinfo_t* vsource)
-{
-	Source src = vtarget->source = vsource->source;
-	if (is_runtime(src) && !is_reg_none(src))
-		REG_NUMBER(po, getreg(src)) = vtarget;
-	psyco_llfree_vinfo(vsource);
-}
+EXTERNFN void vinfo_move(PsycoObject* po, vinfo_t* vtarget, vinfo_t* vsource);
 
 
 /*****************************************************************/
@@ -436,10 +642,11 @@ EXTERNFN void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
 
 /* management functions; see comments in compiler.c */
 #if ALL_CHECKS
-EXTERNFN void psyco_assert_coherent(PsycoObject* po);
+EXTERNFN void psyco_assert_coherent1(PsycoObject* po, bool full);
 #else
-inline void psyco_assert_coherent(PsycoObject* po) { }   /* nothing */
+#  define psyco_assert_coherent1(po, full)  do { } while (0) /* nothing */
 #endif
+#define psyco_assert_coherent(po)    psyco_assert_coherent1(po, true)
 
 /* construction */
 inline PsycoObject* PsycoObject_New(int vlocalscnt) {

@@ -9,7 +9,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #define PAGESIZE 4096
-#define MALLOC_BIGBUFFER   PAGESIZE*16384
+#ifndef MALLOC_BIGBUFFER
+# define MALLOC_BIGBUFFER   PAGESIZE*16384
+#endif
 
 
 struct _alloc_s {
@@ -44,8 +46,8 @@ void* memchk_ef_malloc(int size)
   char* data;
   if (_na_start == NULL)
     {
-      int fd = open("/dev/zero", O_RDWR);
-      _na_start = mmap(NULL, MALLOC_BIGBUFFER, PROT_NONE, MAP_PRIVATE, fd, 0);
+      _na_start = mmap(NULL, MALLOC_BIGBUFFER, PROT_NONE,
+                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
       assert(_na_start != MAP_FAILED);
       _na_cur = (char*) _na_start;
     }
@@ -53,12 +55,12 @@ void* memchk_ef_malloc(int size)
   _na_cur += npages * PAGESIZE;
   if (_na_cur >= ((char*) _na_start) + MALLOC_BIGBUFFER)
     {
-      fprintf(stderr, "Nothing wrong so far, but MALLOC_CHECK is running out of mmap'ed memory.\nIncrease MALLOC_BIGBUFFER.\n");
+      fprintf(stderr, "Nothing wrong so far, but MALLOC_CHECK is running out\n of mmap'ed memory.  Increase MALLOC_BIGBUFFER.\n");
       assert(0);
     }
   err = mprotect(s, npages * PAGESIZE, PROT_READ|PROT_WRITE|PROT_EXEC);
   assert(!err);
-  s->ptr = data = _na_cur - ((size+3)&~3);
+  s->ptr = data = _na_cur - /*((size+3)&~3)*/ size;
   s->npages = npages;
   err = mprotect(s, PAGESIZE, PROT_NONE);
   assert(!err);
@@ -69,7 +71,10 @@ DEFINEFN
 void memchk_ef_free(void* data)
 {
   int err, npages;
-  struct _alloc_s* s = _na_find(data);
+  struct _alloc_s* s;
+  if (data == NULL)
+    return;
+  s = _na_find(data);
   assert(s->ptr == data);
   npages = s->npages;
   s->npages = 0;

@@ -28,8 +28,13 @@
 */
 struct stack_frame_info_s;
 EXTERNFN PyObject* psyco_processor_run(CodeBufferObject* codebuf,
-                                       long initial_stack[], int argc,
+                                       long initial_stack[],
                                        struct stack_frame_info_s*** finfo);
+
+#define RUN_ARGC(codebuf)                                       \
+   (extra_assert(CodeBuffer_Check((codebuf))),                  \
+    (get_stack_depth(&((CodeBufferObject*)(codebuf))->snapshot) \
+     - INITIAL_STACK_DEPTH - sizeof(long)) / sizeof(long))
 
 /* return a new vinfo_t* meaning `in the processor flags, true if <cc>',
    as an integer 0 or 1. The source of the vinfo_t* is compile-time
@@ -51,107 +56,22 @@ inline reg_t next_free_reg(PsycoObject* po) {
 EXTERNVAR long (*psyco_call_var) (void* c_func, int argcount, long arguments[]);
 
 
-/*****************************************************************/
- /***   read and write fields of structures in memory           ***/
+/***************************************************************/
+ /*** Read/write memory                                       ***/
 
-
-/* only called by the inlined functions defined below; do not use directly. */
-EXTERNFN vinfo_t* psyco_get_array_item(PsycoObject* po, vinfo_t* vi, int index);
-EXTERNFN vinfo_t* psyco_read_array_item(PsycoObject* po, vinfo_t* vi, int index);
-EXTERNFN vinfo_t* psyco_read_array_item_var(PsycoObject* po, vinfo_t* v0,
-                                            vinfo_t* v1, int ofsbase, int shift);
-EXTERNFN bool psyco_write_array_item(PsycoObject* po, vinfo_t* src,
-                                     vinfo_t* v, int index);
-EXTERNFN bool psyco_write_array_item_var(PsycoObject* po, vinfo_t* src,
-                                         vinfo_t* v0, vinfo_t* v1, int ofsbase);
-
-
-/* Use read/write_array_item to emit the code that performs the read or
-   write to a structure. Use get/set_array_item if the vinfo_array_t*
-   can be considered as a cache over the in-memory structure. In other
-   words, get_array_item will not reload a value if it has already been
-   loaded once, and set_array_item never actually writes any value at
-   all (it stays in the vinfo_array_t* cache).
-*/
-
-inline vinfo_t* get_array_item(PsycoObject* po, vinfo_t* vi, int index) {
-	/* does not return a new reference */
-	vinfo_t* result = vinfo_getitem(vi, index);
-	if (result == NULL)
-		result = psyco_get_array_item(po, vi, index);
-	return result;
-}
-
-inline vinfo_t* read_array_item(PsycoObject* po, vinfo_t* vi, int index) {
-	/* returns a new reference */
-	vinfo_t* result;
-	if (is_virtualtime(vi->source) &&
-	    (result = vinfo_getitem(vi, index)) != NULL)
-		vinfo_incref(result);   /* done, bypass compute() */
-	else
-		result = psyco_read_array_item(po, vi, index);
-	return result;
-}
-
-inline vinfo_t* read_array_item_var(PsycoObject* po, vinfo_t* vi, int baseindex,
-				    vinfo_t* varindex, bool byte) {
-	/* returns a new reference */
-	return psyco_read_array_item_var(po, vi, varindex,
-					 baseindex*sizeof(long), byte ? 0 : 2);
-}
-
-#if 0
---- Disabled: not safe, could make the PsycoObject grow unboundedly
-inline vinfo_t* get_array_item_var(PsycoObject* po, vinfo_t* vi, int baseindex,
-                                   vinfo_t* varindex, bool byte) {
-	/* returns a new reference */
-	if (is_compiletime(varindex->source)) {
-		vinfo_t* r = get_array_item(po, vi,
-		    CompileTime_Get(varindex->source)->value + baseindex);
-		if (r != NULL)
-			vinfo_incref(r);
-		return r;
-	}
-	else
-		return read_array_item_var(po, vi, baseindex, varindex, byte);
-}
-#endif
-
-inline vinfo_t* read_immut_array_item_var(PsycoObject* po, vinfo_t* vi,
-                                          int baseindex, vinfo_t* varindex,
-                                          bool byte) {
-	/* returns a new reference */
-	if (is_compiletime(varindex->source)) {
-		vinfo_t* r = vinfo_getitem(vi,
-		    CompileTime_Get(varindex->source)->value + baseindex);
-		if (r != NULL) {
-			vinfo_incref(r);
-			return r;
-		}
-	}
-	return read_array_item_var(po, vi, baseindex, varindex, byte);
-}
-
-inline void set_array_item(PsycoObject* po, vinfo_t* vi,
-			   int index, vinfo_t* newitem) {
-	/* CONSUMES a reference on 'newitem' */
-	vinfo_t* item = vinfo_needitem(vi, index);
-	vinfo_xdecref(item, po);
-	vi->array->items[index] = newitem;
-}
-
-inline bool write_array_item(PsycoObject* po, vinfo_t* vi,
-			     int index, vinfo_t* newitem) {
-	/* does not consume any reference */
-	return psyco_write_array_item(po, newitem, vi, index);
-}
-
-inline bool write_array_item_var(PsycoObject* po, vinfo_t* vi, int baseindex,
-                                 vinfo_t* varindex, vinfo_t* newitem) {
-	/* does not consume any reference */
-	return psyco_write_array_item_var(po, newitem, vi, varindex,
-                                          baseindex*sizeof(long));
-}
+/* access the data word at address 'nv_ptr + offset + (rt_vindex<<size2)'.
+   'nv_ptr' must be a non-virtual source.
+   'rt_vindex' must be a run-time source or NULL.
+   '1<<size2' also specifies the size of the data word to access.
+   'size2' must be 1, 2, 4 or 8 (in the latter case, only the first 4 bytes
+     are accessed anyway).
+   'nonsigned' selects between zero- and sign-extension if 'size2' is 1 or 2. */
+EXTERNFN vinfo_t* psyco_memory_read(PsycoObject* po, vinfo_t* nv_ptr,
+                                    long offset, vinfo_t* rt_vindex,
+                                    int size2, bool nonsigned);
+EXTERNFN bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr,
+                                 long offset, vinfo_t* rt_vindex,
+                                 int size2, vinfo_t* value);
 
 
 #if 0
@@ -260,7 +180,7 @@ psyco_next_stack_frame(struct stack_frame_info_s** finfo);
 
 /* Returns a condition code for: "'vi' is not null". Warning, when a
    function returns a condition code it must be used immediately, before
-   there is any change that new code is emitted. If you are unsure, use
+   there is any chance for new code to be emitted. If you are unsure, use
    psyco_vinfo_condition() to turn the condition code into a 0 or 1 integer. */
 EXTERNFN condition_code_t integer_non_null(PsycoObject* po, vinfo_t* vi);
 
@@ -285,15 +205,21 @@ vinfo_t* integer_mul_i(PsycoObject* po, vinfo_t* v1, long value2);
 EXTERNFN
 vinfo_t* integer_or   (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
 EXTERNFN
-vinfo_t* integer_and  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+vinfo_t* integer_xor  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
 EXTERNFN
-vinfo_t* integer_and_i(PsycoObject* po, vinfo_t* v1, long value2);
-/*EXTERNFN XXX implement me
-  vinfo_t* integer_lshift  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);*/
+vinfo_t* integer_and  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+/*EXTERNFN
+  vinfo_t* integer_and_i(PsycoObject* po, vinfo_t* v1, long value2);*/
+EXTERNFN
+vinfo_t* integer_lshift  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+EXTERNFN              /* signed */
+vinfo_t* integer_rshift  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+/*EXTERNFN              unsigned
+  vinfo_t* integer_urshift  (PsycoObject* po, vinfo_t* v1, vinfo_t* v2);*/
 EXTERNFN
 vinfo_t* integer_lshift_i(PsycoObject* po, vinfo_t* v1, long counter);
-/*EXTERNFN              signed XXX implement me
-  vinfo_t* integer_rshift_i(PsycoObject* po, vinfo_t* v1, long counter); */
+EXTERNFN              /* signed */
+vinfo_t* integer_rshift_i(PsycoObject* po, vinfo_t* v1, long counter);
 EXTERNFN              /* unsigned */
 vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter);
 EXTERNFN
@@ -427,6 +353,18 @@ EXTERNVAR c_promotion_t psyco_nonfixed_pyobj_promotion;
 
 /* Check if the given virtual source is a promotion exception */
 EXTERNFN bool psyco_vsource_is_promotion(VirtualTimeSource source);
+
+
+/*****************************************************************/
+/* Pentium timing (this function is only defined if TIMING_WITH ==
+                   TIMING_WITH_PENTIUM_TSC in timing.h) */
+#if HAVE_LONG_LONG
+typedef LONG_LONG pentium_tsc_t;
+#else
+typedef long pentium_tsc_t;
+#endif
+typedef pentium_tsc_t (*psyco_pentium_tsc_fn) (void);
+/*EXTERNVAR psyco_pentium_tsc_fn psyco_pentium_tsc; see timing.h */
 
 
 #endif /* _PROCESSOR_H */

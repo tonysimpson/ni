@@ -9,9 +9,14 @@
 #include "../Python/pycompiler.h"
 
 
-#define OB_REFCOUNT         QUARTER(offsetof(PyObject, ob_refcnt))
-#define OB_TYPE             QUARTER(offsetof(PyObject, ob_type))
-#define VAR_OB_SIZE         QUARTER(offsetof(PyVarObject, ob_size))
+/*#define OB_REFCOUNT         never directly manipulated*/
+#define OB_type    DEF_FIELD(PyObject, PyTypeObject*, ob_type, NO_PREV_FIELD)
+#define FIX_size   DEF_FIELD(PyVarObject,        int, ob_size, OB_type)
+#define VAR_size   FMUT(FIX_size)
+
+#define iOB_TYPE   FIELD_INDEX(OB_type)
+#define iFIX_SIZE  FIELD_INDEX(FIX_size)
+#define iVAR_SIZE  FIELD_INDEX(VAR_size)
 
 
 /* common type checkers, rewritten because in Psyco we manipulate type
@@ -34,18 +39,19 @@
 
 /* Return the type of an object, or NULL in case of exception (typically
    a promotion exception). */
-inline PyTypeObject* Psyco_NeedType(PsycoObject* po, vinfo_t* vi) {
-	 vinfo_t* vtp = get_array_item(po, vi, OB_TYPE);
-	 if (vtp == NULL)
-		 return NULL;
-	 return (PyTypeObject*) psyco_pyobj_atcompiletime(po, vtp);
-}
+EXTERNFN PyTypeObject* Psyco_NeedType(PsycoObject* po, vinfo_t* vi);
+
 inline PyTypeObject* Psyco_FastType(vinfo_t* vi) {
-	/* only call this when you know the type has already been
-	   loaded by a previous Psyco_NeedType() */
-	vinfo_t* vtp = vinfo_getitem(vi, OB_TYPE);
-	extra_assert(vtp != NULL && is_compiletime(vtp->source));
-	return (PyTypeObject*) (CompileTime_Get(vtp->source)->value);
+	/* fast version.  Only call this when you know the type has
+	   already been loaded by a previous Psyco_NeedType() */
+	vinfo_t* vtp = vinfo_getitem(vi, iOB_TYPE);
+	if (vtp == NULL) {
+		PyObject* o = (PyObject*) CompileTime_Get(vi->source)->value;
+		return o->ob_type;
+	}
+	else {
+		return (PyTypeObject*) CompileTime_Get(vtp->source)->value;
+	}
 }
 #if USE_RUNTIME_SWITCHES
 # error "Disabled because of type inheritance. The switch overlooks subtypes."
@@ -68,13 +74,15 @@ inline int Psyco_VerifyType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
 		return -1;
 	return PyType_TypeCheck(vtp, tp);
 }
+/* Return the type that the object is known to be of, or NULL if unknown.
+   Never fails. */
+EXTERNFN PyTypeObject* Psyco_KnownType(vinfo_t* vi);
 
 /* Use this to assert the type of an object. Do not use unless you are
    sure about it! (e.g. don't use this for integer-computing functions
    if they might return a long in case of overflow) */
 inline void Psyco_AssertType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
-	vinfo_setitem(po, vi, OB_TYPE,
-		      vinfo_new(CompileTime_New((long) tp)));
+	psyco_assert_field(po, vi, OB_type, (long) tp);
 }
 
 /* Same as integer_non_null() but assumes we are testing a PyObject* pointer,
@@ -135,15 +143,22 @@ EXTERNFN vinfo_t* PsycoObject_RichCompareBool(PsycoObject* po,
 					vinfo_t* v3, vinfo_t* v4),		\
 				(po, op, flags, "vvvv", v1, v2, v3, v4))
 
-#define DEF_KNOWN_RET_TYPE_internal(cname, knowntype, fargs, gargs)             \
-static vinfo_t* cname  fargs  {                                                 \
-	vinfo_t* result = psyco_generic_call  gargs ;                           \
-	if (result != NULL) {                                                   \
-		set_array_item(po, result, OB_TYPE,                             \
-			       vinfo_new(CompileTime_New((long)(knowntype))));  \
-	}                                                                       \
-	return result;                                                          \
+#define DEF_KNOWN_RET_TYPE_internal(cname, knowntype, fargs, gargs)	\
+static vinfo_t* cname  fargs  {						\
+	vinfo_t* result = psyco_generic_call  gargs ;			\
+	if (result != NULL && !IS_NOTIMPLEMENTED(result)) {		\
+		Psyco_AssertType(po, result, knowntype);		\
+	}								\
+	return result;							\
 }
+
+/* 'true' unless 'x' is exactly the special 'not implemented' value
+   built by psyco_generic_call with CfPyErrNotImplemented */
+#define IS_IMPLEMENTED(x)	((x) == NULL || !IS_NOTIMPLEMENTED(x))
+
+/* is 'x' the special 'not implemented' value? */
+#define IS_NOTIMPLEMENTED(x)	\
+	((x)->source == CompileTime_NewSk(&psyco_skNotImplemented))
 
 
 #if USE_RUNTIME_SWITCHES

@@ -151,10 +151,16 @@ EXTERNFN CodeBufferObject* psyco_unify_code(PsycoObject* po,
 
 /* To "simplify" recursively a vinfo_array_t. The simplification done
    is to replace run-time values inside a sub-array of a non-virtual
-   value with NULL. We assume that these can still be reloaded later if
-   necessary. Returns the number of run-time values left.
+   value with NULL, and to remove sub-arrays of constant-time values.
+   We assume that these can still be reloaded later if necessary.
+   Returns the number of run-time values left.
    This assumes that all 'tmp' marks are cleared in 'array'. */
-EXTERNFN int psyco_simplify_array(vinfo_array_t* array);
+EXTERNFN int psyco_simplify_array(vinfo_array_t* array,
+                                  PsycoObject* po);  /* 'po' may be NULL */
+
+/* Emit the code to prepare for Psyco code calling Psyco code in
+   a compiled function call */
+EXTERNFN bool psyco_forking(PsycoObject* po, vinfo_array_t* array);
 
 /*****************************************************************/
  /***   Promotion                                               ***/
@@ -236,6 +242,11 @@ inline bool runtime_condition_t(PsycoObject* po, condition_code_t cond) {
    use object_non_null() in this case. */
 EXTERNFN int runtime_NON_NULL_f(PsycoObject* po, vinfo_t* vi);
 EXTERNFN int runtime_NON_NULL_t(PsycoObject* po, vinfo_t* vi);
+
+/* check if an integer is between the given *inclusive* bounds.
+   Same return values as above.  Does not consume a ref. */
+EXTERNFN int runtime_in_bounds(PsycoObject* po, vinfo_t* vi,
+                               long lowbound, long highbound);
 
 
 #endif /* _DISPATCHER_H */

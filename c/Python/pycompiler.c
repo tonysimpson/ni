@@ -60,13 +60,11 @@ PyObject* Psyco_DefineMetaModule(char* modulename)
 	PyObject* module = PyImport_ImportModule(modulename);
 	if (module == NULL) {
 		PyErr_Clear();
-		debug_printf(("psyco: note: module %s not found\n",
-			      modulename));
+		debug_printf(1, ("init: module %s not found\n",
+				 modulename));
 	}
 	else {
-#if VERBOSE_LEVEL > 1
-		debug_printf(("psyco: activated module %s\n", modulename));
-#endif
+		debug_printf(2, ("init: activated module %s\n", modulename));
 	}
 	return module;
 }
@@ -81,15 +79,16 @@ PyObject* Psyco_GetModuleObject(PyObject* module, char* name,
 	
 	fobj = PyObject_GetAttrString(module, name);
 	if (fobj == NULL) {
-		debug_printf(("psyco: note: %s.%s not found\n",
-			      PyModule_GetName(module), name));
+		debug_printf(1, ("init: %s.%s not found\n",
+				 PyModule_GetName(module), name));
 		PyErr_Clear();
 		return NULL;
 	}
 	if (expected_type != NULL && !PyObject_TypeCheck(fobj, expected_type)) {
-		debug_printf(("psyco: note: %s.%s is of type %.200s instead of "
-			      "%.200s\n", PyModule_GetName(module), name,
-			      fobj->ob_type->tp_name, expected_type->tp_name));
+		debug_printf(1, ("init: %s.%s is of type %.200s instead of "
+				 "%.200s\n", PyModule_GetName(module), name,
+				 fobj->ob_type->tp_name,
+				 expected_type->tp_name));
 		Py_DECREF(fobj);
 		fobj = NULL;
 	}
@@ -108,9 +107,9 @@ PyCFunction Psyco_DefineModuleFn(PyObject* module, char* meth_name,
 
 	if (PyCFunction_GET_FLAGS(fobj) != meth_flags) {
 		f = NULL;
-		debug_printf(("psyco: note: %s.%s built-in has wrong "
-			      "meth_flags\n", PyModule_GetName(module),
-			      meth_name));
+		debug_printf(1, ("init: %s.%s built-in has wrong "
+				 "meth_flags\n", PyModule_GetName(module),
+				 meth_name));
 	}
 	else {
 		f = PyCFunction_GET_FUNCTION(fobj);
@@ -252,6 +251,19 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 #undef FORGET_REF
 
 DEFINEFN
+vinfo_t* generic_call_ct(int flags, long result)
+{
+	switch (flags & CfPyErrMask) {
+		
+	case CfPyErrNotImplemented:   /* test for a Py_NotImplemented result */
+		if ((PyObject*) result == Py_NotImplemented)
+			return psyco_vi_NotImplemented();
+		break;
+	}
+	return NULL;  /* meaning: nothing particular */
+}
+
+DEFINEFN
 vinfo_t* Psyco_Meta1x(PsycoObject* po, void* c_function, int flags,
 		      const char* arguments, long a1)
 {
@@ -387,7 +399,7 @@ void PycException_Promote(PsycoObject* po, vinfo_t* vi, c_promotion_t* promotion
 
 #if !HAVE_PyString_FromFormatV
 /* This code is copied from Python 2.2. */
-PyObject *
+DEFINEFN PyObject *
 PyString_FromFormatV(const char *format, va_list vargs)
 {
 	va_list count;
@@ -906,50 +918,6 @@ inline void PsycoTraceBack_Here(PsycoObject* po, int lasti)
 }
 
 
-#define FRAME_STACK_ALLOC_BY	83   /* about 1KB */
-
-DEFINEFN
-stack_frame_info_t* psyco_finfo(PsycoObject* callee)
-{
-	Source sglobals;
-	static stack_frame_info_t* current = NULL;
-	static stack_frame_info_t* end = NULL;
-	if (current == end) {
-		current = PyMem_NEW(stack_frame_info_t, FRAME_STACK_ALLOC_BY);
-		if (current == NULL)
-			OUT_OF_MEMORY();
-		end = current + FRAME_STACK_ALLOC_BY;
-	}
-	current->co = callee->pr.co;
-	sglobals = callee->vlocals.items[INDEX_LOC_GLOBALS]->source;
-	if (is_compiletime(sglobals))
-		current->globals = (PyObject*) CompileTime_Get(sglobals)->value;
-	else
-		current->globals = NULL;  /* uncommon */
-	
-	return current++;
-}
-
-DEFINEFN
-PyFrameObject* psyco_emulate_frame(stack_frame_info_t* finfo,
-				   PyObject* default_globals)
-{
-	PyFrameObject* back;
-	PyFrameObject* result;
-	PyThreadState* tstate = PyThreadState_GET();
-	
-	/* frame objects are not created in stack order
-	   with Psyco, so it's probably better not to
-	   create plain wrong chained lists */
-	back = tstate->frame;
-	tstate->frame = NULL;
-	result = PyFrame_New(tstate, finfo->co,
-			     finfo->globals!=NULL?finfo->globals:default_globals,
-			     NULL);
-	tstate->frame = back;
-	return result;
-}
-
  /***************************************************************/
 /***                      Initialization                       ***/
  /***************************************************************/
@@ -1080,7 +1048,7 @@ static code_t* do_changed_global(changed_global_t* cg)
 	mark_varying(po, key);
 
 	/* 'v' is now run-time, recompile */
-	target = psyco_compile_code(po, NULL)->codeptr;
+	target = (code_t*) psyco_compile_code(po, NULL)->codestart;
 	/* XXX don't know what to do with the reference returned by
 	   XXX psyco_compile_code() */
 
@@ -1184,12 +1152,9 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		
 		/* if the object is changed later we will jump to
 		   a proxy which we prepare now */
-		onchangebuf = psyco_new_code_buffer(NULL, NULL);
-                if (onchangebuf == NULL)
-			OUT_OF_MEMORY();
 		po = PsycoObject_Duplicate(po);
-
-		code = onchangebuf->codeptr;
+		onchangebuf = psyco_new_code_buffer(NULL, NULL, &po->codelimit);
+		code = (code_t*) onchangebuf->codestart;
 		TEMP_SAVE_REGS_FN_CALLS;
 		po->code = code;
 		cg = (changed_global_t*) psyco_jump_proxy(po,
@@ -1198,9 +1163,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		cg->po = po;
 		cg->varname = key;             Py_INCREF(key);
                 cg->previousvalue = result;    Py_INCREF(result);
-		SHRINK_CODE_BUFFER(onchangebuf,
-                                   (code_t*)(cg+1) - onchangebuf->codeptr,
-                                   "load_global");
+		SHRINK_CODE_BUFFER(onchangebuf, (code_t*)(cg+1), "load_global");
 
 		/* go on in the main code sequence */
 		po = po1;
@@ -1210,7 +1173,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		cg->originalmacrocode = code;
                 LOAD_REG_FROM_IMMED(mprg, (long) globals);
 		DICT_ITEM_IFCHANGED(code, index, key, result,
-				    onchangebuf->codeptr, mprg);
+				    (code_t*) onchangebuf->codestart, mprg);
 		po->code = code;
                 dump_code_buffers();
 	}
@@ -1624,6 +1587,7 @@ static int cimpl_print_expr(PyObject* v)
 
 static int cimpl_print_item_to(PyObject* v, PyObject* stream)
 {
+	/* XXX update to Python 2.3's implementation */
 	if (stream == NULL || stream == Py_None) {
 		stream = PySys_GetObject("stdout");
 		if (stream == NULL) {
@@ -1878,6 +1842,10 @@ static void cimpl_do_raise(PyObject *type, PyObject *value, PyObject *tb)
 	/*return WHY_EXCEPTION;*/
 }
 
+#if HAVE_PYTHON_SUPPORT
+# define PyClass_NewInGlobals(g, bases, dict, name) \
+			PyClass_New(bases, dict, name)
+#else  /* !HAVE_PYTHON_SUPPORT */
 static PyObject*
 PyClass_NewInGlobals(PyObject* g,  /* globals */
 		     PyObject *bases, PyObject *dict, PyObject *name)
@@ -1893,6 +1861,7 @@ PyClass_NewInGlobals(PyObject* g,  /* globals */
 	}
 	return PyClass_New(bases, dict, name);
 }
+#endif  /* !HAVE_PYTHON_SUPPORT */
 
 /* copied from ceval.c where it is private */
 /* added a workaround for PyClass_New(), which normally uses
@@ -2092,7 +2061,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
   PyObject *old_py_exc, *old_py_val, *old_py_tb;
   PyErr_Fetch(&old_py_exc, &old_py_val, &old_py_tb);
 
-  if ((po->pr.mp_flags & MP_FLAGS_HAS_EXCEPT) != 0 &&
+  if ((psyco_mp_flags(po->pr.merge_points) & MP_FLAGS_HAS_EXCEPT) != 0 &&
       (LOC_CONTINUATION->array == NullArray)) {
     /* for functions that have "try: except:" blocks, we reserve some room
        in the stack to store the previous tstate->exc_xxx if an exception
@@ -2522,17 +2491,13 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			Py_FatalError("psyco: undetected exception "
 				      "in END_FINALLY");
 		POP(v);
-		if (is_compiletime(v->source) &&
-		    CompileTime_Get(v->source)->value == (long) Py_None) {
+		if (psyco_knowntobe(v, (long) Py_None)) {
 			/* 'None' on the stack, it is the end of a finally
 			   block with no exception raised */
 			vinfo_decref(v, po);
 			goto fine;
 		}
-		if (v->array->count > OB_TYPE &&
-		    is_compiletime(v->array->items[OB_TYPE]->source) &&
-		    CompileTime_Get(v->array->items[OB_TYPE]->source)->value ==
-		     (long)(&PyTuple_Type) &&
+		if (Psyco_KnownType(v) == &PyTuple_Type &&
 		    PsycoTuple_Load(v) == 3) {
 			/* 'v' is a 3- tuple. As no real Python exception is
 			   a tuple object we are sure it comes from a
@@ -2598,7 +2563,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 				   and if they match proceed by loading the
 				   tuple item by item into the stack. */
 				vinfo_t* vsize;
-				vsize = get_array_item(po, v, VAR_OB_SIZE);
+				vsize = psyco_get_const(po, v, FIX_size);
 				if (vsize == NULL)
 					break;
 
@@ -2615,8 +2580,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 				/* make sure the tuple data is loaded */
 				for (i=oparg; i--; ) {
-					w = get_array_item(po, v,
-							   TUPLE_OB_ITEM + i);
+					w = psyco_get_nth_const(po, v,
+								TUPLE_ob_item,
+								i);
 					if (w == NULL)
 						break;
 				}
@@ -2626,7 +2592,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			/* copy the tuple items into the stack */
 			POP(v);
 			for (i=oparg; i--; ) {
-				w = v->array->items[TUPLE_OB_ITEM + i];
+				w = PsycoTuple_GET_ITEM(v, i);
                                 vinfo_incref(w);
                                 PUSH(w);
                                 /* in case the tuple is freed while its items
@@ -2799,34 +2765,11 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 
 	case BUILD_LIST:
-		v = PsycoList_New(po, oparg);
+		v = PsycoList_New(po, oparg, STACK_POINTER() - oparg);
 		if (v == NULL)
 			break;
-		
-                if (oparg > 0) {
-			int i;
-			
-			/* load 'list->ob_item' into 'w' */
-			w = read_array_item(po, v, LIST_OB_ITEM);
-			if (w == NULL) {
-				vinfo_decref(v, po);
-				break;
-			}
-			
-			/* write the list items from 'w' */
-			for (i=0; i<oparg; i++) {
-				x = NTOP(oparg-i);
-				if (!write_array_item_ref(po, w, i, x, true))
-					break;
-			}
-			vinfo_decref(w, po);
-			if (PycException_Occurred(po)) {
-				vinfo_decref(v, po);
-				break;
-			}
-			while (oparg--)
-				POP_DECREF();
-		}
+		while (oparg--)
+			POP_DECREF();
 		PUSH(v);
 		goto fine;
 
@@ -3148,12 +3091,23 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	
 	/* are we running out of space in the current code buffer? */
 	if ((po->codelimit - po->code) < BUFFER_MARGIN) {
-		extra_assert(!is_respawning(po));
-		SAVE_NEXT_INSTR(next_instr);
-		if (mp->bytecode_position != next_instr)
-			mp = NULL;
-		code1 = psyco_compile(po, mp, false);
-		goto finished;
+		if (is_respawning(po)) {
+			/* when respawning, just forget everything we
+			   wrote so far and come back to the beginning
+			   again */
+			PsycoObject_EmergencyCodeRoom(po);
+		}
+		else {
+			/* normal case: save the current position, and
+			   stop compilation. When this point is reached
+			   at run-time, compilation will go on in a
+			   new buffer. */
+			SAVE_NEXT_INSTR(next_instr);
+			if (mp->bytecode_position != next_instr)
+				mp = NULL;
+			code1 = psyco_compile(po, mp, false);
+			goto finished;
+		}
 	}
 	
 	/* mark merge points via a call to psyco_compile() */
@@ -3256,17 +3210,17 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	}
 	
 	if (b->b_type == SETUP_FINALLY) {
-		/* unlike ceval.c, SETUP_FINALLY always pushes a single
-		   object on the stack. See comments in pycompiler.h.
-		   This object is a 3-tuple (exc, value, traceback) which
+		/* SETUP_FINALLY always pushes on the stack either a
+		   single compile-time None object or three objects
+		   (exc, value, traceback). Unlike Python, the latter
 		   might represent a pseudo-exception like EReturn. */
 		int next_instr;
 		vinfo_t** stack_a = po->vlocals.items + po->pr.stack_base;
 		vinfo_t* exc_info = PsycoTuple_New(3, NULL);
 		PycException_Fetch(po);
-		exc_info->array->items[TUPLE_OB_ITEM + 0] = po->pr.exc;
-		exc_info->array->items[TUPLE_OB_ITEM + 1] = po->pr.val;
-		exc_info->array->items[TUPLE_OB_ITEM + 2] = po->pr.tb;
+		PsycoTuple_GET_ITEM(exc_info, 0) = po->pr.exc;
+		PsycoTuple_GET_ITEM(exc_info, 1) = po->pr.val;
+		PsycoTuple_GET_ITEM(exc_info, 2) = po->pr.tb;
 		po->pr.exc = NULL;
 		po->pr.val = NULL;
 		po->pr.tb  = NULL;

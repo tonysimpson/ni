@@ -63,10 +63,15 @@ inline type* psyco_llalloc_##name(void) {			\
 	else {							\
 		vi = (type*) psyco_linked_list_##name;		\
 		psyco_linked_list_##name = *(void**) vi;	\
+		BLOCKALLOC_DEBUG_CHECK(				\
+			(type*) psyco_linked_list_##name, type)	\
 	}							\
+        BLOCKALLOC_DEBUG_CHECK(vi, type)			\
 	return vi;						\
 }								\
 inline void psyco_llfree_##name(type* vi) {			\
+	if (PSYCO_DEBUG)					\
+		memset(vi, 0xCD, sizeof(type));			\
 	*(void**) vi = psyco_linked_list_##name;		\
 	psyco_linked_list_##name = (void**) vi;			\
 }
@@ -76,12 +81,16 @@ DVAR void** psyco_linked_list_##name = NULL;				\
 DFN  void* psyco_ll_newblock_##name()					\
 {									\
 	int block_count = (blocksize)/sizeof(type);			\
+	size_t sze = block_count * sizeof(type);			\
 	type* p;							\
 	type* prev = (type*) psyco_linked_list_##name;			\
-	type* block = PyMem_NEW(type, block_count);			\
+	type* block = (type*) PyMem_MALLOC(sze);			\
+	psyco_memory_usage += sze;					\
 	extra_assert(block_count > 0 && sizeof(type) >= sizeof(void*));	\
 	if (block == NULL)						\
 		OUT_OF_MEMORY();					\
+	if (PSYCO_DEBUG)						\
+		memset(block, 0xCD, sze);				\
 	for (p=block+block_count; --p!=block; ) {			\
 		*(type**)p = prev;					\
 		prev = p;						\
@@ -89,6 +98,17 @@ DFN  void* psyco_ll_newblock_##name()					\
 	psyco_linked_list_##name = *(void***) prev;			\
 	return prev;							\
 }
+
+#if PSYCO_DEBUG
+# define BLOCKALLOC_DEBUG_CHECK(vi, type)				\
+	if (vi) {							\
+		int i;							\
+		for (i=sizeof(void*); i<sizeof(type); i++)		\
+			assert(((unsigned char*)(vi))[i] == 0xCD);	\
+	}
+#else
+# define BLOCKALLOC_DEBUG_CHECK(vi, type)   /* nothing */
+#endif
 
 /***************************************************************/
 

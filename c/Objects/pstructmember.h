@@ -4,6 +4,8 @@
 
 #ifndef _PSY_STRUCTMEMBER_H
 #define _PSY_STRUCTMEMBER_H
+
+#include "../Python/pycompiler.h"
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 
 

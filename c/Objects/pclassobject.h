@@ -11,10 +11,15 @@
 
 
 /* Instance methods */
-#define METHOD_IM_FUNC         QUARTER(offsetof(PyMethodObject, im_func))
-#define METHOD_IM_SELF         QUARTER(offsetof(PyMethodObject, im_self))
-#define METHOD_IM_CLASS        QUARTER(offsetof(PyMethodObject, im_class))
-#define METHOD_SIZE            (METHOD_IM_CLASS+1)
+#define METHOD_im_func   DEF_FIELD(PyMethodObject, PyObject*, im_func,  OB_type)
+#define METHOD_im_self   DEF_FIELD(PyMethodObject, PyObject*, im_self,  \
+						METHOD_im_func)
+#define METHOD_im_class  DEF_FIELD(PyMethodObject, PyObject*, im_class, \
+						METHOD_im_self)
+#define iMETHOD_IM_FUNC  FIELD_INDEX(METHOD_im_func)
+#define iMETHOD_IM_SELF  FIELD_INDEX(METHOD_im_self)
+#define iMETHOD_IM_CLASS FIELD_INDEX(METHOD_im_class)
+#define METHOD_TOTAL     FIELDS_TOTAL(METHOD_im_class)
 
 
 EXTERNFN vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,

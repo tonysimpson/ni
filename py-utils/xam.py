@@ -81,11 +81,10 @@ def lineaddresses(line):
     return result
 
 def codeat(addr):
-    i = bisect.bisect_left(codeboundary, (addr, None))
-    if i<len(codeboundary):
-        addrend, codebuf = codeboundary[i]
-        if isinstance(codebuf, CodeBuf) and \
-           codebuf.addr <= addr < codebuf.addr + len(codebuf.data):
+    i = bisect.bisect(codeboundary, (addr, None))
+    if i>0:
+        addrend, codebuf = codeboundary[i-1]
+        if isinstance(codebuf, CodeBuf):
             return codebuf
 
 
@@ -99,41 +98,52 @@ LOC_LOCALS_PLUS = 2
 class CodeBuf:
     
     def __init__(self, mode, co_filename, co_name, nextinstr,
-                 addr, data, stackdepth):
+                 addr, stackdepth):
         self.mode = mode
         self.co_filename = co_filename
         self.co_name = co_name
         self.nextinstr = nextinstr
         self.addr = addr
-        self.data = data
+        #self.data = data
         self.stackdepth = stackdepth
         #self.reverse_lookup = []  # list of (offset, codebuf pointing there)
         self.specdict = []
-        if self.data:
-            codeboundary.append((self.addr+len(self.data)-1, self))
+        if self.mode != "proxy":
+            codeboundary.append((self.addr-0.5, self))
+        else:
+            self.data = ""
         #for i in range(4, len(data)+1):
         #    offset, = struct.unpack('l', data[i-4:i])
         #    rawtargets.setdefault(addr+i+offset, {})[self] = 1
 
     def __getattr__(self, attr):
+        if attr == 'data':
+            i = bisect.bisect(codeboundary, (self.addr-0.5, self))
+            assert codeboundary[i-1][1] is self
+            next = codeboundary[i][1]
+            while not isinstance(codeboundary[i][1], BigBuffer):
+                i = i + 1
+            bigbuf = codeboundary[i][1]
+            self.data = data = bigbuf.load(self.addr, next.addr)
+            return data
         if attr == 'cache_text':
             # produce the disassembly listing
             data = self.data
             addr = self.addr
-            self.cache_text = []
-            for i in range(0, 16):
-                if data[i:i+4] == '\x66\x66\x66\x66':
-                    # detected a rt_local_buf_t structure
-                    next, key = struct.unpack('ll', data[i+4:i+12])
-                    data = data[i+12:]
-                    addr += i+12
-                    self.cache_text = [
-                        'Created by promotion of the value 0x%x\n' % key,
-                        'Next promoted value at buffer 0x%x\n' % next,
-                        ]
-                    break
-                if data[i:i+1] != '\xCC':
-                    break
+            k = 0
+            while data[k:k+1] == '\xCC':
+                k = k + 1
+            if data[k:k+4] == '\x66\x66\x66\x66':
+                # detected a rt_local_buf_t structure
+                next, key = struct.unpack('ll', data[k+4:k+12])
+                data = data[k+12:]
+                addr += k+12
+                self.cache_text = [
+                    'Created by promotion of the value 0x%x\n' % key,
+                    'Next promoted value at buffer 0x%x\n' % next,
+                    ]
+            else:
+                self.cache_text = []
             f = open(tmpfile, 'wb')
             f.write(data)
             f.close()
@@ -267,6 +277,23 @@ class CodeBuf:
         return ''.join(data)
 
 
+class BigBuffer:
+    def __init__(self, file, start, length):
+        #print 'BigBuffer:', hex(start), hex(start+length), '(%d)' % length
+        self.file = file
+        self.offset = file.tell()
+        self.start = start
+        self.length = length
+        self.addr = start + length   # end address
+        codeboundary.append((self.addr+0.5, self))
+        file.seek(self.length, 1)
+    def load(self, begin, end):
+        assert self.start <= begin <= self.addr, \
+               (hex(self.start), hex(begin), hex(end), hex(self.addr))
+        self.file.seek(self.offset + (begin-self.start))
+        return self.file.read(min(self.addr, end) - begin)
+
+
 class VInfo:
     pass
 
@@ -280,6 +307,12 @@ class CompileTimeVInfo(VInfo):
             text += ", fixed"
         if self.flags & 2:
             text += ", reference"
+        return text
+    def getsummarytext(self):
+        text = "Compile-time"
+        if self.flags & 1:
+            text += " fixed"
+        text += " 0x%x" % self.value
         return text
 
 class RunTimeVInfo(VInfo):
@@ -298,35 +331,42 @@ class RunTimeVInfo(VInfo):
         if stack:
             text += " in stack [ESP+0x%x] or from top %d" %  \
                     (self.stackdepth - stack, stack)
-        if self.source & 0x04000000:
-            text += " non-negative"
         if not (self.source & 0x08000000):
             text += " holding a reference"
+        if self.source & 0x04000000:
+            text += " >=0"
         return text
+    def getsummarytext(self):
+        return "Run-time"
 
 class VirtualTimeVInfo(VInfo):
     def __init__(self, vs):
         self.vs = vs
     def gettext(self):
         return "Virtual-time source (%x)" % self.vs
+    def getsummarytext(self):
+        return "Virtual-time (%x)" % self.vs
 
 def readdump(filename = 'psyco.dump'):
     re_symb1 = re.compile(r"(\w+?)[:]\s0x([0-9a-fA-F]+)")
-    re_codebuf = re.compile(r"CodeBufferObject 0x([0-9a-fA-F]+) (\d+) (\-?\d+) \'(.*?)\' \'(.*?)\' (\-?\d+) \'(.*?)\'$")
+    re_codebuf = re.compile(r"CodeBufferObject 0x([0-9a-fA-F]+) (\-?\d+) \'(.*?)\' \'(.*?)\' (\-?\d+) \'(.*?)\'$")
     re_specdict = re.compile(r"spec_dict 0x([0-9a-fA-F]+)")
     re_vinfo_array = re.compile(r"vinfo_array")
     re_spec1 = re.compile(r"0x([0-9a-fA-F]+)\s(.*)$")
+    re_bigbuffer = re.compile(r"BigBuffer 0x([0-9a-fA-F]+) (\d+)$")
     
     codebufs = []
     dumpfile = open(filename, 'rb')
     bufcount, = struct.unpack("i", dumpfile.read(4))
-    buftable = struct.unpack("l"*bufcount, dumpfile.read(4*bufcount))
+    buftable = list(struct.unpack("l"*bufcount, dumpfile.read(4*bufcount)))
+    buftable.reverse()
     if buftable:
-        filesize = buftable[0]
+        filesize = buftable[-1]
     else:
         filesize = sys.maxint
     filesize *= 1.0
     nextp = 0.1
+    cbsortedsize = 0
     for filename in symbolfiles:
         line = dumpfile.readline()
         match = re_symb1.match(line)
@@ -344,25 +384,25 @@ def readdump(filename = 'psyco.dump'):
             if percent >= nextp:
                 sys.stderr.write('%d%%...' % int(100*percent))
                 nextp += 0.1
-            size = int(match.group(2))
-            data = dumpfile.read(size)
-            assert len(data) == size
-            codebuf = CodeBuf(match.group(7), match.group(4), match.group(5),
-                              int(match.group(6)), long(match.group(1), 16),
-                              data, int(match.group(3)))
+            #size = int(match.group(2))
+            #data = dumpfile.read(size)
+            #assert len(data) == size
+            codebuf = CodeBuf(match.group(6), match.group(3), match.group(4),
+                              int(match.group(5)), long(match.group(1), 16),
+                              int(match.group(2)))
             codebuf.complete_list = codebufs
             codebuf.dumpfile = dumpfile
-            codebuf.vlocalsofs = buftable[0]
-            buftable = buftable[1:]
+            codebuf.vlocalsofs = buftable.pop()
             codebufs.insert(0, codebuf)
         else:
             match = re_specdict.match(line)
             if match:
                 addr = long(match.group(1), 16)
-                for codebuf in codebufs:
-                    if codebuf.addr < addr <= codebuf.addr+len(codebuf.data):
-                        break
-                else:
+                if len(codeboundary) != cbsortedsize:
+                    codeboundary.sort()
+                    cbsortedsize = len(codeboundary)
+                codebuf = codeat(addr-4)
+                if codebuf is None:
                     raise "spec_dict with no matching code buffer", line
                 while 1:
                     line = dumpfile.readline()
@@ -375,8 +415,14 @@ def readdump(filename = 'psyco.dump'):
                 assert len(codebufs) == bufcount
                 break
             else:
-                raise "invalid line", line
-    codeboundary.sort()
+                match = re_bigbuffer.match(line)
+                if match:
+                    BigBuffer(dumpfile, long(match.group(1), 16),
+                              int(match.group(2)))
+                else:
+                    raise "invalid line", line
+    if len(codeboundary) != cbsortedsize:
+        codeboundary.sort()
     codemap = {}
     for codebuf in codebufs:
         #codebuf.build_reverse_lookup()

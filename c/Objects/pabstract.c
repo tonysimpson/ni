@@ -215,16 +215,13 @@ vinfo_t* PsycoObject_Size(PsycoObject* po, vinfo_t* vi)
 DEFINEFN
 vinfo_t* psyco_generic_immut_ob_size(PsycoObject* po, vinfo_t* vi)
 {
-	vinfo_t* result = get_array_item(po, vi, VAR_OB_SIZE);
-	if (result != NULL)
-		vinfo_incref(result);
-	return result;
+	return psyco_get_field(po, vi, FIX_size);
 }
 
 DEFINEFN
 vinfo_t* psyco_generic_mut_ob_size(PsycoObject* po, vinfo_t* vi)
 {
-	return read_array_item(po, vi, VAR_OB_SIZE);
+	return psyco_get_field(po, vi, VAR_size);
 }
 
 DEFINEFN
@@ -238,7 +235,7 @@ vinfo_t* PsycoSequence_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i)
 	m = tp->tp_as_sequence;
 	if (m && m->sq_item) {
 		vinfo_t* result;
-		vinfo_t* i2 = i;
+		vinfo_t* release_me = NULL;
 		if (m->sq_length) {
 			condition_code_t cc = integer_cmp_i(po, i, 0, Py_LT);
 			if (cc == CC_ERROR)
@@ -249,17 +246,15 @@ vinfo_t* PsycoSequence_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i)
 							 "v", o);
 				if (l == NULL)
 					return NULL;
-				i2 = integer_add(po, i, l, false);
+				release_me = i = integer_add(po, i, l, false);
 				vinfo_decref(l, po);
-				if (i2 == NULL)
+				if (i == NULL)
 					return NULL;
-                                i = NULL;
 			}
 		}
 		result = Psyco_META2(po, m->sq_item, CfReturnRef|CfPyErrIfNull,
-				     "vv", o, i2);
-		if (i == NULL)
-			vinfo_decref(i2, po);
+				     "vv", o, i);
+		vinfo_xdecref(release_me, po);
 		return result;
 	}
 
@@ -279,7 +274,7 @@ bool PsycoSequence_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i,
 	if (m && m->sq_ass_item) {
 		bool result;
 		char* vargs;
-		vinfo_t* i1 = NULL;
+		vinfo_t* release_me = NULL;
 		if (m->sq_length) {
 			condition_code_t cc = integer_cmp_i(po, i, 0, Py_LT);
 			if (cc == CC_ERROR)
@@ -290,9 +285,9 @@ bool PsycoSequence_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i,
 						"v", o);
 				if (l == NULL)
 					return false;
-				i = i1 = integer_add(po, i, l, false);
+				release_me = i = integer_add(po, i, l, false);
 				vinfo_decref(l, po);
-				if (i1 == NULL)
+				if (i == NULL)
 					return false;
 			}
 		}
@@ -300,7 +295,7 @@ bool PsycoSequence_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i,
 		result = Psyco_META3(po, m->sq_ass_item,
 				     CfNoReturnValue|CfPyErrIfNonNull,
 				     vargs, o, i, value) != NULL;
-		vinfo_xdecref(i1, po);
+		vinfo_xdecref(release_me, po);
 		return result;
 	}
 
@@ -312,12 +307,68 @@ bool PsycoSequence_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i,
 
 DEFINEFN
 vinfo_t* PsycoSequence_GetSlice(PsycoObject* po, vinfo_t* o,
-				vinfo_t* ilow, vinfo_t* ihigh)
+				vinfo_t* i1, vinfo_t* i2)
 {
-	/* XXX implement me */
-	return psyco_generic_call(po, PySequence_GetSlice,
-				  CfReturnRef|CfPyErrIfNull,
-				  "vvv", o, ilow, ihigh);
+	PySequenceMethods *m;
+	PyTypeObject* tp = Psyco_NeedType(po, o);
+	if (tp == NULL)
+		return false;
+
+	m = tp->tp_as_sequence;
+	if (m && m->sq_slice) {
+		vinfo_t* result = NULL;
+		vinfo_t* l = NULL;   /* length, if already computed */
+		vinfo_t* release_me1 = NULL;
+		vinfo_t* release_me2 = NULL;
+		if (m->sq_length) {
+			condition_code_t cc1, cc2;
+			cc1 = integer_cmp_i(po, i1, 0, Py_LT);
+			if (cc1 == CC_ERROR)
+				goto fail;
+			if (runtime_condition_f(po, cc1)) {
+				/* i1 < 0 */
+				l = Psyco_META1(po, m->sq_length,
+						CfReturnNormal|CfPyErrIfNeg,
+						"v", o);
+				if (l == NULL)
+					goto fail;
+				release_me1 = i1 = integer_add(po, i1, l, false);
+				if (i1 == NULL)
+					goto fail;
+			}
+			cc2 = integer_cmp_i(po, i2, 0, Py_LT);
+			if (cc2 == CC_ERROR)
+				goto fail;
+			if (runtime_condition_f(po, cc2)) {
+				/* i2 < 0 */
+				if (l == NULL) {
+					l = Psyco_META1(po, m->sq_length,
+						CfReturnNormal|CfPyErrIfNeg,
+						"v", o);
+					if (l == NULL)
+						goto fail;
+				}
+				release_me2 = i2 = integer_add(po, i2, l, false);
+				if (i2 == NULL)
+					goto fail;
+			}
+		}
+		result = Psyco_META3(po, m->sq_slice, CfReturnRef|CfPyErrIfNull,
+				     "vvv", o, i1, i2);
+
+	fail:
+		vinfo_xdecref(release_me2, po);
+		vinfo_xdecref(release_me1, po);
+		vinfo_xdecref(l, po);
+		return result;
+	}
+	else {
+		/* XXX call mp_subscript with sliceobj_from_intint */
+		/* fallback */
+		return psyco_generic_call(po, PySequence_GetSlice,
+					  CfReturnRef|CfPyErrIfNull,
+					  "vvv", o, i1, i2);
+	}
 }
 
 DEFINEFN
@@ -373,8 +424,7 @@ vinfo_t* PsycoSequence_Tuple(PsycoObject* po, vinfo_t* seq)
 		return NULL;
 
 	/* the result is a tuple */
-	set_array_item(po, v, OB_TYPE,
-		       vinfo_new(CompileTime_New((long)(&PyTuple_Type))));
+	Psyco_AssertType(po, v, &PyTuple_Type);
 	return v;
 }
 
@@ -457,9 +507,6 @@ vinfo_t* PsycoNumber_Absolute(PsycoObject* po, vinfo_t* vi)
 #define NB_TERNOP(nb_methods, slot) \
 		((ternaryfunc*)(& ((char*)nb_methods)[slot] ))
 
-#define IS_IMPLEMENTED(x)   \
-  ((x) == NULL || ((x)->source != CompileTime_NewSk(&psyco_skNotImplemented)))
-
 
 /* the 'cimpl_xxx()' functions are called at run-time, to do things
    we give up to write at the meta-level in the PsycoXxx() functions. */
@@ -540,10 +587,15 @@ static vinfo_t* binary_op1(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 		vinfo_decref(x, po); /* can't do it */
 	}
 	if (!NEW_STYLE_NUMBER(vtp) || !NEW_STYLE_NUMBER(wtp)) {
-		/* no optimization for the part specific to old-style numbers */
-		return psyco_generic_call(po, cimpl_oldstyle_binary_op1,
-                                          CfReturnRef|CfPyErrNotImplemented,
-					  "vvl", v, w, op_slot);
+		/* could PyNumber_CoerceEx possibly succeed? */
+		if ((vtp->tp_as_number && vtp->tp_as_number->nb_coerce) ||
+		    (wtp->tp_as_number && wtp->tp_as_number->nb_coerce)) {
+			/* yes -- but we don't try to optimize
+			   old-style numbers any further here */
+			return psyco_generic_call(po, cimpl_oldstyle_binary_op1,
+					CfReturnRef|CfPyErrNotImplemented,
+						  "vvl", v, w, op_slot);
+		}
 	}
 	return psyco_vi_NotImplemented();
 }
@@ -815,3 +867,76 @@ vinfo_t* PsycoIter_Next(PsycoObject* po, vinfo_t* iter)
 			   "v", iter);
 }
 #endif /* HAVE_GENERATORS */
+
+
+DEFINEFN
+vinfo_t* psyco_generic_subscript(PsycoObject* po, vinfo_t* o, vinfo_t* key)
+{
+	/* This is the meta-implementation of the mapping item assignment
+	   for sequences in Python >= 2.3, which is called for any
+	   expression of the form a[n]. It expects n to be an integer
+	   or an extended slice object. Regular slicing a[n:m] does not
+	   come here. */
+
+	/* TypeSwitch */
+	PyTypeObject* ktp = Psyco_NeedType(po, key);
+	if (ktp == NULL)
+		return NULL;
+
+	if (PyType_TypeCheck(ktp, &PyInt_Type)) {
+		return PsycoSequence_GetItem(po, o,
+					     PsycoInt_AS_LONG(po, key));
+	}
+	else if (PyType_TypeCheck(ktp, &PyLong_Type)) {
+		vinfo_t* key_value = PsycoLong_AsLong(po, key);
+		if (key_value == NULL)
+			return NULL;
+		return PsycoSequence_GetItem(po, o, key_value);
+	}
+	else {
+		PyTypeObject* tp = Psyco_NeedType(po, o);
+		if (tp == NULL)
+			return NULL;
+		extra_assert(tp->tp_as_mapping != NULL);
+		extra_assert(tp->tp_as_mapping->mp_subscript != NULL);
+		return psyco_generic_call(po, tp->tp_as_mapping->mp_subscript,
+					  CfReturnRef|CfPyErrIfNull,
+					  "vv", o, key);
+	}
+}
+
+DEFINEFN
+bool psyco_generic_ass_subscript(PsycoObject* po, vinfo_t* o,
+				 vinfo_t* key, vinfo_t* value)
+{
+	/* see psyco_generic_subscript() for comments */
+	
+	/* TypeSwitch */
+	PyTypeObject* ktp = Psyco_NeedType(po, key);
+	if (ktp == NULL)
+		return false;
+
+	if (PyType_TypeCheck(ktp, &PyInt_Type)) {
+		return PsycoSequence_SetItem(po, o,
+					     PsycoInt_AS_LONG(po, key),
+					     value);
+	}
+	else if (PyType_TypeCheck(ktp, &PyLong_Type)) {
+		vinfo_t* key_value = PsycoLong_AsLong(po, key);
+		if (key_value == NULL)
+			return false;
+		return PsycoSequence_SetItem(po, o, key_value, value);
+	}
+	else {
+		char* vargs = (value!=NULL) ? "vvv" : "vvl";
+		PyTypeObject* tp = Psyco_NeedType(po, o);
+		if (tp == NULL)
+			return false;
+		extra_assert(tp->tp_as_mapping != NULL);
+		extra_assert(tp->tp_as_mapping->mp_ass_subscript != NULL);
+		return psyco_generic_call(po,
+					  tp->tp_as_mapping->mp_ass_subscript,
+					  CfNoReturnValue|CfPyErrIfNonNull,
+					  vargs, o, key, value) != NULL;
+	}
+}

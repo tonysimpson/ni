@@ -84,9 +84,10 @@ void decref_create_new_ref(PsycoObject* po, vinfo_t* w)
 }
 
 DEFINEFN
-void decref_create_new_lastref(PsycoObject* po, vinfo_t* w)
+bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w)
 {
-	if (!eat_reference(w)) {
+	bool could_eat = eat_reference(w);
+	if (!could_eat) {
 		/* in this case we must Py_INCREF() the object */
 		BEGIN_CODE
 		if (is_compiletime(w->source))
@@ -99,6 +100,7 @@ void decref_create_new_lastref(PsycoObject* po, vinfo_t* w)
 		}
                 END_CODE
 	}
+	return could_eat;
 }
 
 DEFINEFN

@@ -2,7 +2,9 @@
 #include "vcompiler.h"
 #include "codemanager.h"
 #include "mergepoints.h"
+#include "stats.h"
 #include "Objects/ptupleobject.h"
+#include "Python/frames.h"
 
 #include <eval.h>  /* for PyEval_EvalCodeEx() */
 
@@ -14,8 +16,8 @@
 static void fix_run_time_args(PsycoObject * po, vinfo_array_t* target,
                               vinfo_array_t* source, RunTimeSource* sources)
 {
-  int i = source->count;
-  extra_assert(i == target->count);
+  int i = target->count;
+  extra_assert(target->count <= source->count);
   while (i--)
     {
       vinfo_t* a = source->items[i];
@@ -73,14 +75,14 @@ static PsycoObject* psyco_build_frame(PyCodeObject* co, vinfo_t* vglobals,
   nfrees = PyTuple_GET_SIZE(co->co_freevars);
   if (co->co_flags & CO_VARKEYWORDS)
     {
-      debug_printf(("psyco: unsupported: %s has a ** argument\n",
-                    PyCodeObject_NAME(co)));
+      debug_printf(1, ("unsupported ** argument in call to %s\n",
+                       PyCodeObject_NAME(co)));
       return BF_UNSUPPORTED;
     }
   if (ncells != 0 || nfrees != 0)
     {
-      debug_printf(("psyco: unsupported: %s has free or cell variables\n",
-                    PyCodeObject_NAME(co)));
+      debug_printf(1, ("unsupported free or cell vars in %s\n",
+                       PyCodeObject_NAME(co)));
       return BF_UNSUPPORTED;
     }
   minargcnt = co->co_argcount - defcount;
@@ -124,8 +126,7 @@ static PsycoObject* psyco_build_frame(PyCodeObject* co, vinfo_t* vglobals,
   po->stack_depth = INITIAL_STACK_DEPTH;
   po->vlocals.count = INDEX_LOC_LOCALS_PLUS + extras;
   po->last_used_reg = REG_LOOP_START;
-  po->pr.auto_recursion = recursion;
-  po->pr.mp_flags = psyco_mp_flags(merge_points);
+  po->pr.auto_recursion = AUTO_RECURSION(recursion);
 
   /* duplicate the inputvinfos. If two arguments share some common part, they
      will also share it in the copy. */
@@ -134,7 +135,7 @@ static PsycoObject* psyco_build_frame(PyCodeObject* co, vinfo_t* vglobals,
   duplicate_array(arraycopy, inputvinfos);
 
   /* simplify arraycopy in the sense of psyco_simplify_array() */
-  rtcount = psyco_simplify_array(arraycopy);
+  rtcount = psyco_simplify_array(arraycopy, NULL);
 
   /* all run-time arguments or argument parts must be corrected: in the
      input vinfo_t's they have arbitrary sources, but in the new frame's
@@ -261,6 +262,12 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   /* calling with an unknown-at-compile-time number of default arguments
      is not implemented (but this is probably not useful to implement);
      revert to the default behaviour */
+
+  /* Force mutable arguments out of virtual-time */
+  /* This is expected to have already been done on default arguments;
+     see PsycoFunction_New() */
+  if (!psyco_forking(po, arg_tuple->array))
+    return NULL;
 
   /* the processor condition codes will be messed up soon */
   BEGIN_CODE
@@ -522,7 +529,7 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	PyObject* codebuf;
 	PyObject* result;
 	PyObject* tdict;
-	PyObject* tmp;
+	PyFrameRuntime* fruntime;
 	PyObject* f;
 	stack_frame_info_t** finfo;
         long* initial_stack;
@@ -628,28 +635,32 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	   the starting point of this chained list. */
 	f = PyEval_GetFrame();
 	if (f == NULL) {
-		debug_printf(("psyco: warning: empty Python frame stack\n"));
+		debug_printf(1, ("warning: empty Python frame stack\n"));
 		goto unsupported;
 	}
 	tdict = psyco_thread_dict();
 	if (tdict==NULL) return NULL;
-	tmp = Py_BuildValue("lOO", (long) &finfo,
-			    self->psy_code, self->psy_globals);
-	if (tmp==NULL) return NULL;
+	fruntime = PyCStruct_NEW(PyFrameRuntime, PyFrameRuntime_dealloc);
+        Py_INCREF(f);
+        fruntime->cs_key = f;
+        fruntime->psy_frames_start = &finfo;
+        fruntime->psy_code = self->psy_code;
+        fruntime->psy_globals = self->psy_globals;
 	extra_assert(PyDict_GetItem(tdict, f) == NULL);
-	err   = PyDict_SetItem(tdict, f, tmp);
-	Py_XDECREF(tmp);
+	err = PyDict_SetItem(tdict, f, (PyObject*) fruntime);
+	Py_DECREF(fruntime);
 	if (err) return NULL;
 	/* Warning, no 'return' between this point and the PyDict_DelItem()
 	   below */
         
 	/* get the actual arguments */
+	extra_assert(RUN_ARGC(codebuf) == PyTuple_GET_SIZE(arg));
 	initial_stack = (long*) (&PyTuple_GET_ITEM(arg, 0));
 
 	/* run! */
-        Py_INCREF(codebuf);
-	result = psyco_processor_run((CodeBufferObject*) codebuf, initial_stack,
-				     PyTuple_GET_SIZE(arg), &finfo);
+	Py_INCREF(codebuf);
+	result = psyco_processor_run((CodeBufferObject*) codebuf,
+                                     initial_stack, &finfo);
 	Py_DECREF(codebuf);
 	psyco_trash_object(NULL);  /* free any trashed object now */
 

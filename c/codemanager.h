@@ -10,13 +10,6 @@
 #include "dispatcher.h"
 
 
-/* define to store the end of the code in CodeBufferObjects */
-/*#undef STORE_CODE_END*/
-
-#if CODE_DUMP
-# define STORE_CODE_END   /* always needed by CODE_DUMP */
-#endif
-
 #define WARN_TOO_MANY_BUFFERS    6    /* to detect missing buffer unlocks */
 
 
@@ -30,21 +23,22 @@
 */
 struct CodeBufferObject_s {
 	PyObject_HEAD
-	code_t* codeptr;
+	void* codestart;
 	FrozenPsycoObject snapshot;
-  
-#ifdef STORE_CODE_END
-	code_t* codeend;
+
+#if CODE_DUMP
 	char* codemode;
-# if CODE_DUMP
 	CodeBufferObject* chained_list;
-# endif
 #endif
 };
 
 #if CODE_DUMP
 EXTERNVAR CodeBufferObject* psyco_codebuf_chained_list;
 EXTERNVAR void** psyco_codebuf_spec_dict_list;
+EXTERNFN void psyco_dump_bigbuffers(FILE* f);
+# define SET_CODEMODE(b, mode)   ((b)->codemode = (mode))
+#else
+# define SET_CODEMODE(b, mode)   do { } while (0)   /* nothing */
 #endif
 
 
@@ -52,12 +46,12 @@ EXTERNVAR void** psyco_codebuf_spec_dict_list;
 EXTERNVAR PyTypeObject CodeBuffer_Type;
 
 
-/* starts a new code buffer, whose size is initially BIG_BUFFER_SIZE.
+/* starts a new code buffer. The limit is returned in the optional last argument.
    'po' is the state of the compiler at this point, of which a
    frozen copy will be made. It can be NULL. If not, set 'ge' as in
    psyco_compile(). */
 EXTERNFN
-CodeBufferObject* psyco_new_code_buffer(PsycoObject* po, global_entries_t* ge);
+CodeBufferObject* psyco_new_code_buffer(PsycoObject* po, global_entries_t* ge, code_t** plimit);
 
 /* creates a CodeBufferObject pointing to an already existing code target */
 EXTERNFN
@@ -65,20 +59,20 @@ CodeBufferObject* psyco_proxy_code_buffer(PsycoObject* po, global_entries_t* ge)
 
 /* shrink a buffer returned by new_code_buffer() */
 EXTERNFN
-void psyco_shrink_code_buffer(CodeBufferObject* obj, int nsize);
+void psyco_shrink_code_buffer(CodeBufferObject* obj, code_t* codeend);
+
+/* emergency enlarge a buffer (by coding a jump to a new buffer) */
+EXTERNFN
+void psyco_emergency_enlarge_buffer(code_t** pcode, code_t** pcodelimit);
 
 EXTERNFN
 int psyco_locked_buffers(void);
 
-#ifdef STORE_CODE_END
-#define SHRINK_CODE_BUFFER(obj, nsize, mode)    do {    \
-      psyco_shrink_code_buffer(obj, nsize);             \
-      (obj)->codemode = (mode);                         \
+#define SHRINK_CODE_BUFFER(obj, nend, mode)    do {    \
+      psyco_shrink_code_buffer(obj, nend);             \
+      SET_CODEMODE(obj, mode);                         \
 } while (0)
-#else
-# define SHRINK_CODE_BUFFER(obj, nsize, mode)     \
-      psyco_shrink_code_buffer(obj, nsize)
-#endif
+
 
 /* a replacement for Py_XDECREF(obj) which does not release the object
    immediately, but only at the next call to psyco_trash_object() */

@@ -27,7 +27,7 @@ EXTERNFN vinfo_t* PsycoSequence_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i)
 EXTERNFN bool     PsycoSequence_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i,
                                         vinfo_t* value);
 EXTERNFN vinfo_t* PsycoSequence_GetSlice(PsycoObject* po, vinfo_t* o,
-                                         vinfo_t* ilow, vinfo_t* ihigh);
+                                         vinfo_t* i1, vinfo_t* i2);
 EXTERNFN bool     PsycoSequence_SetSlice(PsycoObject* po, vinfo_t* o,
                                          vinfo_t* ilow, vinfo_t* ihigh,
                                          vinfo_t* value);
@@ -101,10 +101,15 @@ EXTERNFN vinfo_t* PsycoObject_GetIter(PsycoObject* po, vinfo_t* vi);
 #endif
 
 
-/* generic len() function that reads the object's ob_size field;
-   see e.g. plistobject.c */
+/* generic implementations of len() that reads the object's ob_size field
+   and the tp_subscript of all sequences in Python 2.3.
+   See e.g. plistobject.c */
 EXTERNFN vinfo_t* psyco_generic_immut_ob_size(PsycoObject* po, vinfo_t* vi);
 EXTERNFN vinfo_t* psyco_generic_mut_ob_size(PsycoObject* po, vinfo_t* vi);
+EXTERNFN vinfo_t* psyco_generic_subscript(PsycoObject* po, vinfo_t* o,
+					  vinfo_t* key);
+EXTERNFN bool psyco_generic_ass_subscript(PsycoObject* po, vinfo_t* o,
+					  vinfo_t* key, vinfo_t* value);
 
 
 #endif /* _PSY_ABSTRACT_H */

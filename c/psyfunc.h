@@ -50,13 +50,4 @@ inline bool is_proxycode(PyCodeObject* code) {
 }
 
 
-/* Return the nth frame (0=top). If it is a Python frame, psy_frame is
-   unmodified. If it is a Psyco frame, *psy_frame is filled and the
-   return value is only the next Python frame of the stack. */
-EXTERNFN struct _frame* psyco_get_frame(int depth,
-                                        struct stack_frame_info_s* psy_frame);
-EXTERNFN PyObject* psyco_get_globals(void);
-EXTERNFN PyObject* psyco_get_locals(void);
-
-
 #endif /* _PSYFUNC_H */

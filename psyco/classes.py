@@ -2,9 +2,6 @@
 # 
 #  Psyco class support module.
 #   Copyright (C) 2001-2002  Armin Rigo et.al.
-#
-#  All source files of Psyco, including all Python sources in this package,
-#   are protected by the GNU General Public License as found in COPYING.txt.
 
 """Psyco class support module.
 
@@ -24,7 +21,7 @@ will automatically use the Psyco-optimized metaclass.
 """
 ###########################################################################
 
-import psyco
+import core
 
 __all__ = ['psyobj', 'psymetaclass', '__metaclass__']
 
@@ -48,10 +45,10 @@ else:
             type.__init__(self, name, bases, dict)
             bindlist = self.__dict__.get('__psyco__bind__')
             if bindlist is None:
-                psyco.bind(self)
+                core.bind(self)
             else:
                 for attr in bindlist:
-                    psyco.bind(self.__dict__.get(attr))
+                    core.bind(self.__dict__.get(attr))
     
     psyobj = psymetaclass("psyobj", (), {})
 __metaclass__ = psymetaclass

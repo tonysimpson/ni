@@ -7,44 +7,41 @@ vinfo_t* PsycoMethod_New(PyObject* func, vinfo_t* self, PyObject* cls)
 {
 	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_method));
 	
-	extra_assert(METHOD_SIZE > METHOD_IM_FUNC);
-	extra_assert(METHOD_SIZE > METHOD_IM_SELF);
-	extra_assert(METHOD_SIZE > METHOD_IM_CLASS);
-	
-	result->array = array_new(METHOD_SIZE);
-	result->array->items[OB_TYPE] =
+	result->array = array_new(METHOD_TOTAL);
+	result->array->items[iOB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyMethod_Type)));
         
         Py_INCREF(func);
-	result->array->items[METHOD_IM_FUNC] =
+	result->array->items[iMETHOD_IM_FUNC] =
 		vinfo_new(CompileTime_NewSk(sk_new((long) func, SkFlagPyObj)));
         
 	vinfo_incref(self);
-	result->array->items[METHOD_IM_SELF] = self;
+	result->array->items[iMETHOD_IM_SELF] = self;
         
         Py_INCREF(cls);
-	result->array->items[METHOD_IM_CLASS] =
+	result->array->items[iMETHOD_IM_CLASS] =
 		vinfo_new(CompileTime_NewSk(sk_new((long) cls, SkFlagPyObj)));
         
 	return result;
 }
 
 
-static bool compute_method(PsycoObject* po, vinfo_t* methobj)
+static bool compute_method(PsycoObject* po, vinfo_t* methobj, bool forking)
 {
 	vinfo_t* newobj;
 	vinfo_t* im_func;
 	vinfo_t* im_self;
 	vinfo_t* im_class;
+        if (forking) return true;
 	
 	/* get the fields from the Python object 'methobj' */
-	im_func = vinfo_getitem(methobj, METHOD_IM_FUNC);
+	im_func = vinfo_getitem(methobj, iMETHOD_IM_FUNC);
 	if (im_func == NULL)
 		return false;
-	im_self = vinfo_getitem(methobj, METHOD_IM_SELF);
+	im_self = vinfo_getitem(methobj, iMETHOD_IM_SELF);
 	if (im_self == NULL)
 		return false;
-	im_class = vinfo_getitem(methobj, METHOD_IM_CLASS);
+	im_class = vinfo_getitem(methobj, iMETHOD_IM_CLASS);
 	if (im_class == NULL)
 		return false;
 
@@ -78,7 +75,7 @@ vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,
 	condition_code_t cc;
 	
 	/* get the 'im_self' field from the Python object 'methobj' */
-	im_self = get_array_item(po, methobj, METHOD_IM_SELF);
+	im_self = psyco_get_const(po, methobj, METHOD_im_self);
 	if (im_self == NULL)
 		return NULL;
 
@@ -112,7 +109,7 @@ vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,
 		arg = newarg;
 	}
 
-	im_func = get_array_item(po, methobj, METHOD_IM_FUNC);
+	im_func = psyco_get_const(po, methobj, METHOD_im_func);
 	if (im_func == NULL)
 		result = NULL;
 	else

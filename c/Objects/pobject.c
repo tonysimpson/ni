@@ -16,6 +16,40 @@ DEFINEVAR fixed_switch_t psyfs_none;
 
 
 DEFINEFN
+PyTypeObject* Psyco_NeedType(PsycoObject* po, vinfo_t* vi)
+{
+	if (is_compiletime(vi->source)) {
+		/* optimization for the type of a known object */
+		PyObject* o = (PyObject*) CompileTime_Get(vi->source)->value;
+		return o->ob_type;
+	}
+	else {
+		vinfo_t* vtp = psyco_get_const(po, vi, OB_type);
+		if (vtp == NULL)
+			return NULL;
+		return (PyTypeObject*) psyco_pyobj_atcompiletime(po, vtp);
+	}
+}
+
+DEFINEFN
+PyTypeObject* Psyco_KnownType(vinfo_t* vi)
+{
+	if (is_compiletime(vi->source)) {
+		PyObject* o = (PyObject*) CompileTime_Get(vi->source)->value;
+		return o->ob_type;
+	}
+	else {
+		vinfo_t* vtp = vinfo_getitem(vi, iOB_TYPE);
+		if (vtp != NULL && is_compiletime(vtp->source))
+			return (PyTypeObject*)
+				CompileTime_Get(vtp->source)->value;
+		else
+			return NULL;
+	}
+}
+
+
+DEFINEFN
 vinfo_t* PsycoObject_IsTrue(PsycoObject* po, vinfo_t* vi)
 {
 	PyTypeObject* tp;
@@ -48,11 +82,11 @@ vinfo_t* PsycoObject_Repr(PsycoObject* po, vinfo_t* vi)
 	vinfo_t* vstr = psyco_generic_call(po, PyObject_Repr,
 					   CfReturnRef|CfPyErrIfNull,
 					   "v", vi);
-	if (vstr != NULL) {
-		/* the result is a string */
-		set_array_item(po, vstr, OB_TYPE,
-		       vinfo_new(CompileTime_New((long)(&PyString_Type))));
-	}
+	if (vstr == NULL)
+		return NULL;
+	
+	/* the result is a string */
+	Psyco_AssertType(po, vstr, &PyString_Type);
 	return vstr;
 }
 
@@ -111,42 +145,45 @@ bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
 }
 
 /* Helper to get the offset an object's __dict__ slot, if any.
-   Return the base offset, or -1 if there is no __dict__ slot.
-   A variable offset may be computed and stored in *varindex;
-   the variable offset is a number of longs (i.e. the quarter
-   of a byte offset) */
+   Return a defield_t to the base offset, or NO_PREV_FIELD if there is
+   no __dict__ slot.  A variable offset may be computed and stored in
+   *varindex. */
 
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 
-static long getdictoffset(PsycoObject* po, vinfo_t* obj, vinfo_t** varindex)
+static defield_t getdictoffset(PsycoObject* po, vinfo_t* obj, vinfo_t** varindex)
 {
 	long dictoffset;
 	PyTypeObject *tp = Psyco_FastType(obj);
 
 	if (!(tp->tp_flags & Py_TPFLAGS_HAVE_CLASS))
-		return -1;
+		return NO_PREV_FIELD;
 	dictoffset = tp->tp_dictoffset;
 	if (dictoffset == 0)
-		return -1;
-	if (dictoffset > 0)
-		return dictoffset;
-        else {
-		vinfo_t* ob_size = read_array_item(po, obj, VAR_OB_SIZE);
+		return NO_PREV_FIELD;
+	if (dictoffset < 0) {
+		vinfo_t* size1;
+		vinfo_t* ob_size = psyco_get_field(po, obj, VAR_size);
 		if (ob_size == NULL)
-			return -1;
+			return NO_PREV_FIELD;
+		size1 = integer_abs(po, ob_size, false);
+		vinfo_decref(ob_size, po);
+		if (size1 == NULL)
+			return NO_PREV_FIELD;
+		
 		extra_assert(dictoffset % SIZEOF_VOID_P == 0);
 		/* the following code emulates _PyObject_VAR_SIZE() */
 		if ((tp->tp_itemsize & (SIZEOF_VOID_P-1)) == 0 &&
 		    (tp->tp_basicsize & (SIZEOF_VOID_P-1)) == 0) {
 			/* the result is automatically aligned */
 			vinfo_t* a;
-			a = integer_mul_i(po, ob_size,
+			a = integer_mul_i(po, size1,
 					  tp->tp_itemsize / SIZEOF_VOID_P);
-			vinfo_decref(ob_size, po);
+			vinfo_decref(size1, po);
 			if (a == NULL)
-				return -1;
+				return NO_PREV_FIELD;
 			*varindex = a;
-			return tp->tp_basicsize + dictoffset;
+			dictoffset = tp->tp_basicsize + dictoffset;
 		}
 		else {
 			/* need to align the result to the next
@@ -154,23 +191,24 @@ static long getdictoffset(PsycoObject* po, vinfo_t* obj, vinfo_t** varindex)
 			vinfo_t* a;
 			vinfo_t* b;
 			vinfo_t* c;
-			a = integer_mul_i(po, ob_size, tp->tp_itemsize);
-			vinfo_decref(ob_size, po);
+			a = integer_mul_i(po, size1, tp->tp_itemsize);
+			vinfo_decref(size1, po);
 			if (a == NULL)
-				return -1;
+				return NO_PREV_FIELD;
 			c = integer_add_i(po, a, tp->tp_basicsize + dictoffset +
 						 SIZEOF_VOID_P - 1, false);
 			vinfo_decref(a, po);
 			if (c == NULL)
-				return -1;
+				return NO_PREV_FIELD;
 			b = integer_urshift_i(po, c, SIZE_OF_LONG_BITS);
 			vinfo_decref(c, po);
 			if (b == NULL)
-				return -1;
+				return NO_PREV_FIELD;
 			*varindex = b;
-			return 0;
+			dictoffset = 0;
 		}
 	}
+	return DEF_ARRAY(PyObject*, dictoffset);
 }
 
 DEFINEFN
@@ -182,7 +220,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 	vinfo_t* res = NULL;
 	descrgetfunc f;
 	PyObject* name;
-	long dictofsbase;
+	defield_t dictofsbase;
 	vinfo_t* dictofs;
 
 	/* 'name' is generally known at compile-time.
@@ -249,7 +287,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 
 	dictofs = NULL;
 	dictofsbase = getdictoffset(po, obj, &dictofs);
-	if (dictofsbase == -1) {
+	if (dictofsbase == NO_PREV_FIELD) {
 		if (PycException_Occurred(po))
 			goto done;
 		/* no __dict__ slot */
@@ -259,11 +297,12 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 		int cond;
 		vinfo_t* dict;
 		if (dictofs == NULL)
-			dict = read_array_item(po, obj, QUARTER(dictofsbase));
-		else
-			dict = read_array_item_var(po, obj,
-						   QUARTER(dictofsbase),
-                                                   dictofs, false);
+			dict = psyco_get_field(po, obj, dictofsbase);
+		else {
+			dict = psyco_get_field_array(po, obj, dictofsbase,
+						     dictofs);
+			vinfo_decref(dictofs, po);
+		}
 		if (dict == NULL)
 			goto done;
 		cc = integer_non_null(po, dict);
@@ -338,9 +377,6 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 /* Macro to get the tp_richcompare field of a type if defined */
 #define RICHCOMPARE(t) (PyType_HasFeature((t), Py_TPFLAGS_HAVE_RICHCOMPARE) \
                          ? (t)->tp_richcompare : NULL)
-
-#define IS_IMPLEMENTED(x)   \
-  ((x) == NULL || ((x)->source != CompileTime_NewSk(&psyco_skNotImplemented)))
 
 
 /* Map rich comparison operators to their swapped version, e.g. LT --> GT */

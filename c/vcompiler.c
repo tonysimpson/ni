@@ -34,6 +34,35 @@ vinfo_array_t* array_grow1(vinfo_array_t* array, int ncount)
   return array;
 }
 
+DEFINEFN
+void vinfo_array_shrink(PsycoObject* po, vinfo_t* vi, int ncount)
+{
+  vinfo_array_t* array = vi->array;
+  int i = array->count;
+  if (i <= ncount)
+    return;
+  
+  while (i > ncount)
+    {
+      vinfo_t* v1 = array->items[--i];
+      if (v1 != NULL)
+        {
+          array->items[i] = NULL;
+          vinfo_decref(v1, po);
+        }
+    }
+  if (ncount == 0)
+    array = NullArray;
+  else
+    {
+      array = PyMem_REALLOC(array, sizeof(int) + ncount * sizeof(vinfo_t*));
+      if (array == NULL)
+        OUT_OF_MEMORY();
+      array->count = ncount;
+    }
+  vi->array = array;
+}
+
 
 /*****************************************************************/
 
@@ -114,6 +143,33 @@ void vinfo_release(vinfo_t* vi, PsycoObject* po)
   psyco_llfree_vinfo(vi);
 }
 
+DEFINEFN
+void vinfo_move(PsycoObject* po, vinfo_t* vtarget, vinfo_t* vsource)
+{
+  Source src = vsource->source;
+
+#if PSYCO_DEBUG
+  extra_assert(!is_virtualtime(src));
+  if (is_compiletime(src))
+    {
+      /* a compile-time vinfo may only hold compile-time subitems */
+      int j;
+      for (j=0; j<vtarget->array->count; j++)
+        extra_assert(vtarget->array->items[j] == NULL ||
+                     is_compiletime(vtarget->array->items[j]->source));
+    }
+#endif
+  
+  extra_assert(vsource->array == NullArray);
+  vtarget->source = src;
+  if (is_runtime(src) && !is_reg_none(src))
+    REG_NUMBER(po, getreg(src)) = vtarget;
+  extra_assert(vsource->refcount == 1);
+  psyco_llfree_vinfo(vsource);
+  clear_tmp_marks(vtarget->array);
+  psyco_simplify_array(vtarget->array, po);
+}
+
 
 DEFINEFN
 void clear_tmp_marks(vinfo_array_t* array)
@@ -162,25 +218,40 @@ bool array_contains(vinfo_array_t* array, vinfo_t* vi)
 }
 
 #if ALL_CHECKS
-static void coherent_array(vinfo_array_t* source, PsycoObject* po, int found[])
+static void coherent_array(vinfo_array_t* source, PsycoObject* po, int found[],
+                           bool allow_any)
 {
   int i = source->count;
   while (i--)
     if (source->items[i] != NULL)
       {
         Source src = source->items[i]->source;
-	if (is_runtime(src) && !is_reg_none(src))
-          {
-            assert(REG_NUMBER(po, getreg(src)) == source->items[i]);
-            found[(int) getreg(src)] = 1;
-          }
+        assert(allow_any || is_compiletime(src));
+        switch (gettime(src)) {
+        case RunTime:
+          /* test that we don't have an unreasonably high value
+             although it might still be correct in limit cases */
+          extra_assert(getstack(src) < RunTime_StackMax/2);
+          if (!is_reg_none(src))
+            {
+              assert(REG_NUMBER(po, getreg(src)) == source->items[i]);
+              found[(int) getreg(src)] = 1;
+            }
+          break;
+        case CompileTime:
+        case VirtualTime:
+          break;
+        default:
+          assert(0);
+        }
         if (psyco_vsource_cc(src) != CC_ALWAYS_FALSE)
           {
             assert(po->ccreg == source->items[i]);
             found[REG_TOTAL] = 1;
           }
 	if (source->items[i]->array != NullArray)
-	  coherent_array(source->items[i]->array, po, found);
+          coherent_array(source->items[i]->array, po, found,
+                         !is_compiletime(src));
       }
 }
 
@@ -227,7 +298,7 @@ static vinfo_t* nonnull_refcount(vinfo_array_t* source)
 }
 
 DEFINEFN
-void psyco_assert_coherent(PsycoObject* po)
+void psyco_assert_coherent1(PsycoObject* po, bool full)
 {
   vinfo_array_t debug_extra_refs;
   int found[REG_TOTAL+1];
@@ -238,19 +309,22 @@ void psyco_assert_coherent(PsycoObject* po)
   debug_extra_refs.count = 2;
   debug_extra_refs.items[0] = po->pr.exc;  /* normally private to pycompiler.c,*/
   debug_extra_refs.items[1] = po->pr.val;  /* but this is for debugging only */
-  coherent_array(&po->vlocals, po, found);
-  coherent_array(&debug_extra_refs, po, found);
-  for (i=0; i<REG_TOTAL; i++)
-    if (!found[i])
-      assert(REG_NUMBER(po, i) == NULL);
-  if (!found[REG_TOTAL])
-    assert(po->ccreg == NULL);
-  hack_refcounts(&po->vlocals, -1, 0);
-  hack_refcounts(&debug_extra_refs, -1, 0);
-  err = nonnull_refcount(&po->vlocals);
-  hack_refcounts(&debug_extra_refs, +1, 0x10000);
-  hack_refcounts(&po->vlocals, +1, 0x10000);
-  assert(!err);  /* see nonnull_refcounts() */
+  coherent_array(&po->vlocals, po, found, true);
+  coherent_array(&debug_extra_refs, po, found, true);
+  if (full)
+    {
+      for (i=0; i<REG_TOTAL; i++)
+        if (!found[i])
+          assert(REG_NUMBER(po, i) == NULL);
+      if (!found[REG_TOTAL])
+        assert(po->ccreg == NULL);
+      hack_refcounts(&po->vlocals, -1, 0);
+      hack_refcounts(&debug_extra_refs, -1, 0);
+      err = nonnull_refcount(&po->vlocals);
+      hack_refcounts(&debug_extra_refs, +1, 0x10000);
+      hack_refcounts(&po->vlocals, +1, 0x10000);
+      assert(!err);  /* see nonnull_refcounts() */
+    }
 }
 #endif
 
@@ -336,6 +410,212 @@ DEFINEFN void PsycoObject_Delete(PsycoObject* po)
 /*****************************************************************/
 
 
+inline vinfo_t* field_read(PsycoObject* po, vinfo_t* vi, long offset,
+			   vinfo_t* vindex, defield_t df, bool newref)
+{
+	vinfo_t* result = psyco_memory_read(po, vi, offset, vindex,
+				FIELD_SIZE2(df), (long)df & FIELD_UNSIGNED);
+	if (newref && FIELD_HAS_REF(df)) {
+		/* the container 'vi' could be freed while the
+		   field 'result' is still in use */
+		need_reference(po, result);
+	}
+	return result;
+}
+
+DEFINEFN
+vinfo_t* psyco_internal_getfld(PsycoObject* po, int findex, defield_t df,
+			       vinfo_t* vi, long offset)
+{
+	bool newref = !((long)df & FIELD_INTL_NOREF);
+	vinfo_t* vf;
+	if (is_virtualtime(vi->source)) {
+		vf = vinfo_getitem(vi, findex);
+		if (vf != NULL)
+			goto done;
+		if (vinfo_compute(vi, po) == SOURCE_ERROR)
+			return NULL;
+	}
+	if ((long)df & FIELD_MUTABLE) {
+		extra_assert(newref);
+		return field_read(po, vi, offset, NULL, df, newref);
+	}
+	vf = vinfo_getitem(vi, findex);
+	if (vf != NULL)
+		goto done;
+	
+	if (is_runtime(vi->source)) {
+		vf = field_read(po, vi, offset, NULL, df, newref);
+		if (((long)df & FIELD_ARRAY) && newref)
+			return vf;
+	}
+	else {
+		long result;
+		long sk_flag = 0;
+		char* ptr = (char*)(CompileTime_Get(vi->source)->value);
+		ptr += offset;
+		switch (FIELD_SIZE2(df)) {
+		case 0:
+			if ((long)df & FIELD_UNSIGNED)
+				result = *((unsigned char*) ptr);
+			else
+				result = *((signed char*) ptr);
+			break;
+		case 1:
+			if ((long)df & FIELD_UNSIGNED)
+				result = *((unsigned short*) ptr);
+			else
+				result = *((signed short*) ptr);
+			break;
+		default:
+			result = *((long*) ptr);
+			if ((long)df & FIELD_PYOBJ_REF) {
+				extra_assert(result);
+				extra_assert(newref);
+				Py_INCREF((PyObject*) result);
+				sk_flag = SkFlagPyObj;
+			}
+			break;
+		}
+		vf = vinfo_new(CompileTime_NewSk(sk_new(result, sk_flag)));
+	}
+	vinfo_setitem(po, vi, findex, vf);
+	
+ done:
+	if (newref)
+		vinfo_incref(vf);
+	return vf;
+}
+
+DEFINEFN
+vinfo_t* psyco_get_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
+                               vinfo_t* vindex)
+{
+	long offset = FIELD_OFFSET(df);
+	NonVirtualSource sindex = vinfo_compute(vindex, po);
+	if (sindex == SOURCE_ERROR)
+		return NULL;
+	
+	extra_assert((long)df & FIELD_ARRAY);
+	if (is_compiletime(sindex)) {
+		return psyco_get_nth_field(po, vi, df,
+					   CompileTime_Get(sindex)->value);
+	}
+	else {
+		if (vinfo_compute(vi, po) == SOURCE_ERROR)
+			return NULL;
+		return field_read(po, vi, offset, vindex, df, true);
+	}
+}
+
+DEFINEFN
+bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
+			   vinfo_t* vi, long offset, vinfo_t* value)
+{
+	if (is_virtualtime(vi->source)) {
+		vinfo_t* vf = vinfo_getitem(vi, findex);
+		if (vf != NULL) {
+			/* can only set field virtually if a value was
+			   previously found */
+			vinfo_incref(value);
+			vinfo_setitem(po, vi, findex, value);
+			return true;
+		}
+		if (vinfo_compute(vi, po) == SOURCE_ERROR)
+			return false;
+	}
+	extra_assert((long)df & FIELD_MUTABLE);
+	if (!psyco_memory_write(po, vi, offset, NULL, FIELD_SIZE2(df), value))
+		return false;
+
+	if (FIELD_HAS_REF(df)) {
+		/* 'value' is a PyObject* that wants to hold a reference */
+		if (vinfo_getitem(vi, findex) == value) {
+			/* special case: writing a value that is already
+			   virtually there.  This is common when promoting
+			   objects out of virtual-time.  In this case, we try
+			   to transfer the reference to the new memory
+			   location.  If this succeeds, the original 'value'
+			   must be removed from 'vi', because it no longer
+			   holds the reference and might become invalid if
+			   its new no-longer-virtual container object is
+			   deleted too early.
+
+			   This causes the 'value' to be reloaded from the
+			   memory location the next time it is used, but in a
+			   lot of cases it avoids a Py_INCREF()/Py_DECREF()
+			   pair, which costs more. */
+			if (decref_create_new_lastref(po, value)) {
+				vinfo_setitem(po, vi, findex, NULL);
+			}
+		}
+		else {
+			/* common case */
+			decref_create_new_ref(po, value);
+		}
+	}
+	return true;
+}
+
+DEFINEFN
+bool psyco_put_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
+			   vinfo_t* vindex, vinfo_t* value)
+{
+	long offset = FIELD_OFFSET(df);
+	NonVirtualSource sindex = vinfo_compute(vindex, po);
+	if (sindex == SOURCE_ERROR)
+		return false;
+	
+	extra_assert((long)df & FIELD_ARRAY);
+	if (is_compiletime(sindex)) {
+		return psyco_put_nth_field(po, vi, df,
+					   CompileTime_Get(sindex)->value,
+					   value);
+	}
+	else {
+		if (vinfo_compute(vi, po) == SOURCE_ERROR)
+			return false;
+		if (!psyco_memory_write(po, vi, offset, vindex,
+					FIELD_SIZE2(df), value))
+			return false;
+		if (FIELD_HAS_REF(df)) {
+			/* 'value' is a PyObject* that wants to
+			   hold a reference */
+			decref_create_new_ref(po, value);
+		}
+		return true;
+	}
+}
+
+DEFINEFN
+void psyco_assert_field(PsycoObject* po, vinfo_t* vi, defield_t df,
+			long value)
+{
+	long sk_flag = 0;
+	extra_assert(!((long)df & FIELD_MUTABLE));
+
+	if (is_compiletime(vi->source)) {
+#if PSYCO_DEBUG
+		/* check assertion at compile-time */
+		vinfo_t* vf = psyco_get_field(po, vi, df);
+		assert(CompileTime_Get(vf->source)->value == value);
+		vinfo_decref(vf, po);
+#endif
+	}
+	else {
+		if (FIELD_HAS_REF(df)) {
+			Py_INCREF((PyObject*) value);
+			sk_flag = SkFlagPyObj;
+		}
+		vinfo_setitem(po, vi, FIELD_INDEX(df),
+		      vinfo_new(CompileTime_NewSk(sk_new(value, sk_flag))));
+	}
+}
+
+
+/*****************************************************************/
+
+
 typedef struct {
 	CodeBufferObject*	self;
 	PsycoObject* 		po;
@@ -380,9 +660,9 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
 {
   coding_pause_t* cp;
   code_t* calling_code;
-  CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL);
-  if (codebuf == NULL)
-    OUT_OF_MEMORY();
+  code_t* calling_limit;
+  code_t* limit;
+  CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL, &limit);
   
   extra_assert(jmpcondition != CC_ALWAYS_FALSE);
 
@@ -390,13 +670,15 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
      followed by a coding_pause_t structure, itself followed by the
      'extra' data. */
   calling_code = po->code;
-  po->code = codebuf->codeptr;
+  calling_limit = po->codelimit;
+  po->code = (code_t*) codebuf->codestart;
+  po->codelimit = limit;
   BEGIN_CODE
   TEMP_SAVE_REGS_FN_CALLS;
   END_CODE
   cp = (coding_pause_t*) psyco_jump_proxy(po, &do_resume_coding, 1, 1);
   SHRINK_CODE_BUFFER(codebuf,
-                     (code_t*)(cp+1) + extrasize - codebuf->codeptr,
+                     (code_t*)(cp+1) + extrasize,
                      "coding_pause");
   /* fill in the coding_pause_t structure and the following 'extra' data */
   cp->self = codebuf;
@@ -408,11 +690,12 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
 
   /* write the jump to the proxy */
   po->code = calling_code;
+  po->codelimit = calling_limit;
   BEGIN_CODE
   if (jmpcondition == CC_ALWAYS_TRUE)
-    JUMP_TO(codebuf->codeptr);  /* jump always */
+    JUMP_TO((code_t*) codebuf->codestart);  /* jump always */
   else
-    FAR_COND_JUMP_TO(codebuf->codeptr, jmpcondition);
+    FAR_COND_JUMP_TO((code_t*) codebuf->codestart, jmpcondition);
   END_CODE
   dump_code_buffers();
 }
@@ -424,7 +707,7 @@ static code_t* psyco_resume_compile(PsycoObject* po, void* extra)
   mergepoint_t* mp = psyco_exact_merge_point(po->pr.merge_points,
                                              po->pr.next_instr);
   extra_assert(psyco_locked_buffers() == 0);  /* we are not compiling yet */
-  return psyco_compile_code(po, mp)->codeptr;
+  return (code_t*) psyco_compile_code(po, mp)->codestart;
   /* XXX don't know what to do with the reference returned by
      XXX psyco_compile_code() */
 }
@@ -470,13 +753,12 @@ code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
       {
         CodeBufferObject* codebuf = psyco_proxy_code_buffer(po,
                                           mp != NULL ? &mp->entries : NULL);
-        if (codebuf == NULL)
-          OUT_OF_MEMORY();
 #if CODE_DUMP
         codebuf->chained_list = psyco_codebuf_chained_list;
         psyco_codebuf_chained_list = codebuf;
 #endif
         /*Py_DECREF(codebuf); XXX cannot loose reference if mp == NULL*/
+        if (codebuf) ;  /* for unused variable warnings */
       }
       
       if (cmp != NULL)   /* partial match */
@@ -572,10 +854,8 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
                    don't register it in mp->entries */
   
   /* Normal case. Start a new buffer */
-  codebuf = psyco_new_code_buffer(po, mp==NULL ? NULL : &mp->entries);
-  if (codebuf == NULL)
-    OUT_OF_MEMORY();
-  po->code = codebuf->codeptr;
+  codebuf = psyco_new_code_buffer(po, mp==NULL ? NULL : &mp->entries, &po->codelimit);
+  po->code = (code_t*) codebuf->codestart;
 
   if (compile_now)
     {
@@ -604,7 +884,7 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
 
   /* we have written some code into a new codebuf, now shrink it to
      its actual size */
-  psyco_shrink_code_buffer(codebuf, code1 - codebuf->codeptr);
+  psyco_shrink_code_buffer(codebuf, code1);
   dump_code_buffers();
   return codebuf;
 }
@@ -612,8 +892,9 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
 
 /*****************************************************************/
 
-static bool computed_do_not_use(PsycoObject* po, vinfo_t* vi)
+static bool computed_do_not_use(PsycoObject* po, vinfo_t* vi, bool forking)
 {
+  if (forking) return true;
   fprintf(stderr, "psyco: internal error (computed_do_not_use)\n");
   extra_assert(0);     /* stop if debugging */
   vi->source = SOURCE_DUMMY;

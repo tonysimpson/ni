@@ -2,17 +2,18 @@
 #include "ptupleobject.h"
 
 
-static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj)
+static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj, bool forking)
 {
 	vinfo_t* newobj;
 	vinfo_t* m_self;
 	vinfo_t* m_ml;
+	if (forking) return true;
 	
 	/* get the fields from the Python object 'methobj' */
-	m_self = vinfo_getitem(methobj, CFUNC_M_SELF);
+	m_self = vinfo_getitem(methobj, iCFUNC_M_SELF);
 	if (m_self == NULL)
 		return false;
-	m_ml = vinfo_getitem(methobj, CFUNC_M_ML);
+	m_ml = vinfo_getitem(methobj, iCFUNC_M_ML);
 	if (m_ml == NULL)
 		return false;
 
@@ -40,7 +41,7 @@ vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
                              vinfo_t* tuple, vinfo_t* kw)
 {
 	long mllong;
-	vinfo_t* vml = get_array_item(po, func, CFUNC_M_ML);
+	vinfo_t* vml = psyco_get_const(po, func, CFUNC_m_ml);
 	if (vml == NULL)
 		return NULL;
 
@@ -60,7 +61,7 @@ vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 		vinfo_t* carg;
                 char* argumentlist = "vv";
 
-		vinfo_t* vself = get_array_item(po, func, CFUNC_M_SELF);
+		vinfo_t* vself = psyco_get_const(po, func, CFUNC_m_self);
 		if (vself == NULL)
 			return NULL;
 

@@ -309,12 +309,22 @@ static void fz_find_rt1(vinfo_array_t* aa, int length,
         {
           vinfo_t* a;
           Source source = fz_getarg();
-          extra_assert(length < aa->count);
-          a = aa->items[length];
-          if (is_runtime(source))
-            (*callback)(aa->items[length], source, extra);
-          if (opc > 0)
-            fz_find_rt1(a->array, opc, callback, extra);
+          if (is_compiletime(source))
+            {
+              /* no run-time value should exist under a compile-time one */
+              extra_assert(aa == NULL || length < aa->count);
+              if (opc > 0)
+                fz_find_rt1(NULL, opc, NULL, NULL);
+            }
+          else
+            {
+              extra_assert(aa != NULL && length < aa->count);
+              a = aa->items[length];
+              if (is_runtime(source))
+                (*callback)(a, source, extra);
+              if (opc > 0)
+                fz_find_rt1(a->array, opc, callback, extra);
+            }
         }
     }
 }
@@ -343,6 +353,7 @@ inline void fz_build(FrozenPsycoObject* fpo, vinfo_array_t* aa)
   fz_putopc(aa->count);
   opc_size = cmpinternal.buf_end - cmpinternal.buf_opc;
   arg_size = ((signed char*) cmpinternal.buf_args) - cmpinternal.buf_begin;
+  psyco_memory_usage += arg_size + opc_size + sizeof(CodeBufferObject);
   nbuf = fz_internal_copy(&cmpinternal, arg_size + opc_size);
   fpo->fz_vlocals_opc = (Source*) (nbuf + arg_size);
 }
@@ -391,11 +402,18 @@ inline void fz_restore_invariant(FrozenPsycoObject* fpo) {
 #endif /* VLOCALS_OPC */
 
 
+#if !ALL_STATIC
+ DEFINEFN int psyco_top_array_count(FrozenPsycoObject* fpo)  /*for psyco.c*/
+          { return fz_top_array_count(fpo); }
+#endif
+
+
  /***************************************************************/
 
 DEFINEFN
 void fpo_build(FrozenPsycoObject* fpo, PsycoObject* po)
 {
+  psyco_assert_coherent1(po, false);
   clear_tmp_marks(&po->vlocals);
   fz_build(fpo, &po->vlocals);
   fpo->fz_stuff.fz_stack_depth = po->stack_depth;
@@ -506,15 +524,11 @@ static code_t* do_respawn(respawn_t* rs)
   /* respawn there */
   po = fpo_unfreeze(&firstcodebuf->snapshot);
   
-  codebuf = psyco_new_code_buffer(NULL, NULL);
-  if (codebuf == NULL)
-    OUT_OF_MEMORY();
+  codebuf = psyco_new_code_buffer(NULL, NULL, &po->codelimit);
   codebuf->snapshot.fz_stuff.respawning = rs;
   codebuf->snapshot.fz_respawned_cnt = rs->respawn_cnt;
   codebuf->snapshot.fz_respawned_from = firstcodebuf;
-  code = codebuf->codeptr;
-  po->code = code;
-  po->codelimit = code + BIG_BUFFER_SIZE - GUARANTEED_MINIMUM;
+  po->code = (code_t*) codebuf->codestart;
   /* respawn by restarting the Python compiler at the beginning of the
      instruction where it left. It will probably re-emit a few machine
      instructions -- not needed, they will be trashed, but this has
@@ -525,22 +539,22 @@ static code_t* do_respawn(respawn_t* rs)
 
   code = GLOBAL_ENTRY_POINT(po);
   
-  SHRINK_CODE_BUFFER(codebuf, code - codebuf->codeptr, "respawned");
+  SHRINK_CODE_BUFFER(codebuf, code, "respawned");
   /* make sure DETECT_RESPAWN() succeeded */
   extra_assert(codebuf->snapshot.fz_respawned_from == rs->respawn_from);
 
-  /* fix the jump to point to 'codebuf->codeptr' */
+  /* fix the jump to point to 'codebuf->codestart' */
   code = rs->write_jmp;
 /*   if (rs->cond == CC_ALWAYS_TRUE) */
-/*     JUMP_TO(codebuf->codeptr); */
+/*     JUMP_TO(codebuf->codestart); */
 /*   else */
-    FAR_COND_JUMP_TO(codebuf->codeptr, rs->cond);
+    FAR_COND_JUMP_TO((code_t*)codebuf->codestart, rs->cond);
   /* cannot Py_DECREF(cp->self) because the current function is returning into
      that code now, but any time later is fine: use the trash of codemanager.c */
   psyco_trash_object((PyObject*) rs->self);
   dump_code_buffers();
   /* XXX don't know what to do with this reference to codebuf */
-  return codebuf->codeptr;
+  return codebuf->codestart;
 }
 
 DEFINEFN
@@ -582,7 +596,7 @@ void psyco_respawn_detected(PsycoObject* po)
      lost code does not looses references to other objects as well.
      Use is_respawning() to bypass the creation of all references when
      compiling during respawn. */
-  po->code = codebuf->codeptr;
+  po->code = codebuf->codestart;
 }
 
 DEFINEFN
@@ -593,23 +607,23 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
     {
       respawn_t* rs;
       code_t* calling_code;
-      CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL);
-      if (codebuf == NULL)
-        OUT_OF_MEMORY();
+      code_t* calling_limit;
+      code_t* limit;
+      CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL, &limit);
   
       extra_assert(jmpcondition < CC_TOTAL);
 
       /* the proxy contains only a jump to do_respawn,
          followed by a respawn_t structure */
       calling_code = po->code;
-      po->code = codebuf->codeptr;
+      calling_limit = po->codelimit;
+      po->code = (code_t*) codebuf->codestart;
+      po->codelimit = limit;
       BEGIN_CODE
       TEMP_SAVE_REGS_FN_CALLS;
       END_CODE
       rs = (respawn_t*) psyco_jump_proxy(po, &do_respawn, 1, 1);
-      SHRINK_CODE_BUFFER(codebuf,
-                         (code_t*)(rs+1) - codebuf->codeptr,
-                         "respawn");
+      SHRINK_CODE_BUFFER(codebuf, (code_t*)(rs+1), "respawn");
       /* fill in the respawn_t structure */
       extra_assert(po->respawn_proxy != NULL);
       rs->self = codebuf;
@@ -620,18 +634,22 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
 
       /* write the jump to the proxy */
       po->code = calling_code;
+      po->codelimit = calling_limit;
       BEGIN_CODE
       /*   if (jmpcondition == CC_ALWAYS_TRUE) */
-      /*     JUMP_TO(codebuf->codeptr); */
+      /*     JUMP_TO(codebuf->codestart); */
       /*   else */
-        FAR_COND_JUMP_TO(codebuf->codeptr, jmpcondition);
+        FAR_COND_JUMP_TO((code_t*)codebuf->codestart, jmpcondition);
       END_CODE
       dump_code_buffers();
     }
   else
-    po->code = po->respawn_proxy->codeptr;  /* respawning: come back at the
-                                               beginning of the trash memory for
-                                               the next instructions */
+    {
+      /* respawning: come back at the
+         beginning of the trash memory for
+         the next instructions */
+      po->code = (code_t*) po->respawn_proxy->codestart;
+    }
 }
 
 DEFINEFN
@@ -648,6 +666,56 @@ int runtime_NON_NULL_t(PsycoObject* po, vinfo_t* vi)
   return cc == CC_ERROR ? -1 : runtime_condition_t(po, cc);
 }
 
+DEFINEFN
+int runtime_in_bounds(PsycoObject* po, vinfo_t* vi,
+                      long lowbound, long highbound)
+{
+  condition_code_t cc;
+  if (highbound == LONG_MAX)
+    {
+      if (lowbound == LONG_MIN)
+        return 1;
+      cc = integer_cmp_i(po, vi, lowbound, Py_GE);
+    }
+  else if (lowbound == 0)
+    {
+      cc = integer_cmp_i(po, vi, highbound, Py_LE | COMPARE_UNSIGNED);
+    }
+  else
+    {
+      if (lowbound != LONG_MIN)
+        {
+          cc = integer_cmp_i(po, vi, lowbound, Py_GE);
+          if (cc == CC_ERROR)
+            return -1;
+          if (!runtime_condition_t(po, cc))
+            return 0;
+        }
+      cc = integer_cmp_i(po, vi, highbound, Py_LE);
+    }
+  return cc == CC_ERROR ? -1 : runtime_condition_t(po, cc);
+}
+
+
+DEFINEFN
+void PsycoObject_EmergencyCodeRoom(PsycoObject* po)
+{
+  if (!is_respawning(po))
+    {
+      /* non-respawning case: start a new buffer, and code a JMP at
+         the end of the current buffer. Note that it is exceptional
+         to reach this point. Normally, pycompiler.c regularly checks
+         that we are not reaching the end of the buffer, and if so,
+         pauses compilation. */
+      psyco_emergency_enlarge_buffer(&po->code, &po->codelimit);
+    }
+  else
+    {
+      /* respawning case: trash everything written so far */
+      po->code = (code_t*) po->respawn_proxy->codestart;
+    }
+}
+
 
 /*****************************************************************/
 
@@ -655,7 +723,8 @@ int runtime_NON_NULL_t(PsycoObject* po, vinfo_t* vi)
 
 /* This implementation should probably not be used any more, but it
    is kept around for reference. Once you understand the comparison
-   algorithm below you can read its more obscure implementation above.
+   algorithm below you can read its more obscure implementation of
+   the VLOCALS_OPC case.
 */
 static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
                              vinfo_array_t** result)
@@ -806,10 +875,30 @@ static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
                     }
                 }
             }
-          if (a->array != b->array)
-            {                     /* can only be equal if both ==NullArray */
-              if (!compatible_array(a->array, b->array, result))
-                goto incompatible;
+          if (a->array != b->array) /* can only be equal if both ==NullArray */
+            {
+              if (is_compiletime(a->source))
+                {
+                  /* For compile-time values we don't bother comparing
+                     subarrays, because they only have a caching role
+                     in this case; they should never contain information
+                     different from what psyco_get_field() can load or
+                     reload from immutable data. */
+#if PSYCO_DEBUG
+                  /* we just verify that there are only compile-time
+                     subitems. */
+                  int j;
+                  for (j=0; j<a->array->count; j++)
+                    extra_assert(a->array->items[j] == NULL ||
+                                 is_compiletime(a->array->items[j]->source));
+                  for (j=0; j<b->array->count; j++)
+                    extra_assert(b->array->items[j] == NULL ||
+                                 is_compiletime(b->array->items[j]->source));
+#endif
+                }
+              else
+                if (!compatible_array(a->array, b->array, result))
+                  goto incompatible;
             }
         }
     }
@@ -837,13 +926,17 @@ inline bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
 
 /* forward */
 static bool compatible_array(vinfo_array_t* aa, int count,
-                             vinfo_array_t** result, vinfo_array_t* reference);
+                             vinfo_array_t** result, vinfo_array_t* reference,
+                             int recdepth);
+static void skip_compatible_array(int count);
 
 static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
-                             vinfo_array_t** result, vinfo_t* aref)
+                             vinfo_array_t** result, vinfo_t* aref,
+                             int recdepth)
 {
   /* Check if 'a' matches 'bsource'. */
   long diff;
+  bool skip_subarray = false;
 
   /* If 'aref!=a' then 'aref' is a vinfo_t* that already passed the test
      against the same 'bsource'. In this case there is an extra test:
@@ -864,70 +957,122 @@ static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
     {
       if ((diff & TimeMask) != 0)
         return false;  /* not the same TIME_MASK */
-      if (is_runtime(a->source))
-        {
-          if ((diff & RunTime_NoRef) != 0)
-            {
-              /* from 'with ref' to 'without ref' or vice-versa:
-                 a source in 'a' with reference cannot pass for
-                 a source in 'b' without reference */
-              if ((a->source & RunTime_NoRef) == 0)
-                return false;
+      
+      switch (gettime(a->source)) {
+        
+      case RunTime:
+        if ((diff & (RunTime_NoRef|RunTime_NonNeg)) != 0)
+          {
+            /* from 'with ref' to 'without ref' or vice-versa:
+               a source in 'a' with reference cannot pass for
+               a source in 'b' without reference */
+            if ((a->source & RunTime_NoRef) == 0 &&
+                (  bsource & RunTime_NoRef) != 0)
+              return false;
+            /* from 'non-negative' to 'possibly negative' or vice-versa:
+               a source in 'a' which may be negative cannot pass for
+               a source in 'b' which cannot */
+            if ((a->source & RunTime_NonNeg) == 0 &&
+                (  bsource & RunTime_NonNeg) != 0)
+              return false;
+          }
+        break;
+
+      case CompileTime:
+        if (KNOWN_SOURCE(a)->value != CompileTime_Get(bsource)->value)
+          {
+            if ((CompileTime_Get(bsource)->refcount1_flags &
+                 SkFlagFixed) != 0)
+              return false;  /* b's value is fixed */
+            if ((KNOWN_SOURCE(a)->refcount1_flags &
+                 SkFlagFixed) != 0 && KNOWN_SOURCE(a)->value == 0)
+              return false;  /* hack: */
+            /* fixed known-to-be-zero values have a special
+               role to play with local variables: undefined
+               variables. These must *never* be un-promoted
+               to run-time, because we will get a NULL
+               pointer and a segfault. Argh. */
+            else {
+              /* approximative match, might un-promote 'a' from
+                 compile-time to run-time. */
+              int i, ocount = (*result)->count;
+              /* do not add several time the same value to the array */
+              for (i=0; i<ocount; i++)
+                if ((*result)->items[i] == a)
+                  break;
+              if (i==ocount)
+                {
+                  *result = array_grow1(*result, ocount+1);
+                  (*result)->items[ocount] = a;
+                }
             }
-        }
-      else
-        {
-          if (is_virtualtime(a->source))
-            return false;  /* different virtual sources */
-          if (KNOWN_SOURCE(a)->value != CompileTime_Get(bsource)->value)
-            {
-              if ((CompileTime_Get(bsource)->refcount1_flags &
-                   SkFlagFixed) != 0)
-                return false;  /* b's value is fixed */
-              if ((KNOWN_SOURCE(a)->refcount1_flags &
-                   SkFlagFixed) != 0 && KNOWN_SOURCE(a)->value == 0)
-                return false;  /* hack: */
-                  /* fixed known-to-be-zero values have a special
-                     role to play with local variables: undefined
-                     variables. These must *never* be un-promoted
-                     to run-time, because we will get a NULL
-                     pointer and a segfault. Argh. */
-              else {
-                /* approximative match, might un-promote 'a' from
-                   compile-time to run-time. */
-                int i, ocount = (*result)->count;
-                /* do not add several time the same value to the array */
-                for (i=0; i<ocount; i++)
-                  if ((*result)->items[i] == a)
-                    break;
-                if (i==ocount)
-                  {
-                    *result = array_grow1(*result, ocount+1);
-                    (*result)->items[ocount] = a;
-                  }
-              }
-            }
-        }
+          }
+        else
+          skip_subarray = true;
+        break;
+        
+      default:  /* case VirtualTime */
+        return false;  /* different virtual sources */
+      }
     }
+  else
+    skip_subarray = is_compiletime(bsource);
 
   if (bcount == 0 && a->array == NullArray)
     return true;    /* shortcut */
-  
-  return compatible_array(a->array, bcount, result, aref->array);
+
+  if (skip_subarray)
+    {
+      /* For compile-time values we don't bother comparing
+         subarrays, because they only have a caching role
+         in this case; they should never contain information
+         different from what psyco_get_field() can load or
+         reload from immutable data. */
+#if PSYCO_DEBUG
+      /* we just verify that there are only compile-time
+         subitems. */
+      int j;
+      for (j=0; j<a->array->count; j++)
+        extra_assert(a->array->items[j] == NULL ||
+                     is_compiletime(a->array->items[j]->source));
+#endif
+      /* skip the subarray in the pseudo-code */
+      skip_compatible_array(bcount);
+      return true;
+    }
+
+  return compatible_array(a->array, bcount, result, aref->array, recdepth+1);
 }
 
 /* The following function is the composition of fz_uncompress() and
    the above compatible_array(), optimized so that we need not build
    a whole uncompressed copy of the pseudo-code. */
 static bool compatible_array(vinfo_array_t* aa, int count,
-                             vinfo_array_t** result, vinfo_array_t* reference)
+                             vinfo_array_t** result, vinfo_array_t* reference,
+                             int recdepth)
 {
   /* In the following comments, 'bb' refers to the implicit intermediate
      array that would be created by fz_uncompress(). */
   /* 'reference' is a either 'aa', or another array of items that already
      passed the test against the same pseudo-code. This lets us check
      shared structures. */
-  
+
+  /* special-case test. See comments below. */
+#define CHECK_FOR_NULL(a)                                               \
+      if (a != NULL) {                                                  \
+        /* if there is no proved progress, and 'a'                      \
+           might just have been promoted,                               \
+           then we have to let compilation go on */                     \
+        if (*result == NullArray &&                                     \
+            is_compiletime(a->source) &&                                \
+            ((KNOWN_SOURCE(a)->refcount1_flags & SkFlagFixed) != 0))    \
+          return false;                                                 \
+        /* if we are not too deep in the array, then we might as        \
+           well try compiling with this extra information */            \
+        if (recdepth <= 2)                                              \
+          return false;                                                 \
+      }
+
   int i;
   /* count = bb->count; */
   extra_assert(count >= 0);
@@ -946,12 +1091,17 @@ static bool compatible_array(vinfo_array_t* aa, int count,
              necessary for a compatibility (the above condition is more
              precise) but I guess that you get better results this way,
              because you have more information for a recompilation.
-             XXX This assumption should be tested.
-             XXX What about requiring that no NULL goes non-NULL in the
-                 rest of the array as well? */
-	  for (i=aa->count; i>count; )
-	    if (aa->items[--i] != NULL)
-	      return false;   /* differs */
+             XXX This assumption should be tested. */
+
+          /* This potentially allows for unbounded array depth,
+             so we disable it after a given depth and revert to the
+             old behavior: all extra items are matched against b == NULL
+             life below. */
+          for (i=aa->count; i>count; )
+            {
+              vinfo_t* a = aa->items[--i];
+              CHECK_FOR_NULL(a)
+            }
         }
     }
   for (i=count; i--; )
@@ -970,9 +1120,7 @@ static bool compatible_array(vinfo_array_t* aa, int count,
              Psyco sometimes emits an infinite loop because the
              PsycoObject after promotion is found to be compatible
              with itself just before promotion. */
-          if (a != NULL && is_compiletime(a->source) &&
-              ((KNOWN_SOURCE(a)->refcount1_flags & SkFlagFixed) != 0))
-            return false;
+          CHECK_FOR_NULL(a)
         }
       else if (opc < 0)  /* 'b' is a link to another 'b'. */
         {
@@ -994,7 +1142,8 @@ static bool compatible_array(vinfo_array_t* aa, int count,
 
           /* Compare 'a' and 'bsource'. */
           extra_assert(i < reference->count);
-          if (!compatible_vinfo(a, bsource, opc, result, reference->items[i]))
+          if (!compatible_vinfo(a, bsource, opc, result, reference->items[i],
+                                recdepth))
             return false;
 
           /* Only after the above call we know if any link is resolved
@@ -1047,7 +1196,8 @@ static bool compatible_array(vinfo_array_t* aa, int count,
                     cmpinternal.tmp_counter = saved_tmp_counter;
                     cmpinternal.buf_args    = saved_buf_args;
                     cmpinternal.buf_opc     = saved_buf_opc;
-                    ok = compatible_vinfo(preva, bsource, opc, result, a);
+                    ok = compatible_vinfo(preva, bsource, opc, result, a,
+                                          recdepth);
 #if ALL_CHECKS
                     if (ok) {
                       extra_assert(buf_opc1     == cmpinternal.buf_opc);
@@ -1073,13 +1223,62 @@ static bool compatible_array(vinfo_array_t* aa, int count,
         }
     }
   return true;
+#undef CHECK_FOR_NULL
+}
+
+/* same as 'compatible_array', faster, for when you are not
+   interested in the result */
+static void skip_compatible_array(int count)
+{
+  int i;
+  extra_assert(count >= 0);
+  for (i=count; i--; )
+    {
+      int opc = fz_getopc();
+      extra_assert(cmpinternal.tmp_counter <= cmpinternal.vcilink->time);
+      if (opc == FZ_OPC_NULL)
+        ;
+      else if (opc < 0)
+        ;
+      else
+        {
+          Source bsource = fz_getarg();
+          extra_assert(is_compiletime(bsource));
+          skip_compatible_array(opc);
+
+          if (cmpinternal.tmp_counter == cmpinternal.vcilink->time)
+            {
+              /* ignore links to vinfo_t's that were compressed inside
+                 the skipped part of the array */
+              struct vcilink_s* pending = NULL;
+              struct vcilink_s* p;
+              while (1) {
+                while (cmpinternal.tmp_counter == cmpinternal.vcilink->time)
+                  {
+                    p = cmpinternal.vcilink;
+                    cmpinternal.vcilink = p->next;
+                    p->next = pending;
+                    pending = p;
+                  }
+                extra_assert(cmpinternal.tmp_counter<cmpinternal.vcilink->time);
+                if (!pending)
+                  break;   /* done */
+                p = pending;
+                pending = p->next;
+                psyco_llfree_vci(p);
+              }
+            }
+          cmpinternal.tmp_counter++;
+          extra_assert(cmpinternal.tmp_counter <= cmpinternal.vcilink->time);
+        }
+    }
 }
 
 inline bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
                                 vcompatible_t* result) {
   bool ok;
   fz_load_fpo_stack(fpo);
-  ok = compatible_array(aa, fz_getopc(), &result->diff, aa);
+  ok = compatible_array(aa, fz_getopc(), &result->diff, aa, 0);
   
   /* free the linked list (it should already be free if 'ok') */
   while (cmpinternal.vcilink != &cmpinternal.sentinel)
@@ -1188,18 +1387,28 @@ static code_t* data_new_buffer(code_t* code, struct dmove_s* dm)
   /* creates a new buffer containing a copy of the already-written code */
   CodeBufferObject* codebuf;
   int codesize;
-  assert(dm->private_codebuf == NULL);  /* otherwise it means we overwrote
-                                           the BIG_BUFFER_SIZE */
-  codebuf = psyco_new_code_buffer(NULL, NULL);
-  if (codebuf == NULL)
-    OUT_OF_MEMORY();
-  /* copy old code to new buffer */
-  codesize = code - dm->code_origin;
-  memcpy(codebuf->codeptr, dm->code_origin, codesize);
-  dm->private_codebuf = codebuf;
-  dm->code_origin = codebuf->codeptr;
-  dm->code_limit = dm->code_origin + BIG_BUFFER_SIZE;
-  return codebuf->codeptr + codesize;
+  if (dm->private_codebuf != NULL)
+    {
+      /* overwriting the regular (large) code buffer */
+      psyco_emergency_enlarge_buffer(&code, &dm->code_limit);
+      return code;
+    }
+  else
+    {
+      /* overwriting the small buffer, start a new (regular) one */
+      codebuf = psyco_new_code_buffer(NULL, NULL, &dm->code_limit);
+      /* the new buffer should be at least as large as the old one */
+      codesize = code - dm->code_origin;
+      if ((code_t*) codebuf->codestart + codesize > dm->code_limit)
+        Py_FatalError("psyco: unexpected unify buffer overflow");
+      /* copy old code to new buffer */
+      memcpy(codebuf->codestart, dm->code_origin, codesize);
+      dm->private_codebuf = codebuf;
+#if PSYCO_DEBUG
+      dm->code_origin = (code_t*) 0xCDCDCDCD;
+#endif
+      return ((code_t*) codebuf->codestart) + codesize;
+    }
 }
 
 #define ORIGINAL_VINFO(spos)    (*(vinfo_t**)(dm->usages + (            \
@@ -1484,7 +1693,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   extra_assert(has_ccreg == (po->ccreg != NULL));
 #endif
   backpointer = code;
-  JUMP_TO(target_codebuf->codeptr);
+  JUMP_TO((code_t*) target_codebuf->codestart);
   
   /* start a new buffer if the last JUMP_TO overflowed,
      but not if we had no room at all in the first place. */
@@ -1493,7 +1702,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
       /* the JMP instruction emitted by JUMP_TO() is not position-
          independent; we must emit it again at the new position */
       code = data_new_buffer(backpointer, &dm);
-      JUMP_TO(target_codebuf->codeptr);
+      JUMP_TO((code_t*) target_codebuf->codestart);
       assert(code <= dm.code_limit);
     }
   
@@ -1505,12 +1714,11 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
     }
   else
     {
-      SHRINK_CODE_BUFFER(dm.private_codebuf, code - dm.code_origin,
-                         "unify");
+      SHRINK_CODE_BUFFER(dm.private_codebuf, code, "unify");
       *target = dm.private_codebuf;
       /* add a jump from the original code buffer to the new one */
       code = po->code;
-      JUMP_TO(dm.private_codebuf->codeptr);
+      JUMP_TO((code_t*) dm.private_codebuf->codestart);
       dump_code_buffers();
     }
   PsycoObject_Delete(po);
@@ -1559,7 +1767,7 @@ static int mark_to_keep(vinfo_array_t* array, bool virtual_parent)
   return total;
 }
 
-static void remove_non_marked(vinfo_array_t* array)
+static void remove_non_marked(vinfo_array_t* array, PsycoObject* po)
 {
   int i;
   for (i=array->count; i--; )
@@ -1571,29 +1779,98 @@ static void remove_non_marked(vinfo_array_t* array)
             {
               /* remove this item */
               array->items[i] = NULL;
-              vinfo_decref(vi, NULL);
+              vinfo_decref(vi, po);
             }
           else if (vi->array != NullArray)
-            remove_non_marked(vi->array);
+            {
+              if (is_compiletime(vi->source))
+                {
+                  /* remove all sub-items */
+                  vinfo_array_t* array = vi->array;
+#if PSYCO_DEBUG
+                  /* we just verify that there are only compile-time
+                     subitems. */
+                  int j;
+                  for (j=0; j<array->count; j++)
+                    extra_assert(array->items[j] == NULL ||
+                                 is_compiletime(array->items[j]->source));
+#endif
+                  vi->array = NullArray;
+                  array_delete(array, po);
+                }
+              else
+                remove_non_marked(vi->array, po);
+            }
         }
     }
 }
 
 DEFINEFN
-int psyco_simplify_array(vinfo_array_t* array)
+int psyco_simplify_array(vinfo_array_t* array, PsycoObject* po)
 {
   /* We remove a run-time vinfo_t if it is not directly in 'array' and
      if it is not in the sub-vinfo_array_t of any virtual-time source. */
   
   /* First mark with a non-NULL value all run-time sources that must
      be kept. */
-  int total = mark_to_keep(array, true);
+  int total;
+  assert_cleared_tmp_marks(array);
+  total = mark_to_keep(array, true);
 
   /* Remove all non-marked run-time sources */
-  remove_non_marked(array);
+  remove_non_marked(array, po);
 
   /* Done */
   return total;
+}
+
+DEFINEFN
+bool psyco_forking(PsycoObject* po, vinfo_array_t* array)
+{
+  /* Some virtual-time objects cannot remain virtualized across calls,
+     because if the called function pulls them out of virtual-time,
+     the caller will not know it.  This is unacceptable for
+     mutable Python objects.  We hope it does not hurt in other cases,
+     but could be defeated by the "is" operator. */
+  int i;
+  for (i=array->count; i--; )
+    {
+      vinfo_t* vi = array->items[i];
+      if (vi != NULL)
+        {
+          if (is_virtualtime(vi->source))
+            {
+              if (!VirtualTime_Get(vi->source)->compute_fn(po, vi, true))
+                return false;
+              /* vi->array may be modified by compute_fn() */
+            }
+          if (vi->array != NullArray)
+            if (!psyco_forking(po, vi->array))
+              return false;
+        }
+    }
+  return true;
+}
+
+static void remove_non_compiletime(vinfo_t* v, PsycoObject* po)
+{
+  vinfo_array_t* array = v->array;
+  int j, length=array->count, newlength=0;
+  for (j=0; j<length; j++)
+    {
+      vinfo_t* vi = array->items[j];
+      if (vi != NULL)
+        {
+          if (!is_compiletime(vi->source))
+            {
+              array->items[j] = NULL;
+              vinfo_decref(vi, po);
+            }
+          else
+            newlength = j+1;
+        }
+    }
+  vinfo_array_shrink(po, v, newlength);
 }
 
 
@@ -1670,7 +1947,7 @@ inline code_t* lookup_old_promotion_values(rt_promotion_t* fs,
   CodeBufferObject* codebuf;
   codebuf = (CodeBufferObject*) PyDict_GetItem(fs->spec_dict, key);
   if (codebuf != NULL)   /* yes */
-    return codebuf->codeptr;
+    return (code_t*) codebuf->codestart;
   return NULL;  /* no */
 }
 #endif  /* PROMOTION_TACTIC == 0 */
@@ -1757,23 +2034,21 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
     OUT_OF_MEMORY();
   Py_DECREF(codebuf);  /* there is a reference left
                           in the dictionary */
-  result = codebuf->codeptr;
+  result = (code_t*) codebuf->codestart;
 #endif
 
 #if PROMOTION_TACTIC == 1
-  codebuf = psyco_new_code_buffer(NULL, NULL);
-  if (codebuf == NULL)
-    OUT_OF_MEMORY();
+  codebuf = psyco_new_code_buffer(NULL, NULL, &po->codelimit);
   {
     code_t* codeend;
-    rt_local_buf_t* buf = (rt_local_buf_t*) codebuf->codeptr;
+    rt_local_buf_t* buf = (rt_local_buf_t*) codebuf->codestart;
     code_t* code = (code_t*)(buf+1);
     ALIGN_NO_FILL();
     result = code;
     buf = ((rt_local_buf_t*) code) - 1;
     
 # if CODE_DUMP
-    memset(codebuf->codeptr, 0xCC, ((char*) buf) - ((char*) codebuf->codeptr));
+    memset(codebuf->codestart, 0xCC, ((char*) buf) - ((char*) codebuf->codestart));
     buf->signature = 0x66666666;
 # endif
     buf->next = fs->local_chained_list;
@@ -1781,9 +2056,8 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
     fs->local_chained_list = buf;
     
     po->code = result;
-    po->codelimit = codebuf->codeptr + BIG_BUFFER_SIZE - GUARANTEED_MINIMUM;
     codeend = psyco_compile(po, mp, false);
-    psyco_shrink_code_buffer(codebuf, codeend - codebuf->codeptr);
+    psyco_shrink_code_buffer(codebuf, codeend);
     /* XXX don't know what to do with reference to 'codebuf' */
   }
 #endif
@@ -1856,6 +2130,10 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
 #endif
   void* do_promotion;
 
+  /* we remove the non-compile-time array values from 'fix' */
+  if (fix->array != NullArray)
+    remove_non_compiletime(fix, po);
+  
   TRACE_EXECUTION("PROMOTION");
   BEGIN_CODE
 #if PROMOTION_FAST_COMMON_CASE
@@ -2024,7 +2302,7 @@ code_t* psyco_finish_fixed_switch(PsycoObject* po, vinfo_t* fix, long kflags,
 DEFINEFN
 void psyco_unfix(PsycoObject* po, vinfo_t* vi)
 {
-  /* Convert 'vi' from compile-time-known to run-time-variable. */
+  /* Convert 'vi' from compile-time to run-time variable. */
   vinfo_t* newvi;
   source_known_t* sk;
 

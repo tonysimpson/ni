@@ -31,6 +31,11 @@
 # define VERBOSE_LEVEL   (PSYCO_DEBUG ? 0 : 0)
 #endif
 
+ /* dump information about profiling and statistics */
+#ifndef VERBOSE_STATS
+# define VERBOSE_STATS   (VERBOSE_LEVEL>=2)
+#endif
+
  /* define for *heavy* memory checking: 0 = off, 1 = reasonably heavy,
                                         2 = unreasonably heavy */
 #ifndef HEAVY_MEM_CHECK
@@ -99,13 +104,10 @@
    XXX carefully check that it is impossible to overflow by more
    We need more than 128 bytes because of the way conditional jumps
    are emitted; see pycompiler.c.
-   XXX actually there are too many places that might emit an
-   unbounded size of code. This is a Big Bug. I won't attempt to
-   fix it now because it should be done together with Psyco's rewrite
-   towards flexible code-emitting back-ends. For now just pretent that
-   a quite large value will be OK. */
+   The END_CODE macro triggers a silent buffer change if space is
+   getting very low -- less than GUARANTEED_MINIMUM */
 #ifndef BUFFER_MARGIN
-# define BUFFER_MARGIN    (1920 + GUARANTEED_MINIMUM)
+# define BUFFER_MARGIN    1024
 #endif
 
 /* When emitting code, all called functions can assume that they
@@ -140,26 +142,36 @@
 # define MALLOC_CHECK_    2  /* GCC malloc() checks */
 # undef NDEBUG
 # include <assert.h>
-# define extra_assert(x)  assert(x)
+# if CODE_DUMP
+#  define extra_assert(x) ((x) ? (void)0 : (psyco_dump_code_buffers(),       \
+                                  assert(x), assert(!"volatile assertion")))
+# else
+#  define extra_assert(x) assert(x)
+# endif
 #else
 # define extra_assert(x)  (void)0  /* nothing */
 #endif
 
 #if VERBOSE_LEVEL
-# if defined(stdout)
-/* cannot use the version below if stdout is a macro */
-#  define debug_printf(args)    (printf args, fflush(stdout))
-# else
-#  define debug_printf(args)     do {       \
-        FILE* __stdout_copy = stdout;       \
-        stdout = stderr;                    \
-        printf args;                        \
-        stdout = __stdout_copy;             \
+# define debug_printf(level, args)     do { \
+        if (VERBOSE_LEVEL >= (level)) {     \
+          psyco_debug_printf args;          \
+        }                                   \
+        if (psyco_logger && (level) == 1) { \
+          psyco_flog args;                  \
+        }                                   \
       } while (0)
-# endif
+EXTERNFN void psyco_debug_printf(char* msg, ...);
 #else
-# define debug_printf(args)     do { } while (0) /* nothing */
+# define debug_printf(level, args)     do { \
+        if (psyco_logger && (level) == 1) { \
+          psyco_flog args;                  \
+        }                                   \
+      } while (0)
 #endif
+EXTERNVAR PyObject* psyco_logger;
+EXTERNFN void psyco_flog(char* msg, ...);
+
 #if VERBOSE_LEVEL >= 4
 # define TRACE_EXECUTION(msg)         do {                                    \
   BEGIN_CODE  EMIT_TRACE(msg, psyco_trace_execution);  END_CODE } while (0)
@@ -214,10 +226,11 @@ typedef struct mergepoint_s mergepoint_t;   /* defined in mergepoint.h */
 typedef struct stack_frame_info_s stack_frame_info_t; /* def in pycompiler.h */
 
 EXTERNVAR PyObject* PyExc_PsycoError;
+EXTERNVAR long psyco_memory_usage;   /* approximative */
 
 
 /* moved here from vcompiler.h because needed by numerous header files */
-typedef bool (*compute_fn_t)(PsycoObject* po, vinfo_t* vi);
+typedef bool (*compute_fn_t)(PsycoObject* po, vinfo_t* vi, bool forking);
 typedef struct {
   compute_fn_t compute_fn;
 } source_virtual_t;
@@ -248,9 +261,11 @@ EXTERNFN code_t* psyco_pycompiler_mainloop(PsycoObject* po);
    should we report the exception? */
 #define OUT_OF_MEMORY()      Py_FatalError("psyco: out of memory")
 
-
 /* Thread-specific state */
 EXTERNFN PyObject* psyco_thread_dict(void);
+
+/* defined in dispatcher.c */
+EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 
 
 #endif /* _PSYCO_H */

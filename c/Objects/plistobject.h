@@ -10,10 +10,31 @@
 #include "pabstract.h"
 
 
-#define LIST_OB_ITEM        QUARTER(offsetof(PyListObject, ob_item))
+#define LIST_ob_item       FMUT(DEF_FIELD(PyListObject, PyObject**, ob_item, \
+                                          VAR_size))
+#define LIST_TOTAL         FIELDS_TOTAL(LIST_ob_item)
+#define VLIST_ITEMS        LIST_TOTAL
+#define LIST_itemsarray    FMUT(DEF_ARRAY(PyObject*, 0))
 
 
-EXTERNFN vinfo_t* PsycoList_New(PsycoObject* po, int size);
+/* Warning: only for very short lists! Each new length could
+   force a new copy of the whole code to be emitted... */
+#define VLIST_LENGTH_MAX   3
+
+
+EXTERNFN vinfo_t* PsycoList_New(PsycoObject* po, int size, vinfo_t** source);
+EXTERNFN vinfo_t* PsycoList_SingletonNew(vinfo_t* vitem);
+/*EXTERNVAR vinfo_t* psyco_empty_list;*/
+
+/* get the virtual array of items in the list,
+   returning the length of the list or -1 if it fails (items not known).
+   The items are then found in list->array->items[VLIST+i].
+   Never sets a PycException. */
+EXTERNFN int PsycoList_Load(vinfo_t* list);
+
+
+/* for pstringobject.c */
+EXTERNFN vinfo_t* psyco_plist_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b);
 
 
 #endif /* _PSY_LISTOBJECT_H */

@@ -48,8 +48,7 @@
 typedef struct {
   PyCodeObject* co;     /* code object we are compiling */
   int next_instr;       /* next instruction to compile */
-  int auto_recursion;   /* # levels to auto-compile calls to Python functions */
-  short mp_flags;	/* see psyco_mp_flags() in mergepoints.h */
+  short auto_recursion; /* # levels to auto-compile calls to Python functions */
   short iblock;		/* index in blockstack */
   PyTryBlock blockstack[CO_MAXBLOCKS]; /* for try and loop blocks */
   
@@ -64,6 +63,9 @@ typedef struct {
   PyObject* changing_globals;  /* dict of names of globals that are detected to
                                   change */
 } pyc_data_t;
+
+#define AUTO_RECURSION_MAX 200
+#define AUTO_RECURSION(r)  ((r)>AUTO_RECURSION_MAX ? AUTO_RECURSION_MAX : (r))
 
 /* Note.
    'stack_level' is stored in 'pr'. To do so we must assume that the level
@@ -107,5 +109,6 @@ typedef struct {
 
 /* for psyco_generic_call() only */
 EXTERNFN vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi);
+EXTERNFN vinfo_t* generic_call_ct(int flags, long result);
 
 #endif /* _PYCHEADER_H */

@@ -64,7 +64,8 @@ MAINFILE = data['MAINFILE']
 
 macros = []
 for name in ['PSYCO_DEBUG', 'VERBOSE_LEVEL',
-             'CODE_DUMP', 'HEAVY_MEM_CHECK', 'ALL_STATIC']:
+             'CODE_DUMP', 'HEAVY_MEM_CHECK', 'ALL_STATIC',
+			 'PSYCO_NO_LINKED_LISTS']:
     if globals().has_key(name):
         macros.append((name, str(globals()[name])))
 

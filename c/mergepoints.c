@@ -1,5 +1,6 @@
 #include "mergepoints.h"
 #include "vcompiler.h"
+#include "stats.h"
 #include "Python/pycinternal.h"
 
 
@@ -246,17 +247,7 @@ static const char instr_control_flow[256] = {
   F(0xF8), F(0xF9), F(0xFA), F(0xFB), F(0xFC), F(0xFD), F(0xFE), F(0xFF),
 };
 #undef F
-static PyObject* CodeMergePoints = NULL;
 
-inline void init_merge_points(void)
-{
-  if (CodeMergePoints == NULL)
-    {
-      CodeMergePoints = PyDict_New();
-      if (CodeMergePoints == NULL)
-        OUT_OF_MEMORY();
-    }
-}
 
 struct instrnode_s {
   int next;     /* ptr to the next instruction if MP_NO_MERGEPT, else -1 */
@@ -264,23 +255,28 @@ struct instrnode_s {
   bool mp;      /* set a mergepoint here? */
 };
 
-static int set_merge_point(struct instrnode_s* instrnodes, int instr)
+inline int set_merge_point(struct instrnode_s* instrnodes, int instr)
 {
   int runaway = 100;
   int bestchoice = instr;
-  while (instrnodes[instr].next >= 0 && !instrnodes[instr].mp && runaway--)
+  while (instrnodes[instr].next >= 0 && !instrnodes[instr].mp && --runaway)
     {
       instr = instrnodes[instr].next;
       if (instrnodes[instr].inpaths >= 2)
         bestchoice = instr;
     }
-  if (instrnodes[instr].mp)  /* already a mergepoint here */
-    return 0;
-  instrnodes[bestchoice].mp = true;  /* set merge point */
-  return 1;
+  if (instrnodes[instr].mp)
+    return 0;        /* found an already-set merge point */
+  else
+    {
+      extra_assert(!instrnodes[bestchoice].mp);
+      instrnodes[bestchoice].mp = true;  /* set merge point */
+      return 1;
+    }
 }
 
-inline PyObject* build_merge_points(PyCodeObject* co)
+DEFINEFN
+PyObject* psyco_build_merge_points(PyCodeObject* co)
 {
   PyObject* s;
   mergepoint_t* mp;
@@ -288,8 +284,17 @@ inline PyObject* build_merge_points(PyCodeObject* co)
   int length = PyString_GET_SIZE(co->co_code);
   unsigned char* source = (unsigned char*) PyString_AS_STRING(co->co_code);
   size_t ibytes = (length+1) * sizeof(struct instrnode_s);
-  struct instrnode_s* instrnodes = (struct instrnode_s*) PyMem_MALLOC(ibytes);
+  struct instrnode_s* instrnodes;
   int i, lasti, count, oparg = 0;
+
+  if (length == 0)
+    {
+      /* normally a code object's code string is never empty,
+         but pyexpat.c has some hacks that we have to work around */
+      Py_INCREF(Py_None);
+      return Py_None;
+    }
+  instrnodes = (struct instrnode_s*) PyMem_MALLOC(ibytes);
   if (instrnodes == NULL)
     OUT_OF_MEMORY();
   memset(instrnodes, 0, ibytes);
@@ -314,17 +319,17 @@ inline PyObject* build_merge_points(PyCodeObject* co)
 	    }
           if (op == SETUP_EXCEPT)
             mp_flags |= MP_FLAGS_HAS_EXCEPT;
+          if (op == SETUP_FINALLY)
+            mp_flags |= MP_FLAGS_HAS_FINALLY;
 	}
       flags = instr_control_flow[(int) op];
       if (flags == 0)
 	if (op != COMPARE_OP || !SUPPORTED_COMPARE_ARG(oparg))
 	  {
 	    /* unsupported instruction */
-#if VERBOSE_LEVEL
-            debug_printf(("psyco: unsupported instruction: "
-                          "bytecode %d at %s:%d\n",
-                          (int) op, PyCodeObject_NAME(co), i0));
-#endif            
+            debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
+                            ("unsupported opcode %d at %s:%d\n",
+                             (int) op, PyCodeObject_NAME(co), i0));
 	    PyMem_FREE(instrnodes);
 	    Py_INCREF(Py_None);
 	    return Py_None;
@@ -382,29 +387,6 @@ inline PyObject* build_merge_points(PyCodeObject* co)
   return s;
 }
 
-
-DEFINEFN
-PyObject* psyco_get_merge_points(PyCodeObject* co)
-{
-  PyObject* s;
-  init_merge_points();
-
-  /* cache results -- warning, don't cache on 'co->co_code' because
-     although the position of the merge points really depend on the
-     bytecode only, we use the 'entries' field to store pointer to
-     already-compiled code, which depends on the other things in
-     'co'. */
-  s = PyDict_GetItem(CodeMergePoints, (PyObject*) co);
-  if (s == NULL)
-    {
-      s = build_merge_points(co);
-      if (PyDict_SetItem(CodeMergePoints, (PyObject*) co, s))
-        OUT_OF_MEMORY();
-      Py_DECREF(s);  /* one ref left in the dict */
-    }
-  return s;
-}
-
 DEFINEFN
 mergepoint_t* psyco_next_merge_point(PyObject* mergepoints,
                                      int position)
@@ -431,4 +413,10 @@ mergepoint_t* psyco_next_merge_point(PyObject* mergepoints,
       }
   } while (bufsize > 0);
   return array;
+}
+
+DEFINEFN
+PyObject* psyco_get_merge_points(PyCodeObject* co)
+{
+  return PyCodeStats_MergePoints(PyCodeStats_Get(co));
 }

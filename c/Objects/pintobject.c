@@ -37,13 +37,14 @@ vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v)
 	return result;
 }
 
-static bool compute_int(PsycoObject* po, vinfo_t* intobj)
+static bool compute_int(PsycoObject* po, vinfo_t* intobj, bool forking)
 {
 	vinfo_t* newobj;
 	vinfo_t* x;
+	if (forking) return true;
 	
 	/* get the field 'ob_ival' from the Python object 'intobj' */
-	x = vinfo_getitem(intobj, INT_OB_IVAL);
+	x = vinfo_getitem(intobj, iINT_OB_IVAL);
 	if (x == NULL)
 		return false;
 
@@ -76,8 +77,7 @@ static vinfo_t* pint_nonzero(PsycoObject* po, vinfo_t* intobj)
 
 static vinfo_t* pint_pos(PsycoObject* po, vinfo_t* intobj)
 {
-	vinfo_t* vtp = vinfo_getitem(intobj, OB_TYPE);  /* might be NULL */
-	if (psyco_knowntobe(vtp, (long)(&PyInt_Type))) {
+	if (Psyco_KnownType(intobj) == &PyInt_Type) {
 		vinfo_incref(intobj);
 		return intobj;
 	}
@@ -187,30 +187,33 @@ static vinfo_t* pint_sub(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 				  "vv", v, w);
 }
 
-static vinfo_t* pint_or(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+static vinfo_t* pint_base2op(PsycoObject* po, vinfo_t* v, vinfo_t* w,
+			     vinfo_t*(*op)(PsycoObject*,vinfo_t*,vinfo_t*))
 {
 	vinfo_t* a;
 	vinfo_t* b;
 	vinfo_t* x;
 	CONVERT_TO_LONG(v, a);
 	CONVERT_TO_LONG(w, b);
-	x = integer_or(po, a, b);
+	x = op (po, a, b);
 	if (x != NULL)
 		x = PsycoInt_FROM_LONG(x);
 	return x;
 }
 
+static vinfo_t* pint_or(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+{
+	return pint_base2op(po, v, w, integer_or);
+}
+
+static vinfo_t* pint_xor(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+{
+	return pint_base2op(po, v, w, integer_xor);
+}
+
 static vinfo_t* pint_and(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
-	vinfo_t* a;
-	vinfo_t* b;
-	vinfo_t* x;
-	CONVERT_TO_LONG(v, a);
-	CONVERT_TO_LONG(w, b);
-	x = integer_and(po, a, b);
-	if (x != NULL)
-		x = PsycoInt_FROM_LONG(x);
-	return x;
+	return pint_base2op(po, v, w, integer_and);
 }
 
 static vinfo_t* pint_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
@@ -269,17 +272,29 @@ static vinfo_t* pint_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 				  "vv", v, w);
 }
 
+#if PY_VERSION_HEX>=0x02040000
+# warning "left shifts must be able to return longs in Python 2.4"
+#endif
+static vinfo_t* pint_lshift(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+{
+	return pint_base2op(po, v, w, integer_lshift);
+}
+
+static vinfo_t* pint_rshift(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+{
+	return pint_base2op(po, v, w, integer_rshift);
+}
+
+
+
 
 /* Careful, most operations might return a long if they overflow.
    Only list here the ones that cannot. Besides, all these operations
    should sooner or later be implemented in Psyco. XXX */
-DEF_KNOWN_RET_TYPE_2(pint_lshift, PyInt_Type.tp_as_number->nb_lshift,
-		     CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)
-DEF_KNOWN_RET_TYPE_2(pint_rshift, PyInt_Type.tp_as_number->nb_rshift,
-		     CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)
-DEF_KNOWN_RET_TYPE_2(pint_xor, PyInt_Type.tp_as_number->nb_xor,
-		     CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)
-
+/*DEF_KNOWN_RET_TYPE_2(pint_lshift, PyInt_Type.tp_as_number->nb_lshift,
+  CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)
+  DEF_KNOWN_RET_TYPE_2(pint_rshift, PyInt_Type.tp_as_number->nb_rshift,
+  CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)*/
 
 INITIALIZATIONFN
 void psy_intobject_init(void)
@@ -295,12 +310,11 @@ void psy_intobject_init(void)
 	Psyco_DefineMeta(m->nb_add,      pint_add);
 	Psyco_DefineMeta(m->nb_subtract, pint_sub);
 	Psyco_DefineMeta(m->nb_or,       pint_or);
+	Psyco_DefineMeta(m->nb_xor,      pint_xor);
 	Psyco_DefineMeta(m->nb_and,      pint_and);
 	Psyco_DefineMeta(m->nb_multiply, pint_mul);
-	
 	Psyco_DefineMeta(m->nb_lshift,   pint_lshift);
 	Psyco_DefineMeta(m->nb_rshift,   pint_rshift);
-	Psyco_DefineMeta(m->nb_xor,      pint_xor);
 	
 	psyco_computed_int.compute_fn = &compute_int;
 }

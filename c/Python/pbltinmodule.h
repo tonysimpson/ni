@@ -9,9 +9,10 @@
 #include "pycompiler.h"
 
 
-#define RANGE_LEN           VAR_OB_SIZE       /* for virtual range() only */
-#define RANGE_START         (LIST_OB_ITEM+1)  /*       "                  */
-/*#define RANGE_STEP          (LIST_OB_ITEM+2)  *       "                  */
+#define RANGE_LEN           iVAR_SIZE       /* for virtual range() only */
+#define RANGE_START         LIST_TOTAL      /*       "                  */
+/*#define RANGE_STEP        (RANGE_START+1)  *       "                  */
+#define RANGE_TOTAL       /*(RANGE_STEP+1)*/    (RANGE_START+1)
 /* XXX no support for steps currently. Needs implementation of division to
    figure out the length. */
 

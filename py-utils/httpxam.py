@@ -1,4 +1,4 @@
-import sys, re, cStringIO, os, dis, types, traceback
+import sys, re, cStringIO, os, dis, types
 import xam, psyco
 from SimpleHTTPServer import SimpleHTTPRequestHandler, test
 
@@ -31,42 +31,40 @@ def show_vinfos(array, d, co=None, path=[]):
     text += '</ol>\n'
     return text
 
+def summary_vinfos(array, d, path=[]):
+    text = ''
+    indent = '  ' * len(path)
+    for i in range(len(array)):
+        vi = array[i]
+        text += indent
+        if vi is None:
+            text += "[NULL]\n"
+        else:
+            text += "%d. %s" % (i, vi.getsummarytext())
+            if d.has_key(vi.addr):
+                text += " (already seen above)"
+            else:
+                d[vi.addr] = 1
+            text += '\n'
+            if vi.array:
+                text += summary_vinfos(vi.array, d, path+[i])
+    return text
+
 re_codebuf = re.compile(r'[/]0x([0-9A-Fa-f]+)$')
 re_proxy = re.compile(r'[/]proxy(\d+)$')
+re_summary = re.compile(r'[/]summary(\d+)$')
 
-def cache_load(filename):
-    if not filename.endswith('.py'):
-        return 0, "Not a module name"
-    path = filename[:-3].split(os.sep)
-    if os.path.isabs(filename):
-        # translate absolute paths into paths relative to sys.path
-        pathlist = sys.path[:]
-        pathlist.sort()
-        pathlist.reverse() # roughly: subdirs first
-        for p in pathlist:
-            if os.path.isabs(p):
-                p = p.split(os.sep)
-                if path[:len(p)] == p:
-                    # module name is relative to 'p'
-                    del path[:len(p)]
-                    break
-    while '.' in path:
-        path.remove('.')
-    while '..' in path:
-        i = path.index('..')
-        if i == 0:
-            return 0, "Outside of the current directory"
-        path.remove(i)
-        path.remove(i-1)
-    modulename = '.'.join(path)
+def cache_load(filename, cache={}):
     try:
-        mod = __import__(modulename, globals(), locals(), ['__doc__'])
-        return 1, mod.__dict__
-    except:
-        f = cStringIO.StringIO()
-        print >> f, "While importing module '%s':" % modulename
-        traceback.print_exc(file=f)
-        return 0, f.getvalue()
+        return cache[filename]
+    except KeyError:
+        data = {}
+        try:
+            f = execfile(filename, data)
+        except:
+            data = None
+        cache[filename] = data
+        return data
 
 class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
 
@@ -166,28 +164,57 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
                 match = re_proxy.match(self.path)
                 if match:
                     title = 'Snapshot'
-                    proxy = codebufs[int(match.group(1))]
-                    filename = proxy.co_filename
-                    ok, moduledata = cache_load(filename)
-                    if not ok:
+                    n = int(match.group(1))
+                    proxy = codebufs[n]
+                    for n1 in xrange(n-1, -1, -1):
+                        pprev = codebufs[n1]
+                        if (pprev.nextinstr == proxy.nextinstr and
+                            pprev.co_name == proxy.co_name and
+                            pprev.co_filename == proxy.co_filename):
+                            pprev = n1
+                            break
+                    else:
+                        pprev = None
+                    for n1 in xrange(n+1, len(codebufs)):
+                        pnext = codebufs[n1]
+                        if (pnext.nextinstr == proxy.nextinstr and
+                            pnext.co_name == proxy.co_name and
+                            pnext.co_filename == proxy.co_filename):
+                            pnext = n1
+                            break
+                    else:
+                        pnext = None
+                    filename = os.path.join(DIRECTORY, proxy.co_filename)
+                    moduledata = cache_load(filename)
+                    if moduledata is None:
                         co = None
                     else:
                         co = moduledata.get(proxy.co_name)
                         try:
                             co = psyco.unproxy(co)
-                        except TypeError:
-                            pass
                         except psyco.error:
+                            pass
+                        except TypeError:
                             pass
                         if hasattr(co, 'func_code'):
                             co = co.func_code
-                    data = '<p>PsycoObject structure at this point:</p>\n'
+                    data = '<p>PsycoObject structure at this point:'
+                    data += '&nbsp;' * 20
+                    data += '['
+                    data += '&nbsp;&nbsp;<a href="summary%d">summary</a>&nbsp;&nbsp;' % n
+                    if pprev is not None or pnext is not None:
+                        if pprev is not None:
+                            data += '&nbsp;&nbsp;<a href="proxy%d">&lt;&lt;&lt; previous</a>&nbsp;&nbsp;' % pprev
+                        if pnext is not None:
+                            data += '&nbsp;&nbsp;<a href="proxy%d">next &gt;&gt;&gt;</a>&nbsp;&nbsp;' % pnext
+                    data += ']'
+                    data += '</p>\n'
                     data += show_vinfos(proxy.vlocals, {}, co)
                     data += '<hr><p>Disassembly of %s:%s:%s:</p>\n' % (
                         proxy.co_filename, proxy.co_name, proxy.get_next_instr())
-                    if not ok:
-                        txt = "While loading the file '%s':\n%s\n" % (
-                            filename, moduledata)
+                    if moduledata is None:
+                        txt = "(exception while loading the file '%s')\n" % (
+                            filename)
                     else:
                         if not hasattr(co, 'co_code'):
                             txt = "(no function object '%s' in file '%s')\n" % (
@@ -204,6 +231,16 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
                     data += '<pre>%s</pre>\n' % txt
                     data += "<br><a href='/0x%x'>Back</a>\n" % proxy.addr
                 else:
+                    match = re_summary.match(self.path)
+                    if match:
+                        n = int(match.group(1))
+                        proxy = codebufs[n]
+                        data = summary_vinfos(proxy.vlocals, {})
+                        f = cStringIO.StringIO(data)
+                        self.send_response(200)
+                        self.send_header("Content-type", "text/plain")
+                        self.end_headers()
+                        return f
                     self.send_error(404, "Invalid path")
                     return None
         f = cStringIO.StringIO(self.htmlpage(title, data))
@@ -219,7 +256,7 @@ if __name__ == '__main__':
         print "  psyco.dump and any .py files containing code objects"
         print "  are loaded from the <directory>."
         sys.exit(1)
-    os.chdir(sys.argv[1])
+    DIRECTORY = sys.argv[1]
     del sys.argv[1]
-    codebufs = xam.readdump('psyco.dump')
+    codebufs = xam.readdump(os.path.join(DIRECTORY, 'psyco.dump'))
     test(CodeBufHTTPHandler)

@@ -7,54 +7,13 @@
 
 
 #include "pycheader.h"
+#include "pyver.h"
 #include "../vcompiler.h"
 #include "../processor.h"
 #include "../dispatcher.h"
 
 
-/*****************************************************************/
- /***   Detects differences between Python versions             ***/
-
-/* Note: not all features can be automatically detected; in some cases
-   we just assume that the feature is present or not based on some
-   other feature that has been introduced roughly at the same time.
-   This may need fixes to compile with some intermediary Python
-   versions. */
-
-#ifdef PyString_CheckExact
-# define NEW_STYLE_TYPES       1    /* Python >=2.2b1 */
-#else
-# define NEW_STYLE_TYPES       0
-# define PyString_CheckExact       PyString_Check
-#endif
-
-#ifndef Py_USING_UNICODE
-# define Py_USING_UNICODE          1   /* always true in Python 2.1 */
-#endif
-
-#define HAVE_struct_dictobject     (NEW_STYLE_TYPES)
-#define HAVE_PyEval_EvalCodeEx     (PYTHON_API_VERSION>=1011)
-#define HAVE_PyString_FromFormatV  (PYTHON_API_VERSION>=1011)
-
-#ifndef Py_TPFLAGS_HAVE_GC
-# define PyObject_GC_New(t,tp)     PyObject_New(t,tp)
-# define PyObject_GC_Track(o)      do { } while (0)  /* nothing */
-# define PyObject_GC_UnTrack(o)    do { } while (0)  /* nothing */
-# define PyObject_GC_Del(o)        PyObject_Del(o)
-#endif
-
-#ifdef METH_O
-# define HAVE_METH_O           1
-#else
-# define HAVE_METH_O           0
-# define METH_O           0x0008
-#endif
-
-#ifndef PyCode_GetNumFree
-# define PyCode_GetNumFree(op) (PyTuple_GET_SIZE((op)->co_freevars))
-#endif
-
-#define MAX3(a,b,c)  ((a)>(b)?((a)>(c)?(a):(c)):(b)>(c)?(b):(c))
+/*#define MAX3(a,b,c)  ((a)>(b)?((a)>(c)?(a):(c)):(b)>(c)?(b):(c))*/
 
 
 /*****************************************************************/
@@ -392,17 +351,5 @@ inline pyc_data_t* pyc_data_new(pyc_data_t* original) {
 inline void pyc_data_delete(pyc_data_t* pyc) {
 	PyMem_FREE(pyc);
 }
-
-/* to keep a trace of the Psyco stack frames */
-struct stack_frame_info_s {
-	int stack_depth;
-	PyCodeObject* co;
-	PyObject* globals;  /* NULL if not compile-time */
-};
-
-EXTERNFN stack_frame_info_t* psyco_finfo(PsycoObject* callee);
-     
-EXTERNFN PyFrameObject* psyco_emulate_frame(stack_frame_info_t* finfo,
-					    PyObject* default_globals);
 
 #endif /* _PYCOMPILER_H */

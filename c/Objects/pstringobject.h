@@ -10,7 +10,17 @@
 #include "pabstract.h"
 
 
-#define STR_OB_SVAL         QUARTER(offsetof(PyStringObject, ob_sval))
+#define STR_ob_sval       FARRAY(UNSIGNED_FIELD(PyStringObject, char, ob_sval, \
+                                                FIX_size))
+#define iSTR_OB_SVAL      FIELD_INDEX(STR_ob_sval)
+
+#define CHARACTER_char    UNSIGNED_FIELD(PyStringObject, char, ob_sval, \
+                                         FIX_size)
+#define iCHARACTER_CHAR   FIELD_INDEX(CHARACTER_char)
+#define CHARACTER_TOTAL   FIELDS_TOTAL(CHARACTER_char)
+
+#define CHARACTER_short   UNSIGNED_FIELD(PyStringObject, short,ob_sval, FIX_size)
+#define CHARACTER_long    UNSIGNED_FIELD(PyStringObject, long, ob_sval, FIX_size)
 
 
 #define PsycoString_Check(tp) PyType_TypeCheck(tp, &PyString_Type)
@@ -27,7 +37,7 @@ inline vinfo_t* PsycoString_AS_STRING(PsycoObject* po, vinfo_t* v)
 }
 inline vinfo_t* PsycoString_GET_SIZE(PsycoObject* po, vinfo_t* v)
 {	/* no type check */
-	return get_array_item(po, v, VAR_OB_SIZE);
+	return psyco_get_const(po, v, FIX_size);
 }
 
 

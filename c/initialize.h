@@ -41,12 +41,16 @@
 # include "dispatcher.c"
 # include "vcompiler.c"
 # include "psyfunc.c"
+# include "stats.c"
+# include "profile.c"
+# include "cstruct.c"
+# include "alarm.c"
 # include "codemanager.c"
 # include "mergepoints.c"
 # include "pycencoding.c"
-# include "selective.c"
 # include "linuxmemchk.c"
 # include "Python/pycompiler.c"
+# include "Python/frames.c"
 # include "Python/pbltinmodule.c"
 # include "Objects/pobject.c"
 # include "Objects/pabstract.c"
@@ -69,7 +73,12 @@
 #else /* if !ALL_STATIC */
   EXTERNFN void psyco_processor_init(void);	/* processor.c */
   EXTERNFN void psyco_compiler_init(void);	/* vcompiler.c */
+  EXTERNFN void psyco_stats_init(void);	/* stats.c */
+  EXTERNFN void psyco_profile_init(void);	/* profile.c */
+  EXTERNFN void psyco_cstruct_init(void);	/* cstruct.c */
+  EXTERNFN void psyco_alarm_init(void);	/* alarm.c */
   EXTERNFN void psyco_pycompiler_init(void);	/* Python/pycompiler.c */
+  EXTERNFN void psyco_frames_init(void);	/* Python/frames.c */
   EXTERNFN void psyco_bltinmodule_init(void);	/* Python/pbltinmodule.c */
   EXTERNFN void psy_object_init(void);	/* Objects/pobject.c */
   EXTERNFN void psy_classobject_init(void);	/* Objects/pclassobject.c */
@@ -92,7 +101,12 @@
 inline void initialize_all_files(void) {
   psyco_processor_init();	/* processor.c */
   psyco_compiler_init();	/* vcompiler.c */
+  psyco_stats_init();	/* stats.c */
+  psyco_profile_init();	/* profile.c */
+  psyco_cstruct_init();	/* cstruct.c */
+  psyco_alarm_init();	/* alarm.c */
   psyco_pycompiler_init();	/* Python/pycompiler.c */
+  psyco_frames_init();	/* Python/frames.c */
   psyco_bltinmodule_init();	/* Python/pbltinmodule.c */
   psy_object_init();	/* Objects/pobject.c */
   psy_classobject_init();	/* Objects/pclassobject.c */

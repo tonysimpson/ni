@@ -58,8 +58,10 @@ static PyObject* cimpl_range1(long start, long len)
   return lst;
 }
 
-static bool compute_range(PsycoObject* po, vinfo_t* rangelst)
+static bool compute_range(PsycoObject* po, vinfo_t* rangelst, bool forking)
 {
+	/* also compute with forking because ranges are lists,
+           which are mutable */
 	vinfo_t* newobj;
 	vinfo_t* vstart;
 	vinfo_t* vlen;
@@ -78,12 +80,8 @@ static bool compute_range(PsycoObject* po, vinfo_t* rangelst)
 	if (newobj == NULL)
 		return false;
 
-	/* remove the RANGE_xxx entries from v->array because they are
-	   no longer relevant */
-	rangelst->array->items[RANGE_START] = NULL;
-	vinfo_decref(vstart, po);
-	rangelst->array->items[RANGE_LEN]   = NULL;
-	vinfo_decref(vlen, po);
+	/* forget fields that were only relevant in virtual-time */
+	vinfo_array_shrink(po, rangelst, LIST_TOTAL);
 	
 	/* move the resulting non-virtual Python object back into 'rangelst' */
 	vinfo_move(po, rangelst, newobj);
@@ -136,8 +134,8 @@ static vinfo_t* pbuiltin_range_or_xrange(PsycoObject* po, vinfo_t* vargs)
 	if (ilen == NULL) goto End;
 	
 	result = vinfo_new(VirtualTime_New(&psyco_computed_range));
-	result->array = array_new(/*RANGE_STEP*/RANGE_START+1);
-	result->array->items[OB_TYPE] =
+	result->array = array_new(RANGE_TOTAL);
+	result->array->items[iOB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyList_Type)));
 	/* XXX implement xrange() completely and replace '&PyList_Type'
 	   above by '&PyRange_Type' for this case */
@@ -218,7 +216,6 @@ static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 
 static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
-	vinfo_t* zero;
 	vinfo_t* vlen;
 	vinfo_t* result;
 	PyTypeObject* vtp;
@@ -240,10 +237,7 @@ static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 		if (runtime_condition_f(po, cc))
 			goto use_proxy;
 
-		zero = psyco_vi_Zero();
-		result = read_immut_array_item_var(po, vobj, STR_OB_SVAL,
-                                                   zero, true);
-		vinfo_decref(zero, po);
+                result = psyco_get_field(po, vobj, CHARACTER_char);
 		if (result == NULL)
 			return NULL;
 		return PsycoInt_FROM_LONG(result);

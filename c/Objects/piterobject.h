@@ -19,9 +19,12 @@ typedef struct {
 	PyObject *it_seq;
 } seqiterobject;
 
-#define SEQITER_IT_INDEX    QUARTER(offsetof(seqiterobject, it_index))
-#define SEQITER_IT_SEQ      QUARTER(offsetof(seqiterobject, it_seq))
-#define SEQITER_IT_MAX      SEQITER_IT_SEQ
+#define SEQITER_it_index  FMUT(DEF_FIELD(seqiterobject, long, it_index, OB_type))
+#define SEQITER_it_seq    DEF_FIELD(seqiterobject, PyObject*, it_seq, \
+						SEQITER_it_index)
+#define iSEQITER_IT_INDEX FIELD_INDEX(SEQITER_it_index)
+#define iSEQITER_IT_SEQ   FIELD_INDEX(SEQITER_it_seq)
+#define SEQITER_TOTAL     FIELDS_TOTAL(SEQITER_it_seq)
 
 
 /*********************************************************************/

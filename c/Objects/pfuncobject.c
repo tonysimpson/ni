@@ -6,28 +6,25 @@
  /***************************************************************/
   /***   Virtual functions                                     ***/
 
-#define FUNC_CODE      QUARTER(offsetof(PyFunctionObject, func_code))
-#define FUNC_GLOBALS   QUARTER(offsetof(PyFunctionObject, func_globals))
-#define FUNC_DEFAULTS  QUARTER(offsetof(PyFunctionObject, func_defaults))
-
 static source_virtual_t psyco_computed_function;
 
-static bool compute_function(PsycoObject* po, vinfo_t* v)
+static bool compute_function(PsycoObject* po, vinfo_t* v, bool forking)
 {
+	/* also compute with forking because function objects are mutable */
 	vinfo_t* newobj;
 	vinfo_t* fcode;
 	vinfo_t* fglobals;
 	vinfo_t* fdefaults;
 
-	fcode = vinfo_getitem(v, FUNC_CODE);
+	fcode = vinfo_getitem(v, iFUNC_CODE);
 	if (fcode == NULL)
 		return false;
 
-	fglobals = vinfo_getitem(v, FUNC_GLOBALS);
+	fglobals = vinfo_getitem(v, iFUNC_GLOBALS);
 	if (fglobals == NULL)
 		return false;
 
-	fdefaults = vinfo_getitem(v, FUNC_DEFAULTS);
+	fdefaults = vinfo_getitem(v, iFUNC_DEFAULTS);
 	if (fdefaults == NULL)
 		return false;
 
@@ -54,19 +51,27 @@ DEFINEFN
 vinfo_t* PsycoFunction_New(PsycoObject* po, vinfo_t* fcode,
 			   vinfo_t* fglobals, vinfo_t* fdefaults)
 {
-	vinfo_t* r = vinfo_new(VirtualTime_New(&psyco_computed_function));
-	r->array = array_new(MAX3(FUNC_CODE, FUNC_GLOBALS, FUNC_DEFAULTS)+1);
-	r->array->items[OB_TYPE] =
+	vinfo_t* r;
+	
+	/* fdefaults contains potential arguments; mutable objects there
+	   must be forced out of virtual-time right now */
+	if (fdefaults != NULL && !psyco_forking(po, fdefaults->array))
+		return NULL;
+
+	/* Build a virtual function object */
+	r = vinfo_new(VirtualTime_New(&psyco_computed_function));
+	r->array = array_new(FUNC_TOTAL);
+	r->array->items[iOB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyFunction_Type)));
 	vinfo_incref(fcode);
-	r->array->items[FUNC_CODE] = fcode;
+	r->array->items[iFUNC_CODE] = fcode;
 	vinfo_incref(fglobals);
-	r->array->items[FUNC_GLOBALS] = fglobals;
+	r->array->items[iFUNC_GLOBALS] = fglobals;
 	if (fdefaults == NULL)
 		fdefaults = psyco_vi_Zero();
 	else
 		vinfo_incref(fdefaults);
-	r->array->items[FUNC_DEFAULTS] = fdefaults;
+	r->array->items[iFUNC_DEFAULTS] = fdefaults;
 	return r;
 }
 
@@ -119,18 +124,18 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 		else {
 			/* virtual-time function objects: read the
 			   individual components */
-			fcode = vinfo_getitem(func, FUNC_CODE);
+			fcode = vinfo_getitem(func, iFUNC_CODE);
 			if (fcode == NULL)
 				return NULL;
 			co = (PyCodeObject*)psyco_pyobj_atcompiletime(po, fcode);
 			if (co == NULL)
 				return NULL;
 			
-			fglobals = vinfo_getitem(func, FUNC_GLOBALS);
+			fglobals = vinfo_getitem(func, iFUNC_GLOBALS);
 			if (fglobals == NULL)
 				return NULL;
 			
-			fdefaults = vinfo_getitem(func, FUNC_DEFAULTS);
+			fdefaults = vinfo_getitem(func, iFUNC_DEFAULTS);
 			if (fdefaults == NULL)
 				return NULL;
 
