@@ -93,6 +93,8 @@ inline void fz_find_runtimes(vinfo_array_t* aa, FrozenPsycoObject* fpo,
 
 #else /* if VLOCALS_OPC */
 
+#define COMPRESS_COMPILETIME_SUBITEMS    0
+
 
 struct vcilink_s {
   int time;
@@ -178,6 +180,44 @@ inline void fz_putopc(int opc)
   *--cmpinternal.buf_opc = opc;
 }
 
+#if COMPRESS_COMPILETIME_SUBITEMS
+static void fz_compress(vinfo_array_t* aa, bool nolinks)
+{
+  int i;
+  int length = aa->count;
+  /*while (length > 0 && aa->items[length-1] == NULL)
+    length--;  ---- invalid optimization ---- */
+  for (i=0; i<length; i++)
+    {
+      vinfo_t* a = aa->items[i];
+      if (a == NULL) {
+        fz_putopc(FZ_OPC_NULL);   /* emit FZ_OPC_NULL */
+      }
+      else if (a->tmp != NULL) {
+        int prevcounter = (int) a->tmp;   /* already seen, emit a link */
+        fz_putopc(FZ_OPC_LINK - (cmpinternal.tmp_counter-prevcounter));
+      }
+      else {
+        bool nosublinks = nolinks;
+        int length;
+        Source arg = a->source;
+        if (is_compiletime(arg))
+          {
+            sk_incref(CompileTime_Get(arg));
+            nosublinks = true;
+          }
+        ++cmpinternal.tmp_counter;
+        if (!nolinks)
+          a->tmp = (vinfo_t*) cmpinternal.tmp_counter;
+        length = a->array->count;
+        if (length)    /* avoid recursive call if unneeded */
+          fz_compress(a->array, nosublinks);  /* store the subarray */
+        fz_putarg(a->source);    /* store the 'source' field */
+        fz_putopc(length);      /* store the length of the subarray */
+      }
+    }
+}
+#else   /* !COMPRESS_COMPILETIME_SUBITEMS */
 static void fz_compress(vinfo_array_t* aa)
 {
   int i;
@@ -196,18 +236,26 @@ static void fz_compress(vinfo_array_t* aa)
       }
       else {
         int length;
-        Source arg = a->source;
-        if (is_compiletime(arg))
-          sk_incref(CompileTime_Get(arg));
+        Source arg;
         a->tmp = (vinfo_t*) (++cmpinternal.tmp_counter);
-        length = a->array->count;
-        if (length)    /* avoid recursive call if unneeded */
-          fz_compress(a->array);  /* store the subarray */
+        arg = a->source;
+        if (is_compiletime(arg))
+          {
+            sk_incref(CompileTime_Get(arg));
+            length = 0;
+          }
+        else
+          {
+            length = a->array->count;
+            if (length)    /* avoid recursive call if unneeded */
+              fz_compress(a->array);  /* store the subarray */
+          }
         fz_putarg(a->source);    /* store the 'source' field */
         fz_putopc(length);      /* store the length of the subarray */
       }
     }
 }
+#endif  /* COMPRESS_COMPILETIME_SUBITEMS */
 /* Compression note: if we implement sharing of common initial segments
    (which could save another 50% memory) we get better results by storing
    the 'source' field *before* its sub-array. This will complicate
@@ -349,7 +397,11 @@ inline void fz_build(FrozenPsycoObject* fpo, vinfo_array_t* aa)
   cmpinternal.buf_args = (Source*) cmpinternal.buf_begin;
   cmpinternal.tmp_counter = 0;
   clear_tmp_marks(aa);
+#if COMPRESS_COMPILETIME_SUBITEMS
+  fz_compress(aa, false);
+#else
   fz_compress(aa);
+#endif
   fz_putopc(aa->count);
   opc_size = cmpinternal.buf_end - cmpinternal.buf_opc;
   arg_size = ((signed char*) cmpinternal.buf_args) - cmpinternal.buf_begin;
@@ -928,7 +980,9 @@ inline bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
 static bool compatible_array(vinfo_array_t* aa, int count,
                              vinfo_array_t** result, vinfo_array_t* reference,
                              int recdepth);
+#if COMPRESS_COMPILETIME_SUBITEMS
 static void skip_compatible_array(int count);
+#endif
 
 static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
                              vinfo_array_t** result, vinfo_t* aref,
@@ -936,7 +990,7 @@ static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
 {
   /* Check if 'a' matches 'bsource'. */
   long diff;
-  bool skip_subarray = false;
+  /*bool skip_subarray = false;*/
 
   /* If 'aref!=a' then 'aref' is a vinfo_t* that already passed the test
      against the same 'bsource'. In this case there is an extra test:
@@ -1007,21 +1061,22 @@ static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
                 }
             }
           }
-        else
-          skip_subarray = true;
+        /*else
+          skip_subarray = true;*/
         break;
         
       default:  /* case VirtualTime */
         return false;  /* different virtual sources */
       }
     }
-  else
-    skip_subarray = is_compiletime(bsource);
+  /*else
+    skip_subarray = is_compiletime(bsource);*/
 
   if (bcount == 0 && a->array == NullArray)
     return true;    /* shortcut */
 
-  if (skip_subarray)
+#if COMPRESS_COMPILETIME_SUBITEMS
+  if (/*skip_subarray*/ is_compiletime(bsource))
     {
       /* For compile-time values we don't bother comparing
          subarrays, because they only have a caching role
@@ -1040,6 +1095,13 @@ static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
       skip_compatible_array(bcount);
       return true;
     }
+#else   /* !COMPRESS_COMPILETIME_SUBITEMS */
+  if (is_compiletime(bsource))
+    {
+      extra_assert(bcount == 0);
+      return true;
+    }
+#endif  /* COMPRESS_COMPILETIME_SUBITEMS */
 
   return compatible_array(a->array, bcount, result, aref->array, recdepth+1);
 }
@@ -1146,8 +1208,8 @@ static bool compatible_array(vinfo_array_t* aa, int count,
                                 recdepth))
             return false;
 
-          /* Only after the above call we know if any link is resolved
-             to the current 'b'. */
+          /* Only after the above call we know if any link previously pending
+             link just resolved into the current 'b'. */
           if (cmpinternal.tmp_counter == cmpinternal.vcilink->time)
             {
               bool ok = true;
@@ -1226,6 +1288,7 @@ static bool compatible_array(vinfo_array_t* aa, int count,
 #undef CHECK_FOR_NULL
 }
 
+#if COMPRESS_COMPILETIME_SUBITEMS
 /* same as 'compatible_array', faster, for when you are not
    interested in the result */
 static void skip_compatible_array(int count)
@@ -1250,33 +1313,13 @@ static void skip_compatible_array(int count)
 #endif
           skip_compatible_array(opc);
 
-          if (cmpinternal.tmp_counter == cmpinternal.vcilink->time)
-            {
-              /* ignore links to vinfo_t's that were compressed inside
-                 the skipped part of the array */
-              struct vcilink_s* pending = NULL;
-              struct vcilink_s* p;
-              while (1) {
-                while (cmpinternal.tmp_counter == cmpinternal.vcilink->time)
-                  {
-                    p = cmpinternal.vcilink;
-                    cmpinternal.vcilink = p->next;
-                    p->next = pending;
-                    pending = p;
-                  }
-                extra_assert(cmpinternal.tmp_counter<cmpinternal.vcilink->time);
-                if (!pending)
-                  break;   /* done */
-                p = pending;
-                pending = p->next;
-                psyco_llfree_vci(p);
-              }
-            }
+          /* no link should resolve now, fz_compress() takes care of that */
+          extra_assert(cmpinternal.tmp_counter < cmpinternal.vcilink->time);
           cmpinternal.tmp_counter++;
-          extra_assert(cmpinternal.tmp_counter <= cmpinternal.vcilink->time);
         }
     }
 }
+#endif  /* COMPRESS_COMPILETIME_SUBITEMS */
 
 inline bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
                                 vcompatible_t* result) {
@@ -2305,16 +2348,71 @@ code_t* psyco_finish_fixed_switch(PsycoObject* po, vinfo_t* fix, long kflags,
 /*****************************************************************/
  /***   Un-Promotion from non-fixed compile-time into run-time  ***/
 
+static void array_remove_vinfo(vinfo_array_t* array, vinfo_t* vi)
+{
+  int i = array->count;
+  while (i--)
+    {
+      vinfo_t* a = array->items[i];
+      if (a != NULL)
+        {
+          if (a == vi)
+            {
+              extra_assert(a->refcount > 1);
+              vinfo_decref(a, NULL);  /* other references expected */
+              array->items[i] = NULL;
+            }
+          else if (a->array != NullArray)
+            array_remove_vinfo(a->array, vi);
+        }
+    }
+}
+
+static void array_remove_inside_ct(vinfo_array_t* array, vinfo_t* vi)
+{
+  int i = array->count;
+  while (i--)
+    {
+      vinfo_t* a = array->items[i];
+      if (a != NULL && a->array != NullArray)
+        {
+          if (is_compiletime(a->source))
+            array_remove_vinfo(a->array, vi);
+          else
+            array_remove_inside_ct(a->array, vi);
+        }
+    }
+}
+
 DEFINEFN
 void psyco_unfix(PsycoObject* po, vinfo_t* vi)
 {
   /* Convert 'vi' from compile-time to run-time variable. */
   vinfo_t* newvi;
   source_known_t* sk;
-
-  /*printf("psyco_unfix(%p, %p, %p)\n", po, code, vi);*/
-  extra_assert(array_contains(&po->vlocals, vi));
   CHKTIME(vi->source, CompileTime);
+
+  /*printf("psyco_unfix(%p, %p, %p)\n", po, po->code, vi);*/
+
+  /* forget all sub-items of the compile-time 'vi',
+     which should all be compile-time */
+  if (vi->array != NullArray)
+    {
+      array_delete(vi->array, po);
+      vi->array = NullArray;
+    }
+
+  /* A particular case that *do* occur:
+     'vi' was always selected as a compile-time vinfo_t not within
+     another compile-time vinfo_t's subarray; but it could
+     actually appear more than once in po->vlocals, and another
+     occurrence could be inside another compile-time vinfo_t.
+     As compile-time vinfo_ts are not allowed to contain anything
+     but compile-time vinfo_ts, unfixing 'vi' would break it.
+     In this situation we remove the faulty occurrences. */
+  if (vi->refcount > 1)
+    array_remove_inside_ct(&po->vlocals, vi);
+  assert_array_contains_nonct(&po->vlocals, vi);
 
   newvi = make_runtime_copy(po, vi);
   /* make_runtime_copy() never fails for compile-time sources */

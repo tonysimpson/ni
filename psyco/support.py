@@ -52,12 +52,106 @@ if hasattr(_psyco, 'ALL_CHECKS') and hasattr(_psyco, 'VERBOSE_LEVEL'):
 ###########################################################################
 # sys._getframe() gives strange results on a mixed Psyco- and Python-style
 # stack frame. Psyco provides a replacement that partially emulates Python
-# frames from Psyco frames. Be aware that the f_back fields are not
-# correctly set up.
+# frames from Psyco frames. The new sys._getframe() may return objects of
+# a custom "Psyco frame" type, which with Python >=2.2 is a subtype of the
+# normal frame type.
 #
 # The same problems require some other built-in functions to be replaced
 # as well. Note that the local variables are not available in any
 # dictionary with Psyco.
+
+
+class Frame:
+    pass
+
+
+class PythonFrame(Frame):
+
+    def __init__(self, frame):
+        self.__dict__.update({
+            '_frame': frame,
+            })
+
+    def __getattr__(self, attr):
+        if attr == 'f_back':
+            try:
+                result = embedframe(_psyco.getframe(self._frame))
+            except ValueError:
+                result = None
+            except error:
+                warn("f_back is skipping dead Psyco frames")
+                result = self._frame.f_back
+            self.__dict__['f_back'] = result
+            return result
+        else:
+            return getattr(self._frame, attr)
+
+    def __setattr__(self, attr, value):
+        setattr(self._frame, attr, value)
+
+    def __delattr__(self, attr):
+        delattr(self._frame, attr)
+
+
+class PsycoFrame(Frame):
+
+    def __init__(self, tag):
+        self.__dict__.update({
+            '_tag'     : tag,
+            'f_code'   : tag[0],
+            'f_globals': tag[1],
+            })
+
+    def __getattr__(self, attr):
+        if attr == 'f_back':
+            try:
+                result = embedframe(_psyco.getframe(self._tag))
+            except ValueError:
+                result = None
+        elif attr == 'f_lineno':
+            result = self.f_code.co_firstlineno  # better than nothing
+        elif attr == 'f_builtins':
+            result = self.f_globals['__builtins__']
+        elif attr == 'f_restricted':
+            result = self.f_builtins is not __builtins__
+        elif attr == 'f_locals':
+            raise AttributeError, ("local variables of functions run by Psyco "
+                                   "cannot be accessed in any way, sorry")
+        else:
+            raise AttributeError, ("emulated Psyco frames have "
+                                   "no '%s' attribute" % attr)
+        self.__dict__[attr] = result
+        return result
+
+    def __setattr__(self, attr, value):
+        raise AttributeError, "Psyco frame objects are read-only"
+
+
+def embedframe(result):
+    if type(result) is type(()):
+        return PsycoFrame(result)
+    else:
+        return PythonFrame(result)
+
+def _getframe(depth=0):
+    """Return a frame object from the call stack. This is a replacement for
+sys._getframe() which is aware of Psyco frames.
+
+The returned objects are instances of either PythonFrame or PsycoFrame
+instead of being real Python-level frame object, so that they can emulate
+the common attributes of frame objects.
+
+The original sys._getframe() ignoring Psyco frames altogether is stored in
+psyco._getrealframe(). See also psyco._getemulframe()."""
+    # 'depth+1' to account for this _getframe() Python function
+    return embedframe(_psyco.getframe(depth+1))
+
+def _getemulframe(depth=0):
+    """As _getframe(), but the returned objects are real Python frame objects
+emulating Psyco frames. Some of their attributes can be wrong or missing,
+however."""
+    # 'depth+1' to account for this _getemulframe() Python function
+    return _psyco.getframe(depth+1, 1)
 
 def patch(name, module=__builtin__):
     f = getattr(_psyco, name)
@@ -66,8 +160,8 @@ def patch(name, module=__builtin__):
         setattr(module, name, f)
         setattr(_psyco, 'original_' + name, org)
 
-
-patch('_getframe', sys)
+_getrealframe = sys._getframe
+sys._getframe = _getframe
 patch('globals')
 patch('eval')
 patch('execfile')

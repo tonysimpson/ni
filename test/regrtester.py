@@ -21,24 +21,34 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_hotshot': "PyEval_SetProfile(NULL,NULL) doesn't allow Psyco to take control back",
         'test_coercion': 'uses eval() with locals',
         'test_richcmp': 'uses eval() with locals',
+        'test_sets': 'uses eval() with locals',
         'test_longexp': 'run it separately if you want, but it takes time and memory',
         'test_weakref': 'only run with FULL_CONTROL_FLOW set to 0 in mergepoints.c',
         'test_gettext': 'gettext mutates _ in the builtins!',
         'test_richcmp': 'uses exec with locals',
-        'test_inspect': 'uses sys.exc_traceback.tb_frame.f_back',
-        'test_exceptions': 'uses sys.exc_traceback.tb_frame.f_back',
+        'test_inspect': 'isframe() does not recognize our Frame instances',
+        'test_exceptions': 'uses tb.tb_frame.f_back',
         'test_largefile': 'fails on Python on my old Linux box',
         'test_popen2': 'log file descriptor messed up in Python < 2.2.2',
+        'test_sys': 'getrefcount() cannot be reliably tested',
+        'test_socket': 'refcounting stuff as well',
+        'test_copy': 'xrange() is very similar to range() with Psyco',
+        'test_tarfile': 'we get permission denied with Python',
+        'test_optparse': 'uses "%(xyz)s" % locals()',
         }
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'
 #    SKIP['test_operator'] = NO_SYS_EXC
 #    SKIP['test_strop'] = NO_SYS_EXC
-if sys.version_info[:2] >= (2,3):
-    SKIP['test_threadedtempfile'] = 'Python bug: Python test just hangs up'
+#if sys.version_info[:2] >= (2,3):
+#    SKIP['test_threadedtempfile'] = 'Python bug: Python test just hangs up'
 
 if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
     SKIP['test_popen2'] = 'gets confused by Psyco debugging output to stderr'
+
+if os.path.exists('regrtester.skip'):
+    execfile('regrtester.skip')
+
 #################################################################################
 
 

@@ -374,10 +374,11 @@ inline void vinfo_setitem(PsycoObject* po, vinfo_t* vi, int index,
 EXTERNFN void clear_tmp_marks(vinfo_array_t* array);
 #if ALL_CHECKS
 EXTERNFN void assert_cleared_tmp_marks(vinfo_array_t* array);
+EXTERNFN void assert_array_contains_nonct(vinfo_array_t* array, vinfo_t* vi);
 #else
 inline void assert_cleared_tmp_marks(vinfo_array_t* array) { }   /* nothing */
+inline void assert_array_contains_nonct(vinfo_array_t* a, vinfo_t* v) { }
 #endif
-EXTERNFN bool array_contains(vinfo_array_t* array, vinfo_t* vi);
 EXTERNFN void duplicate_array(vinfo_array_t* target, vinfo_array_t* source);
 inline void deallocate_array(vinfo_array_t* array, PsycoObject* po) {
 	int i = array->count;
@@ -481,6 +482,8 @@ EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
 #define FIELD_SIZE2(df)   (((long)(df) >> FIELD_SIZE2_SHIFT) & 3)
 #define FIELD_OFFSET(df)   ((long)(df) >> FIELD_OFS_SHIFT)
 #define FIELD_HAS_REF(df)  ((long)(df) & FIELD_PYOBJ_REF)
+#define CHECK_FIELD_INDEX(n)  extra_assert((unsigned)FIELD_INDEX(n) <	\
+					   FIELD_RESERVED_INDEX)
 
 /* functions to read or write a field from or to the structure 
    pointed to by 'vi': */
@@ -542,10 +545,12 @@ inline vinfo_t* psyco_get_nth_const(PsycoObject* po, vinfo_t* vi, defield_t df,
    stores mutable fields is computed (because the mutable fields can actually
    be mutated by anyone after the structure is computed). */
 inline void psyco_forget_field(PsycoObject* po, vinfo_t* vi, defield_t df) {
+	CHECK_FIELD_INDEX(df);
 	vinfo_setitem(po, vi, FIELD_INDEX(df), NULL);
 }
 inline void psyco_forget_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df,
 				   int index) {
+	CHECK_FIELD_INDEX(df);
 	vinfo_setitem(po, vi, FIELD_INDEX(df) + index, NULL);
 }
 
@@ -565,6 +570,7 @@ inline int field_next_index(defield_t df, bool ovf) {
 	else {
 		int n = FIELD_INDEX(df);
 		int field_size = 1 << FIELD_SIZE2(df);
+		CHECK_FIELD_INDEX(df);
 		/* arrays are variable-sized */
 		extra_assert(!((long)df & FIELD_ARRAY));
 		/* round up */

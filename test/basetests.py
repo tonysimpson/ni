@@ -4,6 +4,7 @@
 """
 
 import sys, os, random, doctest, cStringIO
+True,False = 1==1,1==0
 
 
 SEPARATOR = """

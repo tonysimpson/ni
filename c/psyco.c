@@ -135,6 +135,38 @@ static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
       Py_DECREF(key);
     }
 }
+static void vinfo_dump_a1(vinfo_array_t* array)
+{
+  char cmdline[999];
+  FILE* f;
+  sprintf(cmdline, "\"%s\" ../py-utils/vinfo_dump.py", Py_GetProgramFullPath());
+  f = popen(cmdline, "w");
+  if (f == NULL)
+    fprintf(stderr, "shell cannot execute: %s\n", cmdline);
+  else
+    {
+      PyObject* d = PyDict_New();
+      psyco_assert(d);
+      vinfo_array_dump(array, f, d);
+      Py_DECREF(d);
+      pclose(f);
+    }
+}
+DEFINEFN void vinfo_dump(vinfo_t* vi)
+{
+  /* use this interactively, within the C debugger. Unix only */
+  vinfo_array_t array;
+  array.count = 1;
+  array.items[0] = vi;
+  vinfo_dump_a1(&array);
+  if (&vinfo_dump) ;  /* force the compiler to consider it as used */
+}
+DEFINEFN void po_dump(PsycoObject* po)
+{
+  /* use this interactively, within the C debugger. Unix only */
+  vinfo_dump_a1(&po->vlocals);
+  if (&po_dump) ;  /* force the compiler to consider it as used */
+}
 #if !ALL_STATIC
  EXTERNFN int psyco_top_array_count(FrozenPsycoObject* fpo);  /*in dispatcher.c*/
 #else
@@ -284,41 +316,28 @@ static PyObject* need_cpsyco_obj(char* name)
 	return result;
 }
 
-DEFINEFN
-PyObject* psyco_get_globals(void)
-{
-	PyFrameObject* f;
-	stack_frame_info_t finfo;
-
-        finfo.globals = NULL;
-	f = psyco_get_frame(0, &finfo);
-	if (f == NULL)
-		return NULL;  /* error */
-	
-	if (finfo.globals != NULL)
-		return finfo.globals;  /* from the Psyco frame */
-	else
-		return f->f_globals;   /* Python frame, or no Psyco globals */
-}
-
 static PyObject* psyco_get_locals_msg(char* msg, int flag)
 {
 	static int already_logged = 0;
-	PyFrameObject* f;
-	stack_frame_info_t finfo;
+	PyObject* o;
+	PyObject* result;
+	PyObject* zero = PyInt_FromLong(0);
+	assert(zero != NULL);
 
-        finfo.co = NULL;
-	f = psyco_get_frame(0, &finfo);
-	if (f == NULL)
-		return NULL;  /* error */
+	o = psyco_find_frame(zero);
+	Py_DECREF(zero);
+	if (o == NULL)
+		return PyDict_New();  /* error */
 	
-	if (finfo.co != NULL) {
+	if (!PyFrame_Check(o)) {
 		/* it is a Psyco frame -- no locals available */
 		char buffer[400];
 		int i;
 		PyObject* w = need_cpsyco_obj("NoLocalsWarning");
-		if (w == NULL)
+		if (w == NULL) {
+			Py_DECREF(o);
 			return NULL;
+		}
 		for (i=0; msg[i] != '\\' && msg[i] != 0; i++)
 			buffer[i] = msg[i];
 		if (psyco_logger && (flag & already_logged) == 0) {
@@ -334,12 +353,14 @@ static PyObject* psyco_get_locals_msg(char* msg, int flag)
 		}
 		buffer[i] = 0;
 		PyErr_Warn(w, buffer);
-		return PyDict_New();
+		result = PyDict_New();
 	}
 	else {
-		PyFrame_FastToLocals(f);
-		return f->f_locals;
+		PyFrame_FastToLocals((PyFrameObject*) o);
+		result = ((PyFrameObject*) o)->f_locals;
 	}
+	Py_DECREF(o);
+	return result;
 }
 
 DEFINEFN
@@ -414,34 +435,22 @@ static PyObject* Psyco_cannotcompile(PyObject* self, PyObject* args)
 	return Py_None;
 }
 
-/* replacement for sys._getframe() */
+/* replacement for sys._getframe() (together with _getframe() in support.py) */
 static PyObject* Psyco_getframe(PyObject* self, PyObject* args)
 {
-	PyFrameObject* f;
-	stack_frame_info_t finfo;
-	int depth = 0;
-	int emulate = 1;
-	if (!PyArg_ParseTuple(args, "|ii:_getframe", &depth, &emulate))
+	PyObject* o = Py_False;
+	int emulate = 0;
+	if (!PyArg_ParseTuple(args, "|Oi:getframe", &o, &emulate))
 		return NULL;
 
-        finfo.co = NULL;
-	f = psyco_get_frame(depth, &finfo);
-	if (f != NULL) {
-		if (finfo.co != NULL) {
-			/* a Psyco frame; emulate it */
-			if (emulate)
-				f = psyco_emulate_frame(&finfo, f->f_globals);
-			else {
-				Py_INCREF(Py_None);
-				return Py_None;
-			}
-		}
-		else {
-			/* a real Python frame */
-			Py_INCREF(f);
-		}
+	o = psyco_find_frame(o);
+	if (emulate && o != NULL) {
+		PyObject* f = (PyObject*) psyco_emulate_frame(o);
+		Py_DECREF(o);
+		return f;
 	}
-	return (PyObject*) f;
+	else
+		return o;
 }
 
 /* replacement for __builtin__.globals() */
@@ -816,16 +825,12 @@ Return a new copy of the original function that was used to build the\n\
 given proxy code object. Raise psyco.error if code is not a proxy.";
 
 static char getframe_doc[] =
-"_getframe([depth]) -> frameobject\n\
+"getframe([location, emulate]) -> frameobject or (code, globals, addr)\n\
 \n\
-Return a frame object from the call stack. This is a replacement for the\n\
-original sys._getframe() function that can return Psyco frames as well.\n\
-When imported, Psyco installs this function as sys._getframe() and stores\n\
-the original function in psyco.original_sys_getframe().\n\
-\n\
-Note that the Python frame emulation is partial. In particular, do not\n\
-use the f_back fields but always call _getframe() to parse the whole\n\
-stack.";
+Return a frame object from the call stack.\n\
+If location is an integer, return the nth frame (0=top).\n\
+If location was returned by a previous call to getframe(),\n\
+return the previous frame (as if by reading f_back).";
 
 static char globals_doc[] =
 "globals() -> dictionary\n\
@@ -843,8 +848,8 @@ Accessing it returns {} and throws a NoLocalsWarning.";
 static PyMethodDef PsycoMethods[] = {
 	{"proxycode",	&Psyco_proxycode,	METH_VARARGS,	proxycode_doc},
 	{"unproxycode",	&Psyco_unproxycode,	METH_VARARGS,	unproxycode_doc},
-        {"_getframe",	&Psyco_getframe,	METH_VARARGS,	getframe_doc},
-        {"globals",	&Psyco_globals,		METH_VARARGS,	globals_doc},
+	{"getframe",	&Psyco_getframe,	METH_VARARGS,	getframe_doc},
+	{"globals",	&Psyco_globals,		METH_VARARGS,	globals_doc},
 	{"eval",	&Psyco_eval,		METH_VARARGS,	gennolocals_doc},
 	{"execfile",	&Psyco_execfile,	METH_VARARGS,	gennolocals_doc},
 	{"locals",	&Psyco_locals,		METH_VARARGS,	gennolocals_doc},

@@ -199,25 +199,36 @@ void assert_cleared_tmp_marks(vinfo_array_t* array)
 	  assert_cleared_tmp_marks(array->items[i]->array);
       }
 }
-#endif
 
-DEFINEFN
-bool array_contains(vinfo_array_t* array, vinfo_t* vi)
+static bool array_contains(vinfo_array_t* array, vinfo_t* vi)
 {
+  bool result = false;
   int i = array->count;
   while (i--)
     if (array->items[i] != NULL)
       {
 	if (array->items[i] == vi)
-          return true;
+          result = true;
 	if (array->items[i]->array != NullArray)
-	  if (array_contains(array->items[i]->array, vi))
-            return true;
+          {
+            if (is_compiletime(array->items[i]->source))
+              extra_assert(!array_contains(array->items[i]->array, vi));
+            else
+              if (array_contains(array->items[i]->array, vi))
+                result = true;
+          }
       }
-  return false;
+  return result;
 }
 
-#if ALL_CHECKS
+DEFINEFN
+void assert_array_contains_nonct(vinfo_array_t* array, vinfo_t* vi)
+{
+  /* check that 'vi' appears at least once in 'array', and
+     never appears as subitem of a compile-time vinfo_t */
+  extra_assert(array_contains(array, vi));
+}
+
 static void coherent_array(vinfo_array_t* source, PsycoObject* po, int found[],
                            bool allow_any)
 {
@@ -478,8 +489,6 @@ vinfo_t* psyco_internal_getfld(PsycoObject* po, int findex, defield_t df,
 	
 	if (is_runtime(vi->source)) {
 		vf = field_read(po, vi, offset, NULL, df, newref);
-		if (((long)df & FIELD_ARRAY) && newref)
-			return vf;
 	}
 	else {
 		long result;
@@ -511,6 +520,10 @@ vinfo_t* psyco_internal_getfld(PsycoObject* po, int findex, defield_t df,
 		}
 		vf = vinfo_new(CompileTime_NewSk(sk_new(result, sk_flag)));
 	}
+	
+	if (((long)df & FIELD_ARRAY) && newref)
+		return vf;
+	CHECK_FIELD_INDEX(findex);
 	vinfo_setitem(po, vi, findex, vf);
 	
  done:
@@ -637,6 +650,7 @@ void psyco_assert_field(PsycoObject* po, vinfo_t* vi, defield_t df,
 			Py_INCREF((PyObject*) value);
 			sk_flag = SkFlagPyObj;
 		}
+                CHECK_FIELD_INDEX(df);
 		vinfo_setitem(po, vi, FIELD_INDEX(df),
 		      vinfo_new(CompileTime_NewSk(sk_new(value, sk_flag))));
 	}

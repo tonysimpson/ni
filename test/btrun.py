@@ -34,24 +34,6 @@
                              ####   TEST1   ####
                              ###################
 
->>> print 'abcdefghijklmnop'=='abcdefghijklMNop'
-${False}
-
->>> print 'abcdefghijklmnop'=='abcdefghijklmnop'
-${True}
-
->>> print str('abcdefghijklmnop'=='abcdefghijklMNop')
-${False}
-
->>> print str('abcdefghijklmnop'=='abcdefghijklmnop')
-${True}
-
->>> print (lambda x: x==1)(0)
-${False}
-
->>> print (lambda x: x==1)(1)
-${True}
-
 >>> print test1.f1(217)
 1115467
 
@@ -242,14 +224,28 @@ exceptions.NameError
 >>> print [x.__name__ for x in test3.f26()]
 ['float', 'list', 'urllib', 'psyco.classes', 'full']
 
->>> test3.N=5; print test3.f28()
+>>> test3.N=5; print test3.f28(), test3.f28_1(), test3.f28_b(), test3.f28_b1()
 test_getframe():
 test_getframe
 f28
+?
+5 test_getframe():
+test_getframe
+test_getframe1
+f28_1
+?
+5 test_getframe_b():
+test_getframe_b
+f28_b
+?
+5 test_getframe_b():
+test_getframe_b
+test_getframe_b1
+f28_b1
 ?
 5
 
->>> print test3.f27()
+>>> print test3.f27(), test3.f27_1(), test3.f27_b(), test3.f27_b1()
 test_getframe():
 test_getframe
 f28
@@ -265,7 +261,58 @@ test_getframe
 f28
 f27
 ?
-(5, 6, 7)
+(5, 6, 7) test_getframe():
+test_getframe
+test_getframe1
+f28_1
+f27_1
+?
+test_getframe():
+test_getframe
+test_getframe1
+f28_1
+f27_1
+?
+test_getframe():
+test_getframe
+test_getframe1
+f28_1
+f27_1
+?
+(51, 61, 71) test_getframe_b():
+test_getframe_b
+f28_b
+f27_b
+?
+test_getframe_b():
+test_getframe_b
+f28_b
+f27_b
+?
+test_getframe_b():
+test_getframe_b
+f28_b
+f27_b
+?
+(95, 96, 97) test_getframe_b():
+test_getframe_b
+test_getframe_b1
+f28_b1
+f27_b1
+?
+test_getframe_b():
+test_getframe_b
+test_getframe_b1
+f28_b1
+f27_b1
+?
+test_getframe_b():
+test_getframe_b
+test_getframe_b1
+f28_b1
+f27_b1
+?
+(951, 961, 971)
 
 >>> print test3.f29(range(10,0,-1))
 [10, 9, 7, 6, 5, 4, 3, 2, 1]
@@ -363,3 +410,14 @@ abcsome-string
 
 >>> print test5.overflowtest()
 -3851407362L
+
+>>> test5.booltest()
+${False}
+${True}
+${False}
+${True}
+${False}
+${True}
+${[a & b for a in (False,True) for b in (False,True)]}
+${[a | b for a in (False,True) for b in (False,True)]}
+${[a ^ b for a in (False,True) for b in (False,True)]}

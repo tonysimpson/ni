@@ -897,11 +897,12 @@ inline void PsycoTraceBack_Here(PsycoObject* po, int lasti)
 	else {
 		/* We only have a virtual-time exception (not set in Python),
 		   so we build po->pr.tb without actually setting it either */
-		extra_assert(po->pr.tb == NULL);
-		po->pr.tb = psyco_generic_call(po, cimpl_vt_traceback,
-					       CfReturnRef, "lvll",
-					       (long) po->pr.co, LOC_GLOBALS,
-					       lasti, lineno);
+		vinfo_t* tb = psyco_generic_call(po, cimpl_vt_traceback,
+						 CfReturnRef, "lvll",
+						 (long) po->pr.co, LOC_GLOBALS,
+						 lasti, lineno);
+		vinfo_xdecref(po->pr.tb, po);
+		po->pr.tb = tb;
 	}
 }
 
@@ -3142,7 +3143,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		 now without actually releasing it. If this assumption
 		 is false, the psyco_finish_xxx() calls below will give
 		 unexpected results. */
-	      extra_assert(array_contains(&po->vlocals, promote_me));
+              assert_array_contains_nonct(&po->vlocals, promote_me);
 	      clear_pseudo_exception(po);
 #if USE_RUNTIME_SWITCHES
 	      if (promotion->fs == NULL)

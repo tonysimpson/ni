@@ -317,7 +317,7 @@ class CompileTimeVInfo(VInfo):
 
 class RunTimeVInfo(VInfo):
     REG_NAMES = ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"]
-    def __init__(self, source, stackdepth):
+    def __init__(self, source, stackdepth=None):
         self.source = source
         self.stackdepth = stackdepth
     def gettext(self):
@@ -329,8 +329,11 @@ class RunTimeVInfo(VInfo):
             if stack:
                 text += " and"
         if stack:
-            text += " in stack [ESP+0x%x] or from top %d" %  \
-                    (self.stackdepth - stack, stack)
+            if self.stackdepth is None:
+                sd = ""
+            else:
+                sd = "[ESP+0x%x] or " % (self.stackdepth - stack)
+            text += " in stack %sfrom top %d" % (sd, stack)
         if not (self.source & 0x08000000):
             text += " holding a reference"
         if self.source & 0x04000000:

@@ -258,5 +258,9 @@ if __name__ == '__main__':
         sys.exit(1)
     DIRECTORY = sys.argv[1]
     del sys.argv[1]
-    codebufs = xam.readdump(os.path.join(DIRECTORY, 'psyco.dump'))
+    filename = os.path.join(DIRECTORY, 'psyco.dump')
+    if not os.path.isfile(filename) and os.path.isfile(DIRECTORY):
+        filename = DIRECTORY
+        DIRECTORY = os.path.dirname(DIRECTORY)
+    codebufs = xam.readdump(filename)
     test(CodeBufHTTPHandler)

@@ -218,6 +218,9 @@ inline bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
 	f->f_tstate->tracing++;
 	Py_DECREF(codebuf);
 #endif
+#if (PY_VERSION_HEX >= 0x02030000) && (PY_VERSION_HEX < 0x020300f0)
+	if (!r) f->f_stacktop = NULL;  /* work around a bug in Python 2.3b1 */
+#endif
 	return r;
 }
 

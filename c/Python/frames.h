@@ -42,13 +42,17 @@ EXTERNFN bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering);
 #endif /* HAVE_DYN_COMPILE */
 
 
-/* Return the nth frame (0=top). If it is a Python frame, psy_frame is
-   unmodified. If it is a Psyco frame, *psy_frame is filled and the
-   return value is only the next Python frame of the stack. */
-EXTERNFN PyFrameObject* psyco_get_frame(int depth,
-                                        struct stack_frame_info_s* psy_frame);
+/* Find a frame. If 'o' is an integer, it is the 'o'th frame (0=top).
+   If 'o' was returned by a previous call to psyco_get_frame(), find
+   the previous frame (as reading f_back does).
+   The return value is either a normal Python frame object, or
+   a tuple (code, globals, tag). tag is only used for the next call
+   to psyco_get_frame(). */
+EXTERNFN PyObject* psyco_find_frame(PyObject* o);
+EXTERNFN PyFrameObject* psyco_emulate_frame(PyObject* o);
+
 EXTERNFN PyObject* psyco_get_globals(void);
-EXTERNFN PyObject* psyco_get_locals(void);
+EXTERNFN PyObject* psyco_get_locals(void); /* this one implemented in psyco.c */
 
 
 /* to keep a trace of the Psyco stack frames */
@@ -59,9 +63,6 @@ struct stack_frame_info_s {
 };
 
 EXTERNFN stack_frame_info_t* psyco_finfo(PsycoObject* callee);
-
-EXTERNFN PyFrameObject* psyco_emulate_frame(stack_frame_info_t* finfo,
-					    PyObject* default_globals);
 
 /* extra run-time data attached to the Python frame objects which are
    used as starting point for Psyco frames */

@@ -34,6 +34,18 @@ def overflowtest():
         assert PY21
     return `n`
 
+def booltest():
+    True,False = 1==1,1==0
+    print 'abcdefghijklmnop'=='abcdefghijklMNop'
+    print 'abcdefghijklmnop'=='abcdefghijklmnop'
+    print str('abcdefghijklmnop'=='abcdefghijklMNop')
+    print str('abcdefghijklmnop'=='abcdefghijklmnop')
+    print (lambda x: x==1)(0)
+    print (lambda x: x==1)(1)
+    print [a & b for a in (False,True) for b in (False,True)]
+    print [a | b for a in (False,True) for b in (False,True)]
+    print [a ^ b for a in (False,True) for b in (False,True)]
+
 
 if __name__ == '__main__':
     import time

@@ -266,13 +266,25 @@ def test_getframe():
 
 def test_getframe1():
     return test_getframe()
-    f(*x)  # prevents Psyco compilation
+    exec ""  # prevents Psyco compilation
+
+def test_getframe_b():
+    import sys
+    i = 0
+    print 'test_getframe_b():'
+    f = sys._getframe()
+    while f is not None:
+        print f.f_code.co_name
+        f = f.f_back    # walk the stack with f_back
+
+def test_getframe_b1():
+    return test_getframe_b()
+    exec ""  # prevents Psyco compilation
 
 def f28():
     test_getframe()
     return N
 
-#N=-1
 def f27():
     global N
     N = 5
@@ -281,6 +293,48 @@ def f27():
     b = f28()
     N = 7
     c = f28()
+    return a,b,c
+
+def f28_1():
+    test_getframe1()
+    return N
+
+def f27_1():
+    global N
+    N = 51
+    a = f28_1()
+    N = 61
+    b = f28_1()
+    N = 71
+    c = f28_1()
+    return a,b,c
+
+def f28_b():
+    test_getframe_b()
+    return N
+
+def f27_b():
+    global N
+    N = 95
+    a = f28_b()
+    N = 96
+    b = f28_b()
+    N = 97
+    c = f28_b()
+    return a,b,c
+
+def f28_b1():
+    test_getframe_b1()
+    return N
+
+def f27_b1():
+    global N
+    N = 951
+    a = f28_b1()
+    N = 961
+    b = f28_b1()
+    N = 971
+    c = f28_b1()
     return a,b,c
 
 def f29(lst):

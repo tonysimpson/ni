@@ -45,6 +45,6 @@ except ImportError, e:
     raise ImportError, str(e) + extramsg
 
 # Publish important data by importing them in the package
-from support import __version__, error, warning
+from support import __version__, error, warning, _getrealframe, _getemulframe
 from core import full, profile, background, runonly, stop, cannotcompile
 from core import log, bind, unbind, proxy, unproxy, dumpcodebuf

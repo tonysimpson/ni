@@ -130,10 +130,13 @@ vinfo_t* PsycoObject_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key)
 						     PsycoInt_AS_LONG(po, key));
 		}
 		if (PyType_TypeCheck(ktp, &PyLong_Type)) {
+			vinfo_t* result;
 			vinfo_t* key_value = PsycoLong_AsLong(po, key);
 			if (key_value == NULL)
 				return NULL;
-			return PsycoSequence_GetItem(po, o, key_value);
+			result = PsycoSequence_GetItem(po, o, key_value);
+			vinfo_decref(key_value, po);
+			return result;
 		}
 		type_error(po, "sequence index must be integer");
 		return false;
@@ -172,10 +175,13 @@ bool PsycoObject_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key,
 						     value);
 		}
 		if (PyType_TypeCheck(ktp, &PyLong_Type)) {
+			bool result;
 			vinfo_t* key_value = PsycoLong_AsLong(po, key);
 			if (key_value == NULL)
 				return false;
-			return PsycoSequence_SetItem(po, o, key_value, value);
+			result = PsycoSequence_SetItem(po, o, key_value,value);
+			vinfo_decref(key_value, po);
+			return result;
 		}
 		if (tp->tp_as_sequence->sq_ass_item) {
 			type_error(po, "sequence index must be integer");
@@ -888,10 +894,13 @@ vinfo_t* psyco_generic_subscript(PsycoObject* po, vinfo_t* o, vinfo_t* key)
 					     PsycoInt_AS_LONG(po, key));
 	}
 	else if (PyType_TypeCheck(ktp, &PyLong_Type)) {
+		vinfo_t* result;
 		vinfo_t* key_value = PsycoLong_AsLong(po, key);
 		if (key_value == NULL)
 			return NULL;
-		return PsycoSequence_GetItem(po, o, key_value);
+		result = PsycoSequence_GetItem(po, o, key_value);
+		vinfo_decref(key_value, po);
+		return result;
 	}
 	else {
 		PyTypeObject* tp = Psyco_NeedType(po, o);
@@ -922,10 +931,13 @@ bool psyco_generic_ass_subscript(PsycoObject* po, vinfo_t* o,
 					     value);
 	}
 	else if (PyType_TypeCheck(ktp, &PyLong_Type)) {
+		bool result;
 		vinfo_t* key_value = PsycoLong_AsLong(po, key);
 		if (key_value == NULL)
 			return false;
-		return PsycoSequence_SetItem(po, o, key_value, value);
+		result = PsycoSequence_SetItem(po, o, key_value, value);
+		vinfo_decref(key_value, po);
+		return result;
 	}
 	else {
 		char* vargs = (value!=NULL) ? "vvv" : "vvl";

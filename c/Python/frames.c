@@ -306,8 +306,45 @@ bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering)
 		result = NULL;
 	}
 	if (result == NULL) {
-		extra_assert(PyErr_Occurred());
-		return false;  /* exception */
+		if (entering) {
+			/* Nothing special to worry in this case,
+			   eval_frame() will return right away */
+			extra_assert(PyErr_Occurred());  /* exception */
+			return false;
+		}
+		
+		/* Attention: the maybe_call_line_trace() call of ceval.c:822
+		   (Python 2.3b1) will *not* reload f->f_lasti and
+		   f->f_stacktop if these get modified in case of exception!
+		   We definitely cannot modify the stack top. We *must*
+		   however empty the block stack to prevent exception
+		   handlers to be entered --- they have already been run by
+		   Psyco! */
+		PyObject *exc, *value, *tb;
+		PyErr_Fetch(&exc, &value, &tb);
+		extra_assert(exc != NULL);      /* exception */
+                f->f_iblock = 0;
+		
+		/* We cannot prevent Python from calling PyTraceBack_Here()
+		   when this function returns, althought Psyco has already
+		   recorded a traceback. We remove Psyco's traceback and
+		   make sure Python will re-insert an equivalent one. */
+		if (tb != NULL) {  /* should normally never be NULL */
+			/* no C interface to tb_lasti; call it via Python */
+			PyObject *tb_next, *tb_lasti;
+			tb_lasti = PyObject_GetAttrString(tb, "tb_lasti");
+			extra_assert(tb_lasti != NULL);
+			extra_assert(PyInt_Check(tb_lasti));
+			f->f_lasti = PyInt_AS_LONG(tb_lasti);
+			Py_DECREF(tb_lasti);
+
+			tb_next = PyObject_GetAttrString(tb, "tb_next");
+			extra_assert(tb_next != NULL);
+			Py_DECREF(tb);
+			tb = tb_next;
+		}
+		PyErr_Restore(exc, value, tb);
+		return false;
 	}
 	else {
 		/* to emulate the return, move the current position to
@@ -378,9 +415,7 @@ void PyFrameRuntime_dealloc(PyFrameRuntime* self)
 	/* nothing */
 }
 
-DEFINEFN
-PyFrameObject* psyco_emulate_frame(stack_frame_info_t* finfo,
-				   PyObject* default_globals)
+inline PyFrameObject* psyco_build_pyframe(PyObject* co, PyObject* globals)
 {
 	PyFrameObject* back;
 	PyFrameObject* result;
@@ -391,15 +426,39 @@ PyFrameObject* psyco_emulate_frame(stack_frame_info_t* finfo,
 	   create plain wrong chained lists */
 	back = tstate->frame;
 	tstate->frame = NULL;
-	result = PyFrame_New(tstate, finfo->co,
-			     finfo->globals!=NULL?finfo->globals:default_globals,
-			     NULL);
+	result = PyFrame_New(tstate, (PyCodeObject*) co, globals, NULL);
+	if (result == NULL)
+		OUT_OF_MEMORY();
         result->f_lasti = -1;  /* can be used to identify emulated frames */
 	tstate->frame = back;
 	return result;
 }
 
-static PyFrameObject* pgetframe(int depth, struct stack_frame_info_s* psy_frame)
+DEFINEFN
+PyFrameObject* psyco_emulate_frame(PyObject* o)
+{
+	if (PyFrame_Check(o)) {
+		/* a real Python frame */
+		Py_INCREF(o);
+		return (PyFrameObject*) o;
+	}
+	else {
+		/* a Psyco frame: emulate it */
+		PyObject* co = PyTuple_GetItem(o, 0);
+		PyObject* globals = PyTuple_GetItem(o, 1);
+		extra_assert(co != NULL);
+		extra_assert(globals != NULL);
+		return psyco_build_pyframe(co, globals);
+	}
+}
+
+struct sfitmp_s {
+	stack_frame_info_t** fi;
+	struct sfitmp_s* next;
+};
+
+static PyObject* pvisitframes(PyObject*(*callback)(PyObject*,void*),
+			      void* data)
 {
         /* Whenever we run Psyco-produced machine code, we mark the current
            Python frame as the starting point of a chained list of Psyco
@@ -414,12 +473,10 @@ static PyFrameObject* pgetframe(int depth, struct stack_frame_info_s* psy_frame)
            XXX this would no longer work if we filled the emulated frames
                with more information, like local variables */
 
+	PyObject* result = NULL;
 	PyFrameRuntime* fstart;
 	PyObject* tdict = psyco_thread_dict();
 	PyFrameObject* f = PyThreadState_Get()->frame;
-
-	if (depth < 0)
-		depth = 0;
 	
 	while (f != NULL) {
 		/* is this Python frame the starting point of a chained
@@ -427,75 +484,185 @@ static PyFrameObject* pgetframe(int depth, struct stack_frame_info_s* psy_frame)
 		fstart = (PyFrameRuntime*) PyDict_GetItem(tdict, (PyObject*) f);
 		if (fstart != NULL) {
 			/* Yes. Get the list start. */
+			struct sfitmp_s* revlist;
+			struct sfitmp_s* p;
+			PyObject* o;
+			PyObject* g;
 			stack_frame_info_t** f1;
 			stack_frame_info_t** finfo;
 			finfo = *(fstart->psy_frames_start);
 
-			/* Count the frames in the list. The end is marked by
+			/* Enumerate the frames and store them in a
+			   last-in first-out linked list. The end is marked by
 			   a pointer with an odd integer value (actually the
 			   least significant byte of the integer value is -1,
 			   but real pointers cannot be odd at all because they
 			   are aligned anyway). */
+			revlist = NULL;
 			for (f1 = finfo; (((long)(*f1)) & 1) == 0;
-			     f1 = psyco_next_stack_frame(f1))
-				depth--;
+			     f1 = psyco_next_stack_frame(f1)) {
+				p = (struct sfitmp_s*)
+					PyMem_MALLOC(sizeof(struct sfitmp_s));
+				if (p == NULL)
+					OUT_OF_MEMORY();
+				p->fi = f1;
+				p->next = revlist;
+				revlist = p;
+			}
 
-			if (depth < 0) {
-				/* The requested frame is one of these Psyco
-				   frames */
-				while (++depth != 0)
-					finfo = psyco_next_stack_frame(finfo);
-				*psy_frame = **finfo;  /* copy structure */
-				return f;
+			/* now actually visit them in the correct order */
+			while (revlist) {
+				p = revlist;
+				/* a Psyco frame is represented as
+				   (co, globals, address_of(*fi)) */
+				if (result == NULL) {
+					g = (*p->fi)->globals;
+					if (g == NULL)
+						g = f->f_globals;
+					o = Py_BuildValue("OOl",
+							  (*p->fi)->co,
+							  g,
+							  (long)(p->fi));
+					if (o == NULL)
+						OUT_OF_MEMORY();
+					result = callback(o, data);
+					Py_DECREF(o);
+				}
+				revlist = p->next;
+				PyMem_FREE(p);
 			}
-			if (depth == 0) {
-				/* the result is a real Python frame
-				   shadowed by a Psyco frame, i.e. a
-				   proxy function. */
-				psy_frame->co = fstart->psy_code;
-				psy_frame->globals = fstart->psy_globals;
-				return f;
-			}
+			if (result != NULL)
+				return result;
+
+			/* there is still the real Python frame
+			   which is shadowed by a Psyco frame, i.e. a
+			   proxy function. Represented as
+			   (co, globals, f) */
+			o = Py_BuildValue("OOO",
+					  fstart->psy_code,
+					  fstart->psy_globals,
+					  f);
+			if (o == NULL)
+				OUT_OF_MEMORY();
+			result = callback(o, data);
+			Py_DECREF(o);
 		}
-		if (depth-- == 0) {
-			/* the result is a real Python frame */
-			return f;
+		else {
+			/* a real unshadowed Python frame */
+			result = callback((PyObject*) f, data);
 		}
+		if (result != NULL)
+			return result;
 		f = f->f_back;
 	}
 	return NULL;
 }
 
-DEFINEFN PyFrameObject *
-psyco_get_frame(int depth, struct stack_frame_info_s* psy_frame)
+
+
+static PyObject* visit_nth_frame(PyObject* o, void* n)
 {
-	PyFrameObject* result = pgetframe(depth, psy_frame);
+	/* count the calls to the function and return 'o' when
+	   the counter reaches zero */
+	if (!--*(int*)n) {
+		Py_INCREF(o);
+		return o;
+	}
+	return NULL;
+}
+
+static PyObject* visit_prev_frame(PyObject* o, void* data)
+{
+	PyObject* cmp = *(PyObject**) data;
+
+	if (cmp != NULL) {
+		/* still searching */
+		if (PyFrame_Check(o) || PyFrame_Check(cmp)) {
+			if (o != cmp) return NULL;
+		}
+		else {
+			PyObject* p1;
+			PyObject* p2;
+
+			p1 = PyTuple_GetItem(o,   2);  /* tag */
+			p2 = PyTuple_GetItem(cmp, 2);
+			if (PyObject_Compare(p1, p2) != 0) return NULL;
+
+			p1 = PyTuple_GetItem(o,   0);  /* code */
+			p2 = PyTuple_GetItem(cmp, 0);
+			if (p1 != p2) return NULL;
+
+			p1 = PyTuple_GetItem(o,   1);  /* globals */
+			p2 = PyTuple_GetItem(cmp, 1);
+			if (p1 != p2) return NULL;
+		}
+		/* found it ! We will succeed the next time
+		   visit_find_frame() is called. */
+		*(PyObject**) data = NULL;
+		return NULL;
+	}
+	else {
+		/* found it the previous time, now return this next 'o' */
+		Py_INCREF(o);
+		return o;
+	}
+}
+
+DEFINEFN
+PyObject* psyco_find_frame(PyObject* o)
+{
+	void* result;
+	if (PyInt_Check(o)) {
+		int depth = PyInt_AsLong(o) + 1;
+		if (depth <= 0)
+			depth = 1;
+		result = pvisitframes(visit_nth_frame, &depth);
+	}
+	else {
+		result = pvisitframes(visit_prev_frame, (void*) &o);
+		if (result == NULL && !PyErr_Occurred() && o != NULL)
+			PyErr_SetString(PyExc_PsycoError,
+					"f_back is invalid when frames are no longer active");
+	}
 	if (result == NULL && !PyErr_Occurred())
 		PyErr_SetString(PyExc_ValueError,
 				"call stack is not deep enough");
+	return (PyObject*) result;
+}
+
+static PyObject* visit_get_globals(PyObject* o, void* ignored)
+{
+	if (PyFrame_Check(o))
+		return ((PyFrameObject*) o)->f_globals;
+	else
+		return PyTuple_GetItem(o, 1);
+}
+DEFINEFN
+PyObject* psyco_get_globals(void)
+{
+	PyObject* result = pvisitframes(visit_get_globals, NULL);
+	if (result == NULL)
+		psyco_fatal_msg("sorry, don't know what to do with no globals");
 	return result;
 }
 
-
 #if HAVE_PYTHON_SUPPORT
+static PyObject* visit_first_frame(PyObject* o, void* ignored)
+{
+	if (PyFrame_Check(o)) {
+		/* a real Python frame: don't return a new reference */
+		return (PyObject*) o;
+	}
+	else {
+		/* a Psyco frame: emulate it */
+		PyFrameObject* f = psyco_emulate_frame(o);
+		psyco_trash_object((PyObject*) f);
+		return (PyObject*) f;
+	}
+}
 static PyFrameObject* psyco_threadstate_getframe(PyThreadState* self)
 {
-	PyFrameObject* f;
-	stack_frame_info_t finfo;
-	
-	finfo.co = NULL;
-	f = pgetframe(0, &finfo);
-	if (f == NULL) {
-		return NULL;  /* no current frame */
-	}
-
-	if (finfo.co != NULL) {
-		/* a Psyco frame: emulate it */
-		f = psyco_emulate_frame(&finfo, f->f_globals);
-		psyco_trash_object((PyObject*) f);
-	}
-	/* else a real Python frame: don't return a new reference */
-	return f;
+	return (PyFrameObject*) pvisitframes(visit_first_frame, NULL);
 }
 #endif
 
