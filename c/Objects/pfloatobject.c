@@ -234,7 +234,7 @@ static vinfo_t*  release_double(PsycoObject* po, vinfo_t* u1, vinfo_t* u2) {
     return NULL;
 }
     
-static vinfo_t*  return_null() {
+static vinfo_t*  return_null(void) {
     return NULL;
 }
 
