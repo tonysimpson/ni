@@ -104,7 +104,7 @@ DFN  void* psyco_ll_newblock_##name()					\
 	if (vi) {							\
 		int i;							\
 		for (i=sizeof(void*); i<sizeof(type); i++)		\
-			assert(((unsigned char*)(vi))[i] == 0xCD);	\
+			extra_assert(((unsigned char*)(vi))[i] == 0xCD);\
 	}
 #else
 # define BLOCKALLOC_DEBUG_CHECK(vi, type)   /* nothing */

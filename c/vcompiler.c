@@ -194,7 +194,7 @@ void assert_cleared_tmp_marks(vinfo_array_t* array)
   while (i--)
     if (array->items[i] != NULL)
       {
-	assert(array->items[i]->tmp == NULL);
+	extra_assert(array->items[i]->tmp == NULL);
 	if (array->items[i]->array != NullArray)
 	  assert_cleared_tmp_marks(array->items[i]->array);
       }
@@ -226,7 +226,7 @@ static void coherent_array(vinfo_array_t* source, PsycoObject* po, int found[],
     if (source->items[i] != NULL)
       {
         Source src = source->items[i]->source;
-        assert(allow_any || is_compiletime(src));
+        extra_assert(allow_any || is_compiletime(src));
         switch (gettime(src)) {
         case RunTime:
           /* test that we don't have an unreasonably high value
@@ -234,7 +234,7 @@ static void coherent_array(vinfo_array_t* source, PsycoObject* po, int found[],
           extra_assert(getstack(src) < RunTime_StackMax/2);
           if (!is_reg_none(src))
             {
-              assert(REG_NUMBER(po, getreg(src)) == source->items[i]);
+              extra_assert(REG_NUMBER(po, getreg(src)) == source->items[i]);
               found[(int) getreg(src)] = 1;
             }
           break;
@@ -242,11 +242,11 @@ static void coherent_array(vinfo_array_t* source, PsycoObject* po, int found[],
         case VirtualTime:
           break;
         default:
-          assert(0);
+          psyco_fatal_msg("gettime() corrupted");
         }
         if (psyco_vsource_cc(src) != CC_ALWAYS_FALSE)
           {
-            assert(po->ccreg == source->items[i]);
+            extra_assert(po->ccreg == source->items[i]);
             found[REG_TOTAL] = 1;
           }
 	if (source->items[i]->array != NullArray)
@@ -315,18 +315,18 @@ void psyco_assert_coherent1(PsycoObject* po, bool full)
     {
       for (i=0; i<REG_TOTAL; i++)
         if (!found[i])
-          assert(REG_NUMBER(po, i) == NULL);
+          extra_assert(REG_NUMBER(po, i) == NULL);
       if (!found[REG_TOTAL])
-        assert(po->ccreg == NULL);
+        extra_assert(po->ccreg == NULL);
       hack_refcounts(&po->vlocals, -1, 0);
       hack_refcounts(&debug_extra_refs, -1, 0);
       err = nonnull_refcount(&po->vlocals);
       hack_refcounts(&debug_extra_refs, +1, 0x10000);
       hack_refcounts(&po->vlocals, +1, 0x10000);
-      assert(!err);  /* see nonnull_refcounts() */
+      extra_assert(!err);  /* see nonnull_refcounts() */
     }
 }
-#endif
+#endif  /* ALL_CHECKS */
 
 DEFINEFN
 void duplicate_array(vinfo_array_t* target, vinfo_array_t* source)
@@ -596,7 +596,7 @@ void psyco_assert_field(PsycoObject* po, vinfo_t* vi, defield_t df,
 #if PSYCO_DEBUG
 		/* check assertion at compile-time */
 		vinfo_t* vf = psyco_get_field(po, vi, df);
-		assert(CompileTime_Get(vf->source)->value == value);
+		extra_assert(CompileTime_Get(vf->source)->value == value);
 		vinfo_decref(vf, po);
 #endif
 	}
@@ -632,7 +632,7 @@ static code_t* do_resume_coding(coding_pause_t* cp)
   /* safety check: do not write a JMP whose target is itself...
      would make an endless loop */
   code = cp->write_jmp;
-  assert(target != code);
+  psyco_assert(target != code);
   if (cp->cond == CC_ALWAYS_TRUE)
     JUMP_TO(target);
   else

@@ -10,9 +10,18 @@
 #include "pabstract.h"
 
 
+/* various ways to access the actual character data */
+#define STR_sval      UNSIGNED_ARRAY(char, offsetof(PyStringObject, ob_sval))
+#define STR_sval2     UNSIGNED_ARRAY(short, offsetof(PyStringObject, ob_sval))
+#define STR_sval4     UNSIGNED_ARRAY(long, offsetof(PyStringObject, ob_sval))
+
+
 /* all flavors of virtual strings */
 #define VIRTUALSTR_FIRST  FIELDS_TOTAL(FIX_size)
-#define VIRTUALSTR_LAST   (VIRTUALSTR_FIRST+1)   /* <-- keep up-to-date !! */
+
+/* virtual one-character strings */
+#define CHARACTER_CHAR    VIRTUALSTR_FIRST
+#define CHARACTER_TOTAL   (CHARACTER_CHAR+1)
 
 /* virtual string slices */
 #define STRSLICE_SOURCE   VIRTUALSTR_FIRST
@@ -22,21 +31,6 @@
 /* virtual string concatenations */
 #define CATSTR_LIST       VIRTUALSTR_FIRST
 #define CATSTR_TOTAL      (CATSTR_LIST+1)
-
-/* all string representations end with the actual character data: */
-#define STR_ob_sval       FARRAY(UNSIGNED_FIELD(PyStringObject, char, ob_sval, \
-                                                (defield_t) VIRTUALSTR_LAST))
-#define iSTR_OB_SVAL      FIELD_INDEX(STR_ob_sval)
-
-#define CHARACTER_char    UNSIGNED_FIELD(PyStringObject, char, ob_sval, \
-                                         (defield_t) VIRTUALSTR_LAST)
-#define iCHARACTER_CHAR   FIELD_INDEX(CHARACTER_char)
-#define CHARACTER_TOTAL   FIELDS_TOTAL(CHARACTER_char)
-
-#define CHARACTER_short   FARRAY(UNSIGNED_FIELD(PyStringObject, short,ob_sval, \
-                                         (defield_t) VIRTUALSTR_LAST))
-#define CHARACTER_long    FARRAY(UNSIGNED_FIELD(PyStringObject, long, ob_sval, \
-                                         (defield_t) VIRTUALSTR_LAST))
 
 
 #define PsycoString_Check(tp) PyType_TypeCheck(tp, &PyString_Type)
@@ -58,6 +52,7 @@ inline vinfo_t* PsycoString_GET_SIZE(PsycoObject* po, vinfo_t* v)
 
 
 EXTERNFN vinfo_t* PsycoCharacter_New(vinfo_t* chrval);
+EXTERNFN bool PsycoCharacter_Ord(PsycoObject* po, vinfo_t* v, vinfo_t** vord);
 
 
 #endif /* _PSY_STRINGOBJECT_H */

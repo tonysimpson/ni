@@ -1455,12 +1455,12 @@ condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi)
 	   vinfo_decref() will not emit a Py_DECREF() that would
 	   clobber the condition code. We check all this. */
 #if ALL_CHECKS
-	assert(!has_rtref(vi->source));
+	extra_assert(!has_rtref(vi->source));
 	{ code_t* code1 = po->code;
 #endif
 	vinfo_decref(vi, po);
 #if ALL_CHECKS
-	assert(po->code == code1); }
+	extra_assert(po->code == code1); }
 #endif
 	return result;
 }

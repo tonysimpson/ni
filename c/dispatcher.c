@@ -1734,7 +1734,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
          independent; we must emit it again at the new position */
       code = data_new_buffer(backpointer, &dm);
       JUMP_TO((code_t*) target_codebuf->codestart);
-      assert(code <= dm.code_limit);
+      psyco_assert(code <= dm.code_limit);
     }
   
   PyMem_FREE(dm.usages);

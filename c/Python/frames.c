@@ -314,7 +314,7 @@ bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f)
 		PyObject** p;
 		int new_i = PyString_GET_SIZE(co->co_code) - 1;
 		   /* RETURN_VALUE */
-		assert(PyString_AS_STRING(co->co_code)[new_i] == 83);
+		psyco_assert(PyString_AS_STRING(co->co_code)[new_i] == 83);
 		f->f_lasti = new_i;
 		f->f_iblock = 0;
 

@@ -138,17 +138,19 @@
 # define INITIALIZATIONFN  DEFINEFN
 #endif
 
-#if ALL_CHECKS
-# define MALLOC_CHECK_    2  /* GCC malloc() checks */
-# ifndef WIN32
-#  define extra_assert(x) ((void)((x) || psyco_assert_failed(#x, __FILE__, __LINE__)))
-# else
+#ifndef WIN32
+# define psyco_assert(x) ((void)((x) || psyco_fatal_msg(#x)))
+#else
 /* The VC++ preprocessor is not even able to produce from #x a C string that
    is correctly escape for the VC++ compiler !! */
-#  define extra_assert(x) ((void)((x) || \
-                         psyco_assert_failed("assertion failed", __FILE__, __LINE__)))
-# endif
-EXTERNFN int psyco_assert_failed(char* msg, char* filename, int lineno);
+# define psyco_assert(x) ((void)((x) || psyco_fatal_msg("assertion failed")))
+#endif
+#define psyco_fatal_msg(msg)  psyco_fatal_error(msg, __FILE__, __LINE__)
+EXTERNFN int psyco_fatal_error(char* msg, char* filename, int lineno);
+
+#if ALL_CHECKS
+# define MALLOC_CHECK_    2  /* GCC malloc() checks */
+# define extra_assert(x)  psyco_assert(x)
 #else
 # define extra_assert(x)  (void)0  /* nothing */
 #endif

@@ -42,7 +42,7 @@ void Psyco_DefineMeta(void* c_function, void* psyco_function)
 		if (Psyco_Meta_Dict == NULL)
 			return;
 	}
-        extra_assert(c_function != NULL);
+        psyco_assert(c_function != NULL);
 	key = PyInt_FromLong((long) c_function);
 	if (key != NULL) {
 		value = PyInt_FromLong((long) psyco_function);
@@ -907,9 +907,11 @@ inline void PsycoTraceBack_Here(PsycoObject* po, int lasti)
 /***                      Initialization                       ***/
  /***************************************************************/
 
-DEFINEVAR source_known_t psyco_skNone;    /* known value 'Py_None' */
-DEFINEVAR source_known_t psyco_skZero;    /* known value 0 */
+DEFINEVAR source_known_t psyco_skZero;   /* known value 0 */
 DEFINEVAR source_known_t psyco_skOne;     /* known value 1 */
+DEFINEVAR source_known_t psyco_skNone;     /* known value 'Py_None' */
+DEFINEVAR source_known_t psyco_skPy_False;  /* known value 'Py_False' */
+DEFINEVAR source_known_t psyco_skPy_True;    /* known value 'Py_True' */
 DEFINEVAR source_known_t psyco_skNotImplemented;
 
 static PyObject* s_builtin_object;   /* intern string '__builtins__' */
@@ -918,19 +920,19 @@ INITIALIZATIONFN
 void psyco_pycompiler_init(void)
 {
 	s_builtin_object = PyString_InternFromString("__builtins__");
-	
-	memcpy(&psyco_skNone,
-	       sk_new((long) Py_None,           SkFlagFixed),
-	       sizeof(source_known_t));
-	memcpy(&psyco_skZero,
-	       sk_new((long) 0,                 SkFlagFixed),
-	       sizeof(source_known_t));
-	memcpy(&psyco_skOne,
-	       sk_new((long) 1,                 SkFlagFixed),
-	       sizeof(source_known_t));
-	memcpy(&psyco_skNotImplemented,
-	       sk_new((long) Py_NotImplemented, SkFlagFixed),
-	       sizeof(source_known_t));
+        
+        psyco_skZero          .refcount1_flags = SkFlagFixed;
+        psyco_skZero          .value           = (long) 0;
+        psyco_skOne           .refcount1_flags = SkFlagFixed;
+        psyco_skOne           .value           = (long) 1;
+        psyco_skNone          .refcount1_flags = SkFlagFixed;
+        psyco_skNone          .value           = (long) Py_None;
+        psyco_skPy_False      .refcount1_flags = SkFlagFixed;
+        psyco_skPy_False      .value           = (long) Py_False;
+        psyco_skPy_True       .refcount1_flags = SkFlagFixed;
+        psyco_skPy_True       .value           = (long) Py_True;
+        psyco_skNotImplemented.refcount1_flags = SkFlagFixed;
+        psyco_skNotImplemented.value           = (long) Py_NotImplemented;
 
 	ERtPython = psyco_vsource_not_important;
 	EReturn   = psyco_vsource_not_important;
@@ -1055,12 +1057,12 @@ PyObject* psy_get_builtins(PyObject* globals)
 	/* XXX we currently consider the absence
 	   of builtins to be a fatal error */
 	builtins = PyDict_GetItem((PyObject*) globals, s_builtin_object);
-	assert(builtins != NULL);
+	psyco_assert(builtins != NULL);
 	if (PyModule_Check(builtins)) {
 		builtins = PyModule_GetDict(builtins);
-		assert(builtins != NULL);
+		psyco_assert(builtins != NULL);
 	}
-	assert(PyDict_Check(builtins));
+	psyco_assert(PyDict_Check(builtins));
         return builtins;
 }
 
@@ -1621,7 +1623,7 @@ static int cimpl_unpack_iterable(PyObject* v, int argcnt, PyObject** sp)
 	PyObject *it;  /* iter(v) */
 	PyObject *w;
 
-	assert(v != NULL);
+	extra_assert(v != NULL);
 
 	it = PyObject_GetIter(v);
 	if (it == NULL)

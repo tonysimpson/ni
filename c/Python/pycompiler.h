@@ -27,9 +27,11 @@ inline vinfo_t* psyco_vi_##name(void) {                 \
   return vinfo_new(CompileTime_NewSk(&psyco_sk##name)); \
 }
 
-DEF_SK_AND_VI(None)    /* known value 'Py_None' */
-DEF_SK_AND_VI(Zero)    /* known value 0 */
-DEF_SK_AND_VI(One)     /* known value 1 */
+DEF_SK_AND_VI(Zero)      /* known value 0 */
+DEF_SK_AND_VI(One)       /* known value 1 */
+DEF_SK_AND_VI(None)      /* known value 'Py_None'  */
+DEF_SK_AND_VI(Py_False)  /* known value 'Py_False' */
+DEF_SK_AND_VI(Py_True)   /* known value 'Py_True'  */
 DEF_SK_AND_VI(NotImplemented)   /* 'Py_NotImplemented' */
 
      /* the macro defines psyco_vi_None(), psyco_vi_Zero(),

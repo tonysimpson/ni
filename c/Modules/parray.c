@@ -193,27 +193,16 @@ static bool integral_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,
 
 static bool p_c_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi, vinfo_t* v)
 {
-	PyTypeObject* vtp = Psyco_NeedType(po, v);
-	if (vtp == NULL)
+	vinfo_t* value;
+	if (!PsycoCharacter_Ord(po, v, &value))
 		return false;
-	
-	if (PyType_TypeCheck(vtp, &PyString_Type)) {
-		condition_code_t cc;
-		vinfo_t* vlen = psyco_get_field(po, v, FIX_size);
-		cc = integer_cmp_i(po, vlen, 1, Py_EQ);
-		vinfo_decref(vlen, po);
-		
-		if (cc == CC_ERROR)
-			return false;
-		if (runtime_condition_t(po, cc)) {
-			/* 'v' is really a string of size 1 */
-			defield_t rdf = FMUT(DEF_ARRAY(char, 0));
-			vinfo_t* value = psyco_get_const(po, v, CHARACTER_char);
-			if (value == NULL)
-				return false;
-			return generic_setitem(po, ap, vi, value, rdf);
-					       
-		}
+
+	if (value != NULL) {
+		/* 'v' is really a string of size 1 */
+		defield_t rdf = FMUT(DEF_ARRAY(char, 0));
+		bool result = generic_setitem(po, ap, vi, value, rdf);
+		vinfo_decref(value, po);
+		return result;
 	}
 	PycException_SetString(po, PyExc_TypeError,
 			       "array item must be char");

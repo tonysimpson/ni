@@ -303,7 +303,7 @@ inline bool compute_vinfo(vinfo_t* vi, PsycoObject* po) {
 	return true;
 }
 
-/* sub-array (see also processor.h, psyco_get_field()&co.) */
+/* sub-array (see also psyco_get_field()&co.) */
 inline void vinfo_array_grow(vinfo_t* vi, int ncount) {
 	if (ncount > vi->array->count)
 		vi->array = array_grow1(vi->array, ncount);

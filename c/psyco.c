@@ -93,16 +93,13 @@ void psyco_flog(char* msg, ...)
 }
 
 
-#if ALL_CHECKS
 DEFINEFN
-int psyco_assert_failed(char* msg, char* filename, int lineno)
+int psyco_fatal_error(char* msg, char* filename, int lineno)
 {
   fprintf(stderr, "%s:%d: %s\n", filename, lineno, msg);
-  Py_FatalError("assertion failed in Psyco");
+  Py_FatalError("Psyco assertion failed");
   return 0;
 }
-#endif
-
 
 #if CODE_DUMP
 static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
@@ -113,7 +110,7 @@ static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
     {
       vinfo_t* vi = array->items[i];
       PyObject* key = PyInt_FromLong((long)vi);
-      assert(key);
+      psyco_assert(key);
       fprintf(f, "%ld\n", (long)vi);
       if (vi != NULL && !PyDict_GetItem(d, key))
         {
@@ -130,7 +127,7 @@ static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
             fprintf(f, "vt 0x%lx\n", (long) VirtualTime_Get(vi->source));
             break;
           default:
-            assert(0);
+            psyco_fatal_msg("gettime() corrupted");
           }
           PyDict_SetItem(d, key, Py_None);
           vinfo_array_dump(vi->array, f, d);
@@ -214,9 +211,9 @@ void psyco_dump_code_buffers(void)
                 {
                   repr = PyObject_Repr(key);
                 }
-              assert(!PyErr_Occurred());
-              assert(PyString_Check(repr));
-              assert(CodeBuffer_Check(value));
+              psyco_assert(!PyErr_Occurred());
+              psyco_assert(PyString_Check(repr));
+              psyco_assert(CodeBuffer_Check(value));
               fprintf(f, "0x%lx %s\n",
                       (long)((CodeBufferObject*)value)->codestart,
                       PyString_AsString(repr));
@@ -236,19 +233,19 @@ void psyco_dump_code_buffers(void)
             else
               live_po = NULL;
             d = PyDict_New();
-            assert(d);
+            psyco_assert(d);
             buftable[i++] = ftell(f);
             vinfo_array_dump(live_po ? &live_po->vlocals : NullArray, f, d);
             Py_DECREF(d);
             if (live_po)
               PsycoObject_Delete(live_po);
           }
-        assert(i==bufcount);
+        psyco_assert(i==bufcount);
         fseek(f, sizeof(bufcount), 0);
         fwrite(buftable, sizeof(long), bufcount, f);
       }
       PyMem_FREE(buftable);
-      assert(!PyErr_Occurred());
+      psyco_assert(!PyErr_Occurred());
       fclose(f);
       PyErr_Restore(exc, val, tb);
     }
@@ -270,7 +267,7 @@ DEFINEFN void psyco_trace_execution(char* msg, void* code_position)
 DEFINEFN void psyco_trace_execution_noerr(char* msg, void* code_position)
 {
   debug_printf(4, ("psyco: trace %p for %s\n", code_position, msg));
-  assert(!PyErr_Occurred());
+  psyco_assert(!PyErr_Occurred());
 }
 #endif
 

@@ -21,7 +21,7 @@ static bool compute_char(PsycoObject* po, vinfo_t* v, bool force)
 	vinfo_t* newobj;
 	if (!force) return true;
 
-	chrval = vinfo_getitem(v, iCHARACTER_CHAR);
+	chrval = vinfo_getitem(v, CHARACTER_CHAR);
 	if (chrval == NULL)
 		return false;
 
@@ -45,7 +45,7 @@ inline vinfo_t* PsycoCharacter_NEW(vinfo_t* chrval)
 	result->array->items[iOB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyString_Type)));
 	result->array->items[iFIX_SIZE] = psyco_vi_One();
-	result->array->items[iCHARACTER_CHAR] = chrval;
+	result->array->items[CHARACTER_CHAR] = chrval;
 	return result;
 }
 
@@ -54,6 +54,48 @@ vinfo_t* PsycoCharacter_New(vinfo_t* chrval)
 {
 	vinfo_incref(chrval);
 	return PsycoCharacter_NEW(chrval);
+}
+
+inline defield_t first_character(vinfo_t* v)
+{
+	if (v->source == VirtualTime_New(&psyco_computed_char))
+		return (defield_t) CHARACTER_CHAR;
+	else
+		return STR_sval;
+}
+
+DEFINEFN bool PsycoCharacter_Ord(PsycoObject* po, vinfo_t* v, vinfo_t** vord)
+{
+	vinfo_t* vlen;
+	PyTypeObject* vtp;
+	condition_code_t cc;
+	vinfo_t* result = NULL;
+	
+	if (v->source == VirtualTime_New(&psyco_computed_char)) {
+		result = vinfo_getitem(v, CHARACTER_CHAR);
+		if (result != NULL) {
+			vinfo_incref(result);
+			goto done;
+		}
+	}
+
+	vtp = Psyco_NeedType(po, v);
+	if (vtp == NULL)
+		return false;
+
+	if (PyType_TypeCheck(vtp, &PyString_Type)) {
+		vlen = PsycoString_GET_SIZE(po, v);
+		if (vlen == NULL)
+			return false;
+		cc = integer_cmp_i(po, vlen, 1, Py_EQ);
+		if (cc == CC_ERROR)
+			return false;
+		if (runtime_condition_t(po, cc))
+			result = psyco_get_field(po, v, STR_sval);
+	}
+ done:
+	*vord = result;
+	return true;
 }
 
 
@@ -115,6 +157,22 @@ inline vinfo_t* PsycoStrSlice_NEW(vinfo_t* source, vinfo_t* start, vinfo_t* len)
 	result->array->items[STRSLICE_SOURCE] = source;
 	result->array->items[STRSLICE_START]  = start;
 	return result;
+}
+
+static vinfo_t* strslice_real_source(PsycoObject* po, vinfo_t* s)
+{
+	if (s->source == VirtualTime_New(&psyco_computed_strslice)) {
+		/* get a ptr to the real source memory
+		   without forcing the strslice out of
+		   virtual-time */
+		vinfo_t* start = vinfo_getitem(s, STRSLICE_START);
+		vinfo_t* src = vinfo_getitem(s, STRSLICE_SOURCE);
+		if (src != NULL && start != NULL) {
+			return integer_add(po, src, start, false);
+		}
+	}
+	vinfo_incref(s);
+	return s;
 }
 
 
@@ -221,21 +279,10 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v, bool force)
 		slen = psyco_get_const(po, s, FIX_size);
 		if (slen == NULL)
 			goto fail;
-		if (s->source == VirtualTime_New(&psyco_computed_strslice)) {
-				/* get a ptr to the real source memory
-				   without forcing the strslice out of
-				   virtual-time */
-			vinfo_t* start= vinfo_getitem(s, STRSLICE_START);
-			vinfo_t* src = vinfo_getitem(s, STRSLICE_SOURCE);
-			if (src != NULL && start != NULL) {
-				release_me = integer_add(po, src, start,
-							 false);
-				if (release_me == NULL)
-					goto fail;
-				s = release_me;
-			}
-		}
-		else if (is_compiletime(slen->source)) {
+		release_me = s = strslice_real_source(po, s);
+		if (s == NULL)
+			goto fail;
+		if (is_compiletime(slen->source)) {
 			int l = CompileTime_Get(slen->source)->value;
 			if (1 <= l && l <= sizeof(long)) {
 				/* special-case 1-4 characters */
@@ -243,16 +290,15 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v, bool force)
 				defield_t rdf, wdf;
 				switch (l) {
 				case 1: /*SIZEOF_CHAR:*/
-					/* also takes care of virtual chars */
-					rdf = CHARACTER_char;
+					rdf = first_character(s);
 					wdf = FMUT(DEF_ARRAY(char, 0));
 					break;
 				case 2: /*SIZEOF_SHORT:*/
-					rdf = CHARACTER_short;
+					rdf = STR_sval2;
 					wdf = FMUT(DEF_ARRAY(short, 0));
 					break;
 				default:
-					rdf = CHARACTER_long;
+					rdf = STR_sval4;
 					wdf = FMUT(DEF_ARRAY(long, 0));
 					break;
 					/* for 3 chars, we copy a whole word,
@@ -285,10 +331,8 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v, bool force)
 			goto fail;
 
 	string_done:
-		if (release_me != NULL) {
-			vinfo_decref(release_me, po);
-			release_me = NULL;
-		}
+		vinfo_decref(release_me, po);
+		release_me = NULL;
 		if (++i == count)
 			break;  /* done */
 		t = integer_add(po, ptr, slen, false);
@@ -380,7 +424,7 @@ static vinfo_t* pstring_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 		return a;
 	}
 	
-	result = psyco_get_field_array(po, a, STR_ob_sval, i);
+	result = psyco_get_field_array(po, a, STR_sval, i);
 	if (result == NULL)
 		return NULL;
 
@@ -603,6 +647,198 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 				  "vv", a, b);
 }
 
+/* higher-level meta-version of memcmp(): compares the data in string 'v' of length
+   'vlen' with the data in string 'w' of length 'wlen'.
+   Return 0 (no), 1 (yes), or -1 (error). */
+inline int psyco_richmemcmp(PsycoObject* po, vinfo_t* v, vinfo_t* w,
+			    vinfo_t* vlen, vinfo_t* wlen, int op)
+{
+	condition_code_t cc;
+	vinfo_t* minlen;
+	bool same_size;
+	int result;
+	vinfo_t* vresult;
+	vinfo_t* vtest;
+	vinfo_t* wtest;
+
+	/* first compare the sizes */
+	cc = integer_cmp(po, vlen, wlen, Py_EQ);
+	if (cc == CC_ERROR)
+		return -1;
+	same_size = runtime_condition_t(po, cc);
+	if (same_size) {
+		/* same length, but better put in 'minlen' the compile-time
+		   value if there is one */
+		if (is_compiletime(wlen->source))
+			minlen = wlen;
+		else
+			minlen = vlen;
+		if (psyco_knowntobe(minlen, 0))
+			return (op == Py_EQ || op == Py_LE || op == Py_GE);
+	}
+	else {
+		/* different sizes */
+		switch (op) {
+		case Py_EQ:
+			return 0;
+		case Py_NE:
+			return 1;
+		default:
+			/* pass */
+		}
+		if (psyco_knowntobe(vlen, 0))
+			return (op == Py_LT || op == Py_LE);
+		if (psyco_knowntobe(wlen, 0))
+			return (op == Py_GT || op == Py_GE);
+		
+		cc = integer_cmp(po, vlen, wlen, Py_LT);
+		if (cc == CC_ERROR)
+			return -1;
+		if (runtime_condition_t(po, cc)) {
+			/* len(v) < len(w) */
+			minlen = vlen;
+			/*  (v < w)   iff  (v[:minlen] <= w[:minlen])  */
+			/*  (v <= w)  iff  (v[:minlen] <= w[:minlen])  */
+			/*  (v > w)   iff  (v[:minlen]  > w[:minlen])  */
+			/*  (v >= w)  iff  (v[:minlen]  > w[:minlen])  */
+			switch (op) {
+			case Py_LT: op = Py_LE; break;
+			case Py_GE: op = Py_GT; break;
+			default:                break;
+			}
+		}
+		else {
+			/* len(v) > len(w) */
+			minlen = wlen;
+			/*  (v < w)   iff  (v[:minlen] <  w[:minlen])  */
+			/*  (v <= w)  iff  (v[:minlen] <  w[:minlen])  */
+			/*  (v > w)   iff  (v[:minlen] >= w[:minlen])  */
+			/*  (v >= w)  iff  (v[:minlen] >= w[:minlen])  */
+			switch (op) {
+			case Py_LE: op = Py_LT; break;
+			case Py_GT: op = Py_GE; break;
+			default:                break;
+			}
+		}
+	}
+
+	/* optimize slices */
+	w = strslice_real_source(po, w);
+	v = strslice_real_source(po, v);
+	if (v == NULL || w == NULL)
+		goto fail1;
+	
+	/* is 'minlen' a known and small value? */
+	if (is_compiletime(minlen->source)) {
+		defield_t vrdf, wrdf;
+		switch (CompileTime_Get(minlen->source)->value) {
+		case 1: /*SIZEOF_CHAR:*/
+			vrdf = first_character(v);
+			wrdf = first_character(w);
+			break;
+			
+		case 2: /*SIZEOF_SHORT:*/
+			if (op != Py_EQ && op != Py_NE) goto use_memcmp;
+			vrdf = wrdf = STR_sval2;
+			break;
+
+		case 4: /*SIZEOF_LONG:*/
+			if (op != Py_EQ && op != Py_NE) goto use_memcmp;
+			vrdf = wrdf = STR_sval4;
+			break;
+
+		default:
+			goto use_memcmp;
+		}
+
+		/* load all the characters of the (short) strings
+		   into registers */
+		vtest = psyco_get_field(po, v, vrdf);
+		wtest = psyco_get_field(po, w, wrdf);
+		if (vtest == NULL || wtest == NULL)
+			goto fail2;
+		cc = integer_cmp(po, vtest, wtest, op);
+		vresult = NULL;
+	}
+	else {
+	   use_memcmp:
+		/* compare the 'minlen' first bytes of the data blocks */
+		vtest = integer_add_i(po, v, offsetof(PyStringObject, ob_sval),
+				      false);
+		wtest = integer_add_i(po, w, offsetof(PyStringObject, ob_sval),
+				      false);
+		if (vtest == NULL || wtest == NULL)
+			goto fail2;
+		/* variable-sized memcmp */
+		vresult = psyco_generic_call(po, memcmp, CfReturnNormal,
+					     "vvv", vtest, wtest, minlen);
+		cc = integer_cmp_i(po, vresult, 0, op);
+	}
+	
+	if (cc == CC_ERROR)
+		result = -1;
+	else
+		result = runtime_condition_t(po, cc);
+	vinfo_xdecref(vresult, po);
+	vinfo_decref(wtest, po);
+	vinfo_decref(vtest, po);
+	vinfo_decref(v, po);
+	vinfo_decref(w, po);
+	return result;
+
+ fail2:
+	vinfo_xdecref(wtest, po);
+	vinfo_xdecref(vtest, po);
+ fail1:
+	vinfo_xdecref(v, po);
+	vinfo_xdecref(w, po);
+	return -1;
+}
+
+static vinfo_t* pstring_richcompare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int op)
+{
+	int result;
+	
+	/* Make sure both arguments are strings. */
+	PyTypeObject *tp = Psyco_FastType(v);
+	if (!PyType_TypeCheck(tp, &PyString_Type)) {
+		return psyco_vi_NotImplemented();
+	}
+	tp = Psyco_NeedType(po, w);
+	if (tp == NULL)
+		return NULL;
+	if (!PyType_TypeCheck(tp, &PyString_Type)) {
+		return psyco_vi_NotImplemented();
+	}
+
+ 	if (v->source == w->source) {
+		/* identical strings */
+		result = (op == Py_EQ || op == Py_LE || op == Py_GE);
+	}
+	else {
+		vinfo_t* vlen;
+		vinfo_t* wlen;
+		/* get the sizes */
+		wlen = psyco_get_const(po, w, FIX_size);
+		if (wlen == NULL)
+			return NULL;
+		vlen = psyco_get_const(po, v, FIX_size);
+		if (vlen == NULL)
+			return NULL;
+		
+		result = psyco_richmemcmp(po, v, w, vlen, wlen, op);
+	}
+	
+	switch (result) {
+	case 0:
+		return psyco_vi_Py_False();
+	case 1:
+		return psyco_vi_Py_True();
+	default:
+		return NULL;
+	}
+}
+
 
 INITIALIZATIONFN
 void psy_stringobject_init(void)
@@ -613,6 +849,7 @@ void psy_stringobject_init(void)
 	Psyco_DefineMeta(m->sq_item, pstring_item);
 	Psyco_DefineMeta(m->sq_slice, pstring_slice);
 	Psyco_DefineMeta(m->sq_concat, pstring_concat);
+        Psyco_DefineMeta(PyString_Type.tp_richcompare, pstring_richcompare);
 
 	mm = PyString_Type.tp_as_mapping;
 	if (mm) {  /* Python >= 2.3 */

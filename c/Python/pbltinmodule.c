@@ -216,38 +216,15 @@ static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 
 static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
-	vinfo_t* vlen;
 	vinfo_t* result;
-	PyTypeObject* vtp;
-	condition_code_t cc;
 	METH_O_WRAPPER(ord, vself, vobj);
 
-	/* TypeSwitch */
-	vtp = Psyco_NeedType(po, vobj);
-	if (vtp == NULL)
+	if (!PsycoCharacter_Ord(po, vobj, &result))
 		return NULL;
-
-	if (PyType_TypeCheck(vtp, &PyString_Type)) {
-		vlen = PsycoString_GET_SIZE(po, vobj);
-		if (vlen == NULL)
-			return NULL;
-		cc = integer_cmp_i(po, vlen, 1, Py_NE);
-		if (cc == CC_ERROR)
-			return NULL;
-		if (runtime_condition_f(po, cc))
-			goto use_proxy;
-
-                result = psyco_get_field(po, vobj, CHARACTER_char);
-		if (result == NULL)
-			return NULL;
-		return PsycoInt_FROM_LONG(result);
-	}
-
-#ifdef Py_USING_UNICODE
-	/* ... */
-#endif
 	
-   use_proxy:
+	if (result != NULL)
+		return PsycoInt_FROM_LONG(result);
+	
 	return psyco_generic_call(po, cimpl_ord, CfReturnRef|CfPyErrIfNull,
 				  "lv", NULL, vobj);
 }

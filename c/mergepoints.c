@@ -453,7 +453,7 @@ inline void find_unused_vars(struct instrnode_s* instrnodes,
              write a note to say it can be deleted.  */
           int remove = node->storemask & ~node->mask;
           int i;
-          assert(node->mask & (1<<VARS_PER_PASS));
+          psyco_assert(node->mask & (1<<VARS_PER_PASS));
           for (i=var0; remove; i++, remove>>=1)
             if (remove & 1)
               psyco_ge_unused_var(node->mp, i);
@@ -553,7 +553,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
           if (op == EXTENDED_ARG)
             {
               op = source[i++];
-              assert(HAS_ARG(op) && op != EXTENDED_ARG);
+              psyco_assert(HAS_ARG(op) && op != EXTENDED_ARG);
               i += 2;
               oparg = oparg<<16 | ((source[i-1]<<8) + source[i-2]);
             }
@@ -580,8 +580,8 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
           case SETUP_EXCEPT:  mp_flags |= MP_FLAGS_HAS_EXCEPT;  break;
           case SETUP_FINALLY: mp_flags |= MP_FLAGS_HAS_FINALLY; break;
           }
-          assert(iblock == 0 || oparg <= blockstack[iblock-1].b_handler);
-          assert(iblock < CO_MAXBLOCKS);
+          psyco_assert(iblock == 0 || oparg <= blockstack[iblock-1].b_handler);
+          psyco_assert(iblock < CO_MAXBLOCKS);
           blockstack[iblock].b_type = op;
           blockstack[iblock].b_handler = i + oparg;
           iblock++;
@@ -591,7 +591,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
           /* break the innermost loop */
           btop = iblock;
           do {
-            assert(btop>0);
+            psyco_assert(btop>0);
             btop--;
           } while (blockstack[btop].b_type != SETUP_LOOP &&
                    blockstack[btop].b_type != SETUP_FINALLY);
@@ -608,7 +608,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
         case CONTINUE_LOOP:
           btop = iblock;
           do {
-            assert(btop>0);
+            psyco_assert(btop>0);
             btop--;
           } while (blockstack[btop].b_type != SETUP_LOOP &&
                    blockstack[btop].b_type != SETUP_FINALLY);

@@ -1,6 +1,7 @@
 /* custom checking allocators a la Electric Fence */
 #include "linuxmemchk.h"
 #if HEAVY_MEM_CHECK
+#undef NDEBUG
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
