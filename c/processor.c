@@ -1,6 +1,7 @@
 #include "processor.h"
 #include "vcompiler.h"
 #include "codemanager.h"
+#include "pycencoding.h"
 #include "Python/pycompiler.h"  /* for exception handling stuff */
 
 
@@ -115,18 +116,57 @@ static glue_int_mul_fn glue_int_mul_1;
 
 
 DEFINEFN
+void psyco_emit_header(PsycoObject* po, int nframelocal)
+{
+  int j = nframelocal;
+  vinfo_array_t* array;
+  extra_assert(LOC_CONTINUATION->array->count == 0);
+
+  BEGIN_CODE
+  INITIALIZE_FRAME_LOCALS(nframelocal);
+  po->stack_depth += 4*nframelocal;
+  END_CODE
+
+  array = LOC_CONTINUATION->array = array_new(nframelocal);
+  while (j--)
+    array->items[j] = vinfo_new(RunTime_NewStack
+                             (po->stack_depth - 4*j, REG_NONE, false));
+}
+
+DEFINEFN
 code_t* psyco_finish_return(PsycoObject* po, NonVirtualSource retval)
 {
   code_t* code = po->code;
-  int retpos = getstack(po->vlocals.items[INDEX_LOC_CONTINUATION]->source);
+  int retpos;
+  int nframelocal = LOC_CONTINUATION->array->count;
 
-  /* load the return value into EAX */
-  if (retval != SOURCE_DUMMY)
-    LOAD_REG_FROM(retval, REG_FUNCTIONS_RETURN);
-
-  /* 'retpos' is the position in the stack of the return value. */
-  /* clean up the stack up to that position */
+  /* 'retpos' is the position in the stack of the return address. */
+  retpos = getstack(LOC_CONTINUATION->source);
   extra_assert(retpos != RunTime_StackNone);
+
+  /* load the return value into EAX for regular functions, EBX for functions
+     with a prologue */
+  if (retval != SOURCE_DUMMY) {
+    reg_t rg = nframelocal>0 ? REG_ANY_CALLEE_SAVED : REG_FUNCTIONS_RETURN;
+    LOAD_REG_FROM(retval, rg);
+  }
+
+  if (nframelocal > 0)
+    {
+      /* psyco_emit_header() was used; first clear the stack only up to and not
+         including the frame-local data */
+      int framelocpos = retpos + 4*nframelocal;
+      extra_assert(framelocpos ==
+                   getstack(LOC_CONTINUATION->array->items[0]->source));
+      STACK_CORRECTION(framelocpos - po->stack_depth);
+      po->stack_depth = framelocpos;
+      
+      /* perform Python-specific cleanup */
+      FINALIZE_FRAME_LOCALS(nframelocal);
+      LOAD_REG_FROM_REG(REG_FUNCTIONS_RETURN, REG_ANY_CALLEE_SAVED);
+    }
+
+  /* now clean up the stack up to retpos */
   STACK_CORRECTION(retpos - po->stack_depth);
 
   /* emit a 'RET xxx' instruction that pops and jumps to the address
@@ -951,7 +991,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 {
 	char argtags[MAX_ARGUMENTS_COUNT];
 	long raw_args[MAX_ARGUMENTS_COUNT], args[MAX_ARGUMENTS_COUNT];
-	int count, i, j;
+	int count, i, j, stackbase, totalstackspace = 0;
 	vinfo_t* vresult;
 	bool has_refs = false;
 
@@ -1017,6 +1057,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
                 case 'a':
                 case 'A':
 			has_refs = true;
+			totalstackspace += 4*((vinfo_array_t*) arg)->count;
 			break;
 
 		default:
@@ -1108,6 +1149,9 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 
 	BEGIN_CODE
 	SAVE_REGS_FN_CALLS;
+	stackbase = po->stack_depth;
+	po->stack_depth += totalstackspace;
+	STACK_CORRECTION(totalstackspace);
 	for (i=count; i--; ) {
 		switch (argtags[i]) {
 			
@@ -1128,13 +1172,15 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 			bool with_reference = (argtags[i] == 'A');
 			int j = array->count;
 			if (j > 0) {
-				RESERVE_STACK_SPACE(j, REG_ANY_CALLER_SAVED);
-			}
-			while (j--) {
-				array->items[j] = vinfo_new
-					(RunTime_NewStack(po->stack_depth - 4*j,
-							  REG_NONE,
-							  with_reference));
+				do {
+					stackbase += 4;
+					array->items[--j] = vinfo_new
+						(RunTime_NewStack(stackbase,
+								REG_NONE,
+								with_reference));
+				} while (j);
+				LOAD_ADDRESS_FROM_RT (array->items[0]->source,
+						      REG_ANY_CALLER_SAVED);
 			}
 			CALL_SET_ARG_FROM_RT (RunTime_New(REG_ANY_CALLER_SAVED,
 							  false),  i, count);

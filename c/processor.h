@@ -325,6 +325,12 @@ inline int intlog2(long value) {
 /*****************************************************************/
  /***   code termination                                        ***/
 
+/* write a function header reserving 'nframelocal' machine words for
+   local storage. These are put in an array under LOC_CONTINUATION as
+   run-time values. Do not use this with nframelocal==0; no header is
+   needed (so far) in this case. */
+EXTERNFN void psyco_emit_header(PsycoObject* po, int nframelocal);
+
 /* write a return, clearing the stack as necessary, and releases 'po'. */
 EXTERNFN code_t* psyco_finish_return(PsycoObject* po, NonVirtualSource retval);
 

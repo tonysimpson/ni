@@ -10,11 +10,10 @@
 
 'psyco.classes.psyobj' is an alternate Psyco-optimized root for classes.
 Any class inheriting from it or using the metaclass '__metaclass__' might
-get optimized specifically for Psyco. It is equivalent to call instead
+get optimized specifically for Psyco. It is equivalent to call
 psyco.bind() on the class object after its creation.
 
-Note that this is not compatible with multiple inheritance and it does
-not work on Python version 2.1 or earlier.
+Note that this module has no effect with Python version 2.1 or earlier.
 
 Importing everything from psyco.classes in a module will import the
 '__metaclass__' name, so all classes defined after a

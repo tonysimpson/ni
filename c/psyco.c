@@ -132,6 +132,7 @@ static PsycoObject* psyco_build_frame(PyCodeObject* co, vinfo_t* vglobals,
   po->vlocals.count = INDEX_LOC_LOCALS_PLUS + extras;
   po->last_used_reg = REG_LOOP_START;
   po->pr.auto_recursion = recursion;
+  po->pr.mp_flags = psyco_mp_flags(merge_points);
 
   /* duplicate the inputvinfos. If two arguments share some common part, they
      will also share it in the copy. */
@@ -238,6 +239,10 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
 
   if (is_proxycode(co))
     co = ((PsycoFunctionObject*) PyTuple_GET_ITEM(co->co_consts, 1))->psy_code;
+  else
+    if (--recursion < 0)  /* the recursion limit only applies to non-proxified
+                             functions */
+      goto fail_to_default;
   
   tuple_size = PsycoTuple_Load(arg_tuple);
 #if HAVE_PyEval_EvalCodeEx
@@ -950,6 +955,11 @@ static PyObject* Psyco_dumpcodebuf(PyObject* self, PyObject* args)
 DEFINEFN void psyco_trace_execution(char* msg, void* code_position)
 {
   debug_printf(("psyco: trace %p for %s\n", code_position, msg));
+}
+DEFINEFN void psyco_trace_execution_noerr(char* msg, void* code_position)
+{
+  debug_printf(("psyco: trace %p for %s\n", code_position, msg));
+  assert(!PyErr_Occurred());
 }
 #endif
 

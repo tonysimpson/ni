@@ -323,5 +323,27 @@ inline bool write_array_item_var_ref(PsycoObject* po, vinfo_t* vi,
 	return true;
 }
 
+/* called by psyco_emit_header() */
+#define INITIALIZE_FRAME_LOCALS(nframelocal)   do {     \
+  STACK_CORRECTION(4*((nframelocal)-1));                \
+  PUSH_IMMED(0);    /* f_exc_type, initially NULL */    \
+} while (0)
+
+/* called by psyco_finish_return() */
+#define FINALIZE_FRAME_LOCALS(nframelocal)     do {                     \
+  CODE_FOUR_BYTES(code,                                                 \
+            0x83,                                                       \
+            0x3C,               /* CMP [ESP], 0 */                      \
+            0x24,                                                       \
+            0);                                                         \
+  code[4] = 0x70 | CC_E;        /* JE exit */                           \
+  code[5] = 11 - 6;                                                     \
+  code[6] = 0xE8;               /* CALL cimpl_finalize_frame_locals */  \
+  code += 11;                                                           \
+  *(long*)(code-4) = (code_t*)(&cimpl_finalize_frame_locals) - code;    \
+} while (0)
+
+/* implemented in pycompiler.c */
+EXTERNFN void cimpl_finalize_frame_locals(PyObject*, PyObject*, PyObject*);
 
 #endif /* _PYCENCODING_H */

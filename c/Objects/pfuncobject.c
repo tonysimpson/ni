@@ -77,9 +77,7 @@ DEFINEFN
 vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
                         vinfo_t* arg, vinfo_t* kw)
 {
-	/* calling a Python function: compile the called function if
-	   auto_recursion > 0. */
-	if (po->pr.auto_recursion > 0 && psyco_knowntobe(kw, (long) NULL)) {
+	if (psyco_knowntobe(kw, (long) NULL)) {
 		PyCodeObject* co;
 		vinfo_t* fcode;
 		vinfo_t* fglobals;
@@ -110,7 +108,7 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 			}
 			
 			result = psyco_call_pyfunc(po, co, fglobals, fdefaults,
-						 arg, po->pr.auto_recursion - 1);
+						 arg, po->pr.auto_recursion);
 			vinfo_decref(fdefaults, po);
 			vinfo_decref(fglobals, po);
 			return result;
@@ -134,7 +132,7 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 				return NULL;
 
 			return psyco_call_pyfunc(po, co, fglobals, fdefaults,
-						 arg, po->pr.auto_recursion - 1);
+						 arg, po->pr.auto_recursion);
 		}
 	}
 	else {

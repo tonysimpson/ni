@@ -1,5 +1,5 @@
 from __future__ import nested_scopes
-import os, sys, re, htmlentitydefs, struct
+import os, sys, re, htmlentitydefs, struct, bisect
 from psyco import _psyco
 
 tmpfile = '~tmpfile.tmp'
@@ -24,7 +24,8 @@ re_lineaddr = re.compile(r'\s*0?x?([0-9a-fA-F]+)')
 
 
 symbols = {}
-rawtargets = {}
+#rawtargets = {}
+codeboundary = []
 
 def load_symbol_file(filename, symb1, addr1):
     d = {}
@@ -79,6 +80,14 @@ def lineaddresses(line):
         result.append(addr)
     return result
 
+def codeat(addr):
+    i = bisect.bisect_left(codeboundary, (addr, None))
+    if i<len(codeboundary):
+        addrend, codebuf = codeboundary[i]
+        if isinstance(codebuf, CodeBuf) and \
+           codebuf.addr <= addr < codebuf.addr + len(codebuf.data):
+            return codebuf
+
 
 re_int = re.compile(r"(\-?\d+)$")
 re_ctvinfo = re.compile(r"ct (\d+) (\-?\d+)$")
@@ -100,11 +109,11 @@ class CodeBuf:
         self.stackdepth = stackdepth
         #self.reverse_lookup = []  # list of (offset, codebuf pointing there)
         self.specdict = []
-        for i in range(len(data)):
-            symbols[self.addr+i] = self
-        for i in range(4, len(data)+1):
-            offset, = struct.unpack('l', data[i-4:i])
-            rawtargets.setdefault(addr+i+offset, {})[self] = 1
+        if self.data:
+            codeboundary.append((self.addr+len(self.data), self))
+        #for i in range(4, len(data)+1):
+        #    offset, = struct.unpack('l', data[i-4:i])
+        #    rawtargets.setdefault(addr+i+offset, {})[self] = 1
 
     def __getattr__(self, attr):
         if attr == 'cache_text':
@@ -149,11 +158,15 @@ class CodeBuf:
             self.reverse_lookup = []
             start = self.addr
             end = start + len(self.data)
-            for addr in range(start, end):
-                if rawtargets.has_key(addr):
-                    for codebuf in rawtargets[addr].keys():
-                        maybe[codebuf] = 1
-            for codebuf in maybe.keys():
+            for codebuf in self.complete_list:
+                addr0 = codebuf.addr
+                data = codebuf.data
+                for i in range(4, len(data)+1):
+                    offset, = struct.unpack('l', data[i-4:i])
+                    if start <= addr0+i+offset < end or start <= offset < end:
+                        break
+                else:
+                    continue
                 for line in codebuf.disass_text:
                     for addr in lineaddresses(line):
                         if start <= addr < end:
@@ -205,7 +218,7 @@ class CodeBuf:
 
     def spec_dict(self, key, value):
         self.specdict.append((key, value))
-        rawtargets.setdefault(value, {})[self] = 1
+        #rawtargets.setdefault(value, {})[self] = 1
         try:
             del self.disass_text
         except:
@@ -243,7 +256,7 @@ class CodeBuf:
                 if sources != [self]*len(sources):
                     data.append('\n')
             for addr in lineaddresses(line):
-                sym = symbols.get(addr)
+                sym = symbols.get(addr) or codeat(addr)
                 if sym:
                     line = '%s\t(%s)' % (line, symtext(sym, addr, self))
                     break
@@ -358,6 +371,7 @@ def readdump(filename = 'psyco.dump'):
                 break
             else:
                 raise "invalid line", line
+    codeboundary.sort()
     codemap = {}
     for codebuf in codebufs:
         #codebuf.build_reverse_lookup()

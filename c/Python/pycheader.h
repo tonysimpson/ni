@@ -49,7 +49,8 @@ typedef struct {
   PyCodeObject* co;     /* code object we are compiling */
   int next_instr;       /* next instruction to compile */
   int auto_recursion;   /* # levels to auto-compile calls to Python functions */
-  int iblock;		/* index in blockstack */
+  short mp_flags;	/* see psyco_mp_flags() in mergepoints.h */
+  short iblock;		/* index in blockstack */
   PyTryBlock blockstack[CO_MAXBLOCKS]; /* for try and loop blocks */
   
   /* fields after 'blockstack' are not saved in a FrozenPsycoObject */

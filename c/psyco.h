@@ -152,11 +152,15 @@
 # define debug_printf(args)     do { } while (0) /* nothing */
 #endif
 #if VERBOSE_LEVEL >= 4
-# define TRACE_EXECUTION(msg)   do {                                    \
-                       BEGIN_CODE  EMIT_TRACE(msg);  END_CODE } while (0)
+# define TRACE_EXECUTION(msg)         do {                                    \
+  BEGIN_CODE  EMIT_TRACE(msg, psyco_trace_execution);  END_CODE } while (0)
+# define TRACE_EXECUTION_NOERR(msg)   do {                                    \
+  BEGIN_CODE  EMIT_TRACE(msg, psyco_trace_execution_noerr);  END_CODE } while (0)
 EXTERNFN void psyco_trace_execution(char* msg, void* code_position);
+EXTERNFN void psyco_trace_execution_noerr(char* msg, void* code_position);
 #else
-# define TRACE_EXECUTION(msg)   do { } while (0) /* nothing */
+# define TRACE_EXECUTION(msg)         do { } while (0) /* nothing */
+# define TRACE_EXECUTION_NOERR(msg)   do { } while (0) /* nothing */
 #endif
 
 

@@ -118,10 +118,8 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
             match = re_codebuf.match(self.path)
             if match:
                 addr = long(match.group(1), 16)
-                for codebuf in codebufs:
-                    if codebuf.addr <= addr < codebuf.addr+len(codebuf.data):
-                        break
-                else:
+                codebuf = xam.codeat(addr)
+                if not codebuf:
                     self.send_error(404, "No code buffer at this address")
                     return None
                 title = '%s code buffer at 0x%x' % (codebuf.mode.capitalize(),

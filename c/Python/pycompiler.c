@@ -626,52 +626,104 @@ static void cimpl_pyerr_fetch(PyObject* target[])
 	}
 }
 
-inline void cimpl_set_exc_info(PyObject* target[], PyObject* tb)
+DEFINEFN
+void cimpl_finalize_frame_locals(PyObject* f_exc_type,
+				 PyObject* f_exc_value,
+				 PyObject* f_exc_traceback)
 {
-#if 0
-	DISABLED, UNDER CONSTRUCTION
+	/* Called by code emitted by pycencoding.h when a function exits,
+	   but only if f_exc_type!=NULL. Works like reset_exc_info() of
+	   Python. */
+	PyThreadState *tstate = PyThreadState_GET();
+	PyObject *tmp_type, *tmp_value, *tmp_tb;
+
+	/* This frame caught an exception */
+	tmp_type = tstate->exc_type;
+	tmp_value = tstate->exc_value;
+	tmp_tb = tstate->exc_traceback;
+	tstate->exc_type = f_exc_type;  /* references are transferred */
+	tstate->exc_value = f_exc_value;
+	tstate->exc_traceback = f_exc_traceback;
+	Py_XDECREF(tmp_type);
+	Py_XDECREF(tmp_value);
+	Py_XDECREF(tmp_tb);
+	/* For b/w compatibility */
+	PySys_SetObject("exc_type", f_exc_type);
+	PySys_SetObject("exc_value", f_exc_value);
+	PySys_SetObject("exc_traceback", f_exc_traceback);
+}
+
+inline void cimpl_set_exc_info(PyObject* target[], PyObject* tb,
+			       PyObject** f_exc_type,
+			       PyObject** f_exc_value,
+			       PyObject** f_exc_traceback)
+{
+	/* Equivalent of PyErr_NormalizeException() + set_exc_info() */
 	PyThreadState *tstate = PyThreadState_GET();
         PyObject *type, *value;
-#endif
+	PyObject *tmp_type, *tmp_value, *tmp_tb;
 
         PyErr_NormalizeException(target+0, target+1, &tb);
-#if 0
-	DISABLED, UNDER CONSTRUCTION
         type = target[0];
         value = target[1];
 
+	if (*f_exc_type == NULL) {
+		/* This frame didn't catch an exception before */
+		/* Save previous exception of this thread in this frame */
+		if (tstate->exc_type == NULL) {
+			Py_INCREF(Py_None);
+			tstate->exc_type = Py_None;
+		}
+		Py_INCREF(tstate->exc_type);
+		Py_XINCREF(tstate->exc_value);
+		Py_XINCREF(tstate->exc_traceback);
+		*f_exc_type = tstate->exc_type;
+		*f_exc_value = tstate->exc_value;
+		*f_exc_traceback = tstate->exc_traceback;
+	}
 	/* Set new exception for this thread */
-	target[0] = tstate->exc_type;
-	target[1] = tstate->exc_value;
-	target[2] = tstate->exc_traceback;
+	tmp_type = tstate->exc_type;
+	tmp_value = tstate->exc_value;
+	tmp_tb = tstate->exc_traceback;
 	Py_XINCREF(type);
 	Py_XINCREF(value);
 	Py_XINCREF(tb);
 	tstate->exc_type = type;
 	tstate->exc_value = value;
 	tstate->exc_traceback = tb;
+	Py_XDECREF(tmp_type);
+	Py_XDECREF(tmp_value);
+	Py_XDECREF(tmp_tb);
 	/* For b/w compatibility */
 	PySys_SetObject("exc_type", type);
 	PySys_SetObject("exc_value", value);
 	PySys_SetObject("exc_traceback", tb);
-#endif
+	
 	Py_XDECREF(tb);  /* XXX implement tracebacks */
 }
 
-static void cimpl_pyerr_fetch_and_normalize(PyObject* target[])
+static void cimpl_pyerr_fetch_and_normalize(PyObject* target[],
+					    PyObject** f_exc_type,
+					    PyObject** f_exc_value,
+					    PyObject** f_exc_traceback)
 {
 	PyObject* tb;
         extra_assert(PyErr_Occurred());
 	PyErr_Fetch(target+0, target+1, &tb);
-        cimpl_set_exc_info(target, tb);
+        cimpl_set_exc_info(target, tb,
+			   f_exc_type, f_exc_value, f_exc_traceback);
 }
 
 static void cimpl_pyerr_normalize(PyObject* exc, PyObject* val,
-				  PyObject* target[])
+				  PyObject* target[],
+				  PyObject** f_exc_type,
+				  PyObject** f_exc_value,
+				  PyObject** f_exc_traceback)
 {
 	target[0] = exc;  Py_INCREF(exc);
 	target[1] = val;  Py_INCREF(val);
-        cimpl_set_exc_info(target, NULL);
+        cimpl_set_exc_info(target, NULL,
+			   f_exc_type, f_exc_value, f_exc_traceback);
 }
 
 DEFINEFN
@@ -697,53 +749,36 @@ inline bool PycException_FetchNormalize(PsycoObject* po)
 {
 	vinfo_t* result;
 	vinfo_array_t* array = array_new(2);
+	vinfo_array_t* f_exc = LOC_CONTINUATION->array;
 
-#if 0
-	DISABLED, UNDER CONSTRUCTION
         /* At runtime, we load the following data into the array:
 
-           array[0] -- exc_type       previously set in the thread
-           array[1] -- exc_value      previously set in the thread
-           array[2] -- exc_traceback  previously set in the thread
-           array[3] -- exc_type       new exception, normalized
-           array[4] -- exc_value      new exception, normalized
+           array[0] -- exc_type       new exception, normalized
+           array[1] -- exc_value      new exception, normalized
            no traceback yet
         */
-#endif
-
+	extra_assert(f_exc->count >= 3);
 	if (PycException_Is(po, &ERtPython)) {
 		/* fetch and normalize the exception */
 		result = psyco_generic_call(po, cimpl_pyerr_fetch_and_normalize,
-					    CfNoReturnValue, "A", array);
+					    CfNoReturnValue, "Arrr", array,
+					    f_exc->items[0],
+					    f_exc->items[1],
+					    f_exc->items[2]);
 	}
 	else {
 		/* normalize the already-given exception */
 		result = psyco_generic_call(po, cimpl_pyerr_normalize,
-					    CfNoReturnValue, "vvA",
-					    po->pr.exc, po->pr.val, array);
+					    CfNoReturnValue, "vvArrr",
+					    po->pr.exc, po->pr.val, array,
+					    f_exc->items[0],
+					    f_exc->items[1],
+					    f_exc->items[2]);
 	}
 	if (result == NULL) {
 		array_release(array);
 		return false;
 	}
-
-#if 0
-	DISABLED, UNDER CONSTRUCTION
-        if (po->pr.f_exc_type == NULL) {
-		/* Non-nested except: block */
-		/* Save previous exception of this thread */
-		po->pr.f_exc_type      = array->items[0];
-		po->pr.f_exc_value     = array->items[1];
-		po->pr.f_exc_traceback = array->items[2];
-	}
-	else {
-		/* Nested except: block */
-		vinfo_decref(array->items[0], po);
-		vinfo_decref(array->items[1], po);
-		vinfo_decref(array->items[2], po);
-	}
-#endif
-        
 	clear_pseudo_exception(po);
 	PycException_Raise(po, array->items[0], array->items[1]);
 	array_release(array);
@@ -1669,6 +1704,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
   /* save and restore the current Python exception throughout compilation */
   PyObject *old_py_exc, *old_py_val, *old_py_tb;
   PyErr_Fetch(&old_py_exc, &old_py_val, &old_py_tb);
+
+  if ((po->pr.mp_flags & MP_FLAGS_HAS_EXCEPT) != 0 &&
+      (LOC_CONTINUATION->array == NullArray)) {
+    /* for functions that have "try: except:" blocks, we reserve some room
+       in the stack to store the previous tstate->exc_xxx if an exception
+       is raised and catched. This space plays the role of Python's
+       PyFrameObject::f_exc_xxx fields. */
+    psyco_emit_header(po, 3);
+  }
   
   while (po->pr.next_instr != -1)
     {
@@ -1686,7 +1730,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
                                                 next_instr+1);
 
       /* trace each code block entry point */
-      TRACE_EXECUTION("ENTER_MAINLOOP");
+      TRACE_EXECUTION_NOERR("ENTER_MAINLOOP");
       
       /* main loop */
       while (1) {
@@ -2569,7 +2613,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 	case SET_LINENO:
 		/* trace execution at each SET_LINENO opcode */
-		TRACE_EXECUTION("SET_LINENO");
+		TRACE_EXECUTION_NOERR("SET_LINENO");
 		goto fine;
 
 	case CALL_FUNCTION:
@@ -2681,7 +2725,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
                 mp++;
 		/* trace execution at each of the <snapshot>s the execution
 		   goes through */
-		TRACE_EXECUTION("SNAPSHOT");
+		TRACE_EXECUTION_NOERR("SNAPSHOT");
 	}
       }  /* end of the main loop, exit if exception */
 

@@ -18,14 +18,12 @@ Compile all global functions:
 Compile all class methods:
   from psyco.classes import *
 
-  If you use classes (but not multiple inheritance), the above line
-  to put at the beginning of each file defining classes instructs
-  Psyco to compile all the methods. Alternatively, you can manually
-  select the classes to optimize by having them inherit from
-  'psyco.classes.psyobj'. (Only works on Python >= 2.2; incompatible
-  with multiple inheritance.)
+  For Python >= 2.2, the above line to put at the beginning of each
+  file defining classes instructs Psyco to compile all their methods.
+  Alternatively, you can manually select the classes to optimize by
+  having them inherit from 'psyco.classes.psyobj'.
 
-Detailled choice of functions to compile:
+Detailled choice of functions and classes to compile:
   psyco.bind(f)
 
   For larger programs, the above solutions are too heavy, as Psyco
@@ -56,7 +54,7 @@ The optional second argument specifies the number of recursive
 compilation levels: all functions called by func are compiled
 up to the given depth of indirection."""
     if isinstance(func, FunctionType):
-        func.func_code = _psyco.proxycode(func)
+        func.func_code = _psyco.proxycode(func, rec)
     elif isinstance(func, MethodType):
         bind(func.im_func, rec)
     elif hasattr(func, '__dict__'):  # for classes
@@ -74,7 +72,7 @@ The optional second argument specifies the number of recursive
 compilation levels: all functions called by func are compiled
 up to the given depth of indirection."""
     if isinstance(func, FunctionType):
-        code = _psyco.proxycode(func)
+        code = _psyco.proxycode(func, rec)
         return new.function(code, func.func_globals, func.func_name)
     if isinstance(func, MethodType):
         p = proxy(func.im_func, rec)

@@ -38,6 +38,7 @@ typedef enum {
 
 #define REG_FUNCTIONS_RETURN       REG_386_EAX
 #define REG_ANY_CALLER_SAVED       REG_386_EAX  /* just any "trash" register */
+#define REG_ANY_CALLEE_SAVED       REG_386_EBX  /* saved by C functions */
 
 typedef enum {
         CC_O         = 0,    /* overflow */
@@ -524,18 +525,6 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   JUMP_TO((code_t*)(target));                                           \
 } while (0)
 
-/* C functions that want to return several values can do so by
-   taking an array of longs as arguments. Use the following
-   macro to reserve space in the stack. In the register 'rg' will
-   be copied the address of the reserved space.
-   Use psyco_alloc_space_array() to allocate the reserved space
-   to an array of vinfo_t's.  */
-#define RESERVE_STACK_SPACE(cnt, rg)     do {   \
-  STACK_CORRECTION(4*(cnt));                    \
-  po->stack_depth += 4*(cnt);                   \
-  LOAD_REG_FROM_REG(rg, REG_386_ESP);           \
-} while (0)
-
 /* load the 'dst' register with the run-time address of 'source'
    which must be in the stack */
 #define LOAD_ADDRESS_FROM_RT(source, dst)    do {                               \
@@ -910,11 +899,11 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
    }                                                    \
 } while (0)
 
-#define EMIT_TRACE(msg)      do {               \
+#define EMIT_TRACE(msg, fn)      do {           \
   TEMP_SAVE_REGS_FN_CALLS;                      \
   PUSH_IMMED((long) code);                      \
   PUSH_IMMED((long) (msg));                     \
-  CALL_C_FUNCTION(psyco_trace_execution, 2);    \
+  CALL_C_FUNCTION(fn, 2);                       \
   STACK_CORRECTION(-8);                         \
   TEMP_RESTORE_REGS_FN_CALLS;                   \
 } while (0)

@@ -669,6 +669,7 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
   code_t* code = po->code;
   CodeBufferObject* target_codebuf = *target;
   int sdepth = get_stack_depth(&target_codebuf->snapshot);
+  int popsdepth;
   char pops[REG_TOTAL+2];
 
   psyco_assert_coherent(po);
@@ -702,6 +703,7 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
   code = data_free_unused(code, &dm, &po->vlocals);
 
   /* update the registers (1): reg-to-reg moves and exchanges */
+  popsdepth = po->stack_depth;
   memset(pops, -1, sizeof(pops));
   for (i=0; i<REG_TOTAL; i++)
     {
@@ -713,17 +715,11 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
             {
               if (rg != i)
                 {
-                  vinfo_t* c = REG_NUMBER(po, i);
-                  if (c != NULL)
-                    {
-                      SET_RUNTIME_REG_TO(c, rg);
-                      REG_NUMBER(po, rg) = c;
-                      XCHG_REGS(i, rg);
-                    }
-                  else
-                    LOAD_REG_FROM_REG(i, rg);
-                  /* an update is omitted because we are about to
-                     release 'po' anyway: 'REG_NUMBER(po, i) = a;' */
+                  NEED_REGISTER(i);
+                  LOAD_REG_FROM_REG(i, rg);
+                  SET_RUNTIME_REG_TO(a, i);
+                  REG_NUMBER(po, rg) = NULL;
+                  REG_NUMBER(po, i) = a;
                 }
               dm.copy_regs[i] = NULL;
             }
@@ -744,20 +740,21 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
         }
     }
   /* update the registers (2): stack-to-register POPs */
-  for (i=0; pops[i]>=0 || pops[i+1]>=0; i++)
-    {
-      char reg = pops[i];
-      if (reg<0)
-        {  /* If there is only one 'garbage' stack entry, POP it as well.
+  if (popsdepth == po->stack_depth)
+    for (i=0; pops[i]>=0 || pops[i+1]>=0; i++)
+      {
+        char reg = pops[i];
+        if (reg<0)
+          {/* If there is only one 'garbage' stack entry, POP it as well.
               If there are more, give up and use regular MOVs to load the rest */
-          po->stack_depth -= 4;
-          reg = pops[++i];
-          POP_REG(reg);
-        }
-      POP_REG(reg);
-      dm.copy_regs[(int) reg] = NULL;
-      po->stack_depth -= 4;
-    }
+            po->stack_depth -= 4;
+            reg = pops[++i];
+            POP_REG(reg);
+          }
+        POP_REG(reg);
+        dm.copy_regs[(int) reg] = NULL;
+        po->stack_depth -= 4;
+      }
   if (code > dm.code_limit)  /* start a new buffer if we wrote past the end */
     code = data_new_buffer(code, &dm);
   

@@ -6,32 +6,34 @@ NO_SYS_GETFRAME = """using sys._getframe() fails with Psyco"""
 #NO_THREAD = """XXX not reliable, check if Psyco is generally
 #        unreliable with threads or if there is another problem"""
 
-NO_PICKLE = """pickles function objects that Psyco rebinds"""
+#NO_PICKLE = """pickles function objects that Psyco rebinds"""
 
-NO_SYS_EXC = """XXX Psyco does not set sys.exc_xxx upon exception"""
+#NO_SYS_EXC = """XXX Psyco does not set sys.exc_xxx upon exception"""
 
 
 SKIP = {'test_gc': NO_SYS_GETFRAME,
 #        'test_thread': NO_THREAD,
 #        'test_asynchat': NO_THREAD,
-        'test_extcall': 'prints to stdout a function object that Psyco rebinds',
-        'test_descr': NO_PICKLE,
-        'test_pickle': NO_PICKLE,
-        'test_cpickle': NO_PICKLE,
-        'test_re': NO_PICKLE,
-        'test_sre': NO_SYS_EXC,
-        'test_string': NO_SYS_EXC,
-        'test_unicode': NO_SYS_EXC,
-        'test_inspect': 'gets confused with Psyco rebinding functions',
+#        'test_extcall': 'prints to stdout a function object that Psyco rebinds',
+        'test_descr': 'seems that it mutates user-defined types and Psyco does not like it at all',
+#        'test_pickle': NO_PICKLE,
+#        'test_cpickle': NO_PICKLE,
+#        'test_re': NO_PICKLE,
+#        'test_sre': NO_SYS_EXC,
+#        'test_string': NO_SYS_EXC,
+#        'test_unicode': NO_SYS_EXC,
+#        'test_inspect': 'gets confused with Psyco rebinding functions',
         'test_profilehooks': NO_SYS_GETFRAME,
         'test_profile': 'profiling does not see all functions run by Psyco',
-#        'test_popen2': 'gets confused by Psyco debugging output to stderr',
         'test_repr': 'self-nested tuples and lists not supported',
         'test_builtin': 'vars() and locals() not supported'
         }
-if sys.version_info[:2] < (2,2):
-    SKIP['test_operator'] = NO_SYS_EXC
-    SKIP['test_strop'] = NO_SYS_EXC
+#if sys.version_info[:2] < (2,2):
+#    SKIP['test_operator'] = NO_SYS_EXC
+#    SKIP['test_strop'] = NO_SYS_EXC
+
+if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
+    SKIP['test_popen2'] = 'gets confused by Psyco debugging output to stderr'
 
 GROUP_TESTS = 4    # number of tests to run per Python process
 
