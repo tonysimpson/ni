@@ -30,6 +30,28 @@ EXTERNFN void psyco_pycompiler_init(void);
 
 
 /*****************************************************************/
+ /***   Common constants                                        ***/
+
+/* the following known values have the SkFlagFixed set */
+#define DEF_SK_AND_VI(name)                             \
+EXTERNVAR source_known_t psyco_sk##name;                \
+inline vinfo_t* psyco_vi_##name(void) {                 \
+  sk_incref(&psyco_sk##name);                           \
+  return vinfo_new(CompileTime_NewSk(&psyco_sk##name)); \
+}
+
+DEF_SK_AND_VI(None)    /* known value 'Py_None' */
+DEF_SK_AND_VI(Zero)    /* known value 0 */
+DEF_SK_AND_VI(One)     /* known value 1 */
+DEF_SK_AND_VI(NotImplemented)   /* 'Py_NotImplemented' */
+
+     /* the macro defines psyco_vi_None(), psyco_vi_Zero(),
+        psyco_vi_One() and psyco_vi_NotImplemented(). */
+
+#undef DEF_SK_AND_VI
+
+
+/*****************************************************************/
  /***   Compile-time Pseudo exceptions                          ***/
 
 
@@ -79,7 +101,7 @@ EXTERNFN void PycException_SetObject(PsycoObject* po, PyObject* e, PyObject* v);
 EXTERNFN void PycException_SetVInfo(PsycoObject* po, PyObject* e, vinfo_t* v);
 
 /* checking for the Python class of an exception */
-EXTERNFN condition_code_t PycException_Matches(PsycoObject* po, PyObject* e);
+EXTERNFN vinfo_t* PycException_Matches(PsycoObject* po, PyObject* e);
 
 inline bool PycException_Is(PsycoObject* po, source_virtual_t* sv) {
 	return po->pr.exc->source == VirtualTime_New(sv);
@@ -197,11 +219,12 @@ inline bool psyco_knowntobe(vinfo_t* vi, long value) {
  /***   Exception utilities                                     ***/
 
 /* Psyco equivalent of PyErr_Occurred() */
-inline condition_code_t PsycoErr_Occurred(PsycoObject* po) {
-	if (PycException_Occurred(po) && PycException_IsPython(po))
-		return CC_ALWAYS_TRUE;
+inline vinfo_t* PsycoErr_Occurred(PsycoObject* po) {
+	if (PycException_Occurred(po) && PycException_IsPython(po)) {
+		return psyco_vi_One();
+	}
 	else
-		return psyco_flag_call(po, PyErr_Occurred, CfReturnFlag, "");
+		return psyco_generic_call(po, PyErr_Occurred, CfReturnNormal, "");
 }
 
 

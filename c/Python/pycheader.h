@@ -102,12 +102,5 @@ typedef struct {
 /* for psyco_generic_call() only */
 EXTERNFN vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi);
 
-
-/* the following known values have the SkFlagFixed set */
-EXTERNVAR vinfo_t* psyco_viNone;    /* known value 'Py_None' */
-EXTERNVAR vinfo_t* psyco_viZero;    /* known value 0 */
-EXTERNVAR vinfo_t* psyco_viOne;     /* known value 1 */
-EXTERNVAR vinfo_t* psyco_viNotImplemented;   /* 'Py_NotImplemented' */
-
-
+     
 #endif /* _PYCHEADER_H */

@@ -272,13 +272,7 @@ static vinfo_t* nonnull_refcount(vinfo_array_t* source)
   while (i--)
     if (source->items[i] != NULL)
       {
-        if (source->items[i]->refcount != 0x10000 &&
-            /* list here the 'global' vinfo_t's whose reference counters
-               might be larger than the # of references hold by this po alone */
-            source->items[i] != psyco_viNone &&
-            source->items[i] != psyco_viZero &&
-            source->items[i] != psyco_viOne  &&
-            1)
+        if (source->items[i]->refcount != 0x10000)
           {
             fprintf(stderr, "nonnull_refcount: item %d\n", i);
             return source->items[i];
@@ -392,6 +386,7 @@ PsycoObject* psyco_duplicate(PsycoObject* po)
   pyc_data_duplicate(&result->pr, &po->pr);
 
   assert_cleared_tmp_marks(&result->vlocals);
+  psyco_assert_coherent(result);
   return result;
 }
 
