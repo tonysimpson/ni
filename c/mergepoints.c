@@ -140,6 +140,8 @@ static const unsigned char other_opcodes[] = {
   BUILD_MAP,
   LOAD_ATTR,
   /* COMPARE_OP see below */
+  IMPORT_NAME,
+  IMPORT_FROM,
 #ifdef GET_ITER
   GET_ITER,
 #endif

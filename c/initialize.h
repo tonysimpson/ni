@@ -6,8 +6,35 @@
     DO NOT MODIFY. Changes will be overwritten ! */
 
 
- /* Do not use this file directly. Only included from psyco.c. */
+ /* Including this file results in all headers Objects/xxx.h
+    being included, so that it has roughly the same result
+    for Psyco as a "#include <Python.h>" has for Python:
+    including all headers extension modules generally need.
 
+    This file is moreover used internally by psyco.c. */
+
+#ifndef PSYCO_INITIALIZATION
+
+# include "Objects/pobject.h"
+# include "Objects/pabstract.h"
+# include "Objects/pclassobject.h"
+# include "Objects/pdescrobject.h"
+# include "Objects/pdictobject.h"
+# include "Objects/pfloatobject.h"
+# include "Objects/pfuncobject.h"
+# include "Objects/pintobject.h"
+# include "Objects/piterobject.h"
+# include "Objects/plistobject.h"
+# include "Objects/plongobject.h"
+# include "Objects/pmethodobject.h"
+# include "Objects/pstringobject.h"
+# include "Objects/pstructmember.h"
+# include "Objects/ptupleobject.h"
+
+#else /* if PSYCO_INITIALIZATION */
+# undef PSYCO_INITIALIZATION
+
+  /* internal part for psyco.c */
 #if ALL_STATIC
 # include "processor.c"
 # include "dispatcher.c"
@@ -79,3 +106,5 @@ inline void initialize_all_files(void) {
   psyco_initarray();	/* Modules/parray.c */
   psyco_initmath();	/* Modules/pmath.c */
 }
+
+#endif /* PSYCO_INITIALIZATION */

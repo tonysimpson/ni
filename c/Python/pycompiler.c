@@ -299,16 +299,6 @@ void pyc_data_build(PsycoObject* po, PyObject* merge_points)
 	po->pr.merge_points = merge_points;
 }
 
-DEFINEFN
-void pyc_data_release(pyc_data_t* pyc)
-{
-	vinfo_xdecref(pyc->val, NULL);
-	vinfo_xdecref(pyc->exc, NULL);
-/* 	vinfo_xdecref(pyc->f_exc_type, NULL); */
-/* 	vinfo_xdecref(pyc->f_exc_value, NULL); */
-/* 	vinfo_xdecref(pyc->f_exc_traceback, NULL); */
-}
-
 static void block_setup(PsycoObject* po, int type, int handler, int level)
 {
   PyTryBlock *b;
@@ -574,7 +564,11 @@ vinfo_t* PycException_Matches(PsycoObject* po, PyObject* e)
 inline void clear_pseudo_exception(PsycoObject* po)
 {
 	extra_assert(PycException_Occurred(po));
-	if (po->pr.val != NULL) {
+	if (po->pr.tb != NULL) {
+		vinfo_decref(po->pr.tb, po);
+		po->pr.tb = NULL;
+	}
+        if (po->pr.val != NULL) {
 		vinfo_decref(po->pr.val, po);
 		po->pr.val = NULL;
 	}
@@ -599,29 +593,31 @@ void psyco_virtualize_exception(PsycoObject* po)
 	   and turn into a pseudo-exception (typically to be re-raised
 	   at run-time). */
 	PyObject *exc, *val, *tb;
+	vinfo_t *vexc, *vval, *vtb;
 	PyErr_Fetch(&exc, &val, &tb);
 	extra_assert(exc != NULL);
 
-	PycException_Raise(po,
-			  vinfo_new(CompileTime_NewSk(sk_new((long) exc,
-                                                             SkFlagPyObj))),
-			  vinfo_new(CompileTime_NewSk(sk_new((long) val,
-                                                             SkFlagPyObj))));
-	Py_XDECREF(tb);  /* XXX implement tracebacks */
+	vexc = vinfo_new(CompileTime_NewSk(sk_new((long) exc, SkFlagPyObj)));
+	vval = vinfo_new(CompileTime_NewSk(sk_new((long) val, SkFlagPyObj)));
+	vtb  = tb == NULL ? NULL :
+	       vinfo_new(CompileTime_NewSk(sk_new((long) tb,  SkFlagPyObj)));
+	PycException_Restore(po, vexc, vval, vtb);
 }
 
 static void cimpl_pyerr_fetch(PyObject* target[])
 {
-	PyObject* tb;
         extra_assert(PyErr_Occurred());
-	PyErr_Fetch(target+0, target+1, &tb);
-	Py_XDECREF(tb);  /* XXX implement tracebacks */
+	PyErr_Fetch(target+0, target+1, target+2);
 	if (target[0] == NULL) {
 		target[0] = Py_None;
 		Py_INCREF(Py_None);
 	}
 	if (target[1] == NULL) {
 		target[1] = Py_None;
+		Py_INCREF(Py_None);
+	}
+	if (target[2] == NULL) {
+		target[2] = Py_None;
 		Py_INCREF(Py_None);
 	}
 }
@@ -653,19 +649,20 @@ void cimpl_finalize_frame_locals(PyObject* f_exc_type,
 	PySys_SetObject("exc_traceback", f_exc_traceback);
 }
 
-inline void cimpl_set_exc_info(PyObject* target[], PyObject* tb,
+inline void cimpl_set_exc_info(PyObject* target[],
 			       PyObject** f_exc_type,
 			       PyObject** f_exc_value,
 			       PyObject** f_exc_traceback)
 {
 	/* Equivalent of PyErr_NormalizeException() + set_exc_info() */
 	PyThreadState *tstate = PyThreadState_GET();
-        PyObject *type, *value;
+        PyObject *type, *value, *tb;
 	PyObject *tmp_type, *tmp_value, *tmp_tb;
 
-        PyErr_NormalizeException(target+0, target+1, &tb);
+        PyErr_NormalizeException(target+0, target+1, target+2);
         type = target[0];
         value = target[1];
+	tb = target[2];
 
 	if (*f_exc_type == NULL) {
 		/* This frame didn't catch an exception before */
@@ -698,8 +695,6 @@ inline void cimpl_set_exc_info(PyObject* target[], PyObject* tb,
 	PySys_SetObject("exc_type", type);
 	PySys_SetObject("exc_value", value);
 	PySys_SetObject("exc_traceback", tb);
-	
-	Py_XDECREF(tb);  /* XXX implement tracebacks */
 }
 
 static void cimpl_pyerr_fetch_and_normalize(PyObject* target[],
@@ -707,22 +702,22 @@ static void cimpl_pyerr_fetch_and_normalize(PyObject* target[],
 					    PyObject** f_exc_value,
 					    PyObject** f_exc_traceback)
 {
-	PyObject* tb;
         extra_assert(PyErr_Occurred());
-	PyErr_Fetch(target+0, target+1, &tb);
-        cimpl_set_exc_info(target, tb,
+	PyErr_Fetch(target+0, target+1, target+2);
+        cimpl_set_exc_info(target,
 			   f_exc_type, f_exc_value, f_exc_traceback);
 }
 
-static void cimpl_pyerr_normalize(PyObject* exc, PyObject* val,
+static void cimpl_pyerr_normalize(PyObject* exc, PyObject* val, PyObject* tb,
 				  PyObject* target[],
 				  PyObject** f_exc_type,
 				  PyObject** f_exc_value,
 				  PyObject** f_exc_traceback)
 {
 	target[0] = exc;  Py_INCREF(exc);
-	target[1] = val;  Py_INCREF(val);
-        cimpl_set_exc_info(target, NULL,
+	target[1] = val;  Py_XINCREF(val);
+	target[2] = tb;   Py_XINCREF(tb);
+        cimpl_set_exc_info(target,
 			   f_exc_type, f_exc_value, f_exc_traceback);
 }
 
@@ -736,11 +731,13 @@ void PycException_Fetch(PsycoObject* po)
 /* 		psyco_generic_call(po, PyErr_Fetch, CfNoReturnValue, */
 /* 				   "rrr", exc, val, tb); */
 /* 		vinfo_decref(tb, po); */
-		vinfo_array_t* array = array_new(2);
+		vinfo_array_t* array = array_new(3);
 		psyco_generic_call(po, cimpl_pyerr_fetch,
 				   CfNoReturnValue, "A", array);
 		clear_pseudo_exception(po);
-		PycException_Raise(po, array->items[0], array->items[1]);
+		po->pr.exc = array->items[0];
+		po->pr.val = array->items[1];  /* po->pr.val!=NULL after this */
+		po->pr.tb  = array->items[2];  /* po->pr.tb!=NULL after this */
 		array_release(array);
 	}
 }
@@ -748,14 +745,14 @@ void PycException_Fetch(PsycoObject* po)
 inline bool PycException_FetchNormalize(PsycoObject* po)
 {
 	vinfo_t* result;
-	vinfo_array_t* array = array_new(2);
+	vinfo_array_t* array = array_new(3);
 	vinfo_array_t* f_exc = LOC_CONTINUATION->array;
 
         /* At runtime, we load the following data into the array:
 
            array[0] -- exc_type       new exception, normalized
            array[1] -- exc_value      new exception, normalized
-           no traceback yet
+           array[2] -- exc_traceback  new exception, normalized
         */
 	extra_assert(f_exc->count >= 3);
 	if (PycException_Is(po, &ERtPython)) {
@@ -767,10 +764,20 @@ inline bool PycException_FetchNormalize(PsycoObject* po)
 					    f_exc->items[2]);
 	}
 	else {
+		char args[8];
+		args[0] = 'v';
+		args[1] = po->pr.val == NULL ? 'l' : 'v';
+		args[2] = po->pr.tb  == NULL ? 'l' : 'v';
+		args[3] = 'A';
+		args[4] = 'r';
+		args[5] = 'r';
+		args[6] = 'r';
+		args[7] = 0;
 		/* normalize the already-given exception */
 		result = psyco_generic_call(po, cimpl_pyerr_normalize,
-					    CfNoReturnValue, "vvArrr",
-					    po->pr.exc, po->pr.val, array,
+					    CfNoReturnValue, args,
+					    po->pr.exc, po->pr.val, po->pr.tb,
+					    array,
 					    f_exc->items[0],
 					    f_exc->items[1],
 					    f_exc->items[2]);
@@ -780,11 +787,94 @@ inline bool PycException_FetchNormalize(PsycoObject* po)
 		return false;
 	}
 	clear_pseudo_exception(po);
-	PycException_Raise(po, array->items[0], array->items[1]);
+	po->pr.exc = array->items[0];
+	po->pr.val = array->items[1];  /* po->pr.val!=NULL after this */
+	po->pr.tb  = array->items[2];  /* po->pr.tb!=NULL after this */
 	array_release(array);
 	return true;
 }
 
+static PyFrameObject* cimpl_new_frame(PyThreadState* tstate, PyCodeObject* code,
+				      PyObject* globals, int lasti, int lineno)
+{
+	/* Make a minimalistic frame object, working around the specific
+	   expectations of PyFrame_New(), which is the only reasonable way
+	   to create frame objects (because of free lists etc) */
+	PyFrameObject* result;
+	PyFrameObject* back = tstate->frame;
+	tstate->frame = NULL;  /* frame objects are not created in stack order
+				  with Psyco, so it's probably better not to
+				  create plain wrong chained lists */
+	result = PyFrame_New(tstate, code, globals, NULL);
+	tstate->frame = back;
+	if (result != NULL) {
+		result->f_lasti = lasti;
+		result->f_lineno = lineno;
+	}
+	return result;
+}
+
+static void cimpl_rt_traceback(PyCodeObject* code, PyObject* globals,
+			       int lasti, int lineno)
+{
+	PyThreadState* tstate = PyThreadState_GET();
+	PyFrameObject* f = cimpl_new_frame(tstate, code, globals, lasti, lineno);
+	/* an out-of-memory error just replaces the current exception */
+	if (f != NULL) {
+		PyTraceBack_Here(f);
+		Py_DECREF(f);
+	}
+}
+
+static PyObject* cimpl_vt_traceback(PyCodeObject* code, PyObject* globals,
+				    int lasti, int lineno)
+{
+	/* This is a hack around the limited interface to tracebacks.
+	   PyTraceBack_Here() seems to be the only clean way to create new
+	   traceback objects. */
+	PyObject* oldtb;
+	PyObject* newtb;
+	PyThreadState* tstate = PyThreadState_GET();
+	PyFrameObject* f = cimpl_new_frame(tstate, code, globals, lasti, lineno);
+	if (f == NULL) {
+		/* out-of-memory error */
+		Py_INCREF(Py_None);
+		return Py_None;
+	}
+	oldtb = tstate->curexc_traceback;  /* might be NULL */
+	Py_XINCREF(oldtb);
+	if (PyTraceBack_Here(f)) {
+		/* out-of-memory error */
+		Py_XDECREF(oldtb);
+		Py_DECREF(f);
+		Py_INCREF(Py_None);
+		return Py_None;
+	}
+	/* the new traceback is now in curexc_traceback */
+	newtb = tstate->curexc_traceback;  /* extracts the reference */
+	tstate->curexc_traceback = oldtb;  /* consumes the reference */
+	Py_DECREF(f);
+	return newtb;
+}
+
+inline void PsycoTraceBack_Here(PsycoObject* po, int lasti)
+{
+	if (PycException_Is(po, &ERtPython)) {
+		/* Python exception is actually set at run-time */
+		psyco_generic_call(po, cimpl_rt_traceback,
+				   CfNoReturnValue, "lvl",
+				   (long) po->pr.co, LOC_GLOBALS, lasti);
+	}
+	else {
+		/* We only have a virtual-time exception (not set in Python),
+		   so we build po->pr.tb without actually setting it either */
+		extra_assert(po->pr.tb == NULL);
+		po->pr.tb = psyco_generic_call(po, cimpl_vt_traceback,
+					       CfReturnRef, "lvl",
+					       (long) po->pr.co, LOC_GLOBALS,
+					       lasti);
+	}
+}
 
 
  /***************************************************************/
@@ -870,6 +960,17 @@ void psyco_pycompiler_init(void)
  /***   LOAD_GLOBAL tricks                                    ***/
 
 
+static void mark_varying(PsycoObject* po, PyObject* key)
+{
+	if (po->pr.changing_globals == NULL) {
+		po->pr.changing_globals = PyDict_New();
+		if (po->pr.changing_globals == NULL)
+			OUT_OF_MEMORY();
+	}
+	if (PyDict_SetItem(po->pr.changing_globals, key, Py_True))
+		OUT_OF_MEMORY();
+}
+
 /* 'compilation pause' stuff, similar to psyco_coding_pause() */
 typedef struct {
 	CodeBufferObject* self;
@@ -884,12 +985,8 @@ static code_t* do_changed_global(changed_global_t* cg)
 	PsycoObject* po = cg->po;
 	PyObject* key = cg->varname;
 	code_t* code = cg->originalmacrocode;
-	vinfo_t* v;
-	vinfo_t** stack_a = po->vlocals.items + po->pr.stack_base;
-        mergepoint_t* mp;
 	KNOWN_VAR(PyDictObject*, globals, LOC_GLOBALS);
 	PyDictEntry* ep;
-	void* dict_subscript;
 	code_t* target;
 
 	/* first check that the value really changed; it could merely
@@ -906,37 +1003,22 @@ static code_t* do_changed_global(changed_global_t* cg)
 		return code;  /* execution continues after the macro code */
 	}
 
-	/* un-promote the global variable to run-time and write code that
-	   calls dict_subscript(). Warning: we assume this will not overflow
-	   the (relatively large) code previously written by the macro
-	   DICT_ITEM_IFCHANGED at the same place.
+	/* Mark the global variable as varying and compile again */
+	mark_varying(po, key);
 
-	   We call dict_subscript() instead of PyDict_GetItem() for the extra
-	   reference; indeed, we cannot be sure how long we will need the
-	   object so we must own a reference. dict_subscript() could be
-	   inlined too (but be careful about the overflow problem above!)
-
-           XXX what occurs if the global has been deleted ?
-	*/
-	SAVE_REGS_FN_CALLS;
-	CALL_SET_ARG_IMMED((long) key,      1, 2);
-	CALL_SET_ARG_IMMED((long) globals,  0, 2);
-
-	v = new_rtvinfo(po, REG_FUNCTIONS_RETURN, true);
-	PUSH(v);
 	/* 'v' is now run-time, recompile */
-        mp = psyco_exact_merge_point(po->pr.merge_points, po->pr.next_instr);
-	target = psyco_compile_code(po, mp)->codeptr;
+	target = psyco_compile_code(po, NULL)->codeptr;
 	/* XXX don't know what to do with the reference returned by
 	   XXX psyco_compile_code() */
 
-	dict_subscript = PyDict_Type.tp_as_mapping->mp_subscript;
-	CALL_C_FUNCTION_AND_JUMP(dict_subscript,  2,  target);
-  
+	extra_assert(target != code);
+	JUMP_TO(target);  /* code a jump from the original code */
+	
+	Py_DECREF(cg->previousvalue);
   /* cannot Py_DECREF(cg->self) because the current function is returning into
      that code now, but any time later is fine: use the trash of codemanager.h */
 	psyco_trash_object((PyObject*) cg->self);
-	return cg->originalmacrocode;
+	return target;
 }
 
 PyObject* psy_get_builtins(PyObject* globals)
@@ -1033,17 +1115,6 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 			OUT_OF_MEMORY();
 		po = PsycoObject_Duplicate(po);
 
-                /* The global object has not been PUSHed on the Python stack
-                   yet. However, if we enter do_changed_global() later and
-                   figure out the value changed, do_changed_global() will
-                   emit code that loads the run-time value of the global
-                   and emulate the LOAD_GLOBAL opcode by PUSHing a run-time
-                   vinfo_t. This means the recompilation triggered by
-                   do_changed_global() must restart *after* the LOAD_GLOBAL
-                   instruction and not *at* it, so we store the next
-                   instruction position in the new 'po': */
-                SAVE_NEXT_INSTR(next_instr);
-
 		code = onchangebuf->codeptr;
 		TEMP_SAVE_REGS_FN_CALLS;
 		po->code = code;
@@ -1068,9 +1139,6 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 				    onchangebuf->codeptr, mprg);
 		po->code = code;
                 dump_code_buffers();
-
-		Py_INCREF(result);
-		return result;
 	}
 	else if (strcmp(PyString_AS_STRING(key), "__in_psyco__") == 0) {
 		/* special-case __in_psyco__ to always return 1, although
@@ -1078,7 +1146,6 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		   can be used by a function to know that it is compiled
 		   by Psyco. */
 		result = Py_True;
-		Py_INCREF(result);
 	}
 	else {
 		/* no such global variable, get the builtins */
@@ -1087,14 +1154,14 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		}
 		result = PyDict_GetItem(po->pr.f_builtins, key);
 		
-		/* found at all? */
-		if (result != NULL)
-			Py_INCREF(result);
-		else
-			PycException_SetFormat(po, PyExc_NameError,
-					       GLOBAL_NAME_ERROR_MSG,
-					       PyString_AS_STRING(key));
+		if (result == NULL) {
+			/* name not found. Maybe it will exist at run-time
+			   in the globals. Fall back to the safe
+			   cimpl_load_global(). */
+			return NULL;
+		}
 	}
+	Py_INCREF(result);
 	return result;
 }
 
@@ -1606,7 +1673,8 @@ static void cimpl_do_raise(PyObject *type, PyObject *value, PyObject *tb)
 
 /* copied from ceval.c where it is private */
 static PyObject*
-build_class(PyObject *methods, PyObject *bases, PyObject *name)
+cimpl_build_class(PyObject* g,  /* globals */
+		  PyObject *methods, PyObject *bases, PyObject *name)
 {
 	PyObject *metaclass = NULL, *result, *base;
 
@@ -1624,8 +1692,7 @@ build_class(PyObject *methods, PyObject *bases, PyObject *name)
 		}
 	}
 	else {
-		PyObject *g = PyEval_GetGlobals();
-		if (g != NULL && PyDict_Check(g))
+		/*if (g != NULL && PyDict_Check(g))*/
 			metaclass = PyDict_GetItemString(g, "__metaclass__");
 		if (metaclass == NULL)
 			metaclass = (PyObject *) &PyClass_Type;
@@ -1634,6 +1701,29 @@ build_class(PyObject *methods, PyObject *bases, PyObject *name)
 	result = PyObject_CallFunction(metaclass, "OOO", name, bases, methods);
 	Py_DECREF(metaclass);
 	return result;
+}
+
+static PyObject* cimpl_import_name(PyObject* globals, PyObject* name,
+				   PyObject* fromlist)
+{
+	PyObject* w;
+	PyObject* x = PyDict_GetItemString(psy_get_builtins(globals),
+					   "__import__");
+	if (x == NULL) {
+		PyErr_SetString(PyExc_ImportError,
+				"__import__ not found");
+		return NULL;
+	}
+	w = Py_BuildValue("(OOOO)",
+			  name,
+			  globals,
+			  Py_None,
+			  fromlist);
+	if (w == NULL)
+		return NULL;
+	x = PyEval_CallObject(x, w);
+	Py_DECREF(w);
+	return x;
 }
 
 
@@ -1658,12 +1748,11 @@ static code_t* exit_function(PsycoObject* po)
 	if (PycException_Is(po, &EReturn)) {
 		/* load the return value */
 		vinfo_t* retval = po->pr.val;
+		extra_assert(retval != NULL);
 		retsource = vinfo_compute(retval, po);
 		if (retsource == SOURCE_ERROR) return NULL;
-		if (!eat_reference(retval)) {
-			/* return a new reference */
-			psyco_incref_v(po, retval);
-		}
+		/* return a new reference */
+		consume_reference(po, retval);
 		if (retval->array->count > 0) {
 			array_delete(retval->array, po);
 			retval->array = NullArray;
@@ -1678,12 +1767,29 @@ static code_t* exit_function(PsycoObject* po)
 		if (!PycException_Is(po, &ERtPython)) {
 			/* In the other cases (virtual exception),
 			   compute and raise the exception now. */
-			if (psyco_generic_call(po, PyErr_SetObject,
-					       CfNoReturnValue, "vv",
-					       po->pr.exc, po->pr.val) == NULL)
+			char args[4];
+			args[3] = 0;
+			if (po->pr.tb == NULL)
+				args[2] = 'l';
+			else {
+				args[2] = 'v';
+				consume_reference(po, po->pr.tb);
+			}
+			if (po->pr.val == NULL)
+				args[1] = 'l';
+			else {
+				args[1] = 'v';
+				consume_reference(po, po->pr.val);
+			}
+			args[0] = 'v';
+			consume_reference(po, po->pr.exc);
+			if (psyco_generic_call(po, PyErr_Restore,
+					       CfNoReturnValue, args,
+					       po->pr.exc, po->pr.val,
+					       po->pr.tb) == NULL)
 				return NULL;
-			clear_pseudo_exception(po);
 		}
+		clear_pseudo_exception(po);
 		retsource = CompileTime_NewSk(&psyco_skZero); /*to return NULL */
 	}
 	
@@ -1699,6 +1805,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 {
   /* 'stack_a' is the Python stack base pointer */
   vinfo_t** stack_a = po->vlocals.items + po->pr.stack_base;
+  int opcode=0;	/* Current opcode */
+  int oparg=0;	/* Current opcode argument, if any */
   code_t* code1;
   
   /* save and restore the current Python exception throughout compilation */
@@ -1719,8 +1827,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
       /* 'co' is the code object we are interpreting/compiling */
       PyCodeObject* co = po->pr.co;
       unsigned char* bytecode = (unsigned char*) PyString_AS_STRING(co->co_code);
-      int opcode=0;	/* Current opcode */
-      int oparg=0;	/* Current opcode argument, if any */
       vinfo_t *u, *v,	/* temporary objects    */
 	      *w, *x;	/* popped off the stack */
       condition_code_t cc;
@@ -2121,6 +2227,10 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	}
 
 	case END_FINALLY:
+		/* First make extra sure no exception is pending */
+		if (PycException_Occurred(po))
+			Py_FatalError("psyco: undetected exception "
+				      "in END_FINALLY");
 		POP(v);
 		if (is_compiletime(v->source) &&
 		    CompileTime_Get(v->source)->value == (long) Py_None) {
@@ -2144,27 +2254,28 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			PsycoTuple_GET_ITEM(v, 0) = NULL;
 			po->pr.val = PsycoTuple_GET_ITEM(v, 1);
 			PsycoTuple_GET_ITEM(v, 1) = NULL;
-			/* XXX no traceback support */
-			/* tb will be decref'ed by vinfo_decref(v) below */
+			po->pr.tb = PsycoTuple_GET_ITEM(v, 2);
+			PsycoTuple_GET_ITEM(v, 2) = NULL;
 			vinfo_decref(v, po);
 			break;
 		}
 		else {
 			/* end of an EXCEPT block, re-raise the exception
-			   stored in the stack.
-			   XXX when implementing tracebacks find a trick to
-			       mark this as a re-raising */
+			   stored in the stack. As in Python, no extra
+			   traceback is recorded, but instead of the
+			   WHY_RERAISE trick we simply record no traceback
+			   if the opcode is END_FINALLY. */
 			po->pr.exc = v;
 			POP(po->pr.val);
-			POP(v);
-			vinfo_decref(v, po);   /* XXX traceback */
+			POP(po->pr.tb);
 			break;
 		}
 
 	case BUILD_CLASS:
-		x = psyco_generic_call(po, build_class,
+		x = psyco_generic_call(po, cimpl_build_class,
 				       CfReturnRef|CfPyErrIfNull,
-				       "vvv", NTOP(1), NTOP(2), NTOP(3));
+				       "vvvv", LOC_GLOBALS,
+						NTOP(1), NTOP(2), NTOP(3));
 		if (x == NULL)
 			break;
 		POP_DECREF();
@@ -2286,7 +2397,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	case STORE_GLOBAL:
 	{
 		PyObject* w = GETNAMEV(oparg);
-
+		mark_varying(po, w);
 		if (!psyco_generic_call(po, PyDict_SetItem,
 					CfNoReturnValue|CfPyErrIfNonNull,
 					"vlv", LOC_GLOBALS, w, TOP()))
@@ -2298,7 +2409,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	case DELETE_GLOBAL:
 	{
 		PyObject* w = GETNAMEV(oparg);
-
+		mark_varying(po, w);
 		if (runtime_NON_NULL_f(po, psyco_generic_call(po, PyDict_DelItem,
 					CfReturnNormal, "vl", LOC_GLOBALS, w))) {
 			PycException_SetFormat(po, PyExc_NameError,
@@ -2321,22 +2432,27 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	{
 		PyObject* namev = GETNAMEV(oparg);
                 PyObject* value;
-		if (is_compiletime(LOC_GLOBALS->source)) {
-			/* Common case */
+		if (is_compiletime(LOC_GLOBALS->source) &&
+		    (po->pr.changing_globals == NULL ||
+		     PyDict_GetItem(po->pr.changing_globals, namev) == NULL)) {
+			/* Common case: fast global loading */
 			value = load_global(po, namev, next_instr);
-			if (value == NULL)
-				break;
-			v = vinfo_new(CompileTime_NewSk(sk_new((long) value,
-							       SkFlagPyObj)));
+			if (value != NULL) {
+				/* success */
+				v = vinfo_new(CompileTime_NewSk(
+					sk_new((long) value, SkFlagPyObj)));
+				PUSH(v);
+				goto fine;
+			}
+			/* else { variable not found at all } */
 		}
-		else {
-			/* Globals dict is unknown at compile-time */
-			v = psyco_generic_call(po, cimpl_load_global,
-					       CfReturnRef|CfPyErrIfNull,
-					       "vl", LOC_GLOBALS, namev);
-			if (v == NULL)
-				break;
-		}
+		/* else { Globals dict is unknown at compile-time,
+		   	  or the global has been marked as varying } */
+		v = psyco_generic_call(po, cimpl_load_global,
+				       CfReturnRef|CfPyErrIfNull,
+				       "vl", LOC_GLOBALS, namev);
+		if (v == NULL)
+			break;
 		PUSH(v);
 		goto fine;
 	}
@@ -2491,9 +2607,44 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 	}
 
-	/*MISSING_OPCODE(IMPORT_NAME);
-	  MISSING_OPCODE(IMPORT_STAR);
-	  MISSING_OPCODE(IMPORT_FROM);*/
+	case IMPORT_NAME:
+	{
+		PyObject* w = GETNAMEV(oparg);
+
+		x = psyco_generic_call(po, cimpl_import_name,
+				       CfReturnRef|CfPyErrIfNull,
+				       "vlv", LOC_GLOBALS, w, TOP());
+		if (x == NULL)
+			break;
+		POP_DECREF();
+		PUSH(x);
+		goto fine;
+	}
+	
+	/*MISSING_OPCODE(IMPORT_STAR);*/
+
+	case IMPORT_FROM:
+	{
+		PyObject* name = GETNAMEV(oparg);
+		w = vinfo_new(CompileTime_New(((long) name)));
+		v = TOP();
+		x = PsycoObject_GetAttr(po, v, w);
+		vinfo_decref(w, po);
+		if (x == NULL) {
+			extra_assert(PycException_Occurred(po));
+			
+			/* catch PyExc_AttributeError */
+			v = PycException_Matches(po, PyExc_AttributeError);
+			if (runtime_NON_NULL_t(po, v) == true) {
+				PycException_SetFormat(po, PyExc_ImportError,
+					"cannot import name %.230s",
+					PyString_AsString(name));
+			}
+			break;
+		}
+		PUSH(x);
+		goto fine;
+	}
 
 	case JUMP_FORWARD:
 		JUMPBY(oparg);
@@ -2759,6 +2910,17 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
       }
       
       /* At this point, we got a real pseudo-exception. */
+
+      if (PycException_IsPython(po) && opcode != END_FINALLY)
+        {
+          /* log traceback info for real Python exceptions,
+             unless re-raised by END_FINALLY */
+          int lasti = po->pr.next_instr - 1;
+          if (HAS_ARG(opcode))
+            lasti -= 2;
+          PsycoTraceBack_Here(po, lasti);
+        }
+      
       /* Unwind the Python stack until we find a handler for
 	 the (pseudo) exception. You will recognize here
 	 ceval.c's stack unwinding code. */
@@ -2801,8 +2963,10 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		PycException_Fetch(po);
 		exc_info->array->items[TUPLE_OB_ITEM + 0] = po->pr.exc;
 		exc_info->array->items[TUPLE_OB_ITEM + 1] = po->pr.val;
+		exc_info->array->items[TUPLE_OB_ITEM + 2] = po->pr.tb;
 		po->pr.exc = NULL;
 		po->pr.val = NULL;
+		po->pr.tb  = NULL;
 		PUSH(exc_info);
 		JUMPTO(b->b_handler);
 		SAVE_NEXT_INSTR(next_instr);
@@ -2823,7 +2987,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			   EXCEPT block. */
 			/* XXX check that this empty loop cannot be endless */
 		}
-		PUSH(psyco_vi_None());
+		extra_assert(po->pr.val != NULL);
+		extra_assert(po->pr.tb != NULL);
+		PUSH(po->pr.tb);     po->pr.tb  = NULL;
 		PUSH(po->pr.val);    po->pr.val = NULL;
 		PUSH(po->pr.exc);    po->pr.exc = NULL;
 		JUMPTO(b->b_handler);

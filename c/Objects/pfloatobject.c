@@ -96,7 +96,7 @@ cimpl_fp_abs(double a, double* result) {
 }
 
 
-static void 
+DEFINEFN void 
 cimpl_fp_from_long(long value, double* result) 
 {
     *result = value; 
@@ -149,8 +149,8 @@ static bool compute_float(PsycoObject* po, vinfo_t* floatobj)
     vinfo_t* second_half;
     
     /* get the field 'ob_fval' from the Python object 'floatobj' */
-    first_half = get_array_item(po, floatobj, FLOAT_OB_FVAL);
-    second_half = get_array_item(po, floatobj, FLOAT_OB_FVAL+1);
+    first_half = vinfo_getitem(floatobj, FLOAT_OB_FVAL);
+    second_half = vinfo_getitem(floatobj, FLOAT_OB_FVAL+1);
     if (first_half == NULL || second_half == NULL)
         return false;
 

@@ -35,3 +35,10 @@ void decref_create_new_lastref(PsycoObject* po, vinfo_t* w)
                 END_CODE
 	}
 }
+
+DEFINEFN
+void consume_reference(PsycoObject* po, vinfo_t* vi)
+{
+	if (!eat_reference(vi))
+		psyco_incref_v(po, vi);
+}

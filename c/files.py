@@ -72,8 +72,24 @@ if __name__ == '__main__':
     print 'Rebuilding initialize.h...'
     f = open('initialize.h', 'w')
     print >> f, header
-    print >> f, ' /* Do not use this file directly. Only included from psyco.c. */'
+    print >> f, ' /* Including this file results in all headers Objects/xxx.h'
+    print >> f, '    being included, so that it has roughly the same result'
+    print >> f, '    for Psyco as a "#include <Python.h>" has for Python:'
+    print >> f, '    including all headers extension modules generally need.'
     print >> f
+    print >> f, '    This file is moreover used internally by psyco.c. */'
+    print >> f
+    print >> f, '#ifndef PSYCO_INITIALIZATION'
+    print >> f
+    for s in SRC:
+        if isinstance(s, Object):
+            assert s.filename.endswith(".c")
+            print >> f, '# include "%s"' % (s.filename[:-2] + ".h")
+    print >> f
+    print >> f, '#else /* if PSYCO_INITIALIZATION */'
+    print >> f, '# undef PSYCO_INITIALIZATION'
+    print >> f
+    print >> f, '  /* internal part for psyco.c */'
     print >> f, '#if ALL_STATIC'
     for s in SRC:
         if s.filename != MAINFILE:
@@ -89,4 +105,6 @@ if __name__ == '__main__':
         if s.initname:
             print >> f, '  %s();\t/* %s */' % (s.initname, s.filename)
     print >> f, '}'
+    print >> f
+    print >> f, '#endif /* PSYCO_INITIALIZATION */'
     f.close()

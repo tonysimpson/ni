@@ -279,6 +279,9 @@ inline bool eat_reference(vinfo_t* vi)
     return false;
 }
 
+/* force a reference to be consumed */
+EXTERNFN void consume_reference(PsycoObject* po, vinfo_t* vi);
+
 /* make sure we have a reference on 'vi' */
 inline void need_reference(PsycoObject* po, vinfo_t* vi)
 {

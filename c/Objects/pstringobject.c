@@ -19,7 +19,7 @@ static bool compute_char(PsycoObject* po, vinfo_t* v)
 	vinfo_t* chrval;
 	vinfo_t* newobj;
 
-	chrval = get_array_item(po, v, CHARACTER_CHAR);
+	chrval = vinfo_getitem(v, CHARACTER_CHAR);
 	if (chrval == NULL)
 		return false;
 

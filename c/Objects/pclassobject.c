@@ -38,13 +38,13 @@ static bool compute_method(PsycoObject* po, vinfo_t* methobj)
 	vinfo_t* im_class;
 	
 	/* get the fields from the Python object 'methobj' */
-	im_func = get_array_item(po, methobj, METHOD_IM_FUNC);
+	im_func = vinfo_getitem(methobj, METHOD_IM_FUNC);
 	if (im_func == NULL)
 		return false;
-	im_self = get_array_item(po, methobj, METHOD_IM_SELF);
+	im_self = vinfo_getitem(methobj, METHOD_IM_SELF);
 	if (im_self == NULL)
 		return false;
-	im_class = get_array_item(po, methobj, METHOD_IM_CLASS);
+	im_class = vinfo_getitem(methobj, METHOD_IM_CLASS);
 	if (im_class == NULL)
 		return false;
 

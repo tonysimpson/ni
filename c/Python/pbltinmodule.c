@@ -64,11 +64,11 @@ static bool compute_range(PsycoObject* po, vinfo_t* rangelst)
 	vinfo_t* vstart;
 	vinfo_t* vlen;
 
-	vstart = get_array_item(po, rangelst, RANGE_START);
+	vstart = vinfo_getitem(rangelst, RANGE_START);
 	if (vstart == NULL)
 		return false;
 
-	vlen = get_array_item(po, rangelst, RANGE_LEN);
+	vlen = vinfo_getitem(rangelst, RANGE_LEN);
 	if (vlen == NULL)
 		return false;
 

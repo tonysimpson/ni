@@ -26,7 +26,8 @@ SKIP = {'test_gc': NO_SYS_GETFRAME,
         'test_profilehooks': NO_SYS_GETFRAME,
         'test_profile': 'profiling does not see all functions run by Psyco',
         'test_repr': 'self-nested tuples and lists not supported',
-        'test_builtin': 'vars() and locals() not supported'
+        'test_builtin': 'vars() and locals() not supported',
+        'test_inspect': 'does not run even in Python (when called the way classicregrtest.py calls it) and leaves buggy temp files around',
         }
 #if sys.version_info[:2] < (2,2):
 #    SKIP['test_operator'] = NO_SYS_EXC

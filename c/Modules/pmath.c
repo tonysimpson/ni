@@ -10,6 +10,8 @@
  *   - modf()
  */
 
+#include "../initialize.h"
+
 
 #ifndef _MSC_VER
 #ifndef __STDC__

@@ -18,15 +18,15 @@ static bool compute_function(PsycoObject* po, vinfo_t* v)
 	vinfo_t* fglobals;
 	vinfo_t* fdefaults;
 
-	fcode = get_array_item(po, v, FUNC_CODE);
+	fcode = vinfo_getitem(v, FUNC_CODE);
 	if (fcode == NULL)
 		return false;
 
-	fglobals = get_array_item(po, v, FUNC_GLOBALS);
+	fglobals = vinfo_getitem(v, FUNC_GLOBALS);
 	if (fglobals == NULL)
 		return false;
 
-	fdefaults = get_array_item(po, v, FUNC_DEFAULTS);
+	fdefaults = vinfo_getitem(v, FUNC_DEFAULTS);
 	if (fdefaults == NULL)
 		return false;
 
@@ -116,18 +116,18 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 		else {
 			/* virtual-time function objects: read the
 			   individual components */
-			fcode = get_array_item(po, func, FUNC_CODE);
+			fcode = vinfo_getitem(func, FUNC_CODE);
 			if (fcode == NULL)
 				return NULL;
 			co = (PyCodeObject*)psyco_pyobj_atcompiletime(po, fcode);
 			if (co == NULL)
 				return NULL;
 			
-			fglobals = get_array_item(po, func, FUNC_GLOBALS);
+			fglobals = vinfo_getitem(func, FUNC_GLOBALS);
 			if (fglobals == NULL)
 				return NULL;
 			
-			fdefaults = get_array_item(po, func, FUNC_DEFAULTS);
+			fdefaults = vinfo_getitem(func, FUNC_DEFAULTS);
 			if (fdefaults == NULL)
 				return NULL;
 

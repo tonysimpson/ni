@@ -59,7 +59,10 @@ typedef struct {
   PyObject* merge_points;   /* see mergepoints.h */
   vinfo_t* exc;         /* current compile-time (pseudo) exception, see below */
   vinfo_t* val;         /* exception value */
+  vinfo_t* tb;          /* traceback object */
   PyObject* f_builtins;
+  PyObject* changing_globals;  /* dict of names of globals that are detected to
+                                  change */
 } pyc_data_t;
 
 /* Note.

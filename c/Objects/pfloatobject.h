@@ -56,4 +56,9 @@ EXTERNFN bool PsycoFloat_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd1, vi
   vinfo_t* b1, vinfo_t* b2, int op);*/
 
 
+/* Some C implementations made visible for Modules/pmath.c */
+EXTERNFN void 
+cimpl_fp_from_long(long value, double* result);
+
+
 #endif /* _PSY_FLOATOBJECT_H */

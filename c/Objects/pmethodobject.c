@@ -9,10 +9,10 @@ static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj)
 	vinfo_t* m_ml;
 	
 	/* get the fields from the Python object 'methobj' */
-	m_self = get_array_item(po, methobj, CFUNC_M_SELF);
+	m_self = vinfo_getitem(methobj, CFUNC_M_SELF);
 	if (m_self == NULL)
 		return false;
-	m_ml = get_array_item(po, methobj, CFUNC_M_ML);
+	m_ml = vinfo_getitem(methobj, CFUNC_M_ML);
 	if (m_ml == NULL)
 		return false;
 

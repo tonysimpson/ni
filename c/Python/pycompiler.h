@@ -111,6 +111,11 @@ inline void PycException_Raise(PsycoObject* po, vinfo_t* exc, vinfo_t* val) {
 	po->pr.exc = exc;
 	po->pr.val = val;
 }
+inline void PycException_Restore(PsycoObject* po, vinfo_t* exc,
+				 vinfo_t* val, vinfo_t* tb) {
+	PycException_Raise(po, exc, val);
+	po->pr.tb = tb;
+}
 
 /* for Python exceptions detected at compile-time */
 EXTERNFN void PycException_SetString(PsycoObject* po,
@@ -341,11 +346,17 @@ EXTERNFN vinfo_t* Psyco_Meta4x(PsycoObject* po, void* c_function, int flags,
 
 /* construction for non-frozen snapshots */
 EXTERNFN void pyc_data_build(PsycoObject* po, PyObject* merge_points);
-EXTERNFN void pyc_data_release(pyc_data_t* pyc);
+inline void pyc_data_release(pyc_data_t* pyc) {
+	vinfo_xdecref(pyc->val, NULL);
+	vinfo_xdecref(pyc->exc, NULL);
+        vinfo_xdecref(pyc->tb,  NULL);
+	Py_XDECREF(pyc->changing_globals);
+}
 inline void pyc_data_duplicate(pyc_data_t* target, pyc_data_t* source) {
 	memcpy(target, source, sizeof(pyc_data_t));
 	target->exc = NULL;
         target->val = NULL;
+	Py_XINCREF(target->changing_globals);
 }
 
 /* construction for frozen snapshots */

@@ -43,7 +43,7 @@ static bool compute_int(PsycoObject* po, vinfo_t* intobj)
 	vinfo_t* x;
 	
 	/* get the field 'ob_ival' from the Python object 'intobj' */
-	x = get_array_item(po, intobj, INT_OB_IVAL);
+	x = vinfo_getitem(intobj, INT_OB_IVAL);
 	if (x == NULL)
 		return false;
 

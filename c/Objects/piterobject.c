@@ -25,7 +25,7 @@ static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
 	result = PsycoSequence_GetItem(po, seq, index);
 	if (result == NULL) {
 		vinfo_t* matches = PycException_Matches(po, PyExc_IndexError);
-		if (runtime_NON_NULL_t(po, matches)) {
+		if (runtime_NON_NULL_t(po, matches) == true) {
 			PycException_SetVInfo(po, PyExc_StopIteration,
 					      psyco_vi_None());
 		}
@@ -59,11 +59,11 @@ static bool compute_seqiter(PsycoObject* po, vinfo_t* v)
 	vinfo_t* index;
 	vinfo_t* newobj;
 
-	index = get_array_item(po, v, SEQITER_IT_INDEX);
+	index = vinfo_getitem(v, SEQITER_IT_INDEX);
 	if (index == NULL)
 		return false;
 
-	seq = get_array_item(po, v, SEQITER_IT_SEQ);
+	seq = vinfo_getitem(v, SEQITER_IT_SEQ);
 	if (seq == NULL)
 		return false;
 
