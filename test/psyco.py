@@ -1,7 +1,6 @@
 import _psyco
 import sys
 
-files = {}
 ticks = 0
 depth = 10
 funcs = {}
