@@ -36,6 +36,12 @@ def jit(tick=5):
 Argument is number of invocations before rebinding."""
     _psyco.selective(tick)
 
+def jit2(tick=5):
+    """Enable just-in-time compilation.
+Argument is number of invocations before rebinding."""
+    print '** Warning: jit2 is not working yet'
+    _psyco.selective2(tick)
+
 # Psyco mode check
 if hasattr(_psyco, 'ALL_CHECKS'):
     print >> sys.stderr, 'psyco: running in debugging mode'
@@ -101,4 +107,3 @@ _erronce = 0
 #              print 'psyco rebinding function:', fn
 
 #  sys.setprofile(f)
-
