@@ -10,22 +10,15 @@
 
 
 /* Post-2.2 versions of Python introduced the following more explicit names.
-   Map them to the old names if they do not exist. */
-#ifndef PyCmp_IS
-# define PyCmp_IS         IS
-#endif
-#ifndef PyCmp_IS_NOT
-# define PyCmp_IS_NOT     IS_NOT
-#endif
-#ifndef PyCmp_IN
-# define PyCmp_IN         IN
-#endif
-#ifndef PyCmp_NOT_IN
-# define PyCmp_NOT_IN     NOT_IN
-#endif
-#ifndef PyCmp_EXC_MATCH
-# define PyCmp_EXC_MATCH  EXC_MATCH
-#endif
+   XXX We should map the new names to the old ones if the new names do not
+   XXX exist but how can we detect if this is needed?
+   XXX Hacked by completely overriding the enum values with #defines. */
+
+#define  PyCmp_IN		6
+#define  PyCmp_NOT_IN		7
+#define  PyCmp_IS		8
+#define  PyCmp_IS_NOT		9
+#define  PyCmp_EXC_MATCH	10
 
 
 #endif /* _PYCINTERNAL_H */
