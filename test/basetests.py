@@ -70,15 +70,18 @@ childin.close()
 
 # run in a child process
 err = os.system('"%s" %s > %s' % (sys.executable, INPUTSCRIPT, BUFFERFILE))
+print >> sys.stderr
 if err:
-    print >> sys.stderr, 'child process returned %d, %d' % (err>>8, err&255)
+    print >> sys.stderr, 'FAIL: child process returned %d, %d' % (err>>8, err&255)
+    sys.exit(1)
 else:
-    if sys.argv[1:2] == ['-q']:
-        data1 = open(EXPECTEDFILE, 'r').read()
-        data2 = open(BUFFERFILE, 'r').read()
-        err = (data1 != data2) << 8
-        if err:
-            print >> sys.stderr, 'there are differences'
+    data1 = open(EXPECTEDFILE, 'r').read()
+    data2 = open(BUFFERFILE, 'r').read()
+    if data1 != data2:
+        print >> sys.stderr, 'FAIL: different output'
+        if sys.argv[1:2] != ['-q']:
+            cmd = 'diff -c %s %s' % (EXPECTEDFILE, BUFFERFILE)
+            os.system(cmd)
+        sys.exit(1)
     else:
-        err = os.system('diff -c %s %s' % (EXPECTEDFILE, BUFFERFILE))
-sys.exit(err>>8)
+        print >> sys.stderr, 'Passed.'
