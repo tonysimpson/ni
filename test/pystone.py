@@ -58,16 +58,25 @@ TRUE = 1
 FALSE = 0
 
 def main():
-    benchtime, stones = pystones()
-    print "Pystone(%s) time for %d passes = %g" % \
+    benchtime, s1 = pystones_psycho()
+    print "Pystone(%s) (psycho) time for %d passes = %g" % \
           (__version__, LOOPS, benchtime)
-    print "This machine benchmarks at %g pystones/second" % stones
+    print "This machine benchmarks at %g pystones/second" % s1
+    print
+    benchtime, s2 = pystones_reg()
+    print "Pystone(%s) (regular) time for %d passes = %g" % \
+              (__version__, LOOPS, benchtime)
+    print "This machine benchmarks at %g pystones/second" % s2
+    print
+    print "Pystone with Psyco is %.2f times faster than without" % (s1/float(s2))
 
-
-def pystones(loops=LOOPS):
+def pystones_psycho(loops=LOOPS):
     import _psyco
     f = _psyco.proxy(Proc0, 99)
     return f(loops)
+
+def pystones_reg(loops=LOOPS):
+    return Proc0(loops)
 
 IntGlob = 0
 BoolGlob = FALSE
