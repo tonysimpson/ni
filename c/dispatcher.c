@@ -1647,6 +1647,11 @@ typedef struct { /* produced at compile time and read by the dispatcher */
 } rt_promotion_t;
 
 
+/* this macro might be redefined below */
+#define QUICK_LOOKUP_PROMOTION_VALUE(fs, value, result)         \
+                result = lookup_old_promotion_values(fs, value)
+
+
 #if PROMOTION_TACTIC == 0
 #define NEED_PYOBJ_KEY
 inline code_t* lookup_old_promotion_values(rt_promotion_t* fs,
@@ -1662,8 +1667,12 @@ inline code_t* lookup_old_promotion_values(rt_promotion_t* fs,
 #endif  /* PROMOTION_TACTIC == 0 */
 
 #if PROMOTION_TACTIC == 1
-inline code_t* lookup_old_promotion_values(rt_promotion_t* fs,
-                                           long value)
+#  if PROMOTION_FAST_COMMON_CASE
+static
+#  else
+inline
+#  endif
+code_t* lookup_old_promotion_values(rt_promotion_t* fs, long value)
 {
   rt_local_buf_t** ppbuf;
   if (fs->local_chained_list == NULL)
@@ -1697,6 +1706,32 @@ inline code_t* lookup_old_promotion_values(rt_promotion_t* fs,
       ppbuf = &buf->next;
     }
 }
+
+#if PROMOTION_FAST_COMMON_CASE
+static int quick_lookup_counter = 0;
+#  undef QUICK_LOOKUP_PROMOTION_VALUE
+#  define QUICK_LOOKUP_PROMOTION_VALUE(fs, value, res)   do {   \
+        rt_local_buf_t* buf = (fs)->local_chained_list;         \
+        if (buf == NULL) {                                      \
+          res = NULL;  /* not found (list is empty) */          \
+        }                                                       \
+        else if ((quick_lookup_counter-=13) >= 0) {             \
+          for (buf=buf->next; buf!=NULL; buf=buf->next) {       \
+            if (buf->key == (value))                            \
+              return (code_t*)(buf+1);                          \
+          }                                                     \
+          res = NULL;  /* not found */                          \
+        }                                                       \
+        else {                                                  \
+          /* approximately once every 23 times, go through */   \
+          /* the slower path that will move the item to    */   \
+          /* the head of the search list if it is found.   */   \
+          quick_lookup_counter += 307;                          \
+          res = lookup_old_promotion_values(fs, value);         \
+        }                                                       \
+      } while (0)
+#endif
+
 #endif  /* PROMOTION_TACTIC == 1 */
 
 
@@ -1791,7 +1826,7 @@ static code_t* do_promotion_long(rt_promotion_t* fs, long value)
 #endif
 
   /* have we already seen this value? */
-  result = lookup_old_promotion_values(fs, key1);
+  QUICK_LOOKUP_PROMOTION_VALUE(fs, key1, result);
   if (result == NULL)
     {
       /* no -> we must build new code */
@@ -1815,7 +1850,7 @@ static code_t* do_promotion_pyobj(rt_promotion_t* fs, PyObject* key)
 #endif
 
   /* have we already seen this value? */
-  result = lookup_old_promotion_values(fs, key1);
+  QUICK_LOOKUP_PROMOTION_VALUE(fs, key1, result);
   if (result == NULL)
     {
       /* no -> we must build new code */
