@@ -309,10 +309,22 @@ bool PsycoSequence_SetSlice(PsycoObject* po, vinfo_t* o,
 DEFINEFN
 vinfo_t* PsycoSequence_Contains(PsycoObject* po, vinfo_t* seq, vinfo_t* ob)
 {
+	PyTypeObject* tp = Psyco_NeedType(po, seq);
+	if (tp == NULL)
+		return false;
+
+	if (PyType_HasFeature(tp, Py_TPFLAGS_HAVE_SEQUENCE_IN)) {
+		PySequenceMethods *sqm = tp->tp_as_sequence;
+	        if (sqm != NULL && sqm->sq_contains != NULL)
+			return Psyco_META2(po, sqm->sq_contains,
+					   CfReturnNormal|CfPyErrIfNeg,
+					   "vv", seq, ob);
+	}
+
 	/* XXX implement me */
-	return psyco_generic_call(po, PySequence_Contains,
+	return psyco_generic_call(po, _PySequence_IterSearch,
 				  CfReturnNormal|CfPyErrIfNeg,
-				  "vv", seq, ob);
+				  "vvl", seq, ob, PY_ITERSEARCH_CONTAINS);
 }
 
 
@@ -514,6 +526,12 @@ BINARY_FUNC(PsycoNumber_Multiply, nb_multiply, "*")
 BINARY_FUNC(PsycoNumber_Divide, nb_divide, "/")
 BINARY_FUNC(PsycoNumber_Divmod, nb_divmod, "divmod()")
 
+#ifdef BINARY_FLOOR_DIVIDE
+     /* XXX tp_flags test -- not done in Python either, check future releases */
+BINARY_FUNC(PsycoNumber_FloorDivide, nb_floor_divide, "//")
+BINARY_FUNC(PsycoNumber_TrueDivide, nb_true_divide, "/")
+#endif
+
 
 DEFINEFN
 vinfo_t* PsycoNumber_Add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
@@ -567,80 +585,137 @@ vinfo_t* PsycoNumber_Power(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, vinfo_t*v3
 }
 
 
-/* XXX implement the in-place operators */
+#define HASINPLACE(tp) PyType_HasFeature((tp), Py_TPFLAGS_HAVE_INPLACEOPS)
+
+static vinfo_t* binary_iop(PsycoObject* po, vinfo_t* v, vinfo_t* w,
+			   const int iop_slot, const int op_slot,
+			   const char *op_name)
+{
+	PyNumberMethods *mv;
+	PyTypeObject* vtp = Psyco_NeedType(po, v);
+	if (vtp == NULL)
+		return NULL;
+	
+	mv = vtp->tp_as_number;
+	if (mv != NULL && HASINPLACE(vtp)) {
+		binaryfunc *slot = NB_BINOP(mv, iop_slot);
+		if (*slot) {
+			vinfo_t* x = Psyco_META2(po, slot,
+					CfReturnRef|CfPyErrNotImplemented,
+					"vv", v, w);
+			if (IS_IMPLEMENTED(x))
+				return x;
+			vinfo_decref(x, po);
+		}
+	}
+	return binary_op(po, v, w, op_slot, op_name);
+}
+
+
+#define INPLACE_BINOP(func, iop, op, op_name)					\
+DEFINEFN vinfo_t* func(PsycoObject* po, vinfo_t* v, vinfo_t* w) {		\
+	return binary_iop(po, v, w, NB_SLOT(iop), NB_SLOT(op), op_name);	\
+}
+
+INPLACE_BINOP(PsycoNumber_InPlaceOr, nb_inplace_or, nb_or, "|=")
+INPLACE_BINOP(PsycoNumber_InPlaceXor, nb_inplace_xor, nb_xor, "^=")
+INPLACE_BINOP(PsycoNumber_InPlaceAnd, nb_inplace_and, nb_and, "&=")
+INPLACE_BINOP(PsycoNumber_InPlaceLshift, nb_inplace_lshift, nb_lshift, "<<=")
+INPLACE_BINOP(PsycoNumber_InPlaceRshift, nb_inplace_rshift, nb_rshift, ">>=")
+INPLACE_BINOP(PsycoNumber_InPlaceSubtract, nb_inplace_subtract, nb_subtract,"-=")
+INPLACE_BINOP(PsycoNumber_InPlaceDivide, nb_inplace_divide, nb_divide, "/=")
+
+#ifdef BINARY_FLOOR_DIVIDE
+     /* XXX tp_flags test -- not done in Python either, check future releases */
+INPLACE_BINOP(PsycoNumber_InPlaceFloorDivide, nb_inplace_floor_divide,
+              nb_floor_divide, "//=")
+INPLACE_BINOP(PsycoNumber_InPlaceTrueDivide, nb_inplace_true_divide,
+              nb_true_divide, "/=")
+#endif
+
 DEFINEFN
-vinfo_t* PsycoNumber_InPlaceAdd(PsycoObject* po, vinfo_t* v1, vinfo_t* v2) {
-	return psyco_generic_call(po, PyNumber_InPlaceAdd,
-                                  CfReturnRef|CfPyErrIfNull,
-				  "vv", v1, v2);
+vinfo_t* PsycoNumber_InPlaceAdd(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+{
+	PyTypeObject* vtp = Psyco_NeedType(po, v);
+	if (vtp == NULL)
+		return NULL;
+	if (vtp->tp_as_sequence != NULL) {
+		binaryfunc f = NULL;
+		if (HASINPLACE(vtp))
+			f = vtp->tp_as_sequence->sq_inplace_concat;
+		if (f == NULL)
+			f = vtp->tp_as_sequence->sq_concat;
+		if (f != NULL)
+			return Psyco_META2(po, f, CfReturnRef|CfPyErrIfNull,
+					   "vv", v, w);
+	}
+	return binary_iop(po, v, w, NB_SLOT(nb_inplace_add),
+			  NB_SLOT(nb_add), "+=");
 }
 
 DEFINEFN
-vinfo_t* PsycoNumber_InPlaceOr(PsycoObject* po, vinfo_t* v1, vinfo_t* v2) {
-	return psyco_generic_call(po, PyNumber_InPlaceOr,
-                                  CfReturnRef|CfPyErrIfNull,
-				  "vv", v1, v2);
+vinfo_t* PsycoNumber_InPlaceMultiply(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+{
+	intargfunc g;
+	PyTypeObject* vtp = Psyco_NeedType(po, v);
+	if (vtp == NULL)
+		return NULL;
+	
+	if (HASINPLACE(vtp) && vtp->tp_as_sequence != NULL &&
+	    (g = vtp->tp_as_sequence->sq_inplace_repeat)) {
+		vinfo_t* result;
+		vinfo_t* n;
+		switch (Psyco_TypeSwitch(po, w, &psyfs_int_long)) {
+
+		case 0: /* PyInt_Type */
+			n = PsycoInt_AsLong(po, w);
+			break;
+
+		case 1: /* PyLong_Type */
+			n = PsycoLong_AsLong(po, w);
+			break;
+
+		default:
+			if (!PycException_Occurred(po))
+				type_error(po,
+					   "can't multiply sequence to non-int");
+			return NULL;
+		}
+		if (n == NULL)
+			return NULL;
+		result = Psyco_META2(po, g, CfReturnRef|CfPyErrIfNull,
+				     "vv", v, n);
+		vinfo_decref(n, po);
+		return result;
+	}
+	return binary_iop(po, v, w, NB_SLOT(nb_inplace_multiply),
+			  NB_SLOT(nb_multiply), "*=");
 }
 
 DEFINEFN
-vinfo_t* PsycoNumber_InPlaceXor(PsycoObject* po, vinfo_t* v1, vinfo_t* v2) {
-	return psyco_generic_call(po, PyNumber_InPlaceXor,
-                                  CfReturnRef|CfPyErrIfNull,
-				  "vv", v1, v2);
-}
-
-DEFINEFN
-vinfo_t* PsycoNumber_InPlaceAnd(PsycoObject* po, vinfo_t* v1, vinfo_t* v2) {
-	return psyco_generic_call(po, PyNumber_InPlaceAnd,
-                                  CfReturnRef|CfPyErrIfNull,
-				  "vv", v1, v2);
-}
-
-DEFINEFN
-vinfo_t* PsycoNumber_InPlaceLshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2) {
-	return psyco_generic_call(po, PyNumber_InPlaceLshift,
-                                  CfReturnRef|CfPyErrIfNull,
-				  "vv", v1, v2);
-}
-
-DEFINEFN
-vinfo_t* PsycoNumber_InPlaceRshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2) {
-	return psyco_generic_call(po, PyNumber_InPlaceRshift,
-                                  CfReturnRef|CfPyErrIfNull,
-				  "vv", v1, v2);
-}
-
-DEFINEFN
-vinfo_t* PsycoNumber_InPlaceSubtract(PsycoObject* po, vinfo_t* v1, vinfo_t*v2) {
-	return psyco_generic_call(po, PyNumber_InPlaceSubtract,
-                                  CfReturnRef|CfPyErrIfNull,
-				  "vv", v1, v2);
-}
-
-DEFINEFN
-vinfo_t* PsycoNumber_InPlaceMultiply(PsycoObject* po, vinfo_t* v1, vinfo_t*v2) {
-	return psyco_generic_call(po, PyNumber_InPlaceMultiply,
-                                  CfReturnRef|CfPyErrIfNull,
-				  "vv", v1, v2);
-}
-
-DEFINEFN
-vinfo_t* PsycoNumber_InPlaceDivide(PsycoObject* po, vinfo_t* v1, vinfo_t* v2) {
-	return psyco_generic_call(po, PyNumber_InPlaceDivide,
-                                  CfReturnRef|CfPyErrIfNull,
-				  "vv", v1, v2);
-}
-
-DEFINEFN
-vinfo_t* PsycoNumber_InPlaceRemainder(PsycoObject* po, vinfo_t* v1,vinfo_t*v2) {
-	return psyco_generic_call(po, PyNumber_InPlaceRemainder,
-                                  CfReturnRef|CfPyErrIfNull,
-				  "vv", v1, v2);
+vinfo_t* PsycoNumber_InPlaceRemainder(PsycoObject* po, vinfo_t* v ,vinfo_t* w)
+{
+	PyTypeObject* vtp = Psyco_NeedType(po, v);
+	if (vtp == NULL)
+		return NULL;
+	if (PsycoString_Check(vtp))
+		return psyco_generic_call(po, PyString_Format,
+                                          CfReturnRef|CfPyErrIfNull,
+					  "vv", v, w);
+#ifdef Py_USING_UNICODE
+	else if (PsycoUnicode_Check(vtp))
+		return psyco_generic_call(po, PyUnicode_Format,
+                                          CfReturnRef|CfPyErrIfNull,
+					  "vv", v, w);
+#endif
+	return binary_iop(po, v, w, NB_SLOT(nb_inplace_remainder),
+			  NB_SLOT(nb_remainder), "%");
 }
 
 DEFINEFN
 vinfo_t* PsycoNumber_InPlacePower(PsycoObject* po, vinfo_t* v1, vinfo_t* v2,
 				  vinfo_t* v3) {
+	/* XXX implement the ternary operators */
 	return psyco_generic_call(po, PyNumber_InPlacePower,
                                   CfReturnRef|CfPyErrIfNull,
 				  "vvv", v1, v2, v3);

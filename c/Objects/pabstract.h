@@ -8,14 +8,7 @@
 
 #include "pobject.h"
 #include "../pycencoding.h"
-
-
-/* #ifndef BINARY_FLOOR_DIVIDE */
-/* # define PyNumber_FloorDivide          NULL */
-/* # define PyNumber_TrueDivide           NULL */
-/* # define PyNumber_InPlaceFloorDivide   NULL */
-/* # define PyNumber_InPlaceTrueDivide    NULL */
-/* #endif */
+#include "../Python/pycinternal.h"
 
 
 /* 'kw' may be NULL */
@@ -47,40 +40,51 @@ EXTERNFN vinfo_t* PsycoNumber_Negative(PsycoObject* po, vinfo_t* vi);
 EXTERNFN vinfo_t* PsycoNumber_Invert(PsycoObject* po, vinfo_t* vi);
 EXTERNFN vinfo_t* PsycoNumber_Absolute(PsycoObject* po, vinfo_t* vi);
 
-EXTERNFN vinfo_t* PsycoNumber_Add(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
-EXTERNFN vinfo_t* PsycoNumber_Or(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
-EXTERNFN vinfo_t* PsycoNumber_Xor(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
-EXTERNFN vinfo_t* PsycoNumber_And(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
-EXTERNFN vinfo_t* PsycoNumber_Lshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
-EXTERNFN vinfo_t* PsycoNumber_Rshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
-EXTERNFN vinfo_t* PsycoNumber_Subtract(PsycoObject* po, vinfo_t* v1, vinfo_t*v2);
-EXTERNFN vinfo_t* PsycoNumber_Multiply(PsycoObject* po, vinfo_t* v1, vinfo_t*v2);
-EXTERNFN vinfo_t* PsycoNumber_Divide(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
-EXTERNFN vinfo_t* PsycoNumber_Divmod(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
-EXTERNFN vinfo_t* PsycoNumber_Remainder(PsycoObject* po, vinfo_t* v1,vinfo_t*v2);
+EXTERNFN vinfo_t* PsycoNumber_Add(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN vinfo_t* PsycoNumber_Or(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN vinfo_t* PsycoNumber_Xor(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN vinfo_t* PsycoNumber_And(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN vinfo_t* PsycoNumber_Lshift(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN vinfo_t* PsycoNumber_Rshift(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN vinfo_t* PsycoNumber_Subtract(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN vinfo_t* PsycoNumber_Multiply(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN vinfo_t* PsycoNumber_Divide(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN vinfo_t* PsycoNumber_Divmod(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN vinfo_t* PsycoNumber_Remainder(PsycoObject* po, vinfo_t* v,vinfo_t* w);
 EXTERNFN vinfo_t* PsycoNumber_Power(PsycoObject* po, vinfo_t* v1, vinfo_t* v2,
                                     vinfo_t* v3);
 
+#ifdef BINARY_FLOOR_DIVIDE
 EXTERNFN
-vinfo_t* PsycoNumber_InPlaceAdd(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+vinfo_t* PsycoNumber_FloorDivide(PsycoObject* po, vinfo_t* v, vinfo_t* w);
 EXTERNFN
-vinfo_t* PsycoNumber_InPlaceOr(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+vinfo_t* PsycoNumber_TrueDivide(PsycoObject* po, vinfo_t* v, vinfo_t* w);
 EXTERNFN
-vinfo_t* PsycoNumber_InPlaceXor(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+vinfo_t* PsycoNumber_InPlaceFloorDivide(PsycoObject* po, vinfo_t* v, vinfo_t* w);
 EXTERNFN
-vinfo_t* PsycoNumber_InPlaceAnd(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+vinfo_t* PsycoNumber_InPlaceTrueDivide(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+#endif
+
 EXTERNFN
-vinfo_t* PsycoNumber_InPlaceLshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+vinfo_t* PsycoNumber_InPlaceAdd(PsycoObject* po, vinfo_t* v, vinfo_t* w);
 EXTERNFN
-vinfo_t* PsycoNumber_InPlaceRshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+vinfo_t* PsycoNumber_InPlaceOr(PsycoObject* po, vinfo_t* v, vinfo_t* w);
 EXTERNFN
-vinfo_t* PsycoNumber_InPlaceSubtract(PsycoObject* po, vinfo_t* v1, vinfo_t*v2);
+vinfo_t* PsycoNumber_InPlaceXor(PsycoObject* po, vinfo_t* v, vinfo_t* w);
 EXTERNFN
-vinfo_t* PsycoNumber_InPlaceMultiply(PsycoObject* po, vinfo_t* v1, vinfo_t*v2);
+vinfo_t* PsycoNumber_InPlaceAnd(PsycoObject* po, vinfo_t* v, vinfo_t* w);
 EXTERNFN
-vinfo_t* PsycoNumber_InPlaceDivide(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
+vinfo_t* PsycoNumber_InPlaceLshift(PsycoObject* po, vinfo_t* v, vinfo_t* w);
 EXTERNFN
-vinfo_t* PsycoNumber_InPlaceRemainder(PsycoObject* po, vinfo_t* v1,vinfo_t*v2);
+vinfo_t* PsycoNumber_InPlaceRshift(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN
+vinfo_t* PsycoNumber_InPlaceSubtract(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN
+vinfo_t* PsycoNumber_InPlaceMultiply(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN
+vinfo_t* PsycoNumber_InPlaceDivide(PsycoObject* po, vinfo_t* v, vinfo_t* w);
+EXTERNFN
+vinfo_t* PsycoNumber_InPlaceRemainder(PsycoObject* po, vinfo_t* v,vinfo_t* w);
 EXTERNFN
 vinfo_t* PsycoNumber_InPlacePower(PsycoObject* po, vinfo_t* v1, vinfo_t* v2,
                                   vinfo_t* v3);

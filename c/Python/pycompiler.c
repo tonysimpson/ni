@@ -1063,6 +1063,26 @@ static bool psyco_assign_slice(PsycoObject* po, vinfo_t* u,
 
 /* the code of the following functions is "copy-pasted" from ceval.c */
 
+static int cimpl_print_expr(PyObject* v)
+{
+	PyObject* x;
+	PyObject* w = PySys_GetObject("displayhook");
+	if (w == NULL) {
+		PyErr_SetString(PyExc_RuntimeError,
+				"lost sys.displayhook");
+		return -1;
+	}
+	x = Py_BuildValue("(O)", v);
+	if (x == NULL)
+		return -1;
+	w = PyEval_CallObject(w, x);
+	Py_XDECREF(w);
+	Py_DECREF(x);
+	if (w == NULL)
+		return -1;
+	return 0;
+}
+
 static int cimpl_print_item_to(PyObject* v, PyObject* stream)
 {
 	if (stream == NULL || stream == Py_None) {
@@ -1276,6 +1296,38 @@ static void cimpl_do_raise(PyObject *type, PyObject *value, PyObject *tb)
 	/*return WHY_EXCEPTION;*/
 }
 
+/* copied from ceval.c where it is private */
+static PyObject*
+build_class(PyObject *methods, PyObject *bases, PyObject *name)
+{
+	PyObject *metaclass = NULL, *result, *base;
+
+	if (PyDict_Check(methods))
+		metaclass = PyDict_GetItemString(methods, "__metaclass__");
+	if (metaclass != NULL)
+		Py_INCREF(metaclass);
+	else if (PyTuple_Check(bases) && PyTuple_GET_SIZE(bases) > 0) {
+		base = PyTuple_GET_ITEM(bases, 0);
+		metaclass = PyObject_GetAttrString(base, "__class__");
+		if (metaclass == NULL) {
+			PyErr_Clear();
+			metaclass = (PyObject *)base->ob_type;
+			Py_INCREF(metaclass);
+		}
+	}
+	else {
+		PyObject *g = PyEval_GetGlobals();
+		if (g != NULL && PyDict_Check(g))
+			metaclass = PyDict_GetItemString(g, "__metaclass__");
+		if (metaclass == NULL)
+			metaclass = (PyObject *) &PyClass_Type;
+		Py_INCREF(metaclass);
+	}
+	result = PyObject_CallFunction(metaclass, "OOO", name, bases, methods);
+	Py_DECREF(metaclass);
+	return result;
+}
+
 
  /***************************************************************/
 /***                         Main loop                         ***/
@@ -1303,6 +1355,10 @@ static code_t* exit_function(PsycoObject* po)
 		if (!eat_reference(retval)) {
 			/* return a new reference */
 			psyco_incref_v(po, retval);
+		}
+		if (retval->array->count > 0) {
+			array_delete(retval->array, po);
+			retval->array = NullArray;
 		}
 	}
 	else {
@@ -1510,14 +1566,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		
 	BINARY_OPCODE(BINARY_MULTIPLY, PsycoNumber_Multiply);
 	BINARY_OPCODE(BINARY_DIVIDE, PsycoNumber_Divide);
-
-	/*#ifdef BINARY_FLOOR_DIVIDE
-	 MISSING_OPCODE(BINARY_FLOOR_DIVIDE);
-	 MISSING_OPCODE(BINARY_TRUE_DIVIDE);
-	 MISSING_OPCODE(INPLACE_FLOOR_DIVIDE);
-	 MISSING_OPCODE(INPLACE_TRUE_DIVIDE);
-	#endif*/
-
 	BINARY_OPCODE(BINARY_MODULO, PsycoNumber_Remainder);
 	BINARY_OPCODE(BINARY_ADD, PsycoNumber_Add);
 	BINARY_OPCODE(BINARY_SUBTRACT, PsycoNumber_Subtract);
@@ -1527,7 +1575,14 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	BINARY_OPCODE(BINARY_AND, PsycoNumber_And);
 	BINARY_OPCODE(BINARY_XOR, PsycoNumber_Xor);
 	BINARY_OPCODE(BINARY_OR, PsycoNumber_Or);
-	
+
+#ifdef BINARY_FLOOR_DIVIDE
+        BINARY_OPCODE(BINARY_FLOOR_DIVIDE, PsycoNumber_FloorDivide);
+        BINARY_OPCODE(BINARY_TRUE_DIVIDE, PsycoNumber_TrueDivide);
+        BINARY_OPCODE(INPLACE_FLOOR_DIVIDE, PsycoNumber_InPlaceFloorDivide);
+        BINARY_OPCODE(INPLACE_TRUE_DIVIDE, PsycoNumber_InPlaceTrueDivide);
+#endif
+
 	case INPLACE_POWER:
 		u = psyco_vi_None();
 		x = PsycoNumber_InPlacePower(po, NTOP(2), NTOP(1), u);
@@ -1655,8 +1710,14 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		POP_DECREF();
 		POP_DECREF();
 		goto fine;
-	
-		/*MISSING_OPCODE(PRINT_EXPR);*/
+
+	case PRINT_EXPR:
+		if (!psyco_generic_call(po, cimpl_print_expr,
+					CfNoReturnValue|CfPyErrIfNonNull,
+					"v", TOP()))
+			break;
+		POP_DECREF();
+		goto fine;
 
 	case PRINT_ITEM:
 		if (!psyco_generic_call(po, cimpl_print_item_to,
@@ -1782,8 +1843,19 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			break;
 		}
 
-	/*MISSING_OPCODE(BUILD_CLASS);
-	  MISSING_OPCODE(STORE_NAME);
+	case BUILD_CLASS:
+		x = psyco_generic_call(po, build_class,
+				       CfReturnRef|CfPyErrIfNull,
+				       "vvv", NTOP(1), NTOP(2), NTOP(3));
+		if (x == NULL)
+			break;
+		POP_DECREF();
+		POP_DECREF();
+		POP_DECREF();
+		PUSH(x);
+		goto fine;
+
+	/*MISSING_OPCODE(STORE_NAME); -- only used in module's code objects?
 	  MISSING_OPCODE(DELETE_NAME);*/
 
 	case UNPACK_SEQUENCE:

@@ -1137,6 +1137,7 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
   TRACE_EXECUTION("PROMOTION");
   BEGIN_CODE
 #if PROMOTION_FAST_COMMON_CASE
+  NEED_CC();
   RTVINFO_IN_REG(fix);
 #endif
   xsource = fix->source;
