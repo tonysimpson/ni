@@ -38,6 +38,18 @@ def cache_load(filename):
     if not filename.endswith('.py'):
         return 0, "Not a module name"
     path = filename[:-3].split(os.sep)
+    if os.path.isabs(filename):
+        # translate absolute paths into paths relative to sys.path
+        pathlist = sys.path[:]
+        pathlist.sort()
+        pathlist.reverse() # roughly: subdirs first
+        for p in pathlist:
+            if os.path.isabs(p):
+                p = p.split(os.sep)
+                if path[:len(p)] == p:
+                    # module name is relative to 'p'
+                    del path[:len(p)]
+                    break
     while '.' in path:
         path.remove('.')
     while '..' in path:
@@ -52,6 +64,7 @@ def cache_load(filename):
         return 1, mod.__dict__
     except:
         f = cStringIO.StringIO()
+        print >> f, "While importing module '%s':" % modulename
         traceback.print_exc(file=f)
         return 0, f.getvalue()
 
