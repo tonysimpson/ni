@@ -190,6 +190,7 @@ class CodeBuf:
                  'stackdepth', 'specdict', 'data', 'cache_text',
                  'disass_text', 'reverse_lookup', 'vlocals',
                  'complete_list', 'dumpfile', 'vlocalsofs', 'codemap']
+    machine_code_format = '?'
     
     def __init__(self, mode, co_filename, co_name, nextinstr,
                  addr, stackdepth):
