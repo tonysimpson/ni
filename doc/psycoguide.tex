@@ -766,7 +766,9 @@ Apart from speed, functions are supposed to run identically under Psyco and unde
 \item \strong{Frame objects} are emulated.  The \function{sys._getframe} function returns an instance of a custom class which emulates the standard frame objects' behavior as much as possible.  The frames corresponding to a Psyco-accelerated frame have some placeholder attributes, notably \member{f_locals}.  \emph{There is no way to read the local variables of a Psyco-accelerated frame.}  Actually, only the \member{f_code}, \member{f_globals}, \member{f_back} and \member{f_lineno} fields are well-tested.  Also keep in mind that if you obtain a real frame object (which you can do with some other mean than \function{sys._getframe}, e.g.\ via a traceback object), the \member{f_back} chained list will not include the Psyco-accelerated frames.
 
 \item The compiled machine code does not include the regular polling done by Python, meaning that a \exception{KeyboardInterrupt} will not be detected before execution comes back to the regular Python interpreter.  Your program cannot be interrupted if caught into an infinite Psyco-compiled loop.  (This could be fixed if requested.)
-  
+
+\item Infinite recursions are not correctly detected. They are likely to result in segmentation faults (or whatever a stack overflow triggers on your system) instead of Python's nice \exception{RuntimeError}. Similarily, circularities among data structures can cause troubles (e.g.\ printing or comparing lists that contain themselves).
+
 \end{itemize}
 
 At other points, Psyco makes assumptions that may be wrong (and will cause damage if they turn out to be):

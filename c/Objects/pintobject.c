@@ -221,44 +221,6 @@ static vinfo_t* pint_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	vinfo_t* a;
 	vinfo_t* b;
 	vinfo_t* x;
-	PyTypeObject* tp;
-
-	tp = Psyco_NeedType(po, v);
-	if (tp == NULL)
-		return NULL;
-
-	if (!PsycoInt_Check(tp) &&
-	    tp->tp_as_sequence &&
-	    tp->tp_as_sequence->sq_repeat) {
-		/* sequence * int */
-		a = PsycoInt_AsLong(po, w);
-		if (a == NULL)
-			return NULL;
-		x = Psyco_META2(po, tp->tp_as_sequence->sq_repeat,
-				CfReturnRef|CfPyErrIfNull,
-				"vv", v, a);
-		vinfo_decref(a, po);
-		return x;
-	}
-	
-	tp = Psyco_NeedType(po, w);
-	if (tp == NULL)
-		return NULL;
-
-	if (!PsycoInt_Check(tp) &&
-	    tp->tp_as_sequence &&
-	    tp->tp_as_sequence->sq_repeat) {
-		/* int * sequence */
-		a = PsycoInt_AsLong(po, v);
-		if (a == NULL)
-			return NULL;
-		x = Psyco_META2(po, tp->tp_as_sequence->sq_repeat,
-				CfReturnRef|CfPyErrIfNull,
-				"vv", w, a);
-		vinfo_decref(a, po);
-		return x;
-	}
-	
 	CONVERT_TO_LONG(v, a);
 	CONVERT_TO_LONG(w, b);
 	x = integer_mul(po, a, b, true);

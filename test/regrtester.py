@@ -20,7 +20,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_threaded_import': 'Python hang-ups',
         'test_hotshot': "PyEval_SetProfile(NULL,NULL) doesn't allow Psyco to take control back",
         'test_coercion': 'uses eval() with locals',
-        'test_richcmp': 'uses eval() with locals',
+        'test_richcmp': 'uses eval() with locals and circular data structure cmps',
         'test_sets': 'uses eval() with locals',
         'test_longexp': 'run it separately if you want, but it takes time and memory',
         'test_weakref': 'only run with FULL_CONTROL_FLOW set to 0 in mergepoints.c',
@@ -37,6 +37,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_optparse': 'uses "%(xyz)s" % locals()',
         'test_scope': 'refcounting: relies on the __del__ of instances',
         'test_sax': 'fails without Psyco due to my Expat installation',
+        'test_linuxaudiodev': 'no /dev/dsp on this machine...',
         }
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'

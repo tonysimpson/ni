@@ -426,8 +426,22 @@ ${[a ^ b for a in (False,True) for b in (False,True)]}
 IndexError list index out of range
 2
 
->>> print test5.fL5(10L)
-yyyyyyyyyyx
+>>> test5.seqrepeat()
+'abcabcabcabcabc'
+'abcabcabcabcabc'
+[3, 'z', 3, 'z', 3, 'z', 3, 'z', 3, 'z']
+[6, 3, 6, 3, 6, 3, 6, 3, 6, 3]
+'yyyyyx'
+'abcabcabcabcabcabc'
+'abcabcabcabcabcabc'
+[3, 'z', 3, 'z', 3, 'z', 3, 'z', 3, 'z', 3, 'z']
+[6, 3, 6, 3, 6, 3, 6, 3, 6, 3, 6, 3]
+'yyyyyyx'
+''
+''
+[]
+[]
+'x'
 
 >>> test5.f5(99)
 100

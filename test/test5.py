@@ -54,8 +54,18 @@ def exc_test():
         print exc.__name__, str(value)
         print tb.tb_lineno - tb.tb_frame.f_code.co_firstlineno
 
-def fL5(longvalue):
-    return ('y'*longvalue) + 'x'
+def seqrepeat():
+    for i in [5, 6L, -999]:
+        print `i*'abc'`
+        print `'abc'*i`
+        print i*[3,'z']
+        print [6,3]*i
+        print `('y'*i) + 'x'`
+
+def inplacerepeat():
+    l = l1 = range(100)
+    l *= 2
+    return l is l1
 
 def g5(x):
     return x+1
@@ -220,5 +230,6 @@ if __name__ == '__main__':
     psyco.full()
     #print overflowtest()
     #exc_test()
-    #print `f5(10L)`
+    #seqrepeat()
+    print inplacerepeat()
     psyco.dumpcodebuf()

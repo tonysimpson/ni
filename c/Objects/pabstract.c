@@ -615,18 +615,24 @@ static vinfo_t* binary_op1(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 	return psyco_vi_NotImplemented();
 }
 
+static vinfo_t* binop_type_error(PsycoObject* po,
+				 vinfo_t* v, vinfo_t* w, const char *op_name)
+{
+	PycException_SetFormat(po, PyExc_TypeError,
+		     "unsupported operand type(s) for %s: '%s' and '%s'",
+		     op_name,
+		     Psyco_FastType(v)->tp_name,
+		     Psyco_FastType(w)->tp_name);
+	return NULL;
+}
+
 static vinfo_t* binary_op(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 			  const int op_slot, const char *op_name)
 {
 	vinfo_t* result = binary_op1(po, v, w, op_slot);
 	if (!IS_IMPLEMENTED(result)) {
 		vinfo_decref(result, po);
-		PycException_SetFormat(po, PyExc_TypeError,
-			"unsupported operand type(s) for %s: '%s' and '%s'",
-				       op_name,
-				       Psyco_FastType(v)->tp_name,
-				       Psyco_FastType(w)->tp_name);
-		return NULL;
+		return binop_type_error(po, v, w, op_name);
 	}
 	return result;
 }
@@ -642,7 +648,6 @@ BINARY_FUNC(PsycoNumber_And, nb_and, "&")
 BINARY_FUNC(PsycoNumber_Lshift, nb_lshift, "<<")
 BINARY_FUNC(PsycoNumber_Rshift, nb_rshift, ">>")
 BINARY_FUNC(PsycoNumber_Subtract, nb_subtract, "-")
-BINARY_FUNC(PsycoNumber_Multiply, nb_multiply, "*")
 BINARY_FUNC(PsycoNumber_Divide, nb_divide, "/")
 BINARY_FUNC(PsycoNumber_Divmod, nb_divmod, "divmod()")
 
@@ -667,12 +672,65 @@ vinfo_t* PsycoNumber_Add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 					     "vv", v, w);
 		}
                 else {
-			PycException_SetFormat(po, PyExc_TypeError,
-			    "unsupported operand types for +: '%s' and '%s'",
-					       Psyco_FastType(v)->tp_name,
-					       Psyco_FastType(w)->tp_name);
-			result = NULL;
+			return binop_type_error(po, v, w, "+");
                 }
+	}
+	return result;
+}
+
+static vinfo_t* psequence_repeat(PsycoObject* po, intargfunc repeatfunc,
+				 vinfo_t* vseq, vinfo_t* vn)
+{
+	PyTypeObject* tp = Psyco_FastType(vn);
+	vinfo_t* vcount;
+	vinfo_t* result;
+
+	if (PyType_TypeCheck(tp, &PyInt_Type)) {
+		vcount = PsycoInt_AsLong(po, vn);
+	}
+	else if (PyType_TypeCheck(tp, &PyLong_Type)) {
+		vcount = PsycoLong_AsLong(po, vn);
+	}
+	else {
+		return type_error(po,
+			"can't multiply sequence to non-int");
+	}
+	if (vcount == NULL)
+		return NULL;
+
+#if LONG_MAX != INT_MAX
+# error "omitted code from Python 2.3 here"
+#endif
+	result = Psyco_META2(po, repeatfunc, CfReturnRef|CfPyErrIfNull,
+			     "vv", vseq, vcount);
+	vinfo_decref(vcount, po);
+	return result;
+}
+
+DEFINEFN
+vinfo_t* PsycoNumber_Multiply(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+{
+	/* This has varied a lot over recent Python versions.
+	   2.2 has no special code here; instead, int_mul and long_mul
+	   check if they should delegate to the other argument's
+	   sq_repeat. In 2.3 there is code similar to the code below:
+	   int_mul and long_mul just return NotImplemented, and when
+	   they do we check if we should proceed with sq_repeat.
+	   I use the 2.3 semantics even with earlier Python versions.
+	   Only convoluted user code would see the difference. */
+
+	vinfo_t* result = binary_op1(po, v, w, NB_SLOT(nb_multiply));
+	if (!IS_IMPLEMENTED(result)) {
+		PySequenceMethods *mv = Psyco_FastType(v)->tp_as_sequence;
+		PySequenceMethods *mw = Psyco_FastType(w)->tp_as_sequence;
+		vinfo_decref(result, po);
+		if  (mv && mv->sq_repeat) {
+			return psequence_repeat(po, mv->sq_repeat, v, w);
+		}
+		else if (mw && mw->sq_repeat) {
+			return psequence_repeat(po, mw->sq_repeat, w, v);
+		}
+		result = binop_type_error(po, v, w, "*");
 	}
 	return result;
 }
@@ -683,16 +741,19 @@ vinfo_t* PsycoNumber_Remainder(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	PyTypeObject* vtp = Psyco_NeedType(po, v);
 	if (vtp == NULL)
 		return NULL;
-	if (PsycoString_Check(vtp))
-		return psyco_generic_call(po, PyString_Format,
-                                          CfReturnRef|CfPyErrIfNull,
-					  "vv", v, w);
+	if (vtp->tp_as_number == NULL) {
+		/* <= 2.2 only: special-case strings */
+		if (PsycoString_Check(vtp))
+			return psyco_generic_call(po, PyString_Format,
+						  CfReturnRef|CfPyErrIfNull,
+						  "vv", v, w);
 #ifdef Py_USING_UNICODE
-	else if (PsycoUnicode_Check(vtp))
-		return psyco_generic_call(po, PyUnicode_Format,
-                                          CfReturnRef|CfPyErrIfNull,
-					  "vv", v, w);
+		else if (PsycoUnicode_Check(vtp))
+			return psyco_generic_call(po, PyUnicode_Format,
+						  CfReturnRef|CfPyErrIfNull,
+						  "vv", v, w);
 #endif
+	}
 	return binary_op(po, v, w, NB_SLOT(nb_remainder), "%");
 }
 
@@ -707,9 +768,8 @@ vinfo_t* PsycoNumber_Power(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, vinfo_t*v3
 
 #define HASINPLACE(tp) PyType_HasFeature((tp), Py_TPFLAGS_HAVE_INPLACEOPS)
 
-static vinfo_t* binary_iop(PsycoObject* po, vinfo_t* v, vinfo_t* w,
-			   const int iop_slot, const int op_slot,
-			   const char *op_name)
+static vinfo_t* binary_iop1(PsycoObject* po, vinfo_t* v, vinfo_t* w,
+			    const int iop_slot, const int op_slot)
 {
 	PyNumberMethods *mv;
 	PyTypeObject* vtp = Psyco_NeedType(po, v);
@@ -728,9 +788,20 @@ static vinfo_t* binary_iop(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 			vinfo_decref(x, po);
 		}
 	}
-	return binary_op(po, v, w, op_slot, op_name);
+	return binary_op1(po, v, w, op_slot);
 }
 
+static vinfo_t* binary_iop(PsycoObject* po, vinfo_t* v, vinfo_t* w,
+			   const int iop_slot, const int op_slot,
+			   const char *op_name)
+{
+	vinfo_t* result = binary_iop1(po, v, w, iop_slot, op_slot);
+	if (!IS_IMPLEMENTED(result)) {
+		vinfo_decref(result, po);
+		return binop_type_error(po, v, w, op_name);
+	}
+	return result;
+}
 
 #define INPLACE_BINOP(func, iop, op, op_name)					\
 DEFINEFN vinfo_t* func(PsycoObject* po, vinfo_t* v, vinfo_t* w) {		\
@@ -756,59 +827,59 @@ INPLACE_BINOP(PsycoNumber_InPlaceTrueDivide, nb_inplace_true_divide,
 DEFINEFN
 vinfo_t* PsycoNumber_InPlaceAdd(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
-	PyTypeObject* vtp = Psyco_NeedType(po, v);
-	if (vtp == NULL)
-		return NULL;
-	if (vtp->tp_as_sequence != NULL) {
-		binaryfunc f = NULL;
-		if (HASINPLACE(vtp))
-			f = vtp->tp_as_sequence->sq_inplace_concat;
-		if (f == NULL)
-			f = vtp->tp_as_sequence->sq_concat;
-		if (f != NULL)
-			return Psyco_META2(po, f, CfReturnRef|CfPyErrIfNull,
-					   "vv", v, w);
+	vinfo_t* result = binary_iop1(po, v, w, NB_SLOT(nb_inplace_add),
+				      NB_SLOT(nb_add));
+	if (!IS_IMPLEMENTED(result)) {
+		PyTypeObject* vtp = Psyco_FastType(v);
+		PySequenceMethods* m = vtp->tp_as_sequence;
+		vinfo_decref(result, po);
+		if (m != NULL) {
+			binaryfunc f = NULL;
+			if (HASINPLACE(vtp))
+				f = m->sq_inplace_concat;
+			if (f == NULL)
+				f = m->sq_concat;
+			if (f != NULL)
+				return Psyco_META2(po, f,
+						   CfReturnRef|CfPyErrIfNull,
+						   "vv", v, w);
+		}
+		result = binop_type_error(po, v, w, "+=");
 	}
-	return binary_iop(po, v, w, NB_SLOT(nb_inplace_add),
-			  NB_SLOT(nb_add), "+=");
+	return result;
 }
 
 DEFINEFN
 vinfo_t* PsycoNumber_InPlaceMultiply(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
-	intargfunc g;
-	PyTypeObject* vtp = Psyco_NeedType(po, v);
-	if (vtp == NULL)
-		return NULL;
-	
-	if (HASINPLACE(vtp) && vtp->tp_as_sequence != NULL &&
-	    (g = vtp->tp_as_sequence->sq_inplace_repeat)) {
-		vinfo_t* result;
-		vinfo_t* n;
-		/* TypeSwitch */
-		PyTypeObject* wtp = Psyco_NeedType(po, w);
-		if (wtp == NULL)
-			return NULL;
-
-		if (PyType_TypeCheck(wtp, &PyInt_Type)) {
-			n = PsycoInt_AsLong(po, w);
+	vinfo_t* result = binary_iop1(po, v, w, NB_SLOT(nb_inplace_multiply),
+				      NB_SLOT(nb_multiply));
+	if (!IS_IMPLEMENTED(result)) {
+		PyTypeObject* vtp = Psyco_FastType(v);
+		PyTypeObject* wtp = Psyco_FastType(w);
+		intargfunc f = NULL;
+		PySequenceMethods *mv = vtp->tp_as_sequence;
+		PySequenceMethods *mw = wtp->tp_as_sequence;
+		vinfo_decref(result, po);
+		if (mv != NULL) {
+			if (HASINPLACE(vtp))
+				f = mv->sq_inplace_repeat;
+			if (f == NULL)
+				f = mv->sq_repeat;
+			if (f != NULL)
+				return psequence_repeat(po, f, v, w);
 		}
-		else if (PyType_TypeCheck(wtp, &PyLong_Type)) {
-			n = PsycoLong_AsLong(po, w);
+		else if (mw != NULL) {
+			/* Note that the right hand operand should not be
+			 * mutated in this case so sq_inplace_repeat is not
+			 * used. */
+			if (mw->sq_repeat)
+				return psequence_repeat(po,
+							mw->sq_repeat, w, v);
 		}
-		else {
-			type_error(po, "can't multiply sequence to non-int");
-			return NULL;
-		}
-		if (n == NULL)
-			return NULL;
-		result = Psyco_META2(po, g, CfReturnRef|CfPyErrIfNull,
-				     "vv", v, n);
-		vinfo_decref(n, po);
-		return result;
+		result = binop_type_error(po, v, w, "*=");
 	}
-	return binary_iop(po, v, w, NB_SLOT(nb_inplace_multiply),
-			  NB_SLOT(nb_multiply), "*=");
+	return result;
 }
 
 DEFINEFN
@@ -817,16 +888,19 @@ vinfo_t* PsycoNumber_InPlaceRemainder(PsycoObject* po, vinfo_t* v ,vinfo_t* w)
 	PyTypeObject* vtp = Psyco_NeedType(po, v);
 	if (vtp == NULL)
 		return NULL;
-	if (PsycoString_Check(vtp))
-		return psyco_generic_call(po, PyString_Format,
-                                          CfReturnRef|CfPyErrIfNull,
-					  "vv", v, w);
+	if (vtp->tp_as_number == NULL) {
+		/* <= 2.2 only: special-case strings */
+		if (PsycoString_Check(vtp))
+			return psyco_generic_call(po, PyString_Format,
+						  CfReturnRef|CfPyErrIfNull,
+						  "vv", v, w);
 #ifdef Py_USING_UNICODE
-	else if (PsycoUnicode_Check(vtp))
-		return psyco_generic_call(po, PyUnicode_Format,
-                                          CfReturnRef|CfPyErrIfNull,
-					  "vv", v, w);
+		else if (PsycoUnicode_Check(vtp))
+			return psyco_generic_call(po, PyUnicode_Format,
+						  CfReturnRef|CfPyErrIfNull,
+						  "vv", v, w);
 #endif
+	}
 	return binary_iop(po, v, w, NB_SLOT(nb_inplace_remainder),
 			  NB_SLOT(nb_remainder), "%");
 }

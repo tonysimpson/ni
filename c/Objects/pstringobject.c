@@ -825,6 +825,17 @@ static vinfo_t* pstring_richcompare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int
 	}
 }
 
+static vinfo_t* pstring_mod(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+{
+	PyTypeObject *tp = Psyco_FastType(v);
+	if (!PyType_TypeCheck(tp, &PyString_Type)) {
+		return psyco_vi_NotImplemented();
+	}
+	return psyco_generic_call(po, PyString_Format,
+				  CfReturnRef|CfPyErrIfNull,
+				  "vv", v, w);
+}
+
 
 #if USE_BUFSTR
 /***************************************************************/
@@ -1127,6 +1138,7 @@ INITIALIZATIONFN
 void psy_stringobject_init(void)
 {
 	PyMappingMethods *mm;
+	PyNumberMethods *nm;
 	PySequenceMethods *m = PyString_Type.tp_as_sequence;
 	Psyco_DefineMeta(m->sq_length, psyco_generic_immut_ob_size);
 	Psyco_DefineMeta(m->sq_item, pstring_item);
@@ -1139,6 +1151,10 @@ void psy_stringobject_init(void)
 	mm = PyString_Type.tp_as_mapping;
 	if (mm) {  /* Python >= 2.3 */
 		Psyco_DefineMeta(mm->mp_subscript, psyco_generic_subscript);
+	}
+	nm = PyString_Type.tp_as_number;
+	if (nm) {  /* Python >= 2.3 */
+		Psyco_DefineMeta(nm->nb_remainder, pstring_mod);
 	}
 
         INIT_SVIRTUAL(psyco_computed_char, compute_char, 0, 0);
