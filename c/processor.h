@@ -215,12 +215,6 @@ EXTERNFN vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 /* if the C function returns a new reference */
 #define CfReturnRef      0x01
 
-/* if the C function returns a flag (true/false). In this case,
-   typecast the return value of psyco_generic_call() to condition_code_t.
-   psyco_flag_call() does it for you. */
-#define CfReturnFlag     0x02
-#define psyco_flag_call  (condition_code_t) psyco_generic_call
-
 /* if the C function does not return anything (incompatible with CfPure)
    or if you are not interested in getting the result in a vinfo_t.
    psyco_generic_call() returns anything non-NULL (unless there is an error)
@@ -250,7 +244,15 @@ EXTERNFN vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 /*****************************************************************/
  /***   Emit common instructions                                ***/
 
+/* Returns a condition code for: "'vi' is not null". Warning, when a
+   function returns a condition code it must be used immediately, before
+   there is any change that new code is emitted. If you are unsure, use
+   psyco_vinfo_condition() to turn the condition code into a 0 or 1 integer. */
 EXTERNFN condition_code_t integer_non_null(PsycoObject* po, vinfo_t* vi);
+
+/* Same as above, but consumes the reference on 'vi'. Also checks if
+   'vi==NULL' and returns CC_ERROR in this case. */
+EXTERNFN condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi);
 
 /* Instructions with an 'ovf' parameter will check for overflow
    if 'ovf' is true. They return NULL if an overflow is detected. */

@@ -562,11 +562,29 @@ DEFINEFN
 vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc)
 {
   vinfo_t* result;
-  extra_assert(po->ccreg == NULL);
   if (cc < CC_TOTAL)
     {
-      result = vinfo_new(VirtualTime_New(&cc_functions_table[(int)cc].header));
-      po->ccreg = result;
+      if (po->ccreg != NULL)
+        {
+          /* there is already a value in the processor flags register */
+          extra_assert(psyco_vsource_cc(po->ccreg->source) != CC_ALWAYS_FALSE);
+          
+          if (psyco_vsource_cc(po->ccreg->source) == cc)
+            {
+              /* it is the same condition, so reuse it */
+              result = po->ccreg;
+              vinfo_incref(result);
+              return result;
+            }
+          /* it is not the same condition, save it */
+          BEGIN_CODE
+          NEED_CC();
+          END_CODE
+        }
+      extra_assert(po->ccreg == NULL);
+      po->ccreg = vinfo_new(VirtualTime_New
+                            (&cc_functions_table[(int)cc].header));
+      result = po->ccreg;
     }
   else
     result = vinfo_new(CompileTime_New(cc == CC_ALWAYS_TRUE));
@@ -949,7 +967,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 			vi = (vinfo_t*) arg;
 			src = vinfo_compute(vi, po);
 			if (src == SOURCE_ERROR)
-				goto Error;
+				return NULL;
 			if (!is_compiletime(src)) {
 				flags &= ~CfPure;
 			}
@@ -1005,7 +1023,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		result = psyco_call_var(c_function, count, args);
 		if (PyErr_Occurred()) {
 			psyco_virtualize_exception(po);
-			goto Error;
+			return NULL;
 		}
 		
 		switch (flags & CfReturnMask) {
@@ -1017,13 +1035,6 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		case CfReturnRef:
 			vresult = vinfo_new(CompileTime_NewSk(sk_new(result,
 								SkFlagPyObj)));
-			break;
-
-		case CfReturnFlag:
-			if (result != 0)
-				vresult = (vinfo_t*) CC_ALWAYS_TRUE;
-			else
-				vresult = (vinfo_t*) CC_ALWAYS_FALSE;
 			break;
 
 		default:
@@ -1109,26 +1120,23 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		vresult = new_rtvinfo(po, REG_FUNCTIONS_RETURN, true);
 		break;
 
-	case CfReturnFlag:
-		BEGIN_CODE
-		CHECK_NONZERO_REG(REG_FUNCTIONS_RETURN);
-		END_CODE
-		vresult = (vinfo_t*) CHECK_NONZERO_CONDITION;
-		break;
-
 	default:
-		vresult = (vinfo_t*) 1;  /* anything non-NULL */
+		if ((flags & CfPyErrMask) == 0)
+			return (vinfo_t*) 1;   /* anything non-NULL */
+		
+		vresult = new_rtvinfo(po, REG_FUNCTIONS_RETURN, false);
+		vresult = generic_call_check(po, flags, vresult);
+		vinfo_xdecref(vresult, po);
+#ifdef ALL_CHECKS
+		if (vresult != NULL)
+			vresult = (vinfo_t*) 1;  /* anything non-NULL */
+#endif
+		return vresult;
 	}
 	
 	if (flags & CfPyErrMask)
 		vresult = generic_call_check(po, flags, vresult);
 	return vresult;
-
-    Error:
-	if ((flags & CfReturnMask) == CfReturnFlag)
-		return (vinfo_t*) CC_ERROR;
-	else
-		return NULL;
 }
 
 
@@ -1183,6 +1191,30 @@ condition_code_t integer_non_null(PsycoObject* po, vinfo_t* vi)
 	return CHECK_NONZERO_CONDITION;
 }
 
+DEFINEFN
+condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi)
+{
+	condition_code_t result;
+
+	if (vi == NULL)
+		return CC_ERROR;
+
+        result = integer_non_null(po, vi);
+
+	/* 'vi' cannot be a reference to a Python object if we are
+	   asking ourselves if it is NULL or not. So the following
+	   vinfo_decref() will not emit a Py_DECREF() that would
+	   clobber the condition code. We check all this. */
+#ifdef ALL_CHECKS
+	assert(!has_rtref(vi->source));
+	{ code_t* code1 = po->code;
+#endif
+	vinfo_decref(vi, po);
+#ifdef ALL_CHECKS
+	assert(po->code == code1); }
+#endif
+	return result;
+}
 
 #define GENERIC_BINARY_HEADER                   \
   NonVirtualSource v1s, v2s;                    \
