@@ -32,6 +32,6 @@ EXTERNFN vinfo_t* PsycoTuple_New(int count, vinfo_t** source);
 EXTERNFN int PsycoTuple_Load(vinfo_t* tuple);
 
 
-EXTERNFN void psy_tupleobject_init();
+EXTERNFN void psy_tupleobject_init(void);
 
 #endif /* _PSY_TUPLEOBJECT_H */

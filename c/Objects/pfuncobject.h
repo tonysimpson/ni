@@ -10,6 +10,6 @@
 #include "pabstract.h"
 
 
-EXTERNFN void psy_funcobject_init();
+EXTERNFN void psy_funcobject_init(void);
 
 #endif /* _PSY_FUNCOBJECT_H */

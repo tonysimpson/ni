@@ -111,7 +111,7 @@ EXTERNVAR fixed_switch_t psyfs_tuple_list;
 EXTERNVAR fixed_switch_t psyfs_string_unicode;
 
 
-inline void psy_object_init()
+inline void psy_object_init(void)
 {
 	long values[2];
         int cnt;

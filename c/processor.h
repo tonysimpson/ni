@@ -8,7 +8,7 @@
 
 #include "vcompiler.h"
 
-EXTERNFN void psyco_processor_init();
+EXTERNFN void psyco_processor_init(void);
 
 
 /***************************************************************/

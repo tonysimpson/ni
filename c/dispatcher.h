@@ -11,7 +11,7 @@
 #include "processor.h"
 
 
-EXTERNFN void psyco_dispatcher_init();
+EXTERNFN void psyco_dispatcher_init(void);
 
 
 /* a frozen PsycoObject is a snapshot of an actual PsycoObject,

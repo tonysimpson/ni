@@ -18,6 +18,6 @@
 EXTERNVAR source_virtual_t psyco_computed_range;
 
 
-EXTERNFN void psy_bltinmodule_init();
+EXTERNFN void psy_bltinmodule_init(void);
 
 #endif /* _PSY_BLTINMODULE_H */

@@ -9,7 +9,7 @@
 
 #if defined(CODE_DUMP_FILE) && defined(CODE_DUMP_AT_END_ONLY)
 # undef psyco_dump_code_buffers
-EXTERNFN void psyco_dump_code_buffers();
+EXTERNFN void psyco_dump_code_buffers(void);
 #endif
 
 
@@ -409,7 +409,7 @@ static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
     }
 }
 DEFINEFN
-void psyco_dump_code_buffers()
+void psyco_dump_code_buffers(void)
 {
   FILE* f = fopen(CODE_DUMP_FILE, "wb");
   if (f != NULL)
@@ -477,7 +477,7 @@ static PyMethodDef PsycoMethods[] = {
 };
 
 /* Initialization */
-void init_psyco()
+void init_psyco(void)
 {
   PyObject* CPsycoModule;
 

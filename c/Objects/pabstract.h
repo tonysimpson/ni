@@ -94,6 +94,6 @@ EXTERNFN vinfo_t* psyco_generic_immut_ob_size(PsycoObject* po, vinfo_t* vi);
 EXTERNFN vinfo_t* psyco_generic_mut_ob_size(PsycoObject* po, vinfo_t* vi);
 
 
-inline void psy_abstract_init() { }  /* nothing */
+inline void psy_abstract_init(void) { }  /* nothing */
 
 #endif /* _PSY_ABSTRACT_H */

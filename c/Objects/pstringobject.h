@@ -34,6 +34,6 @@ inline vinfo_t* PsycoString_GET_SIZE(PsycoObject* po, vinfo_t* v)
 EXTERNFN vinfo_t* PsycoCharacter_New(vinfo_t* chrval);
 
 
-EXTERNFN void psy_stringobject_init();  /* nothing */
+EXTERNFN void psy_stringobject_init(void);  /* nothing */
 
 #endif /* _PSY_STRINGOBJECT_H */

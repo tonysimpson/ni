@@ -5,13 +5,12 @@
 #ifndef _VCOMPILER_H
 #define _VCOMPILER_H
 
-
 #include "psyco.h"
 #include "encoding.h"
 #include "Python/pycheader.h"
 
 
-EXTERNFN void psyco_compiler_init();
+EXTERNFN void psyco_compiler_init(void);
 
 
 /*****************************************************************/
@@ -128,7 +127,7 @@ inline void sk_decref(source_known_t *sk) {
 
 /* construction */
 EXTERNVAR void** sk_linked_list;
-EXTERNFN void* sk_malloc_block();
+EXTERNFN void* sk_malloc_block(void);
 inline source_known_t* sk_new(long v, long flags) {
 	source_known_t* sk;
 	if (sk_linked_list == NULL)
@@ -253,7 +252,7 @@ struct vinfo_s {
 
 /* allocation */
 EXTERNVAR void** vinfo_linked_list;
-EXTERNVAR void* vinfo_malloc_block();
+EXTERNVAR void* vinfo_malloc_block(void);
 /* private! Do not use */
 #ifdef PSYCO_NO_LINKED_LISTS
 # define VINFO_FREE_1(vi)   PyCore_FREE(vi)
@@ -440,7 +439,7 @@ inline void psyco_assert_coherent(PsycoObject* po) { }   /* nothing */
 #endif
 
 /* construction */
-inline PsycoObject* PsycoObject_New() {
+inline PsycoObject* PsycoObject_New(void) {
 	PsycoObject* po = (PsycoObject*) PyCore_MALLOC(sizeof(PsycoObject));
         if (po == NULL)
 		OUT_OF_MEMORY();

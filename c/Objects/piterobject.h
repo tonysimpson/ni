@@ -47,6 +47,6 @@ inline vinfo_t* PsycoSeqIter_New(vinfo_t* seq)
 }
 
 
-EXTERNFN void psy_iterobject_init();
+EXTERNFN void psy_iterobject_init(void);
 
 #endif /* _PSY_ITEROBJECT_H */

@@ -16,6 +16,6 @@
 EXTERNFN vinfo_t* PsycoList_New(PsycoObject* po, int size);
 
 
-EXTERNFN void psy_listobject_init();  /* nothing */
+EXTERNFN void psy_listobject_init(void);  /* nothing */
 
 #endif /* _PSY_LISTOBJECT_H */

@@ -14,6 +14,6 @@
 #define CFUNC_M_SELF        QUARTER(offsetof(PyCFunctionObject, m_self))
 
 
-EXTERNFN void psy_methodobject_init();
+EXTERNFN void psy_methodobject_init(void);
 
 #endif /* _PSY_METHODOBJECT_H */

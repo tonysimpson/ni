@@ -13,6 +13,6 @@
 EXTERNFN vinfo_t* PsycoDict_New(PsycoObject* po);
 
 
-EXTERNFN void psy_dictobject_init();
+EXTERNFN void psy_dictobject_init(void);
 
 #endif /* _PSY_LISTOBJECT_H */

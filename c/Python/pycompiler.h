@@ -12,7 +12,7 @@
 #include "../dispatcher.h"
 
 
-EXTERNFN void psyco_pycompiler_init();
+EXTERNFN void psyco_pycompiler_init(void);
 
 
 #ifdef PyString_CheckExact
