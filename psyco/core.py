@@ -141,8 +141,8 @@ up to the given depth of indirection."""
                  if isinstance(o, (types.MethodType,
                                    types.FunctionType))]
         if not funcs:
-            raise TypeError, ("nothing bindable found in %s object" %
-                              type(x).__name__)
+            raise error, ("nothing bindable found in %s object" %
+                          type(x).__name__)
         for o in funcs:
             bind(o, rec)
         return

@@ -45,10 +45,16 @@ else:
             type.__init__(self, name, bases, dict)
             bindlist = self.__dict__.get('__psyco__bind__')
             if bindlist is None:
-                core.bind(self)
+                try:
+                    core.bind(self)
+                except core.error:
+                    pass
             else:
                 for attr in bindlist:
-                    core.bind(self.__dict__.get(attr))
+                    try:
+                        core.bind(self.__dict__.get(attr))
+                    except core.error:
+                        pass
     
     psyobj = psymetaclass("psyobj", (), {})
 __metaclass__ = psymetaclass

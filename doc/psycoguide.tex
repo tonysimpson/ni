@@ -9,9 +9,9 @@
         Psyco Home page: \url{http://psyco.sourceforge.net/}
 }
 
-\date{\today}                   % December 2002
+\date{March 15, 2003}
 
-\release{1.0}                   % release version
+\release{1.0.0b1}                   % release version
 
 \makeindex
 
@@ -30,7 +30,7 @@
 \noindent
 Psyco is a Python extension module which can massively speed up the execution of any Python code.
 
-\strong{This document is an evolving Draft.}
+%\strong{This document is an evolving Draft.}
 
 \end{abstract}
 
@@ -185,6 +185,58 @@ f(args)            # regular slow call
 \end{verbatim}
 
 Unlike \function{psyco.bind}, \function{psyco.proxy} does not affect your original function at all, but only creates a Psyco-accelerated copy of it (a ``proxy'').  Useful if you only want to use Psyco at a very specific moment.  One can also argue that \code{f=psyco.proxy(f)} looks more Pythonic than \code{psyco.bind(f)}.
+
+
+\section{Zope's TAL: a real example with benchmarks}
+
+As an example of a good real-life candidate for Psyco acceleration, I chose \strong{TAL}, the simpler of the two templating languages of Zope (\url{http://www.zope.org}).  TAL is an extension of HTML in which you can write templates which are used to generate real HTML pages dynamically.  The translation from templates to real pages is a typical data-manipulation algorithm that is much faster in C than in Python, but much more obfuscated too.  TAL is currently implemented in Python only.
+
+For these tests, we will use the file \file{TAL.markbench.py} of a Zope 2 installation (if you did not install Zope, the file is in the \file{lib/python} subdirectory of the source archive).  You may have to create a file named \file{.path} to be able to run \file{markbench.py}, as explained when you first try to run it.
+
+On a Dual Pentium Linux running Python 2.2.2, using the Zope 2.6 distribution, I get the following times:
+
+\begin{verbatim}
+\fixme
+\end{verbatim}
+
+If I add the following line at the top of \file{markbench.py} the times drop massively --- the longest-running tests run as much as three times faster!
+
+\begin{verbatim}
+import psyco; psyco.log(); psyco.full()
+\end{verbatim}
+
+Results:
+
+\begin{verbatim}
+\fixme
+\end{verbatim}
+
+Here you see in the DTML test the first rule about Psyco: some code is obviously not seen by Psyco at all.  In other words for some reason this code runs in the normal interpreter only.  There are a lot of potential reasons for this, which range from Psyco failing to ``steal'' the code from Python before the latter executes it to code using unsupported constructs (see appendix \ref{unsupported}).
+
+\begin{verbatim}
+import psyco; psyco.log(); psyco.profile()
+\end{verbatim}
+
+Results:
+
+\begin{verbatim}
+\fixme
+\end{verbatim}
+
+If you use the profiler instead of compiling everything, the small tests won't run much faster, but the long-running ones will be about as fast as above.  It means that the profiler is a powerful tool that can be useful on arbitrarily large programs.  However, in the case of a large program in which you know where most of the processor time is spent, you can choose to selectively compile this part:
+
+\begin{verbatim}
+from TALInterpreter import TALInterpreter
+import psyco; psyco.log(); psyco.bind(TALInterpreter)
+\end{verbatim}
+
+Results:
+
+\begin{verbatim}
+\fixme
+\end{verbatim}
+
+Here you can see that only the TAL test is accelerated.  If you have a Zope server using TAL, you could try to add the above two lines to it.  You may get very interesting speed-ups for a very reasonable memory overweight (please tell me about it --- there is no real Zope server I can play with myself)!
 
 
 \section{Old-style classes vs. Built-in types}\label{metaclass}

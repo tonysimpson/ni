@@ -369,7 +369,9 @@ PyObject* psyco_stats_top(int n)
 
  /***************************************************************/
 
+#if !MEASURE_ALL_THREADS
 DEFINEVAR PyThreadState* psyco_main_threadstate;
+#endif
 
 
 INITIALIZATIONFN
