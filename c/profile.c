@@ -174,7 +174,9 @@ inline bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
 #endif
 	PyObject* harg;
 	PyObject* obj;
-	extra_assert(0 <= what && what < PyTrace_TOTAL);
+	extra_assert(what >= 0);
+	if (what >= PyTrace_TOTAL)
+		return true;   /* Python >= 2.4 defines PyTrace_C_xxx */
 #if VERBOSE_LEVEL >= 3
         stats_printf(("hook: %d %s\n", what, PyCodeObject_NAME(f->f_code)));
 #endif

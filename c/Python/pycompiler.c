@@ -2298,6 +2298,17 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
         BINARY_OPCODE(INPLACE_FLOOR_DIVIDE, PsycoNumber_InPlaceFloorDivide);
 #endif
 
+#ifdef LIST_APPEND
+	case LIST_APPEND:
+		w = NTOP(1);
+		v = NTOP(2);
+		if (!PsycoList_Append(po, v, w))
+			break;
+		POP_DECREF();
+		POP_DECREF();
+		goto fine;
+#endif
+
 	case INPLACE_POWER:
 		u = psyco_vi_None();
 		x = PsycoNumber_InPlacePower(po, NTOP(2), NTOP(1), u);
@@ -2581,9 +2592,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		PUSH(x);
 		goto fine;
 
-	/*MISSING_OPCODE(STORE_NAME); -- only used in module's code objects?
-	  MISSING_OPCODE(DELETE_NAME);*/
-
 	case UNPACK_SEQUENCE:
 	{
 		int i;
@@ -2692,6 +2700,11 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 	}
 
+	case STORE_NAME:
+		/* only for modules.
+		   Class bodies are never compiled because of LOAD_LOCALS.
+		   We can assume that f_locals == f_globals */
+		/* fall through */
 	case STORE_GLOBAL:
 	{
 		PyObject* w = GETNAMEV(oparg);
@@ -2704,6 +2717,11 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 	}
 
+	case DELETE_NAME:
+		/* only for modules.
+		   Class bodies are never compiled because of LOAD_LOCALS.
+		   We can assume that f_locals == f_globals */
+		/* fall through */
 	case DELETE_GLOBAL:
 	{
 		PyObject* w = GETNAMEV(oparg);
@@ -2724,8 +2742,11 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		PUSH(v);
 		goto fine;
 
-	/*MISSING_OPCODE(LOAD_NAME);*/
-
+	case LOAD_NAME:
+		/* only for modules.
+		   Class bodies are never compiled because of LOAD_LOCALS.
+		   We can assume that f_locals == f_globals */
+		/* fall through */
 	case LOAD_GLOBAL:
 	{
 		PyObject* namev = GETNAMEV(oparg);

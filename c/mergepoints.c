@@ -59,7 +59,8 @@
 /* instructions through which it is not safe to respawn:
    LOAD_GLOBAL may produce a run-time or various compile-time values
    each time it is respawned */
-#define IS_CTXDEP_INSTR(op)  (op == LOAD_GLOBAL)
+#define IS_CTXDEP_INSTR(op)  (op == LOAD_GLOBAL ||    \
+                              op == LOAD_NAME)
 
 #define MAX_UNINTERRUPTED_RANGE   170  /* bytecode instructions */
 
@@ -105,6 +106,7 @@
                            op == BINARY_XOR ||                \
                            op == BINARY_OR ||                 \
                            IS_NEW_DIVIDE(op) ||               \
+                           IS_LIST_APPEND(op) ||              \
                            op == INPLACE_POWER ||             \
                            op == INPLACE_MULTIPLY ||          \
                            op == INPLACE_DIVIDE ||            \
@@ -141,6 +143,9 @@
                            op == STORE_GLOBAL ||              \
                            op == DELETE_GLOBAL ||             \
                            op == LOAD_GLOBAL ||               \
+                           op == STORE_NAME ||                \
+                           op == DELETE_NAME ||               \
+                           op == LOAD_NAME ||                 \
                            op == LOAD_ATTR ||                 \
                            /* COMPARE_OP special-cased */     \
                            op == IMPORT_NAME ||               \
@@ -200,6 +205,12 @@
                                  op == INPLACE_TRUE_DIVIDE)
 #else
 # define IS_NEW_DIVIDE(op)       0
+#endif
+
+#ifdef LIST_APPEND
+# define IS_LIST_APPEND(op)  (op == LIST_APPEND)
+#else
+# define IS_LIST_APPEND(op)   0
 #endif
  /***************************************************************/
 

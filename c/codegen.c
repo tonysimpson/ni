@@ -140,7 +140,7 @@ condition_code_t psyco_vsource_cc(Source source)
 
 #else /* if !HAVE_CCREG */
 
-/* psyco_vinfo_condition() defined in iencoding.c */
+# error "this was meant for ivm, but now ivm also defines HAVE_CCREG."
 
 #endif /* HAVE_CCREG */
 

@@ -28,10 +28,8 @@
  /*** Condition Codes (a.k.a. the processor 'flags' register) ***/
 
 /* return a new vinfo_t* meaning `in the processor flags, true if <cc>',
-   as an integer 0 or 1.  For i386 the source of the vinfo_t* is compile-time
-   if cc is CC_ALWAYS_TRUE/FALSE, and virtual-time otherwise. (In the latter
-   case it gets stored in po->ccreg.)  For ivm the source is run-time if
-   cc < CC_TOTAL. */
+   as an integer 0 or 1.  The source of the vinfo_t* is compile-time
+   if cc is CC_ALWAYS_TRUE/FALSE, and virtual-time otherwise. */
 EXTERNFN vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc);
 EXTERNFN VirtualTimeSource psyco_source_condition(condition_code_t cc);
 

@@ -18,7 +18,13 @@ INPUTSCRIPT = "input-basetexts.py"
 TESTS = open('btrun.py', 'r').read()
 
 
-tests = doctest._extract_examples(TESTS)
+if hasattr(doctest, '_extract_examples'):
+    tests = doctest._extract_examples(TESTS)
+else:
+    examples = doctest.DocTestParser().get_examples(TESTS)
+    tests = [(example.source, example.want, example.lineno)
+             for example in examples]
+    
 PRELUDE = ''
 for inp, outp, line in tests[:]:
     if not outp:
@@ -43,7 +49,7 @@ def filterline(line):
 for inp, outp, line in all_tests:
     sep = SEPARATOR % inp
     print >> childin, 'print %r' % sep
-    print >> childin, 'print >> sys.stderr, %r' % inp
+    print >> childin, 'print >> sys.stderr, %r' % inp.strip()
     print >> expected, sep
     print >> childin, inp
     outplines = [filterline(line) for line in outp.split('\n')]

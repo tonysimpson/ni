@@ -335,13 +335,92 @@ static vinfo_t* pint_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 				  "vv", v, w);
 }
 
-#if PY_VERSION_HEX>=0x02040000
-# warning "left shifts must be able to return longs in Python 2.4"
-#endif
+#if PY_VERSION_HEX < 0x02040000
+
 static vinfo_t* pint_lshift(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
 	return pint_base2op(po, v, w, integer_lshift);
 }
+
+#else
+/* Python 2.4: left shifts can return longs */
+
+static long cimpl_int_lshift(long a, long b)
+{
+	long c;
+	if (b < 0)
+		return -1;   /* error */
+	if (a == 0)
+		return 0;
+	if (b >= LONG_BIT)
+		return -1;   /* overflow */
+	c = a << b;
+	if (a != Py_ARITHMETIC_RIGHT_SHIFT(long, c, b))
+		return -1;   /* overflow */
+	return c;
+}
+
+static PyObject* cimpl_ovf_int_lshift(long a, long b)
+{
+	if (b > 0) {
+		/* cimpl_int_lshift() overflowed */
+		PyObject *vv, *ww, *result;
+		vv = PyLong_FromLong(a);
+		if (vv == NULL)
+			return NULL;
+		ww = PyLong_FromLong(b);
+		if (ww == NULL) {
+			Py_DECREF(vv);
+			return NULL;
+		}
+		result = PyNumber_Lshift(vv, ww);
+		Py_DECREF(vv);
+		Py_DECREF(ww);
+		return result;
+	}
+	else if (b == 0) {
+		/* special case '(-1)<<0', which makes cimpl_int_lshift()
+		   return -1 by accident */
+		return PyInt_FromLong(a);
+	}
+	else {
+		PyErr_SetString(PyExc_ValueError, "negative shift count");
+		return NULL;
+	}
+}
+
+static vinfo_t* pint_lshift(PsycoObject* po, vinfo_t* v, vinfo_t* w)
+{
+	condition_code_t cc;
+	vinfo_t* a;
+	vinfo_t* b;
+	vinfo_t* x;
+	CONVERT_TO_LONG(v, a);
+	CONVERT_TO_LONG(w, b);
+	x = psyco_generic_call(po, cimpl_int_lshift,
+			       CfPure|CfReturnNormal,
+			       "vv", a, b);
+	if (x == NULL)
+		return NULL;
+
+	cc = integer_cmp_i(po, x, -1, Py_EQ);
+	if (cc == CC_ERROR) {
+		vinfo_decref(x, po);
+		return NULL;
+	}
+
+	if (runtime_condition_f(po, cc)) {
+		/* overflow */
+		vinfo_decref(x, po);
+		return psyco_generic_call(po, cimpl_ovf_int_lshift,
+					  CfPure|CfReturnRef|CfPyErrIfNull,
+					  "vv", a, b);
+	}
+	else
+		return PsycoInt_FROM_LONG(x);
+}
+
+#endif   /* Python 2.4 */
 
 static vinfo_t* pint_rshift(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {

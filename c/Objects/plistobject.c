@@ -296,6 +296,15 @@ vinfo_t* psyco_plist_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 				  "vv", a, b);
 }
 
+DEFINEFN
+bool PsycoList_Append(PsycoObject* po, vinfo_t* v, vinfo_t* vitem)
+{
+	/* use the real PyList_Append */
+	return psyco_generic_call(po, PyList_Append,
+				  CfNoReturnValue|CfPyErrIfNonNull,
+				  "vv", v, vitem) != NULL;
+}
+
 
 INITIALIZATIONFN
 void psy_listobject_init(void)

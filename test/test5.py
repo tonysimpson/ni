@@ -274,6 +274,8 @@ if __name__ == '__main__':
     import time
     print "break!"
     time.sleep(0.5)
-    psyco.full()
-    longrangetest()
+    #psyco.full()
+    #longrangetest()
+    print             f3 (-1, 0)
+    print psyco.proxy(f3)(-1, 0)
     psyco.dumpcodebuf()
