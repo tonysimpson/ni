@@ -33,6 +33,7 @@ Version History:
 """
 
 LOOPS = 10000
+LOOPS1 = 1000  # number of loops for the first run of Psyco
 
 from time import clock
 
@@ -58,25 +59,63 @@ TRUE = 1
 FALSE = 0
 
 def main():
-    benchtime, s1 = pystones_psycho()
-    print "Pystone(%s) (psycho) time for %d passes = %g" % \
-          (__version__, LOOPS, benchtime)
-    print "This machine benchmarks at %g pystones/second" % s1
-    print
-    benchtime, s2 = pystones_reg()
-    print "Pystone(%s) (regular) time for %d passes = %g" % \
-              (__version__, LOOPS, benchtime)
-    print "This machine benchmarks at %g pystones/second" % s2
-    print
-    print "Pystone with Psyco is %.2f times faster than without" % (s1/float(s2))
+    print "Pystone(%s)                   time     loops per second" % __version__
+    py_time, = pystones_reg(LOOPS1+LOOPS)
+    pyloop_time = py_time / (LOOPS1+LOOPS)
+    print "regular Python                  %g        %g" % \
+          (py_time, 1.0/pyloop_time)
+    psy_time1, psy_time = pystones_psycho(LOOPS1, LOOPS)
+    print "Psyco for %d passes           %g        %g" % \
+          (LOOPS1, psy_time1, LOOPS1/psy_time1)
+    print "Psyco for %d more passes      %g        %g" % \
+          (LOOPS, psy_time, LOOPS/psy_time)
+    print "Total for %d passes           %g        %g" % \
+          (LOOPS1+LOOPS, psy_time1+psy_time, 
+             (LOOPS1+LOOPS)/(psy_time1+psy_time))
 
-def pystones_psycho(loops=LOOPS):
+    # invert the equation system:
+    #   psy_time1          = start_time + LOOPS1*loop_time
+    #   psy_time1+psy_time = start_time + (LOOPS1+LOOPS)*loop_time
+    loop_time = psy_time/LOOPS
+    start_time = psy_time1 - LOOPS1*loop_time
+    print "Separated compilation/execution timings for %d passes" % \
+          (LOOPS1+LOOPS)
+    print "Compilation (i.e. start-up)   %g        %g" % \
+          (start_time, 1.0/start_time)
+    print "Machine code execution        %g        %g" % \
+          (loop_time*(LOOPS1+LOOPS), 1.0/loop_time)
+    print
+    print "Relative execution frequencies (iterations per second)"
+    print "iterations        Psyco        Python    Psyco is ... times faster"
+    for d in range(8):
+        n = 10**d
+        psyco1 = n/(start_time+n*loop_time)
+        print " %8d       %g         %g           %.2f" % \
+            (n, psyco1, 1.0/pyloop_time, psyco1*pyloop_time)
+
+    # invert the equation
+    #   start_time + c*loop_time = c*pyloop_time
+    if pyloop_time <= loop_time:
+        print "Psyco is always slower than regular Python."
+    else:
+        c = start_time/(pyloop_time - loop_time)
+        print "Cut-off point: %.1f iterations" % c
+
+def pystones_psycho(*loopslist):
     import _psyco
-    f = _psyco.proxy(Proc0, 99)
-    return f(loops)
+    old_dict = Record.__dict__.copy()
+    try:
+        # replace all methods of Record by proxies
+        #for key, value in old_dict.items():
+        #    if type(value) is type(main):
+        #        Record.__dict__[key] = _psyco.proxy(value, 99)
+        f = _psyco.proxy(Proc0, 99)
+        return map(f, loopslist)
+    finally:
+        Record.__dict__.update(old_dict)
 
-def pystones_reg(loops=LOOPS):
-    return Proc0(loops)
+def pystones_reg(*loopslist):
+    return map(Proc0, loopslist)
 
 IntGlob = 0
 BoolGlob = FALSE
@@ -96,11 +135,6 @@ def Proc0(loops=LOOPS):
     global Array2Glob
     global PtrGlb
     global PtrGlbNext
-
-    starttime = clock()
-    for i in range(loops):
-        pass
-    nulltime = clock() - starttime
 
     PtrGlbNext = Record()
     PtrGlb = Record()
@@ -138,8 +172,8 @@ def Proc0(loops=LOOPS):
         IntLoc2 = 7 * (IntLoc3 - IntLoc2) - IntLoc1
         IntLoc1 = Proc2(IntLoc1)
 
-    benchtime = clock() - starttime - nulltime
-    return benchtime, (loops / benchtime)
+    benchtime = clock() - starttime
+    return benchtime
 
 def Proc1(PtrParIn):
     PtrParIn.PtrComp = NextRecord = PtrGlb.copy()
