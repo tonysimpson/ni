@@ -114,6 +114,7 @@ type is.
 New version of eval(), execfile(), globals(), input(), sys._getframe()
 ----------------------------------------------------------------------
 
+[Release 0.4.2]
 For proper operation, these functions are re-implemented by Psyco. The new
 versions are put directly into the built-in and sys modules respectively,
 so that you should not notice the difference. That is, unless you really
@@ -123,6 +124,7 @@ Psyco.
 No locals() dictionary
 ----------------------
 
+[Release 0.4.2]
 Psyco has no dictionary of local variables. The built-in function
 'locals()', as well as 'vars()' or 'dir()' without argument, will not
 work. Psyco re-implements them to return an empty dictionary and issue
