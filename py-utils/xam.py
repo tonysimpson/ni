@@ -120,15 +120,17 @@ class CodeBuf:
             # produce the disassembly listing
             data = self.data
             addr = self.addr
-            if data[:4] == '\x66\x66\x66\x66':
-                # detected a rt_local_buf_t structure
-                next, key = struct.unpack('ll', data[4:12])
-                data = data[12:]
-                addr += 12
-                self.cache_text = [
-                    'Created by promotion of the value 0x%x\n' % key,
-                    'Next promoted value at buffer 0x%x\n' % next,
-                    ]
+            for i in range(0, 16, 4):
+                if data[:i] == '\xCC'*i and data[i:i+4] == '\x66\x66\x66\x66':
+                    # detected a rt_local_buf_t structure
+                    next, key = struct.unpack('ll', data[i+4:i+12])
+                    data = data[i+12:]
+                    addr += i+12
+                    self.cache_text = [
+                        'Created by promotion of the value 0x%x\n' % key,
+                        'Next promoted value at buffer 0x%x\n' % next,
+                        ]
+                    break
             else:
                 self.cache_text = []
             f = open(tmpfile, 'wb')

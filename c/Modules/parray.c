@@ -217,9 +217,12 @@ static bool parray_ass_item(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,vinfo_t* v
 
 
 /* array creation: we know the result is of type ArrayType.
-   Maybe we should also decode a constant-time description character. */
+   XXX we should also decode a constant-time description character. */
 DEF_KNOWN_RET_TYPE_2(pa_array, cimpl_array, CfReturnRef|CfPyErrIfNull, arraytype)
-
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
+DEF_KNOWN_RET_TYPE_3(parray_new, arraytype->tp_new,
+                     CfReturnRef|CfPyErrIfNull, arraytype)
+#endif
 
 /***************************************************************/
 
@@ -242,8 +245,8 @@ void psyco_initarray(void)
 		/*Psyco_DefineMeta(m->sq_ass_item, parray_ass_item);*/
 		
 		/* map array.array() to its meta-implementation pa_array() */
-		cimpl_array = Psyco_DefineModuleFn(md, "array", METH_VARARGS,
-						   &pa_array);
+		cimpl_array = Psyco_DefineModuleC(md, "array", METH_VARARGS,
+                                                  &pa_array, &parray_new);
 	}
 	Py_XDECREF(md);
 

@@ -81,7 +81,7 @@ def f6(n, p):
 
 def mandelbrot(c):
     z = 0j
-    for i in range(1000):
+    for i in xrange(1000):
         z = z*z + c
         if abs(z) > 2:
             if i > 126-33: i = 126-33
@@ -120,23 +120,37 @@ def f11(n):
     return subtracter(1000)
 
 
+ALLTESTS = []
+
 def go(f, *args):
-    print '-'*80
+    print '-'*78
     v1, t1 = time(psyco.proxy(f), *args)
     print v1
     print '^^^ computed by Psyco in %s seconds' % t1
     v2, t2 = time(f, *args)
     if v1 == v2:
         if t1 and t2:
-            s = ', Psyco is %.2f times faster' % (t2/float(t1))
+            ok = '%.2f times faster' % (t2/float(t1))
+            s = ', Psyco is %s' % ok
         else:
-            s = ''
+            ok = s = ''
         print 'Python got the same result in %s seconds%s' % (t2, s)
     else:
         print v2
         print '^^^ by Python in %s seconds' % t2
-        print '*'*80
+        print '*'*78
         print '!!! different results !!!'
+        ok = 'DIFFERENT RESULTS'
+    ALLTESTS.append((f.func_name,t2,t1,ok))
+
+def print_results():
+    import sys
+    print
+    print '='*23, 'Summary (Python %d.%d.%d)' % sys.version_info[:3], '='*23
+    format = '%-15s  %-15s  %-15s  %s'
+    print format % ('function', 'Python time', 'Psyco time', '')
+    for r in ALLTESTS:
+        print format % r
 
 def go1(arg=2117):
     go(f1, arg)
@@ -166,3 +180,5 @@ if __name__ == "__main__":
     go6()
     go7()
     go(f10)
+    psyco.dumpcodebuf()
+    print_results()

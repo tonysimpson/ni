@@ -1615,11 +1615,7 @@ int psyco_simplify_array(vinfo_array_t* array)
         with the most used items moving forward in the list.
    2 -- order the code buffers as a binary search tree,
         with the most used nodes moving up in the tree (not implemented)
-
-   (1) seems slower than (0) even if the structure is never actually used
-   (i.e. PROMOTION_FAST_COMMON_CASE catches 100% of the cases). Is it
-   related to the fact that (1) mixes data at the beginning of
-   each code buffer? */
+*/
 #define PROMOTION_TACTIC             1
 
 /* Define to 1 to emit a "compare/jump-if-equal" pair of instructions
@@ -1771,13 +1767,18 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
   {
     code_t* codeend;
     rt_local_buf_t* buf = (rt_local_buf_t*) codebuf->codeptr;
+    code_t* code = (code_t*)(buf+1);
+    ALIGN_NO_FILL();
+    result = code;
+    buf = ((rt_local_buf_t*) code) - 1;
+    
 # if CODE_DUMP
+    memset(codebuf->codeptr, 0xCC, ((char*) buf) - ((char*) codebuf->codeptr));
     buf->signature = 0x66666666;
 # endif
     buf->next = fs->local_chained_list;
     buf->key = key;
     fs->local_chained_list = buf;
-    result = (code_t*)(buf+1);
     
     po->code = result;
     po->codelimit = codebuf->codeptr + BIG_BUFFER_SIZE - GUARANTEED_MINIMUM;
@@ -1922,6 +1923,8 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
   /***   compile-time ones (promotion only occurs for certain    ***/
    /***   values, e.g. for types that we know how to optimize).   ***/
 
+#if USE_RUNTIME_SWITCHES
+
 typedef struct { /* produced at compile time and read by the dispatcher */
   fixed_switch_t* rts;    /* special values */
   PsycoObject* po;        /* state before promotion */
@@ -2011,6 +2014,8 @@ code_t* psyco_finish_fixed_switch(PsycoObject* po, vinfo_t* fix, long kflags,
   rtfxs->switchcodeend = switchcodeend;
   return (code_t*)(rtfxs+1);
 }
+
+#endif   /* USE_RUNTIME_SWITCHES */
 
 
 /*****************************************************************/

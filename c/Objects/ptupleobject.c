@@ -123,8 +123,8 @@ vinfo_t* PsycoTuple_Concat(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 	vinfo_t* result;
 	int len1, len2;
 	
-	if (Psyco_TypeSwitch(po, v1, &psyfs_tuple) != 0 ||
-	    Psyco_TypeSwitch(po, v2, &psyfs_tuple) != 0)
+	if (Psyco_VerifyType(po, v1, &PyTuple_Type) != true ||
+	    Psyco_VerifyType(po, v2, &PyTuple_Type) != true)
 		return NULL;
 	
 	/* XXX a "virtual tuple concatenation" would be cool */

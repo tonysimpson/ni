@@ -30,6 +30,7 @@
 # include "Objects/pstringobject.h"
 # include "Objects/pstructmember.h"
 # include "Objects/ptupleobject.h"
+# include "Objects/ptypeobject.h"
 
 #else /* if PSYCO_INITIALIZATION */
 # undef PSYCO_INITIALIZATION
@@ -62,6 +63,7 @@
 # include "Objects/pstringobject.c"
 # include "Objects/pstructmember.c"
 # include "Objects/ptupleobject.c"
+# include "Objects/ptypeobject.c"
 # include "Modules/parray.c"
 # include "Modules/pmath.c"
 #else /* if !ALL_STATIC */
@@ -82,6 +84,7 @@
   EXTERNFN void psy_methodobject_init(void);	/* Objects/pmethodobject.c */
   EXTERNFN void psy_stringobject_init(void);	/* Objects/pstringobject.c */
   EXTERNFN void psy_tupleobject_init(void);	/* Objects/ptupleobject.c */
+  EXTERNFN void psy_typeobject_init(void);	/* Objects/ptypeobject.c */
   EXTERNFN void psyco_initarray(void);	/* Modules/parray.c */
   EXTERNFN void psyco_initmath(void);	/* Modules/pmath.c */
 #endif /* !ALL_STATIC */
@@ -104,6 +107,7 @@ inline void initialize_all_files(void) {
   psy_methodobject_init();	/* Objects/pmethodobject.c */
   psy_stringobject_init();	/* Objects/pstringobject.c */
   psy_tupleobject_init();	/* Objects/ptupleobject.c */
+  psy_typeobject_init();	/* Objects/ptypeobject.c */
   psyco_initarray();	/* Modules/parray.c */
   psyco_initmath();	/* Modules/pmath.c */
 }

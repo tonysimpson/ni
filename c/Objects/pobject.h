@@ -47,14 +47,26 @@ inline PyTypeObject* Psyco_FastType(vinfo_t* vi) {
 	extra_assert(vtp != NULL && is_compiletime(vtp->source));
 	return (PyTypeObject*) (CompileTime_Get(vtp->source)->value);
 }
+#if USE_RUNTIME_SWITCHES
+# error "Disabled because of type inheritance. The switch overlooks subtypes."
 /* Check for the type of an object. Returns the index in the set 'fs' or
    -1 if not in the set (or if exception). Used this is better than
    Psyco_NeedType() if you are only interested in some types, not all of them. */
 inline int Psyco_TypeSwitch(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) {
 	vinfo_t* vtp = get_array_item(po, vi, OB_TYPE);
-	 if (vtp == NULL)
-		 return -1;
-	 return psyco_switch_index(po, vtp, fs);
+	if (vtp == NULL)
+		return -1;
+	return psyco_switch_index(po, vtp, fs);
+}
+#endif
+
+/* Is the given object is of the given type (or a subtype of it) ?
+   Returns -1 in case of error or if promotion is requested. */
+inline int Psyco_VerifyType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
+	PyTypeObject* vtp = Psyco_NeedType(po, vi);
+	if (vtp == NULL)
+		return -1;
+	return PyType_TypeCheck(vtp, tp);
 }
 
 /* Use this to assert the type of an object. Do not use unless you are
@@ -134,6 +146,7 @@ static vinfo_t* cname  fargs  {                                                 
 }
 
 
+#if USE_RUNTIME_SWITCHES
 /* definition of commonly used "fixed switches", i.e. sets of
    values (duplicating fixed switch structures for the same set
    of value can inccur a run-time performance loss in some cases) */
@@ -149,13 +162,7 @@ EXTERNVAR fixed_switch_t psyfs_tuple;
 EXTERNVAR fixed_switch_t psyfs_dict;
 EXTERNVAR fixed_switch_t psyfs_none;
 /* NOTE: don't forget to update pobject.c when adding new variables here */
-
-
-/* To check whether an object is Py_None. Return 0 if it is,
-   and -1 otherwise (use PycException_Occurred() to check for exceptions) */
-inline int Psyco_IsNone(PsycoObject* po, vinfo_t* vi) {
-	return Psyco_TypeSwitch(po, vi, &psyfs_none);
-}
+#endif
 
 
 #endif /* _PSY_OBJECT_H */

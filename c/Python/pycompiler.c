@@ -120,6 +120,28 @@ PyCFunction Psyco_DefineModuleFn(PyObject* module, char* meth_name,
 	return f;
 }
 
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
+DEFINEFN
+PyCFunction Psyco_DefineModuleC(PyObject* module, char* meth_name,
+				int meth_flags, void* meta_fn,
+				void* meta_type_new)
+{
+	PyObject* o = Psyco_GetModuleObject(module, meth_name, NULL);
+	if (o == NULL)
+		return NULL;
+	if (PyType_Check(o) &&
+	    PyType_HasFeature((PyTypeObject*) o, Py_TPFLAGS_HAVE_CLASS) &&
+	    ((PyTypeObject*)o)->tp_new != NULL) {
+		/* maps a callable type */
+		Psyco_DefineMeta(((PyTypeObject*)o)->tp_new, meta_type_new);
+		return NULL;
+	}
+	else
+		return Psyco_DefineModuleFn(module, meth_name,
+					    meth_flags, meta_fn);
+}
+#endif
+
 
 #define FORGET_REF     if (has_rtref(vi->source))			\
 			    vi->source = remove_rtref(vi->source)
@@ -1224,14 +1246,16 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 static vinfo_t* _PsycoEval_SliceIndex(PsycoObject* po, vinfo_t* v)
 {
 	vinfo_t* result;
-	switch (Psyco_TypeSwitch(po, v, &psyfs_int_long)) {
+	/* TypeSwitch */
+	PyTypeObject* vtp = Psyco_NeedType(po, v);
+	if (vtp == NULL)
+		return NULL;
 
-	case 0:   /* PyInt_Type */
+	if (PyType_TypeCheck(vtp, &PyInt_Type)) {
 		result = PsycoInt_AS_LONG(po, v);
 		vinfo_incref(result);
-		break;
-
-	case 1:   /* PyLong_Type */
+	}
+	else if (PyType_TypeCheck(vtp, &PyLong_Type)) {
 		result = PsycoLong_AsLong(po, v);
 		if (result == NULL) {
 			vinfo_t* vi_zero;
@@ -1266,9 +1290,8 @@ static vinfo_t* _PsycoEval_SliceIndex(PsycoObject* po, vinfo_t* v)
 			}
 			result = vinfo_new(CompileTime_New(x));
 		}
-		break;
-
-	default:
+	}
+	else {
 		/* no error set */
 		result = NULL;
 	}
@@ -1471,16 +1494,17 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 		int i;
 		if (flags & CALL_FLAG_KW) {   /*  '**kw' call syntax */
 			vinfo_t* w = args[--n];  /* pop keyword dictionary */
-			
 			/* check that it is a dictionary */
-			if (Psyco_TypeSwitch(po, w, &psyfs_dict) != 0) {
-				if (PycException_Occurred(po))
-					goto fail;
+			switch (Psyco_VerifyType(po, w, &PyDict_Type)) {
+			case true:   /* fine */
+				break;
+			case false:  /* not a dict */
 				/* don't bother displaying the function name
 				   which might not be known yet */
 				PycException_SetString(po, PyExc_TypeError,
 						       "argument after ** "
 						       "must be a dictionary");
+			default:  /* fall through */
 				goto fail;
 			}
 			if (nk != 0) {
@@ -3172,15 +3196,19 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		 unexpected results. */
 	      extra_assert(array_contains(&po->vlocals, promote_me));
 	      clear_pseudo_exception(po);
+#if USE_RUNTIME_SWITCHES
 	      if (promotion->fs == NULL)
+#endif
 		      code1 = psyco_finish_promotion(po,
 						     promote_me,
 						     promotion->kflags);
+#if USE_RUNTIME_SWITCHES
 	      else
 		      code1 = psyco_finish_fixed_switch(po,
 							promote_me,
 							promotion->kflags,
 							promotion->fs);
+#endif
 	      goto finished;
       }
       

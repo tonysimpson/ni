@@ -169,6 +169,7 @@ EXTERNFN int psyco_simplify_array(vinfo_array_t* array);
 EXTERNFN code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix,
                                         long kflags);
 
+#if USE_RUNTIME_SWITCHES
 /* Promotion of certain run-time values into compile-time ones
    (promotion only occurs for values inside a given set, e.g. for
    types that we know how to optimize). The special values are
@@ -179,6 +180,7 @@ EXTERNFN code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix,
 EXTERNFN code_t* psyco_finish_fixed_switch(PsycoObject* po, vinfo_t* fix,
                                            long kflags,
                                            fixed_switch_t* special_values);
+#endif
 
 /* Un-Promotion from non-fixed compile-time into run-time.
    Note: this does not release 'po'. Un-promoting is easy and

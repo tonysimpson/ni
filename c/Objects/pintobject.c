@@ -139,15 +139,16 @@ static vinfo_t* pint_abs(PsycoObject* po, vinfo_t* intobj)
 
 
 #define CONVERT_TO_LONG(vobj, vlng)				\
-	if (Psyco_TypeSwitch(po, vobj, &psyfs_int) == 0) {	\
+	switch (Psyco_VerifyType(po, vobj, &PyInt_Type)) {	\
+	case true:   /* vobj is a PyIntObject */		\
 		vlng = PsycoInt_AS_LONG(po, vobj);		\
 		if (vlng == NULL)				\
 			return NULL;				\
-	}							\
-	else {							\
-		if (PycException_Occurred(po))			\
-			return NULL;				\
+		break;						\
+	case false:  /* vobj is not a PyIntObject */		\
 		return psyco_vi_NotImplemented();		\
+	default:     /* error or promotion */			\
+		return NULL;					\
 	}
 
 static vinfo_t* pint_add(PsycoObject* po, vinfo_t* v, vinfo_t* w)

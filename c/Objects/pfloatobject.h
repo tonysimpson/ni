@@ -52,6 +52,11 @@ inline vinfo_t* PsycoFloat_AS_DOUBLE_2(PsycoObject* po, vinfo_t* v)
 /* return a new ref */
 EXTERNFN bool PsycoFloat_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd1, vinfo_t** vd2);
 
+/* return true if successful, false if error or promotion, or
+   -1 if the convertion is impossible */
+EXTERNFN int psyco_convert_to_double(PsycoObject* po, vinfo_t* vobj,
+                                     vinfo_t** pv1, vinfo_t** pv2);
+
 /*EXTERNFN condition_code_t float_cmp(PsycoObject* po, vinfo_t* a1, vinfo_t* a2, 
   vinfo_t* b1, vinfo_t* b2, int op);*/
 

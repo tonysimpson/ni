@@ -703,16 +703,39 @@ void psyco_processor_init(void)
       cc_functions_table[i].cc = (condition_code_t) i;
     }
   psyco_nonfixed_promotion.header.compute_fn = &computed_promotion;
+#if USE_RUNTIME_SWITCHES
   psyco_nonfixed_promotion.fs = NULL;
+#endif
   psyco_nonfixed_promotion.kflags = SkFlagFixed;
   psyco_nonfixed_pyobj_promotion.header.compute_fn = &computed_promotion;
+#if USE_RUNTIME_SWITCHES
   psyco_nonfixed_pyobj_promotion.fs = NULL;
+#endif
   psyco_nonfixed_pyobj_promotion.kflags = SkFlagFixed | SkFlagPyObj;
 }
 
 
 /*****************************************************************/
  /***   run-time switches                                       ***/
+
+static bool computed_promotion(PsycoObject* po, vinfo_t* v)
+{
+  /* uncomputable, but still use the address of computed_promotion() as a
+     tag to figure out if a virtual source is a c_promotion_s structure. */
+  return psyco_vsource_not_important.compute_fn(po, v);
+}
+
+DEFINEVAR struct c_promotion_s psyco_nonfixed_promotion;
+DEFINEVAR struct c_promotion_s psyco_nonfixed_pyobj_promotion;
+
+DEFINEFN
+bool psyco_vsource_is_promotion(VirtualTimeSource source)
+{
+  return VirtualTime_Get(source)->compute_fn == &computed_promotion;
+}
+
+
+#if USE_RUNTIME_SWITCHES
 
 /* The tactic is to precompute, given a list of the values we will
    have to switch on, a binary tree search algorithm in machine
@@ -833,22 +856,6 @@ static code_t* fx_writecases(code_t* code, code_t** lastcmp,
                            middle+1, last, supposed_end);
     }
   return code;
-}
-
-static bool computed_promotion(PsycoObject* po, vinfo_t* v)
-{
-  /* uncomputable, but still use the address of computed_promotion() as a
-     tag to figure out if a virtual source is a c_promotion_s structure. */
-  return psyco_vsource_not_important.compute_fn(po, v);
-}
-
-DEFINEVAR struct c_promotion_s psyco_nonfixed_promotion;
-DEFINEVAR struct c_promotion_s psyco_nonfixed_pyobj_promotion;
-
-DEFINEFN
-bool psyco_vsource_is_promotion(VirtualTimeSource source)
-{
-  return VirtualTime_Get(source)->compute_fn == &computed_promotion;
 }
 
 /* preparation for psyco_write_run_time_switch() */
@@ -984,6 +991,8 @@ void psyco_fix_switch_case(fixed_switch_t* rts, code_t* code,
   code_t* fixme = code - fixtarget;
   *(long*)(fixme-4) = newtarget - fixme;
 }
+
+#endif   /* USE_RUNTIME_SWITCHES */
 
 
 /*****************************************************************/

@@ -52,6 +52,7 @@ SRC = [
     Object('stringobject'),
     Object('structmember', 0),
     Object('tupleobject'),
+    Object('typeobject'),
 
     Module('array'),
     Module('math'),

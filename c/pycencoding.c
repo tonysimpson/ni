@@ -2,7 +2,6 @@
 #include "pycencoding.h"
 
 
-
 DEFINEFN
 code_t* decref_dealloc_calling(code_t* code, PsycoObject* po, reg_t rg,
                                destructor fn)
@@ -27,7 +26,7 @@ code_t* decref_dealloc_calling(code_t* code, PsycoObject* po, reg_t rg,
     PUSH_REG(rg);
   }
   else {
-    CODE_FOUR_BYTES(code,
+    CODE_FOUR_BYTES(code,                                                     
             PUSH_REG_INSTR(REG_386_EAX),
             PUSH_REG_INSTR(REG_386_ECX),
             PUSH_REG_INSTR(REG_386_EDX),

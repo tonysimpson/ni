@@ -367,11 +367,18 @@ code_t* psyco_emergency_jump(PsycoObject* po, code_t* code);
 /*****************************************************************/
  /***   run-time switches                                       ***/
 
+#define USE_RUNTIME_SWITCHES  0    /* DISABLED */
+
 typedef struct c_promotion_s {
   source_virtual_t header;
+#if USE_RUNTIME_SWITCHES
   struct fixed_switch_s* fs;
+#endif
   long kflags;
 } c_promotion_t;
+
+
+#if USE_RUNTIME_SWITCHES
 
 typedef struct fixed_switch_s {  /* private structure */
   int switchcodesize;   /* size of 'switchcode' */
@@ -404,6 +411,15 @@ EXTERNFN code_t* psyco_write_run_time_switch(fixed_switch_t* rts,
 EXTERNFN void psyco_fix_switch_case(fixed_switch_t* rts, code_t* code,
                                     int item, code_t* newtarget);
 
+/* is the given run-time vinfo_t known to be none of the values
+   listed in rts? */
+inline bool known_to_be_default(vinfo_t* vi, fixed_switch_t* rts) {
+	return vi->array == NullArrayAt(rts->zero);
+}
+
+#endif  /* USE_RUNTIME_SWITCHES */
+
+
 /* The pseudo-exceptions meaning 'promote me' but against no particular
    fixed_switch_t. The second one has the SkFlagPyObj flag. */
 EXTERNVAR c_promotion_t psyco_nonfixed_promotion;
@@ -411,13 +427,6 @@ EXTERNVAR c_promotion_t psyco_nonfixed_pyobj_promotion;
 
 /* Check if the given virtual source is a promotion exception */
 EXTERNFN bool psyco_vsource_is_promotion(VirtualTimeSource source);
-
-
-/* is the given run-time vinfo_t known to be none of the values
-   listed in rts? */
-inline bool known_to_be_default(vinfo_t* vi, fixed_switch_t* rts) {
-	return vi->array == NullArrayAt(rts->zero);
-}
 
 
 #endif /* _PROCESSOR_H */

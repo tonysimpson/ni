@@ -167,6 +167,13 @@ static vinfo_t* pbuiltin_xrange(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 	return pbuiltin_range_or_xrange(po, vargs, &PyRange_Type);
 }
 
+static vinfo_t* prange_new(PsycoObject* po, vinfo_t* vtype,
+			   vinfo_t* vargs, vinfo_t* vkw)
+{
+	/* for Python >= 2.3, where __builtin__.xrange is a type */
+	return pbuiltin_range_or_xrange(po, vargs, &PyRange_Type);
+}
+
 static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 {
 	vinfo_t* intval;
@@ -203,12 +210,16 @@ static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 	vinfo_t* zero;
 	vinfo_t* vlen;
 	vinfo_t* result;
+	PyTypeObject* vtp;
 	condition_code_t cc;
 	METH_O_WRAPPER(ord, vself, vobj);
-        
-	switch (Psyco_TypeSwitch(po, vobj, &psyfs_string_unicode)) {
 
-	case 0:   /* PyString_Type */
+	/* TypeSwitch */
+	vtp = Psyco_NeedType(po, vobj);
+	if (vtp == NULL)
+		return NULL;
+
+	if (PyType_TypeCheck(vtp, &PyString_Type)) {
 		vlen = PsycoString_GET_SIZE(po, vobj);
 		if (vlen == NULL)
 			return NULL;
@@ -225,16 +236,11 @@ static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 		if (result == NULL)
 			return NULL;
 		return PsycoInt_FROM_LONG(result);
+	}
 
 #ifdef Py_USING_UNICODE
-/* 	case 1:   * PyUnicode_Type * */
-/* 		...; */
-/* 		break; */
+	/* ... */
 #endif
-	default:
-		if (PycException_Occurred(po))
-			return NULL;
-	}
 	
    use_proxy:
 	return psyco_generic_call(po, cimpl_ord, CfReturnRef|CfPyErrIfNull,
@@ -276,7 +282,7 @@ static vinfo_t* pbuiltin_apply(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 	switch (tuplesize) {
 	case 3:
 		kwdict = PsycoTuple_GET_ITEM(vargs, 2);
-		if (Psyco_TypeSwitch(po, kwdict, &psyfs_dict) != 0) {
+		if (Psyco_VerifyType(po, kwdict, &PyDict_Type) != true) {
 			/* 'kwdict' is not a dictionary */
 			break;
 		}
@@ -337,7 +343,6 @@ void psyco_bltinmodule_init(void)
     cimpl_ ## name = Psyco_DefineModuleFn(md, #name, flags, &pbuiltin_ ## name)
 
 	DEFMETA( range,		METH_VARARGS );
-	DEFMETA( xrange,	METH_VARARGS );
 	DEFMETA( chr,		METH_VARARGS );
 	DEFMETA( ord,		HAVE_METH_O ? METH_O : METH_VARARGS );
 	DEFMETA( id,		HAVE_METH_O ? METH_O : METH_VARARGS );
@@ -345,6 +350,8 @@ void psyco_bltinmodule_init(void)
 	DEFMETA( abs,		HAVE_METH_O ? METH_O : METH_VARARGS );
 	DEFMETA( apply,		METH_VARARGS );
 	DEFMETA( divmod,	METH_VARARGS );
+	cimpl_xrange = Psyco_DefineModuleC(md, "xrange", METH_VARARGS,
+                                           &pbuiltin_xrange, &prange_new);
 #undef META
 	Py_XDECREF(md);
 }

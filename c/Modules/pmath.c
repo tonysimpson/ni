@@ -23,7 +23,7 @@ extern double modf (double, double *);
 #endif /* _MSC_VER */
 
 
-#include "math.h"
+#include <math.h>
 
 #define CIMPL_MATH_FUNC1(funcname, func, libfunc) \
     static int cimpl_math_##func(double a, double* result) { \
@@ -48,34 +48,16 @@ extern double modf (double, double *);
  * version in pfloatobject.c. The error handling 
  * on invalid args is different
  */
-#define PMATH_CONVERT_TO_DOUBLE(vobj, v1, v2) \
-    switch (Psyco_TypeSwitch(po, vobj, &psyfs_int_long_float)) { \
-        case 0: \
-            result = array_new(2); \
-            psyco_generic_call(po, cimpl_fp_from_long, CfNoReturnValue|CfPure, \
-                               "va", PsycoInt_AS_LONG(po, vobj), result); \
-            v1 = result->items[0]; \
-            v2 = result->items[1]; \
-            array_release(result); \
-            break; \
-        case 1: \
-            if (!PsycoLong_AsDouble(po, vobj, &v1, &v2)) \
-                return NULL; \
-            break; \
-        case 2: \
-            v1 = PsycoFloat_AS_DOUBLE_1(po, vobj); \
-            v2 = PsycoFloat_AS_DOUBLE_2(po, vobj); \
-            if (v1 == NULL || v2 == NULL) \
-                return NULL; \
-            vinfo_incref(v1); \
-            vinfo_incref(v2); \
-            break; \
-        default: \
-            if (PycException_Occurred(po)) \
-                return NULL; \
-            PycException_SetString(po, PyExc_TypeError, \
-                                   "bad argument type for built-in operation"); \
-            return NULL; \
+#define PMATH_CONVERT_TO_DOUBLE(vobj, v1, v2)			\
+    switch (psyco_convert_to_double(po, vobj, &v1, &v2)) {	\
+    case true:							\
+        break;   /* fine */					\
+    case false:							\
+        return NULL;  /* error or promotion */			\
+    default:							\
+        PycException_SetString(po, PyExc_TypeError,		\
+            "bad argument type for built-in operation");	\
+        return NULL;						\
     }
 
 #define PMATH_RELEASE_DOUBLE(v1, v2) \

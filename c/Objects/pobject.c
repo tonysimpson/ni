@@ -3,6 +3,7 @@
 #include "pstringobject.h"
 
 
+#if USE_RUNTIME_SWITCHES
 DEFINEVAR fixed_switch_t psyfs_int;
 DEFINEVAR fixed_switch_t psyfs_int_long;
 DEFINEVAR fixed_switch_t psyfs_int_long_float;
@@ -11,6 +12,7 @@ DEFINEVAR fixed_switch_t psyfs_string_unicode;
 DEFINEVAR fixed_switch_t psyfs_tuple;
 DEFINEVAR fixed_switch_t psyfs_dict;
 DEFINEVAR fixed_switch_t psyfs_none;
+#endif
 
 
 DEFINEFN
@@ -57,22 +59,19 @@ vinfo_t* PsycoObject_Repr(PsycoObject* po, vinfo_t* vi)
 DEFINEFN
 vinfo_t* PsycoObject_GetAttr(PsycoObject* po, vinfo_t* o, vinfo_t* attr_name)
 {
-	PyTypeObject* tp;
-	
-	switch (Psyco_TypeSwitch(po, attr_name, &psyfs_string_unicode)) {
+	/* TypeSwitch */
+	PyTypeObject* tp = Psyco_NeedType(po, attr_name);
+	if (tp == NULL)
+		return NULL;
 
-	case 0:  /* PyString_Type */
-		break;
+	if (!PyType_TypeCheck(tp, &PyString_Type)) {
 
 #ifdef Py_USING_UNICODE
-	case 1:  /* PyUnicode_Type */
-		goto generic;
+		if (PyType_TypeCheck(tp, &PyUnicode_Type))
+			goto generic;
 #endif
-	default:
-		if (!PycException_Occurred(po)) {
-			PycException_SetString(po, PyExc_TypeError,
-					       "attribute name must be string");
-		}
+		PycException_SetString(po, PyExc_TypeError,
+				       "attribute name must be string");
 		return NULL;
 	}
 
@@ -483,6 +482,7 @@ vinfo_t* PsycoObject_RichCompareBool(PsycoObject* po,
 INITIALIZATIONFN
 void psy_object_init(void)
 {
+#if USE_RUNTIME_SWITCHES
 	long values[3];
         int cnt;
 
@@ -517,6 +517,7 @@ void psy_object_init(void)
 
         values[0] = (long)(&PyDict_Type);
 	psyco_build_run_time_switch(&psyfs_dict, SkFlagFixed, values, 1);
+#endif   /* USE_RUNTIME_SWITCHES */
 
         /* associate the Python implementation of some functions with
            the one from Psyco */

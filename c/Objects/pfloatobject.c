@@ -175,33 +175,48 @@ DEFINEVAR source_virtual_t psyco_computed_float;
  /*** float objects meta-implementation                       ***/
 
 
-#define CONVERT_TO_DOUBLE(vobj, v1, v2) \
-    switch (Psyco_TypeSwitch(po, vobj, &psyfs_int_long_float)) { \
-        case 0: \
-            result = array_new(2); \
-            psyco_generic_call(po, cimpl_fp_from_long, CfNoReturnValue|CfPure, \
-                               "va", PsycoInt_AS_LONG(po, vobj), result); \
-            v1 = result->items[0]; \
-            v2 = result->items[1]; \
-            array_release(result); \
-            break; \
-        case 1: \
-            if (!PsycoLong_AsDouble(po, vobj, &v1, &v2)) \
-                return NULL; \
-            break; \
-        case 2: \
-            v1 = PsycoFloat_AS_DOUBLE_1(po, vobj); \
-            v2 = PsycoFloat_AS_DOUBLE_2(po, vobj); \
-            if (v1 == NULL || v2 == NULL) \
-                return NULL; \
-            vinfo_incref(v1); \
-            vinfo_incref(v2); \
-            break; \
-        default: \
-            if (PycException_Occurred(po)) \
-                return NULL; \
-            return psyco_vi_NotImplemented(); \
+#define CONVERT_TO_DOUBLE(vobj, v1, v2)                         \
+    switch (psyco_convert_to_double(po, vobj, &v1, &v2)) {      \
+    case true:                                                  \
+        break;   /* fine */                                     \
+    case false:                                                 \
+        return NULL;  /* error or promotion */                  \
+    default:                                                    \
+        return psyco_vi_NotImplemented();  /* cannot do it */   \
     }
+
+DEFINEFN
+int psyco_convert_to_double(PsycoObject* po, vinfo_t* vobj,
+                            vinfo_t** pv1, vinfo_t** pv2)
+{
+    /* TypeSwitch */
+    PyTypeObject* vtp = Psyco_NeedType(po, vobj);
+    if (vtp == NULL)
+        return false;
+
+    if (PyType_TypeCheck(vtp, &PyInt_Type)) {
+        vinfo_array_t* result = array_new(2);
+        psyco_generic_call(po, cimpl_fp_from_long, CfNoReturnValue|CfPure,
+                           "va", PsycoInt_AS_LONG(po, vobj), result);
+        *pv1 = result->items[0];
+        *pv2 = result->items[1];
+        array_release(result);
+        return true;
+    }
+    if (PyType_TypeCheck(vtp, &PyLong_Type)) {
+        return PsycoLong_AsDouble(po, vobj, pv1, pv2);
+    }
+    if (PyType_TypeCheck(vtp, &PyFloat_Type)) {
+        *pv1 = PsycoFloat_AS_DOUBLE_1(po, vobj);
+        *pv2 = PsycoFloat_AS_DOUBLE_2(po, vobj);
+        if (*pv1 == NULL || *pv2 == NULL)
+            return false;
+        vinfo_incref(*pv1);
+        vinfo_incref(*pv2);
+        return true;
+    }
+    return -1;  /* cannot do it */
+}
 
 #define RELEASE_DOUBLE(v1, v2) \
     vinfo_decref(v2, po); \
@@ -211,7 +226,6 @@ DEFINEVAR source_virtual_t psyco_computed_float;
 static vinfo_t* pfloat_cmp(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
     vinfo_t *a1, *a2, *b1, *b2, *x;
-    vinfo_array_t* result;
     /* We could probably assume that these are floats, but using CONVERT is easier */
     CONVERT_TO_DOUBLE(v, a1, a2);
     CONVERT_TO_DOUBLE(w, b1, b2);
@@ -235,7 +249,6 @@ static vinfo_t* pfloat_nonzero(PsycoObject* po, vinfo_t* v)
 static vinfo_t* pfloat_pos(PsycoObject* po, vinfo_t* v)
 {
     vinfo_t *a1, *a2, *x;
-    vinfo_array_t* result;
     CONVERT_TO_DOUBLE(v, a1, a2);
     x = PsycoFloat_FromDouble(a1, a2);
     RELEASE_DOUBLE(a1, a2);

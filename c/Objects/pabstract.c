@@ -68,20 +68,30 @@ vinfo_t* PsycoEval_CallObjectWithKeywords(PsycoObject* po,
 	
 	if (args == NULL)
 		args = PsycoTuple_New(0, NULL);
-	else if (Psyco_TypeSwitch(po, args, &psyfs_tuple) != 0) {
-		goto use_proxy;
+	else {
+		switch (Psyco_VerifyType(po, args, &PyTuple_Type)) {
+		case true:  /* args is a tuple */
+			vinfo_incref(args);
+			break;
+		case false:  /* args is not a tuple */
+			goto use_proxy;
+		default:     /* error or promotion */
+			return NULL;
+		}
 	}
-	else
-		vinfo_incref(args);
-
 	if (kw == NULL)
 		kw = psyco_vi_Zero();
 	else {
-		if (kw != NULL && Psyco_TypeSwitch(po, kw, &psyfs_dict) != 0) {
+		switch (Psyco_VerifyType(po, kw, &PyDict_Type)) {
+		case true:   /* kw is a dict */
+			vinfo_incref(kw);
+			break;
+		case false:  /* kw is not a dict */
 			vinfo_decref(args, po);
 			goto use_proxy;
+		default:     /* error or promotion */
+			return NULL;
 		}
-		vinfo_incref(kw);
 	}
 
 	result = PsycoObject_Call(po, callable_object, args, kw);
@@ -90,8 +100,6 @@ vinfo_t* PsycoEval_CallObjectWithKeywords(PsycoObject* po,
 	return result;
 
    use_proxy:
-	if (PycException_Occurred(po))
-		return NULL;
 	return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
 				  CfReturnRef|CfPyErrIfNull,
 				  "vvv", callable_object, args, kw);
@@ -112,20 +120,20 @@ vinfo_t* PsycoObject_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key)
 				   CfReturnRef|CfPyErrIfNull, "vv", o, key);
 
 	if (tp->tp_as_sequence) {
-		switch (Psyco_TypeSwitch(po, key, &psyfs_int_long)) {
-		case 0: /* PyInt_Type */
+		/* TypeSwitch */
+		PyTypeObject* ktp = Psyco_NeedType(po, key);
+		if (ktp == NULL)
+			return NULL;
+
+		if (PyType_TypeCheck(ktp, &PyInt_Type)) {
 			return PsycoSequence_GetItem(po, o,
 						     PsycoInt_AS_LONG(po, key));
-		case 1: /* PyLong_Type */
-		{
+		}
+		if (PyType_TypeCheck(ktp, &PyLong_Type)) {
 			vinfo_t* key_value = PsycoLong_AsLong(po, key);
 			if (key_value == NULL)
 				return NULL;
 			return PsycoSequence_GetItem(po, o, key_value);
-		}
-		default: /* error or promotion or other type */
-			if (PycException_Occurred(po))
-				return NULL;
 		}
 		type_error(po, "sequence index must be integer");
 		return false;
@@ -153,21 +161,21 @@ bool PsycoObject_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key,
 	}
 
 	if (tp->tp_as_sequence) {
-		switch (Psyco_TypeSwitch(po, key, &psyfs_int_long)) {
-		case 0: /* PyInt_Type */
+		/* TypeSwitch */
+		PyTypeObject* ktp = Psyco_NeedType(po, key);
+		if (ktp == NULL)
+			return false;
+
+		if (PyType_TypeCheck(ktp, &PyInt_Type)) {
 			return PsycoSequence_SetItem(po, o,
 						     PsycoInt_AS_LONG(po, key),
 						     value);
-		case 1: /* PyLong_Type */
-		{
+		}
+		if (PyType_TypeCheck(ktp, &PyLong_Type)) {
 			vinfo_t* key_value = PsycoLong_AsLong(po, key);
 			if (key_value == NULL)
 				return false;
 			return PsycoSequence_SetItem(po, o, key_value, value);
-		}
-		default: /* error or promotion or other type */
-			if (PycException_Occurred(po))
-				return false;
 		}
 		if (tp->tp_as_sequence->sq_ass_item) {
 			type_error(po, "sequence index must be integer");
@@ -710,20 +718,19 @@ vinfo_t* PsycoNumber_InPlaceMultiply(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	    (g = vtp->tp_as_sequence->sq_inplace_repeat)) {
 		vinfo_t* result;
 		vinfo_t* n;
-		switch (Psyco_TypeSwitch(po, w, &psyfs_int_long)) {
+		/* TypeSwitch */
+		PyTypeObject* wtp = Psyco_NeedType(po, w);
+		if (wtp == NULL)
+			return NULL;
 
-		case 0: /* PyInt_Type */
+		if (PyType_TypeCheck(wtp, &PyInt_Type)) {
 			n = PsycoInt_AsLong(po, w);
-			break;
-
-		case 1: /* PyLong_Type */
+		}
+		else if (PyType_TypeCheck(wtp, &PyLong_Type)) {
 			n = PsycoLong_AsLong(po, w);
-			break;
-
-		default:
-			if (!PycException_Occurred(po))
-				type_error(po,
-					   "can't multiply sequence to non-int");
+		}
+		else {
+			type_error(po, "can't multiply sequence to non-int");
 			return NULL;
 		}
 		if (n == NULL)
@@ -787,8 +794,8 @@ vinfo_t* PsycoObject_GetIter(PsycoObject* po, vinfo_t* vi)
 		return NULL;
 	}
 	else {
-		return psyco_generic_call(po, f, CfReturnRef|CfPyErrIfNull,
-					  "v", vi);
+		return Psyco_META1(po, f, CfReturnRef|CfPyErrIfNull,
+                                   "v", vi);
 	}
 }
 

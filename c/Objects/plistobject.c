@@ -1,5 +1,7 @@
 #include "plistobject.h"
 #include "pintobject.h"
+#include "plongobject.h"
+#include "piterobject.h"
 #include "../Python/pbltinmodule.h"
 
 
@@ -115,12 +117,85 @@ static bool plist_ass_item(PsycoObject* po, vinfo_t* a, vinfo_t* i, vinfo_t* v)
 	return ok;
 }
 
+static vinfo_t* plist_subscript(PsycoObject* po, vinfo_t* o, vinfo_t* key)
+{
+	/* This is the meta-implementation of the mapping item assignment
+	   for lists, which is only defined in Python >= 2.3.
+	   The code below is the same as PsycoObject_GetItem(), but
+	   handles unknown key types (e.g. slices) using the original
+	   list_subscript(). */
+	
+	/* TypeSwitch */
+	PyTypeObject* ktp = Psyco_NeedType(po, key);
+	if (ktp == NULL)
+		return NULL;
+
+	if (PyType_TypeCheck(ktp, &PyInt_Type)) {
+		return PsycoSequence_GetItem(po, o,
+					     PsycoInt_AS_LONG(po, key));
+	}
+	if (PyType_TypeCheck(ktp, &PyLong_Type)) {
+		vinfo_t* key_value = PsycoLong_AsLong(po, key);
+		if (key_value == NULL)
+			return NULL;
+		return PsycoSequence_GetItem(po, o, key_value);
+	}
+	return psyco_generic_call(po, PyList_Type.tp_as_mapping->mp_subscript,
+				  CfReturnRef|CfPyErrIfNull, "vv", o, key);
+}
+
+static bool plist_ass_subscript(PsycoObject* po, vinfo_t* o,
+				vinfo_t* key, vinfo_t* value)
+{
+	/* see plist_subscript() for comments */
+	char* vargs;
+	
+	/* TypeSwitch */
+	PyTypeObject* ktp = Psyco_NeedType(po, key);
+	if (ktp == NULL)
+		return false;
+
+	if (PyType_TypeCheck(ktp, &PyInt_Type)) {
+		return PsycoSequence_SetItem(po, o,
+					     PsycoInt_AS_LONG(po, key),
+					     value);
+	}
+	if (PyType_TypeCheck(ktp, &PyLong_Type)) {
+		vinfo_t* key_value = PsycoLong_AsLong(po, key);
+		if (key_value == NULL)
+			return false;
+		return PsycoSequence_SetItem(po, o, key_value, value);
+	}
+	vargs = (value!=NULL) ? "vvv" : "vvl";
+	return psyco_generic_call(po,
+				  PyList_Type.tp_as_mapping->mp_ass_subscript,
+				  CfNoReturnValue|CfPyErrIfNonNull,
+				  vargs, o, key, value) != NULL;
+}
+
 
 INITIALIZATIONFN
 void psy_listobject_init(void)
 {
+	PyMappingMethods *mm;
 	PySequenceMethods *m = PyList_Type.tp_as_sequence;
 	Psyco_DefineMeta(m->sq_length, psyco_generic_mut_ob_size);
 	Psyco_DefineMeta(m->sq_item, plist_item);
 	Psyco_DefineMeta(m->sq_ass_item, plist_ass_item);
+
+	mm = PyList_Type.tp_as_mapping;
+	if (mm) {  /* Python >= 2.3 */
+		Psyco_DefineMeta(mm->mp_subscript, plist_subscript);
+		Psyco_DefineMeta(mm->mp_ass_subscript, plist_ass_subscript);
+	}
+
+#if HAVE_GENERATORS
+	/* In Python 2.3, lists have their own iterator type for
+	   performance, because generic sequence iterators have an
+	   extra overhead -- which is however completely removed by
+	   Psyco. So we redirect list iterators to generic iterators.
+	   (thus in Psyco, iter(l) never returns a listiterator) */
+	if (PyList_Type.tp_iter != NULL)  /* Python >= 2.3 */
+		Psyco_DefineMeta(PyList_Type.tp_iter, &PsycoSeqIter_New);
+#endif
 }

@@ -206,6 +206,7 @@ inline PyObject* psyco_pyobj_atcompiletime(PsycoObject* po, vinfo_t *vi) {
 	}
 }
 
+#if USE_RUNTIME_SWITCHES
 /* same as above, when the return value is used in a switch.
    In this case we must only promote the known values. So instead
    of writing 'switch (psyco_atcompiletime(po, vi))' you
@@ -222,6 +223,7 @@ inline int psyco_switch_index(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) 
 	else
 		return psyco_switch_lookup(fs, CompileTime_Get(src)->value);
 }
+#endif
 
 /* lazy comparison. Returns true if 'vi' is non-NULL, compile-time, and has the
    given value, and false otherwise. */
@@ -302,11 +304,20 @@ EXTERNFN PyObject* Psyco_DefineMetaModule(char* modulename);
    if not found. In verbose mode, 'not found' errors are printed. */
 EXTERNFN PyObject* Psyco_GetModuleObject(PyObject* module, char* name,
                                          PyTypeObject* expected_type);
-/* Maps a built-in object from a module to a meta-implementation.
+/* Maps a built-in function object from a module to a meta-implementation.
    Returns a pointer to the C function itself. */
 EXTERNFN PyCFunction Psyco_DefineModuleFn(PyObject* module, char* meth_name,
-                                          int meth_flags, void* meta_fn);
-
+					  int meth_flags, void* meta_fn);
+/* Same as above, but also alternatively accepts a callable type object
+   and maps it to meta_type_new. Returns NULL in this case. */
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
+EXTERNFN PyCFunction Psyco_DefineModuleC(PyObject* module, char* meth_name,
+					 int meth_flags, void* meta_fn,
+					 void* meta_type_new);
+#else
+# define Psyco_DefineModuleC(mo, na, fl, fn, tn)  \
+		Psyco_DefineModuleFn(mo, na, fl, fn)
+#endif
 
 /* the general-purpose calling routine: it looks for a meta implementation of
    'c_function' and call it if found; if not found, it encode a run-time call
