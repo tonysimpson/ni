@@ -118,10 +118,6 @@ void Psyco_DefineMetaModule(char* modulename, meta_impl_t* def)
 }
 
 
-#define BAD_FLAGS(fl)  if ((flags & CfReturnMask) == (fl))			\
-			    Py_FatalError("generic_call_check(): CfPyErrXxx "	\
-					  "flags incompatible with "		\
-					  "CfReturnXxx flags")
 #define FORGET_REF     if (has_rtref(vi->source))			\
 			    vi->source = remove_rtref(vi->source)
 
@@ -133,77 +129,56 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 	switch (flags & CfPyErrMask) {
 
 	case CfPyErrIfNull:   /* a return == 0 (or NULL) means an error */
-		BAD_FLAGS(CfNoReturnValue);
-		if ((flags & CfReturnMask) == CfReturnFlag)
-			cc = INVERT_CC((condition_code_t) vi);
-		else
-			cc = integer_cmp_i(po, vi, 0, Py_EQ);
+                cc = integer_cmp_i(po, vi, 0, Py_EQ);
 		break;
 
 	case CfPyErrIfNonNull:   /* a return != 0 means an error */
-		BAD_FLAGS(CfNoReturnValue);
-		if ((flags & CfReturnMask) == CfReturnFlag)
-			cc = (condition_code_t) vi;
-		else
-			cc = integer_cmp_i(po, vi, 0, Py_NE);
+                cc = integer_cmp_i(po, vi, 0, Py_NE);
 		break;
 
 	case CfPyErrIfNeg:   /* a return < 0 means an error */
-		BAD_FLAGS(CfReturnFlag);
-		BAD_FLAGS(CfNoReturnValue);
 		cc = integer_cmp_i(po, vi, 0, Py_LT);
 		break;
 
 	case CfPyErrIfMinus1:     /* only -1 means an error */
-		BAD_FLAGS(CfReturnFlag);
-		BAD_FLAGS(CfNoReturnValue);
 		cc = integer_cmp_i(po, vi, -1, Py_EQ);
 		break;
 
 	case CfPyErrCheck:    /* always check with PyErr_Occurred() */
-		cc = PsycoErr_Occurred(po);
+		cc = integer_NON_NULL(po, PsycoErr_Occurred(po));
 		break;
 
 	case CfPyErrCheckMinus1:   /* use PyErr_Occurred() if return is -1 */
-		BAD_FLAGS(CfReturnFlag);
-		BAD_FLAGS(CfNoReturnValue);
 		cc = integer_cmp_i(po, vi, -1, Py_NE);
 		if (cc == CC_ERROR)
 			goto Error;
 		if (runtime_condition_t(po, cc))
 			return vi;   /* result is not -1, ok */
-		cc = PsycoErr_Occurred(po);
+		cc = integer_NON_NULL(po, PsycoErr_Occurred(po));
 		break;
 
         case CfPyErrCheckNeg:   /* use PyErr_Occurred() if return is < 0 */
-		BAD_FLAGS(CfReturnFlag);
-		BAD_FLAGS(CfNoReturnValue);
 		cc = integer_cmp_i(po, vi, 0, Py_GE);
 		if (cc == CC_ERROR)
 			goto Error;
 		if (runtime_condition_t(po, cc))
 			return vi;   /* result is >= 0, ok */
-		cc = PsycoErr_Occurred(po);
+		cc = integer_NON_NULL(po, PsycoErr_Occurred(po));
 		break;
 
 	case CfPyErrNotImplemented:   /* test for a Py_NotImplemented result */
-		BAD_FLAGS(CfReturnFlag);
-		BAD_FLAGS(CfNoReturnValue);
 		cc = integer_cmp_i(po, vi, (long) Py_NotImplemented, Py_EQ);
 		if (cc == CC_ERROR)
 			goto Error;
 		if (runtime_condition_f(po, cc)) {
 			/* result is Py_NotImplemented */
 			vinfo_decref(vi, po);
-			vinfo_incref(psyco_viNotImplemented);
-			return psyco_viNotImplemented;
+			return psyco_vi_NotImplemented();
 		}
 		cc = integer_cmp_i(po, vi, 0, Py_EQ);
 		break;
 
 	case CfPyErrIterNext:    /* specially for tp_iternext slots */
-		BAD_FLAGS(CfReturnFlag);
-		BAD_FLAGS(CfNoReturnValue);
 		cc = integer_cmp_i(po, vi, 0, Py_NE);
 		if (cc == CC_ERROR)
 			goto Error;
@@ -212,14 +187,13 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 		
 		FORGET_REF;  /* NULL result */
 		vinfo_decref(vi, po);
-		cc = PsycoErr_Occurred(po);
+		cc = integer_NON_NULL(po, PsycoErr_Occurred(po));
 		if (cc == CC_ERROR || runtime_condition_f(po, cc))
 			goto PythonError;  /* PyErr_Occurred() returns true */
 
 		/* NULL result with no error set; it is the end of the
 		   iteration. Raise a pseudo PyErr_StopIteration. */
-		vinfo_incref(psyco_viNone);
-		PycException_SetVInfo(po, PyExc_StopIteration, psyco_viNone);
+		PycException_SetVInfo(po, PyExc_StopIteration, psyco_vi_None());
 		return NULL;
 
 	case CfPyErrAlways:   /* always set an exception */
@@ -233,21 +207,14 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 	if (cc == CC_ERROR || runtime_condition_f(po, cc)) {
 
 	   Error:
-		switch (flags & CfReturnMask) {
-		case CfReturnRef:   /* in case of error, 'vi' is not a real
-				       reference, so forget it */
+		if ((flags & CfReturnMask) == CfReturnRef) {
+			/* in case of error, 'vi' is not a real
+			   reference, so forget it */
 			FORGET_REF;
-			/* fall through */
-		case CfReturnNormal:
-			vinfo_decref(vi, po);
-			vi = NULL;
-			break;
-		case CfReturnFlag:
-			vi = (vinfo_t*) CC_ERROR;
-			break;
-		default:
-			vi = NULL;
 		}
+		vinfo_decref(vi, po);
+		vi = NULL;
+		
 		/* We have detected that a Python exception must be set at
 		   this point. */
 	   PythonError:
@@ -256,7 +223,6 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 	}
 	return vi;
 }
-#undef BAD_FLAGS
 #undef FORGET_REF
 
 DEFINEFN
@@ -413,26 +379,26 @@ void PycException_Promote(PsycoObject* po, vinfo_t* vi, c_promotion_t* promotion
 }
 
 DEFINEFN
-condition_code_t PycException_Matches(PsycoObject* po, PyObject* e)
+vinfo_t* PycException_Matches(PsycoObject* po, PyObject* e)
 {
-	condition_code_t cc;
+	vinfo_t* result;
 	if (PycException_Is(po, &ERtPython)) {
 		/* Exception raised by Python, emit a call to
 		   PyErr_ExceptionMatches() */
-		cc = psyco_flag_call(po, PyErr_ExceptionMatches,
-				     CfReturnFlag, "l", (long) e);
+		result = psyco_generic_call(po, PyErr_ExceptionMatches,
+					    CfReturnNormal, "l", (long) e);
 	}
 	else if (PycException_IsPython(po)) {
 		/* Exception virtually set, that is, present in the PsycoObject
 		   but not actually set at run-time by Python's PyErr_SetXxx */
-		cc = psyco_flag_call(po, PyErr_GivenExceptionMatches,
-				     CfPure | CfReturnFlag,
-				     "vl", po->pr.exc, (long) e);
+		result = psyco_generic_call(po, PyErr_GivenExceptionMatches,
+					    CfPure | CfReturnNormal,
+					    "vl", po->pr.exc, (long) e);
 	}
 	else {   /* pseudo exceptions don't match real Python ones */
-		cc = CC_ALWAYS_FALSE;
+		result = psyco_vi_Zero();
 	}
-	return cc;
+	return result;
 }
 
 inline void clear_pseudo_exception(PsycoObject* po)
@@ -534,11 +500,14 @@ inline bool PycException_FetchNormalize(PsycoObject* po)
 		vinfo_t* exc;
 		vinfo_t* val;
 		vinfo_t* tb;
+                vinfo_t* zero;
 		exc = make_runtime_copy(po, po->pr.exc);
 		if (exc == NULL) return false;
 		val = make_runtime_copy(po, po->pr.val);
 		if (val == NULL) return false;
-		tb = make_runtime_copy(po, psyco_viZero);
+                zero = psyco_vi_Zero();
+		tb = make_runtime_copy(po, zero);
+                vinfo_decref(zero, po);
 		if (tb == NULL) return false;
 		if (psyco_generic_call(po, PyErr_NormalizeException,
 				CfNoReturnValue, "rrr", exc, val, tb) == NULL)
@@ -556,10 +525,10 @@ inline bool PycException_FetchNormalize(PsycoObject* po)
  /***************************************************************/
 
 
-DEFINEVAR vinfo_t* psyco_viNone;    /* known value 'Py_None' */
-DEFINEVAR vinfo_t* psyco_viZero;    /* known value 0 */
-DEFINEVAR vinfo_t* psyco_viOne;     /* known value 1 */
-DEFINEVAR vinfo_t* psyco_viNotImplemented;
+DEFINEVAR source_known_t psyco_skNone;    /* known value 'Py_None' */
+DEFINEVAR source_known_t psyco_skZero;    /* known value 0 */
+DEFINEVAR source_known_t psyco_skOne;     /* known value 1 */
+DEFINEVAR source_known_t psyco_skNotImplemented;
 
 static PyObject* s_builtin_object;   /* intern string '__builtins__' */
 
@@ -568,12 +537,18 @@ void psyco_pycompiler_init()
 {
 	s_builtin_object = PyString_InternFromString("__builtins__");
 	
-	psyco_viNone = vinfo_new(CompileTime_NewSk(sk_new((long) Py_None,
-							  SkFlagFixed)));
-	psyco_viZero = vinfo_new(CompileTime_NewSk(sk_new(0, SkFlagFixed)));
-	psyco_viOne  = vinfo_new(CompileTime_NewSk(sk_new(1, SkFlagFixed)));
-	psyco_viNotImplemented = vinfo_new(CompileTime_NewSk(sk_new
-				((long) Py_NotImplemented, SkFlagFixed)));
+	memcpy(&psyco_skNone,
+	       sk_new((long) Py_None,           SkFlagFixed),
+	       sizeof(source_known_t));
+	memcpy(&psyco_skZero,
+	       sk_new((long) 0,                 SkFlagFixed),
+	       sizeof(source_known_t));
+	memcpy(&psyco_skOne,
+	       sk_new((long) 1,                 SkFlagFixed),
+	       sizeof(source_known_t));
+	memcpy(&psyco_skNotImplemented,
+	       sk_new((long) Py_NotImplemented, SkFlagFixed),
+	       sizeof(source_known_t));
 
 	ERtPython = psyco_vsource_not_important;
 	EReturn   = psyco_vsource_not_important;
@@ -904,7 +879,6 @@ static vinfo_t* _PsycoEval_SliceIndex(PsycoObject* po, vinfo_t* v)
 		if (result == NULL) {
 			vinfo_t* vi_zero;
 			PyObject* long_zero;
-			condition_code_t cc;
 			long x;
 
 			if (!PycException_Matches(po, PyExc_OverflowError))
@@ -920,14 +894,19 @@ static vinfo_t* _PsycoEval_SliceIndex(PsycoObject* po, vinfo_t* v)
 				OUT_OF_MEMORY();
 			vi_zero = vinfo_new(CompileTime_NewSk(sk_new
 					      ((long) long_zero, SkFlagPyObj)));
-			cc = PsycoObject_RichCompareBool(po, v, vi_zero, Py_GT);
+			result = PsycoObject_RichCompareBool(po, v, vi_zero,
+							     Py_GT);
 			vinfo_decref(vi_zero, po);
-			if (cc == CC_ERROR)
-				return NULL;
-			if (runtime_condition_t(po, cc))
+		        switch (runtime_NON_NULL_t(po, result)) {
+			case true:
 				x = INT_MAX;
-			else
+				break;
+			case false:
 				x = 0;
+				break;
+			default:
+				return NULL;
+			}
 			result = vinfo_new(CompileTime_New(x));
 		}
 		break;
@@ -954,8 +933,7 @@ static vinfo_t* psyco_apply_slice(PsycoObject* po, vinfo_t* u,
 		vinfo_t* ilow;
 		vinfo_t* ihigh;
 		if (v == NULL) {
-			ilow = psyco_viZero;
-			vinfo_incref(ilow);
+			ilow = psyco_vi_Zero();
 		}
 		else {
 			ilow = _PsycoEval_SliceIndex(po, v);
@@ -1019,8 +997,7 @@ static bool psyco_assign_slice(PsycoObject* po, vinfo_t* u,
 		vinfo_t* ilow;
 		vinfo_t* ihigh;
 		if (v == NULL) {
-			ilow = psyco_viZero;
-			vinfo_incref(ilow);
+			ilow = psyco_vi_Zero();
 		}
 		else {
 			ilow = _PsycoEval_SliceIndex(po, v);
@@ -1330,7 +1307,7 @@ static code_t* exit_function(PsycoObject* po)
 				return NULL;
 			clear_pseudo_exception(po);
 		}
-		retsource = psyco_viZero->source;  /* to return NULL */
+		retsource = CompileTime_NewSk(&psyco_skZero); /*to return NULL */
 	}
 	
 	return psyco_finish_return(po, retsource);
@@ -1467,9 +1444,12 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 
 	case UNARY_NOT:
-		cc = PsycoObject_IsTrue(po, TOP());
+		v = PsycoObject_IsTrue(po, TOP());
+		cc = integer_NON_NULL(po, v);
 		if (cc == CC_ERROR)
 			break;
+		
+                cc = INVERT_CC(cc);
 		/* turns 'cc' into a Python integer object, 0 or 1 */
 		x = PsycoInt_FROM_LONG(psyco_vinfo_condition(po, cc));
 		POP_DECREF();
@@ -1493,7 +1473,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 
 	case BINARY_POWER:
-		x = PsycoNumber_Power(po, NTOP(2), NTOP(1), psyco_viNone);
+		u = psyco_vi_None();
+		x = PsycoNumber_Power(po, NTOP(2), NTOP(1), u);
+		vinfo_decref(u, po);
 		if (x == NULL)
 			break;
 		POP_DECREF();
@@ -1532,7 +1514,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	BINARY_OPCODE(BINARY_OR, PsycoNumber_Or);
 	
 	case INPLACE_POWER:
-		x = PsycoNumber_InPlacePower(po, NTOP(2), NTOP(1), psyco_viNone);
+		u = psyco_vi_None();
+		x = PsycoNumber_InPlacePower(po, NTOP(2), NTOP(1), u);
+		vinfo_decref(u, po);
 		if (x == NULL)
 			break;
 		POP_DECREF();
@@ -1660,32 +1644,33 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		/*MISSING_OPCODE(PRINT_EXPR);*/
 
 	case PRINT_ITEM:
-		if (psyco_flag_call(po, cimpl_print_item_to,
-				    CfReturnFlag|CfPyErrIfNonNull,
-				    "vl", TOP(), 0) == CC_ERROR)
+		if (!psyco_generic_call(po, cimpl_print_item_to,
+					CfNoReturnValue|CfPyErrIfNonNull,
+					"vl", TOP(), 0))
 			break;
 		POP_DECREF();
 		goto fine;
 		
 	case PRINT_ITEM_TO:
-		if (psyco_flag_call(po, cimpl_print_item_to,
-				    CfReturnFlag|CfPyErrIfNonNull,
-				    "vv", NTOP(2), TOP()) == CC_ERROR)
+		if (!psyco_generic_call(po, cimpl_print_item_to,
+					CfNoReturnValue|CfPyErrIfNonNull,
+					"vv", NTOP(2), TOP()))
 			break;
 		POP_DECREF();
 		POP_DECREF();
 		goto fine;
 		
 	case PRINT_NEWLINE:
-		psyco_flag_call(po, cimpl_print_newline_to,
-				CfReturnFlag|CfPyErrIfNonNull,
-				"l", 0);
-		break;
+		if (!psyco_generic_call(po, cimpl_print_newline_to,
+					CfNoReturnValue|CfPyErrIfNonNull,
+					"l", 0))
+			break;
+		goto fine;
 		
 	case PRINT_NEWLINE_TO:
-		if (psyco_flag_call(po, cimpl_print_newline_to,
-				    CfReturnFlag|CfPyErrIfNonNull,
-				    "v", TOP()) == CC_ERROR)
+		if (!psyco_generic_call(po, cimpl_print_newline_to,
+					CfNoReturnValue|CfPyErrIfNonNull,
+					"v", TOP()))
 			break;
 		POP_DECREF();
 		goto fine;
@@ -1701,7 +1686,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		break;
 
 	case RAISE_VARARGS:
-		u = v = w = psyco_viZero;
+		u = v = w = x = psyco_vi_Zero();
 		switch (oparg) {
 		case 3:
 			u = NTOP(oparg-2); /* traceback */
@@ -1714,10 +1699,12 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		case 0: /* Fallthrough */
 			psyco_generic_call(po, cimpl_do_raise, CfPyErrAlways,
 					   "vvv", w, v, u);
+                        break;
 		default:
 			PycException_SetString(po, PyExc_SystemError,
 					       "bad RAISE_VARARGS oparg");
 		}
+		vinfo_decref(x, po);
 		break;
 
         /*MISSING_OPCODE(LOAD_LOCALS);*/
@@ -1787,16 +1774,12 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	case UNPACK_SEQUENCE:
 	{
 		int i;
-		void* cimpl_unpack;
+		void* cimpl_unpack = NULL;
 		
 		v = TOP();
-		u = get_array_item(po, TOP(), OB_TYPE);
-		if (u == NULL)
-			break;
-		switch (psyco_switch_index(po, u, &psyfs_tuple_list)) {
+		switch (Psyco_TypeSwitch(po, v, &psyfs_tuple_list)) {
 			
 		case 0:   /* PyTuple_Type */
-			cimpl_unpack = NULL;
 
 			/* shortcut: is this a virtual tuple?
 			             of the correct length? */
@@ -1850,15 +1833,16 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			break;
 
 		default:
-			cimpl_unpack = cimpl_unpack_iterable;
+			if (!PycException_Occurred(po))
+				cimpl_unpack = cimpl_unpack_iterable;
 			break;
 		}
 			
 		if (cimpl_unpack != NULL) {
 			vinfo_array_t* array = array_new(oparg);
-			if (psyco_flag_call(po, cimpl_unpack,
-					    CfReturnFlag|CfPyErrIfNonNull,
-					    "vlA", v, oparg, array) == CC_ERROR){
+			if (!psyco_generic_call(po, cimpl_unpack,
+					      CfNoReturnValue|CfPyErrIfNonNull,
+						"vlA", v, oparg, array)) {
 				array_delete(array, po);
 				break;
 			}
@@ -1901,9 +1885,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		KNOWN_VAR(PyObject*, globals, LOC_GLOBALS);
 		PyObject* w = GETNAMEV(oparg);
 
-		if (psyco_flag_call(po, PyDict_SetItem,
-				    CfReturnFlag|CfPyErrIfNonNull,
-				    "llv", globals, w, TOP()) == CC_ERROR)
+		if (!psyco_generic_call(po, PyDict_SetItem,
+					CfNoReturnValue|CfPyErrIfNonNull,
+					"llv", globals, w, TOP()))
 			break;
 		POP_DECREF();
 		goto fine;
@@ -1914,10 +1898,10 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		KNOWN_VAR(PyObject*, globals, LOC_GLOBALS);
 		PyObject* w = GETNAMEV(oparg);
 
-		if (psyco_flag_call(po, PyDict_DelItem,
-				    CfReturnFlag|CfPyErrIfNonNull,
-				    "ll", globals, w) == CC_ERROR) {
-			/*if (!Py_Occurred() at run-time)*/
+		if (!psyco_generic_call(po, PyDict_DelItem,
+					CfNoReturnValue|CfPyErrIfNonNull,
+					"ll", globals, w)) {
+			/*XXX if (!Py_Occurred() at run-time)*/
 			PycException_SetFormat(po, PyExc_NameError,
 					       GLOBAL_NAME_ERROR_MSG,
 					       PyString_AsString(w));
@@ -1983,8 +1967,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			break;
 		}
 
-		SETLOCAL(oparg, psyco_viZero);
-		vinfo_incref(psyco_viZero);
+		u = psyco_vi_Zero();
+		SETLOCAL(oparg, u);
 		goto fine;
 
 	/*MISSING_OPCODE(LOAD_CLOSURE);
@@ -2062,12 +2046,19 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			cc = integer_cmp(po, v, w, Py_NE);
 			break;
 
-		/*MISSING_OPCODE(IN);
-		  MISSING_OPCODE(NOT_IN);*/
+		case IN:
+		case NOT_IN:
+			x = PsycoSequence_Contains(po, w, v);
+			cc = integer_NON_NULL(po, x);
+			if (oparg == NOT_IN && cc != CC_ERROR)
+				cc = INVERT_CC(cc);
+			break;
 
 		case EXC_MATCH:
-			cc = psyco_flag_call(po, PyErr_GivenExceptionMatches,
-					     CfPure | CfReturnFlag, "vv", v, w);
+			x = psyco_generic_call(po, PyErr_GivenExceptionMatches,
+					       CfPure|CfReturnNormal,
+					       "vv", v, w);
+			cc = integer_NON_NULL(po, x);
 			break;
 
 		default:
@@ -2106,7 +2097,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		   outcome of PyObject_IsTrue(). In the case of JUMP_IF_xxx
 		   we must be prepared to have to compile the two possible
 		   paths. */
-		cc = PsycoObject_IsTrue(po, TOP());
+		cc = integer_NON_NULL(po, PsycoObject_IsTrue(po, TOP()));
 		if (cc == CC_ERROR)
 			break;
 		if (opcode == JUMP_IF_FALSE)
@@ -2133,7 +2124,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 	case JUMP_ABSOLUTE:
 		JUMPTO(oparg);
-		mp = psyco_next_merge_point(po->pr.merge_points, next_instr);		
+		mp = psyco_next_merge_point(po->pr.merge_points, next_instr);
 		goto fine;
 
 	case GET_ITER:
@@ -2151,11 +2142,11 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			PUSH(v);
 		}
 		else {
+			extra_assert(PycException_Occurred(po));
+			
 			/* catch PyExc_StopIteration */
-			cc = PycException_Matches(po, PyExc_StopIteration);
-			if (cc == CC_ERROR)
-				break;
-			if (runtime_condition_t(po, cc)) {
+			v = PycException_Matches(po, PyExc_StopIteration);
+			if (runtime_NON_NULL_t(po, v) == true) {
 				/* iterator ended normally */
 				PycException_Clear(po);
 				POP_DECREF();
@@ -2164,7 +2155,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 							    next_instr);
 			}
 			else
-				break;   /* any other exception */
+				break;   /* any other exception, or error in
+					    runtime_NON_NULL_t() */
 		}
 		goto fine;
 
@@ -2200,10 +2192,10 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 				   update_keyword_args() in ceval.c, e.g.
 				   check for duplicate keywords */
 				for (i=na; i<n; i+=2) {
-					if (psyco_flag_call(po, PyDict_SetItem,
-						CfReturnFlag|CfPyErrIfNonNull,
-						"vvv", w, args[i], args[i+1])
-					    == CC_ERROR)
+					if (!psyco_generic_call(po,
+					     PyDict_SetItem,
+					     CfNoReturnValue|CfPyErrIfNonNull,
+					     "vvv", w, args[i], args[i+1]))
 						break;
 				}
 			}
@@ -2370,7 +2362,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			   EXCEPT block. */
 			/* XXX check that this empty loop cannot be endless */
 		}
-		PUSH(psyco_viNone);  vinfo_incref(psyco_viNone);
+		PUSH(psyco_vi_None());
 		PUSH(po->pr.val);    po->pr.val = NULL;
 		PUSH(po->pr.exc);    po->pr.exc = NULL;
 		JUMPTO(b->b_handler);
