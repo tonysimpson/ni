@@ -45,13 +45,21 @@ error = _psyco.error
 class warning(Warning):
     pass
 
+class JitWarning(warning):
+    pass
+
+class NoLocalsWarning(warning):
+    pass
+
+_psyco.NoLocalsWarning = NoLocalsWarning
+
 
 def jit(tick=5):
     """Enable just-in-time compilation.
 Argument is number of invocations before rebinding."""
     if sys.version_info[:3] < (2,1,3):
         from warnings import warn
-        warn('psyco.jit() uses the profiler which is incompatible with nested scopes due to a Python bug', warning)
+        warn('psyco.jit() uses the profiler which is incompatible with nested scopes due to a Python bug', JitWarning)
     _psyco.selective(tick)
 
 def bind(func, rec=_psyco.DEFAULT_RECURSION):
@@ -141,9 +149,28 @@ __builtin__.__in_psyco__ = 0
 # stack frame. Psyco provides a replacement that partially emulates Python
 # frames from Psyco frames. Be aware that the f_back fields are not
 # correctly set up.
+#
+# The same problems require some other built-in functions to be replaced
+# as well. Note that locals are not available with Psyco.
 
-original_sys_getframe = sys._getframe  # old value, if you need it
-sys._getframe = _psyco._getframe
+
+def patch(name, module=__builtin__):
+    f = getattr(_psyco, name)
+    org = getattr(module, name)
+    if org is not f:
+        setattr(module, name, f)
+        setattr(_psyco, 'original_' + name, org)
+
+
+patch('_getframe', sys)
+patch('globals')
+patch('eval')
+patch('execfile')
+patch('locals')
+patch('vars')
+patch('dir')
+patch('input')
+_psyco.original_raw_input = raw_input
 
 
 ###########################################################################
