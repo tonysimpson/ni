@@ -284,6 +284,8 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 		}
 	}
 
+	/* XXX this is broken because the type might have been modified
+	   XXX since the last time we were here! */
 	descr = _PyType_Lookup(tp, name);
 	Py_XINCREF(descr);
 	
