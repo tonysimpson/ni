@@ -11,6 +11,9 @@ FILES = {
     '../doc/psycoguide.tex': re.compile(r'\\release\{([0-9.]+)\}'),
     '../setup.py': re.compile(r'version\s*=\s*\"([0-9.]+)\"'),
     '../../my/psyco/dist/Makefile': re.compile(r'version\s*=\s*([0-9.]+)'),
+    '../../my/psyco/site/content/index.rst': re.compile(r'`Psyco ([0-9.]+)@'),
+    '../../my/psyco/site/content/download.rst': re.compile(r'Current version is ([0-9.]+)'),
+    '../../my/psyco/site/content/./download.rst': re.compile(r'Download Release ([0-9.]+)'),
     }
 
 versions = {}

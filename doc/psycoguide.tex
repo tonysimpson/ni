@@ -61,7 +61,9 @@ Psyco is not dependent on a particular OS.  Precompiled binaries are provided fo
 
 \section{Installing}\label{binaries}
 
-To install from the binaries, be sure to download the version of Psyco that corresponds to your Python version.  Binary released are at \url{http://sourceforge.net/project/showfiles.php?group_id=41036}.  Three pre-compiled versions are currently distributed:
+\warning{The Linux binaries of Psyco 1.1 have been compiled for the recent \file{glibc-2.3}, which means that they will not work on what is currently still most systems! In the future I may switch back to \file{glibc-2.2}, or I may stop releasing Linux binaries altogether because it is incredibly easy to compile from the source (see section \ref{sources} --- you don't need to be root to do that).} Also note that at least some versions of Psyco have been successfully used on other PC Unixes like FreeBSD.
+
+To install from the binaries, be sure to download the version of Psyco that corresponds to your Python version.  Binary released are at \url{http://sourceforge.net/project/showfiles.php?group_id=41036}.  Four pre-compiled versions are currently distributed:
 
 \begin{tableii}{l|l}{filenq}{File name}{Python version}
   \lineii{ psyco-x.y-OS-2.1     }{2.1 or any 2.1.x}
@@ -83,9 +85,9 @@ python setup.py install
 
 \section{Installing from the sources}\label{sources}
 
-The source code is distributed with the official release at the same address \url{http://sourceforge.net/project/showfiles.php?group_id=41036}, but you can also get it from its most current CVS version; see \url{http://sourceforge.net/cvs/?group_id=41036}.
+The source code is distributed with the official release at the same address \url{http://sourceforge.net/project/showfiles.php?group_id=41036}.
 
-People unfamiliar with CVS or whose CVS access is firewalled can use \program{cvsgrabber} (\url{http://cvsgrab.sourceforge.net}) to download the current source via HTTP.
+Alternatively you can get it from its most current CVS version; see \url{http://sourceforge.net/cvs/?group_id=41036}. People unfamiliar with CVS or whose CVS access is firewalled can use \program{cvsgrabber} (\url{http://cvsgrab.sourceforge.net}) to download the current source via HTTP.
 
 To install from the source, run the top-level installation script \file{setup.py}:
 
@@ -96,10 +98,10 @@ python setup.py install
 As usual, other commands are available, e.g.\ 
 
 \begin{verbatim}
-python setup.py build
+python setup.py build_ext -i
 \end{verbatim}
 
-to compile it without installing it into the \file{site-packages} directory.
+will compile the C source and put the result directly into the \file{psyco/} subdirectory (no administrator priviledge is required). After this step, the \file{psyco/} directory is a complete package (exactly as found in the binary distributions) that you can use directly or copy around.
 
 
 \section{Compiling Psyco in Debug mode}\label{debugpsyco}
