@@ -32,7 +32,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_popen2': 'log file descriptor messed up in Python < 2.2.2',
         'test_sys': 'getrefcount() cannot be reliably tested',
         'test_socket': 'refcounting stuff as well',
-        'test_copy': 'xrange() is very similar to range() with Psyco',
+        #'test_copy': 'xrange() is very similar to range() with Psyco',
         'test_tarfile': 'we get permission denied with Python',
         'test_optparse': 'uses "%(xyz)s" % locals()',
         'test_scope': 'refcounting: relies on the __del__ of instances',
