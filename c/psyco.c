@@ -409,6 +409,7 @@ PyObject* psyco_proxycode(PyFunctionObject* func, int rec)
   PyObject *consts, *proxy_cobj;
   static PyObject *varnames = NULL;
   static PyObject *free_cell_vars = NULL;
+  static PyObject *empty_string = NULL;
   unsigned char proxy_bytecode[] = {
     LOAD_CONST, 1, 0,
     LOAD_FAST, 0, 0,
@@ -457,6 +458,12 @@ PyObject* psyco_proxycode(PyFunctionObject* func, int rec)
           if (free_cell_vars == NULL)
             goto error;
         }
+      if (empty_string == NULL)
+        {
+          empty_string = PyString_FromString("");
+          if (empty_string == NULL)
+            goto error;
+        }
       varnames = Py_BuildValue("ss", "args", "kwargs");
       if (varnames == NULL)
         goto error;
@@ -473,7 +480,7 @@ PyObject* psyco_proxycode(PyFunctionObject* func, int rec)
 		       varnames, varnames, free_cell_vars,
 		       free_cell_vars, code->co_filename,
 		       code->co_name, code->co_firstlineno,
-		       code->co_lnotab);
+		       empty_string);
   /* fall through */
  error:
   Py_XDECREF(psyco_fun);
