@@ -1,4 +1,3 @@
-import _psyco
 import sys, re, cStringIO, os, dis, types
 import xam
 from SimpleHTTPServer import SimpleHTTPRequestHandler, test
@@ -12,9 +11,10 @@ def show_vinfos(array, d, co=None, path=[]):
     for i in range(len(array)):
         vi = array[i]
         text += "<li>"
-        if hasattr(co, 'co_code') and path == [xam.LOC_LOCALS_PLUS]:
-            if i < len(co.co_varnames):
-                text += "(%s):\t" % co.co_varnames[i]
+        if hasattr(co, 'co_code') and path == []:
+            j = i - xam.LOC_LOCALS_PLUS
+            if 0 <= j < len(co.co_varnames):
+                text += "(%s):\t" % co.co_varnames[j]
         #if name is not None:
         #    text += "%s " % name
         if vi is None:

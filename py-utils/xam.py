@@ -1,13 +1,7 @@
-#
-# warning: correct symbol look-up requires that you start this file
-# in exactly the same way as you started the program that produced the
-# psyco.dump.
-#
-import _psyco
 import os, sys, re, htmlentitydefs
+import _psyco
 
 tmpfile = '~tmpfile.tmp'
-tmpfile2 = '~tmpfil2.tmp'
 
 # the disassembler to use. 'objdump' writes GNU-style instructions.
 # 'ndisasm' uses Intel syntax.
@@ -15,35 +9,40 @@ tmpfile2 = '~tmpfil2.tmp'
 objdump = 'objdump -b binary -m i386 --adjust-vma=%(origin)d -D %(file)s'
 #objdump = 'ndisasm -o %(origin)d -u %(file)s'
 
+# the files from which symbols are loaded.
+# the order and number of files must match
+# psyco_dump_code_buffers() in psyco.c.
+symbolfiles = [sys.executable, _psyco.__file__]
+
+# the program that lists symbols, and the output it gives
+symbollister = 'nm %s'
+re_symbolentry = re.compile(r'([0-9a-fA-F]+)\s\w\s(.*)')
+
 re_addr = re.compile(r'[\s,$]0x([0-9a-fA-F]+)')
-re_gdb_addr = re.compile(r'(.+) in section|No symbol matches')
 re_lineaddr = re.compile(r'\s*0?x?([0-9a-fA-F]+)')
 
 
 symbols = {}
 
-def load_symbol_addresses(addresses):
-    missing = [addr for addr in addresses if addr not in symbols]
-    if missing:
-        g = open(tmpfile, "w")
-        for addr in missing:
-            print >> g, "info symbol 0x%x" % addr
-        print >> g, "quit"
-        g.close()
-        os.system("gdb -batch -x %s python %d > %s" % (tmpfile, os.getpid(),
-                                                       tmpfile2))
-        os.unlink(tmpfile)
-        f = open(tmpfile2, "r")
-        for addr in missing:
-            while 1:
-                line = f.readline()
-                assert line
-                match = re_gdb_addr.match(line)
-                if match:
-                    break
-            symbols[addr] = match.group(1)  # may be None
-        f.close()
-        os.unlink(tmpfile2)
+def load_symbol_file(filename, symb1, addr1):
+    d = {}
+    g = os.popen(symbollister % filename, "r")
+    while 1:
+        line = g.readline()
+        if not line:
+            break
+        match = re_symbolentry.match(line)
+        if match:
+            d[match.group(2)] = long(match.group(1), 16)
+    g.close()
+    if symb1 in d:
+        delta = addr1 - d[symb1]
+    else:
+        delta = 0
+        print "Warning: no symbol '%s' in '%s'" % (symb1, filename)
+    for key, value in d.items():
+        symbols[value + delta] = key
+
 
 def symtext(sym, addr, inbuf=None):
     if isinstance(sym, CodeBuf):
@@ -67,16 +66,17 @@ def htmlquote(text):
     return ''.join([revmap.get(c,c) for c in text])
 
 
-LOC_LOCALS_PLUS = 2
-LOC_NEXT_INSTR = 3
+LOC_LOCALS_PLUS = 1
 
 class CodeBuf:
     has_spec_dict = 0
     
-    def __init__(self, mode, co_filename, co_name, addr, data, vlocals):
+    def __init__(self, mode, co_filename, co_name, nextinstr,
+                 addr, data, vlocals):
         self.mode = mode
         self.co_filename = co_filename
         self.co_name = co_name
+        self.nextinstr = nextinstr
         self.addr = addr
         self.data = data
         self.vlocals = vlocals
@@ -97,13 +97,8 @@ class CodeBuf:
             os.unlink(tmpfile)
 
     def get_next_instr(self):
-        try:
-            vi = self.vlocals[LOC_NEXT_INSTR]
-        except:
-            return
-        if not isinstance(vi, CompileTimeVInfo):
-            return
-        return vi.value
+        if self.nextinstr >= 0:
+            return self.nextinstr
 
     def spec_dict(self, key, value):
         if not self.has_spec_dict:
@@ -166,8 +161,6 @@ class CodeBuf:
         return ''.join(data)
 
 
-#LOC_NAMES = ['LOC_CODE', 'LOC_GLOBALS', 'LOC_LOCALS_PLUS', 'LOC_NEXT_INSTR']
-
 class VInfo:
     pass
 
@@ -210,7 +203,8 @@ class VirtualTimeVInfo(VInfo):
         return "Virtual-time source (%x)" % self.vs
 
 def readdump(filename = 'psyco.dump'):
-    re_codebuf = re.compile(r"CodeBufferObject 0x([0-9a-fA-F]+) (\d+) (\d+) \'(.*?)\' \'(.*?)\' \'(.*?)\'$")
+    re_symb1 = re.compile(r"(\w+?)[:]\s0x([0-9a-fA-F]+)")
+    re_codebuf = re.compile(r"CodeBufferObject 0x([0-9a-fA-F]+) (\d+) (\-?\d+) \'(.*?)\' \'(.*?)\' (\-?\d+) \'(.*?)\'$")
     re_specdict = re.compile(r"spec_dict")
     re_spec1 = re.compile(r"0x([0-9a-fA-F]+)\s(.*)$")
     re_int = re.compile(r"(\-?\d+)$")
@@ -253,7 +247,11 @@ def readdump(filename = 'psyco.dump'):
     
     codebufs = []
     dumpfile = open(filename, 'rb')
-    alladdr = {}
+    for filename in symbolfiles:
+        line = dumpfile.readline()
+        match = re_symb1.match(line)
+        assert match
+        load_symbol_file(filename, match.group(1), long(match.group(2), 16))
     while 1:
         line = dumpfile.readline()
         if not line:
@@ -266,12 +264,11 @@ def readdump(filename = 'psyco.dump'):
             vlocals = load_vi_array({0: None})
             data = dumpfile.read(size)
             assert len(data) == size
-            codebuf = CodeBuf(match.group(6), match.group(4), match.group(5),
-                              long(match.group(1), 16), data, vlocals)
-            codebuf.findsymbols(alladdr)
+            codebuf = CodeBuf(match.group(7), match.group(4), match.group(5),
+                              int(match.group(6)), long(match.group(1), 16),
+                              data, vlocals)
             codebufs.insert(0, codebuf)
-        else:
-            assert re_specdict.match(line)
+        elif re_specdict.match(line):
             while 1:
                 line = dumpfile.readline()
                 if len(line)<=1:
@@ -279,13 +276,14 @@ def readdump(filename = 'psyco.dump'):
                 match = re_spec1.match(line)
                 assert match
                 codebuf.spec_dict(match.group(2), long(match.group(1), 16))
+        else:
+            raise "invalid line", line
     dumpfile.close()
     codemap = {}
     for codebuf in codebufs:
         codebuf.build_reverse_lookup()
         codebuf.codemap = codemap
         codemap.setdefault(codebuf.addr, []).insert(0, codebuf)
-    load_symbol_addresses(alladdr.keys())
     return codebufs
 
 if __name__ == '__main__':
