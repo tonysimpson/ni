@@ -68,23 +68,28 @@ def run(path, *argv):
         sys.exit(err)
 
 def do_compile(python_version, psyco_mode):
+    print '='*10, python_version, psyco_mode
     preffile = os.path.join(os.pardir, 'preferences.py')
     try:
-        backup = open(preffile, 'r').read()
+        f = open(preffile, 'r')
+        backup = f.read()
+        f.close()
     except IOError:
         backup = ''
     cwd = os.getcwd()
     try:
-        os.chdir(os.pardir)
         f = open(preffile, 'w')
         for varvalue in psyco_mode.items():
             f.write('%s = %s\n' % varvalue)
         f.close()
+        os.chdir(os.pardir)
         run(python_version, 'setup.py', 'build', '-f')
         run(python_version, 'setup.py', 'install')
     finally:
         os.chdir(cwd)
-        open(preffile, 'w').write(backup)
+        f = open(preffile, 'w')
+        f.write(backup)
+        f.close()
 
 def test_with(python_version, psyco_mode, running_mode):
     #
