@@ -53,6 +53,7 @@ SRC = [
     Object('listobject'),
     Object('longobject'),
     Object('methodobject'),
+    Object('rangeobject'),
     Object('stringobject'),
     Object('structmember', 0),
     Object('tupleobject'),

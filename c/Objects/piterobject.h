@@ -28,7 +28,7 @@ typedef struct {
 
 
 /*********************************************************************/
- /* Virtual sequence iterators. Created if needed by PySetIter_New(). */
+ /* Virtual sequence iterators. Created if needed by PySeqIter_New(). */
 EXTERNVAR source_virtual_t psyco_computed_seqiter;
 
 /* !! consumes a ref on 'seq' */

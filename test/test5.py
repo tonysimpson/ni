@@ -233,21 +233,41 @@ def testovf(x, y):
     print -x
     print abs(x)
 
+def rangetypetest(n):
+    print type(range(n)).__name__
+    print type(range(2, n)).__name__
+    print type(range(n, 2, -1)).__name__
+    print type(xrange(n)).__name__
+    print type(xrange(2, n)).__name__
+    print type(xrange(n, 2, -1)).__name__
+
+def rangetest(n):
+    for i in range(n):
+        print i,
+    print
+    for i in range(10, n):
+        print i,
+    print
+    for i in range(n, 10, -1):
+        print i,
+    print
+
+def xrangetest(n):
+    for i in xrange(n):
+        print i,
+    print
+    for i in xrange(10, n):
+        print i,
+    print
+    for i in xrange(n, 10, -1):
+        print i,
+    print
+
 if __name__ == '__main__':
     import time
     print "break!"
     time.sleep(0.5)
-    #print f('test5.py')
-    #print f2(11,22,33)
-    #print f2(11,22,(5,))
-    #print f3(-15, 32)
-    #psyco.bind(f3)
-    #print f3(-15, 32)
-    #psyco.bind(f4)
-    #print f4("some-string")
     psyco.full()
-    #print overflowtest()
-    #exc_test()
-    #seqrepeat()
-    print inplacerepeat()
+    #rangetypetest(15)
+    rangetest(15)
     psyco.dumpcodebuf()

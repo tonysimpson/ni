@@ -2,7 +2,7 @@
 #include "pintobject.h"
 #include "plongobject.h"
 #include "piterobject.h"
-#include "../Python/pbltinmodule.h"
+#include "prangeobject.h"
 #include "../pycodegen.h"
 
 
@@ -169,7 +169,7 @@ static vinfo_t* plist_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 		return result;
 	}
 
-	if (a->source == VirtualTime_New(&psyco_computed_range)) {
+	if (a->source == VirtualTime_New(&psyco_computed_listrange)) {
 		/* optimize range().__getitem__() */
 		/* XXX no support for 'step' right now,
 		   so that the return value is simply 'start+i'. */

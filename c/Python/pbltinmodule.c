@@ -3,6 +3,7 @@
 #include "../Objects/ptupleobject.h"
 #include "../Objects/plistobject.h"
 #include "../Objects/pstringobject.h"
+#include "../Objects/prangeobject.h"
 
 
 static PyCFunction cimpl_range;
@@ -28,65 +29,6 @@ static PyCFunction cimpl_divmod;
 #endif
 
 
-/***************************************************************/
-/* range().
-   This is not for xrange(), which is not optimized by Psyco here.
-   As a result range() is now more efficient than xrange() in common cases.
-   This could be taken care of by short-circuiting the Psyco implementation
-   of xrange() to that of range() itself and thus completely bypassing
-   Python's own xrange types. */
-DEFINEVAR source_virtual_t psyco_computed_range;
-
-static PyObject* cimpl_range1(long start, long len)
-{
-  PyObject* lst = PyList_New(len);
-  long i;
-  if (lst != NULL)
-    {
-      for (i=0; i<len; i++)
-        {
-          PyObject* o = PyInt_FromLong(start);
-          if (o == NULL)
-            {
-              Py_DECREF(lst);
-              return NULL;
-            }
-          PyList_SET_ITEM(lst, i, o);
-          start++;
-        }
-    }
-  return lst;
-}
-
-static bool compute_range(PsycoObject* po, vinfo_t* rangelst)
-{
-	vinfo_t* newobj;
-	vinfo_t* vstart;
-	vinfo_t* vlen;
-
-	vstart = vinfo_getitem(rangelst, RANGE_START);
-	if (vstart == NULL)
-		return false;
-
-	vlen = vinfo_getitem(rangelst, RANGE_LEN);
-	if (vlen == NULL)
-		return false;
-
-	newobj = psyco_generic_call(po, cimpl_range1,
-				    CfReturnRef|CfPyErrIfNull,
-				    "vv", vstart, vlen);
-	if (newobj == NULL)
-		return false;
-
-	/* forget fields that were only relevant in virtual-time */
-	vinfo_array_shrink(po, rangelst, LIST_TOTAL);
-	
-	/* move the resulting non-virtual Python object back into 'rangelst' */
-	vinfo_move(po, rangelst, newobj);
-	return true;
-}
-
-
 static vinfo_t* get_len_of_range(PsycoObject* po, vinfo_t* lo, vinfo_t* hi
 				 /*, vinfo_t* step == 1 currently*/)
 {
@@ -103,20 +45,18 @@ static vinfo_t* get_len_of_range(PsycoObject* po, vinfo_t* lo, vinfo_t* hi
 		return psyco_vi_Zero();
 }
 
-static vinfo_t* pbuiltin_range_or_xrange(PsycoObject* po, vinfo_t* vargs)
+static bool parse_range_args(PsycoObject* po, vinfo_t* vargs,
+			     vinfo_t** iistart, vinfo_t** iilen)
 {
-	vinfo_t* result = NULL;
-	vinfo_t* ilen;
-	vinfo_t* ilow = NULL;
-	vinfo_t* ihigh = NULL;
-	/*vinfo_t* istep = NULL;*/
+	vinfo_t* ilow;
+	vinfo_t* ihigh;
 	int tuplesize = PsycoTuple_Load(vargs);  /* -1 if unknown */
 	
 	switch (tuplesize) {
 	case 1:
 		ihigh = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 0));
-		if (ihigh == NULL) goto End;
-		ilow = vinfo_new(CompileTime_New(0));
+		if (ihigh == NULL) return false;
+		ilow = psyco_vi_Zero();
 		break;
 	/*case 3:
 		istep = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 2));
@@ -124,65 +64,64 @@ static vinfo_t* pbuiltin_range_or_xrange(PsycoObject* po, vinfo_t* vargs)
 		/* fall through */
 	case 2:
 		ilow  = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 0));
-		if (ilow == NULL) goto End;
+		if (ilow == NULL) return false;
 		ihigh = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 1));
-		if (ihigh == NULL) goto End;
+		if (ihigh == NULL) return false;
 		break;
 	default:
-		return NULL;
+		return false;
 	}
-	ilen = get_len_of_range(po, ilow, ihigh);
-	if (ilen == NULL) goto End;
-	
-	result = vinfo_new(VirtualTime_New(&psyco_computed_range));
-	result->array = array_new(RANGE_TOTAL);
-	result->array->items[iOB_TYPE] =
-		vinfo_new(CompileTime_New((long)(&PyList_Type)));
-	/* XXX implement xrange() completely and replace '&PyList_Type'
-	   above by '&PyRange_Type' for this case */
-	result->array->items[RANGE_LEN] = ilen;
-	result->array->items[RANGE_START] = ilow;
-	ilow = NULL;
-
-   End:
-	/*vinfo_xdecref(istep, po);*/
-	vinfo_xdecref(ihigh, po);
-	vinfo_xdecref(ilow, po);
-	return result;
+	*iilen = get_len_of_range(po, ilow, ihigh);
+	if (*iilen == NULL) return false;
+	*iistart = ilow;
+	vinfo_decref(ihigh, po);
+	return true;
 }
 
 static vinfo_t* pbuiltin_range(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 {
-  vinfo_t* result = pbuiltin_range_or_xrange(po, vargs);
-  if (result == NULL && !PycException_Occurred(po))
-    result = psyco_generic_call(po, cimpl_range,
-                                CfReturnRef|CfPyErrIfNull,
-                                "lv", NULL, vargs);
-  return result;
+	vinfo_t* istart;
+	vinfo_t* ilen;
+	if (parse_range_args(po, vargs, &istart, &ilen)) {
+		return PsycoListRange_NEW(po, istart, ilen);
+	}
+	if (PycException_Occurred(po))
+		return NULL;
+	return psyco_generic_call(po, cimpl_range,
+				  CfReturnRef|CfPyErrIfNull,
+				  "lv", NULL, vargs);
 }
 
 static vinfo_t* pbuiltin_xrange(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 {
-  vinfo_t* result = pbuiltin_range_or_xrange(po, vargs);
-  if (result == NULL && !PycException_Occurred(po))
-    result = psyco_generic_call(po, cimpl_xrange,
-                                CfReturnRef|CfPyErrIfNull,
-                                "lv", NULL, vargs);
-  return result;
+	vinfo_t* istart;
+	vinfo_t* ilen;
+	if (parse_range_args(po, vargs, &istart, &ilen)) {
+		return PsycoXRange_NEW(po, istart, ilen);
+	}
+	if (PycException_Occurred(po))
+		return NULL;
+	return psyco_generic_call(po, cimpl_xrange,
+				  CfReturnRef|CfPyErrIfNull,
+				  "lv", NULL, vargs);
 }
 
 #if NEW_STYLE_TYPES
 static vinfo_t* prange_new(PsycoObject* po, vinfo_t* vtype,
 			   vinfo_t* vargs, vinfo_t* vkw)
 {
-  /* for Python >= 2.3, where __builtin__.xrange is a type */
-  vinfo_t* result = pbuiltin_range_or_xrange(po, vargs);
-  if (result == NULL && !PycException_Occurred(po))
-    result = psyco_generic_call(po, PyRange_Type.tp_new,
-                                CfReturnRef|CfPyErrIfNull,
-                                "lvl", &PyRange_Type,
-                                vargs, NULL);
-  return result;
+	/* for Python >= 2.3, where __builtin__.xrange is a type */
+	vinfo_t* istart;
+	vinfo_t* ilen;
+	if (parse_range_args(po, vargs, &istart, &ilen)) {
+		return PsycoXRange_NEW(po, istart, ilen);
+	}
+	if (PycException_Occurred(po))
+		return NULL;
+	return psyco_generic_call(po, PyRange_Type.tp_new,
+				  CfReturnRef|CfPyErrIfNull,
+				  "lvv", &PyRange_Type,
+				  vargs, vkw);
 }
 #else
 # define prange_new  NULL
@@ -324,9 +263,6 @@ INITIALIZATIONFN
 void psyco_bltinmodule_init(void)
 {
 	PyObject* md = Psyco_DefineMetaModule("__builtin__");
-	/* ranges are lists, which are mutable;
-           they must be forced out of virtual-time across function calls */
-        INIT_SVIRTUAL(psyco_computed_range, compute_range, 0, NW_FORCE);
 
 #define DEFMETA(name, flags)							\
     cimpl_ ## name = Psyco_DefineModuleFn(md, #name, flags, &pbuiltin_ ## name)
