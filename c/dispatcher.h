@@ -231,8 +231,9 @@ EXTERNFN bool psyco_prepare_respawn(PsycoObject* po,
 EXTERNFN code_t* psyco_do_respawn(void* arg, int extrasize);
 EXTERNFN code_t* psyco_dont_respawn(void* arg, int extrasize);
 EXTERNFN void psyco_respawn_detected(PsycoObject* po);
+#define detect_respawn_ex(po)  (!++(po)->respawn_cnt)
 inline bool detect_respawn(PsycoObject* po) {
-	if (!++po->respawn_cnt) {
+	if (detect_respawn_ex(po)) {
 		psyco_respawn_detected(po);
 		return true;
 	}

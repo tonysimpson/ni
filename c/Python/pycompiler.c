@@ -1123,9 +1123,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 	   deleted from the globals in the meantime. This is why we
 	   cannot just do that in the "found in globals()" branch
 	   below. */
-	extra_assert(po->respawn_cnt >= -1); /* this is the last respawn
-						pt before the merge pt */
-	if (po->respawn_cnt == -1) {
+	if (detect_respawn_ex(po)) {
 		/* respawning was triggered by the call to
 		   psyco_prepare_respawn_ex() below */
 		/* dictitem_check_change can use NEED_CC and
@@ -1145,12 +1143,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		}
 		dictitem_check_change(po, dummy_dict, dummy_entry);
 		/* end of respawning -- this dummy code will now be trashed */
-#if PSYCO_DEBUG
-		if (!detect_respawn(po))
-			Py_FatalError("invalid respawn_cnt in load_global()");
-#else
-		detect_respawn(po);
-#endif
+		psyco_respawn_detected(po);
 		mark_varying(po, key);
 		return NULL;
 	}
