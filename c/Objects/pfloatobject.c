@@ -192,6 +192,18 @@ static bool compute_float(PsycoObject* po, vinfo_t* floatobj)
     return true;
 }
 
+static PyObject* direct_compute_float(vinfo_t* floatobj, char* data)
+{
+  double value;
+  long* vl = (long*) &value;
+  extra_assert(sizeof(double) == 2*sizeof(long));
+  vl[0] = direct_read_vinfo(vinfo_getitem(floatobj, iINT_OB_IVAL+0), data);
+  vl[1] = direct_read_vinfo(vinfo_getitem(floatobj, iINT_OB_IVAL+1), data);
+  if (PyErr_Occurred())
+    return NULL;
+  return PyFloat_FromDouble(value);
+}
+
 
 DEFINEVAR source_virtual_t psyco_computed_float;
 
@@ -417,7 +429,8 @@ void psy_floatobject_init(void)
 
     Psyco_DefineMeta(PyFloat_Type.tp_compare, pfloat_cmp);
 
-    INIT_SVIRTUAL(psyco_computed_float, compute_float, 0, 0);
+    INIT_SVIRTUAL(psyco_computed_float, compute_float,
+                  direct_compute_float, 0, 0, 0);
 }
 
 #else /* !HAVE_FP_FN_CALLS */

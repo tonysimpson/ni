@@ -121,7 +121,7 @@ void psy_iterobject_init(void)
 
         /* iterator object are mutable;
            they must be forced out of virtual-time across function calls */
-        INIT_SVIRTUAL(psyco_computed_seqiter, compute_seqiter, 1, NW_FORCE);
+        INIT_SVIRTUAL_NOCALL(psyco_computed_seqiter, compute_seqiter, 1);
 }
 
 #else /* !HAVE_GENERATORS */

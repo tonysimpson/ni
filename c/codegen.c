@@ -1136,9 +1136,8 @@ void psyco_codegen_init(void)
   int i;
   for (i=0; i<CC_TOTAL; i++)
     {
-      /* the condition codes cannot be passed across function calls,
-         hence the NW_FORCE argument */
-      INIT_SVIRTUAL(cc_functions_table[i], generic_computed_cc, 0, NW_FORCE);
+      /* the condition codes cannot be passed across function calls */
+      INIT_SVIRTUAL_NOCALL(cc_functions_table[i], generic_computed_cc, 0);
     }
 #endif
   psyco_nonfixed_promotion.header.compute_fn = &computed_promotion;

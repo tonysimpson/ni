@@ -239,8 +239,11 @@ EXTERNVAR long psyco_memory_usage;   /* approximative */
 /* moved here from vcompiler.h because needed by numerous header files.
    See vcompiler.h for comments */
 typedef bool (*compute_fn_t)(PsycoObject* po, vinfo_t* vi);
+typedef PyObject* (*direct_compute_fn_t)(vinfo_t* vi, char* data);
 typedef struct {
   compute_fn_t compute_fn;
+  direct_compute_fn_t direct_compute_fn;
+  long pyobject_mask;
   signed char nested_weight[2];
 } source_virtual_t;
 

@@ -417,5 +417,6 @@ if __name__ == "__main__":
     #go(f36)
     #go(f38, 100)
     psyco.full()
-    print f35()
+    #print f35()
+    f23(0.0)
     psyco.dumpcodebuf()

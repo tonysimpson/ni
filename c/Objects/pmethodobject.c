@@ -34,6 +34,24 @@ static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj)
 	return true;
 }
 
+static PyObject* direct_compute_cfunction(vinfo_t* methobj, char* data)
+{
+	PyObject* m_self;
+	long m_ml;
+	PyObject* result = NULL;
+
+	m_self = direct_xobj_vinfo(
+			vinfo_getitem(methobj, iCFUNC_M_SELF), data);
+	m_ml = direct_read_vinfo(
+			vinfo_getitem(methobj, iCFUNC_M_ML), data);
+	
+	if (!PyErr_Occurred())
+		result = PyCFunction_New((PyMethodDef*) m_ml, m_self);
+	
+	Py_XDECREF(m_self);
+	return result;
+}
+
 
 DEFINEVAR source_virtual_t psyco_computed_cfunction;
 
@@ -127,5 +145,8 @@ void psy_methodobject_init(void)
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	Psyco_DefineMeta(PyCFunction_Type.tp_call, PsycoCFunction_Call);
 #endif
-        INIT_SVIRTUAL(psyco_computed_cfunction, compute_cfunction, 1, 1);
+        INIT_SVIRTUAL(psyco_computed_cfunction, compute_cfunction,
+		      direct_compute_cfunction,
+                      (1 << iCFUNC_M_SELF),
+                      1, 1);
 }

@@ -133,17 +133,71 @@ vinfo_t* PsycoObject_GetAttr(PsycoObject* po, vinfo_t* o, vinfo_t* attr_name)
 
 DEFINEFN
 bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
-                         vinfo_t* attr_name, vinfo_t* v)
+                         vinfo_t* vattrname, vinfo_t* v)
 {
-	/* XXX implement me */
-	if (v != NULL)
-		return psyco_generic_call(po, PyObject_SetAttr,
-                                          CfNoReturnValue|CfPyErrIfNonNull,
-                                          "vvv", o, attr_name, v) != NULL;
+	PyObject* name;
+        PyTypeObject* tp;
+	vinfo_t* vresult;
+	/* as in PsycoObject_GenericGetAttr() we don't try to analyse
+	   a non-constant vattrname */
+	if (!is_compiletime(vattrname->source))
+		goto generic;
+
+	tp = (PyTypeObject*) Psyco_NeedType(po, o);
+	if (tp == NULL)
+		return false;
+
+	name = (PyObject*) CompileTime_Get(vattrname->source)->value;
+	if (!PyString_Check(name)){
+#ifdef Py_USING_UNICODE
+		/* The Unicode to string conversion is done here because the
+		   existing tp_setattro slots expect a string object as name
+		   and we wouldn't want to break those. */
+		if (PyUnicode_Check(name)) {
+# if PSYCO_CAN_CALL_UNICODE
+			name = PyUnicode_AsEncodedString(name, NULL, NULL);
+			if (name == NULL) {
+				psyco_virtualize_exception(po);
+				return NULL;
+			}
+# else
+			goto generic;
+# endif
+		}
+		else
+#endif
+		{
+			PycException_SetString(po, PyExc_TypeError,
+					"attribute name must be string");
+			return false;
+		}
+	}
 	else
-		return psyco_generic_call(po, PyObject_SetAttr,
-                                          CfNoReturnValue|CfPyErrIfNonNull,
-                                          "vvl", o, attr_name, NULL) != NULL;
+		Py_INCREF(name);
+
+	PyString_InternInPlace(&name);
+	if (tp->tp_setattro != NULL) {
+		vresult = Psyco_META3(po, tp->tp_setattro,
+				      CfNoReturnValue|CfPyErrIfNonNull,
+				      v ? "vlv" : "vll", o, name, v);
+		Py_DECREF(name);
+		return vresult != NULL;
+	}
+	if (tp->tp_setattr != NULL) {
+		vresult = Psyco_META3(po, tp->tp_setattr,
+				      CfNoReturnValue|CfPyErrIfNonNull,
+				      v ? "vlv" : "vll", o,
+				      (long)PyString_AS_STRING(name), v);
+		Py_DECREF(name);
+		return vresult != NULL;
+	}
+	Py_DECREF(name);
+
+   generic:
+	/* fall-back implementation */
+	return psyco_generic_call(po, PyObject_SetAttr,
+				  CfNoReturnValue|CfPyErrIfNonNull,
+				  v ? "vvv" : "vvl", o, vattrname, v) != NULL;
 }
 
 /* Helper to get the offset an object's __dict__ slot, if any.

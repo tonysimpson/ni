@@ -58,6 +58,8 @@ SRC = [
     Object('structmember', 0),
     Object('tupleobject'),
     Object('typeobject'),
+    Source('Objects/compactobject.c',  'psyco_compact_init'),
+    Object('compactobject'),
 
     Module('array'),
     Module('math'),

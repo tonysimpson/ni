@@ -56,6 +56,29 @@ static bool compute_method(PsycoObject* po, vinfo_t* methobj)
 	return true;
 }
 
+static PyObject* direct_compute_method(vinfo_t* methobj, char* data)
+{
+	PyObject* im_func;
+	PyObject* im_self;
+	PyObject* im_class;
+	PyObject* result = NULL;
+
+	im_func = direct_xobj_vinfo(
+			vinfo_getitem(methobj, iMETHOD_IM_FUNC), data);
+	im_self = direct_xobj_vinfo(
+			vinfo_getitem(methobj, iMETHOD_IM_SELF), data);
+	im_class = direct_xobj_vinfo(
+			vinfo_getitem(methobj, iMETHOD_IM_CLASS), data);
+	
+	if (!PyErr_Occurred() && im_func != NULL)
+		result = PyMethod_New(im_func, im_self, im_class);
+	
+	Py_XDECREF(im_class);
+	Py_XDECREF(im_self);
+	Py_XDECREF(im_func);
+	return result;
+}
+
 
 DEFINEVAR source_virtual_t psyco_computed_method;
 
@@ -136,5 +159,11 @@ void psy_classobject_init(void)
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	Psyco_DefineMeta(PyMethod_Type.tp_call, pinstancemethod_call);
 #endif
-        INIT_SVIRTUAL(psyco_computed_method, compute_method, 0, 0);
+
+        INIT_SVIRTUAL(psyco_computed_method, compute_method,
+		      direct_compute_method,
+                      (1 << iMETHOD_IM_FUNC) |
+                      (1 << iMETHOD_IM_SELF) |
+                      (1 << iMETHOD_IM_CLASS),
+                      0, 0);
 }

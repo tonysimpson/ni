@@ -116,6 +116,15 @@ static bool compute_int(PsycoObject* po, vinfo_t* intobj)
 	return true;
 }
 
+static PyObject* direct_compute_int(vinfo_t* intobj, char* data)
+{
+	int ival;
+	ival = direct_read_vinfo(vinfo_getitem(intobj, iINT_OB_IVAL), data);
+	if (ival == -1 && PyErr_Occurred())
+		return NULL;
+	return PyInt_FromLong(ival);
+}
+
 
 DEFINEVAR source_virtual_t psyco_computed_int;
 
@@ -374,5 +383,6 @@ void psy_intobject_init(void)
         Psyco_DefineMeta(m->nb_divide,   pint_div);
 	Psyco_DefineMeta(m->nb_remainder,pint_mod);
 
-	INIT_SVIRTUAL(psyco_computed_int, compute_int, 0, 0);
+	INIT_SVIRTUAL(psyco_computed_int, compute_int,
+		      direct_compute_int, 0, 0, 0);
 }

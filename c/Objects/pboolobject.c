@@ -29,6 +29,18 @@ static bool compute_bool(PsycoObject* po, vinfo_t* boolobj)
 	return true;
 }
 
+static PyObject* direct_compute_bool(vinfo_t* boolobj, char* data)
+{
+	PyObject* result;
+	int ival;
+	ival = direct_read_vinfo(vinfo_getitem(boolobj, iBOOL_OB_IVAL), data);
+	if (ival == -1 && PyErr_Occurred())
+		return NULL;
+	result = ival ? Py_True : Py_False;
+	Py_INCREF(result);
+	return result;
+}
+
 
 DEFINEVAR source_virtual_t psyco_computed_bool;
 
@@ -88,7 +100,8 @@ void psy_boolobject_init(void)
 	Psyco_DefineMeta(m->nb_xor,      pbool_xor);
 	Psyco_DefineMeta(m->nb_and,      pbool_and);
 
-	INIT_SVIRTUAL(psyco_computed_bool, compute_bool, 0, 0);
+	INIT_SVIRTUAL(psyco_computed_bool, compute_bool,
+		      direct_compute_bool, 0, 0, 0);
 }
 
 #else /* !BOOLEAN_TYPE */

@@ -55,6 +55,16 @@ static bool compute_xrange(PsycoObject* po, vinfo_t* v)
 	return true;
 }
 
+static PyObject* direct_compute_xrange(vinfo_t* v, char* data)
+{
+	long start, len;
+	start = direct_read_vinfo(vinfo_getitem(v, iRANGE_START), data);
+	len   = direct_read_vinfo(vinfo_getitem(v, iRANGE_LEN),   data);
+	if (PyErr_Occurred())
+		return NULL;
+	return PyRange_New(start, len, 1, 1);
+}
+
 DEFINEFN
 vinfo_t* PsycoXRange_NEW(PsycoObject* po, vinfo_t* start, vinfo_t* len)
 {
@@ -203,8 +213,9 @@ void psy_rangeobject_init(void)
 	if (PyRange_Type.tp_iter != NULL)  /* Python >= 2.3 */
 		Psyco_DefineMeta(PyRange_Type.tp_iter, PsycoSeqIter_New);
 #endif
-	INIT_SVIRTUAL(psyco_computed_xrange, compute_xrange, 0, 0);
-	INIT_SVIRTUAL(psyco_computed_listrange, compute_listrange, 0, NW_FORCE);
+	INIT_SVIRTUAL(psyco_computed_xrange, compute_xrange,
+		      direct_compute_xrange, 0, 0, 0);
+	INIT_SVIRTUAL_NOCALL(psyco_computed_listrange, compute_listrange, 0);
 	/* ranges, unlike xranges, are mutable;
 	   they must be forced out of virtual-time across function calls */
 }

@@ -45,6 +45,34 @@ static bool compute_function(PsycoObject* po, vinfo_t* v)
 	return true;
 }
 
+#if 0	/* not needed currently */
+static PyObject* direct_compute_function(vinfo_t* v, char* data)
+{
+	PyObject* fcode;
+	PyObject* fglobals;
+	PyObject* fdefaults;
+	PyObject* result = NULL;
+
+	fcode     = direct_xobj_vinfo(vinfo_getitem(v, iFUNC_CODE),     data);
+	fglobals  = direct_xobj_vinfo(vinfo_getitem(v, iFUNC_GLOBALS),  data);
+	fdefaults = direct_xobj_vinfo(vinfo_getitem(v, iFUNC_DEFAULTS), data);
+
+	if (!PyErr_Occurred() && fcode != NULL && fglobals != NULL) {
+		result = PyFunction_New(fcode, fglobals);
+		if (result != NULL && fdefaults != NULL) {
+			if (PyFunction_SetDefaults(result, fdefaults) != 0) {
+				Py_DECREF(result);
+				result = NULL;
+			}
+		}
+	}
+	Py_XDECREF(fdefaults);
+	Py_XDECREF(fglobals);
+	Py_XDECREF(fcode);
+	return result;
+}
+#endif
+
 
 DEFINEFN
 vinfo_t* PsycoFunction_New(PsycoObject* po, vinfo_t* fcode,
@@ -180,5 +208,5 @@ void psy_funcobject_init(void)
 #endif
         /* function object are mutable;
            they must be forced out of virtual-time across function calls */
-        INIT_SVIRTUAL(psyco_computed_function, compute_function, 1, NW_FORCE);
+        INIT_SVIRTUAL_NOCALL(psyco_computed_function, compute_function, 1);
 }

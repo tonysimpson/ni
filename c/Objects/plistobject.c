@@ -326,7 +326,7 @@ void psy_listobject_init(void)
 
         /* list object are mutable;
            they must be forced out of virtual-time across function calls */
-        INIT_SVIRTUAL(psyco_computed_vlist, compute_vlist, NW_VLISTS, NW_FORCE);
+        INIT_SVIRTUAL_NOCALL(psyco_computed_vlist, compute_vlist, NW_VLISTS);
 
 	/*psyco_empty_list = PsycoList_NEW(0);*/
 }

@@ -445,6 +445,59 @@ bool psyco_limit_nested_weight(PsycoObject* po, vinfo_array_t* array,
   return true;
 }
 
+DEFINEFN
+long direct_read_vinfo(vinfo_t* vi, char* data)
+{
+  int sindex;
+  if (vi == NULL)
+    {
+      PyErr_SetString(PyExc_PsycoError, "undefined value");
+      return -1;
+    }
+  switch (gettime(vi->source)) {
+    
+  case RunTime:
+    sindex = getstack(vi->source);
+    return *(long*)(data+sindex);
+
+  case CompileTime:
+    return CompileTime_Get(vi->source)->value;
+
+  default:
+    Py_FatalError("Psyco: virtual-time direct_read_vinfo");
+    return 0;
+  }
+}
+
+DEFINEFN
+PyObject* direct_xobj_vinfo(vinfo_t* vi, char* data)
+{
+  int sindex;
+  PyObject* o = NULL;
+  if (vi != NULL)
+    {
+      switch (gettime(vi->source)) {
+    
+      case RunTime:
+        sindex = getstack(vi->source);
+        o = *(PyObject**)(data+sindex);
+        break;
+
+      case CompileTime:
+        o = (PyObject*) CompileTime_Get(vi->source)->value;
+        break;
+
+      case VirtualTime:
+        if (VirtualTime_Get(vi->source)->direct_compute_fn == NULL)
+          Py_FatalError("Psyco: value not directly computable");
+        return VirtualTime_Get(vi->source)->direct_compute_fn(vi, data);
+      }
+      Py_XINCREF(o);
+    }
+  return o;
+}
+
+
 /*****************************************************************/
 
 
@@ -913,10 +966,21 @@ static bool computed_do_not_use(PsycoObject* po, vinfo_t* vi)
   return true;
 }
 
+static PyObject* direct_computed_do_not_use(vinfo_t* vi, char* data)
+{
+  PyErr_SetString(PyExc_PsycoError,
+                  "internal error (direct_computed_do_not_use)");
+  extra_assert(0);     /* stop if debugging */
+  return NULL;
+}
+
 INITIALIZATIONFN
 void psyco_compiler_init(void)
 {
-  INIT_SVIRTUAL(psyco_vsource_not_important, computed_do_not_use, 0, 0);
+  INIT_SVIRTUAL(psyco_vsource_not_important,
+                computed_do_not_use,
+                direct_computed_do_not_use,
+                0, 0, 0);
 }
 
 

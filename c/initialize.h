@@ -34,6 +34,7 @@
 # include "Objects/pstructmember.h"
 # include "Objects/ptupleobject.h"
 # include "Objects/ptypeobject.h"
+# include "Objects/pcompactobject.h"
 
 #else /* if PSYCO_INITIALIZATION */
 # undef PSYCO_INITIALIZATION
@@ -74,6 +75,8 @@
 # include "Objects/pstructmember.c"
 # include "Objects/ptupleobject.c"
 # include "Objects/ptypeobject.c"
+# include "Objects/compactobject.c"
+# include "Objects/pcompactobject.c"
 # include "Modules/parray.c"
 # include "Modules/pmath.c"
 #else /* if !ALL_STATIC */
@@ -102,6 +105,8 @@
   EXTERNFN void psy_stringobject_init(void);	/* Objects/pstringobject.c */
   EXTERNFN void psy_tupleobject_init(void);	/* Objects/ptupleobject.c */
   EXTERNFN void psy_typeobject_init(void);	/* Objects/ptypeobject.c */
+  EXTERNFN void psyco_compact_init(void);	/* Objects/compactobject.c */
+  EXTERNFN void psy_compactobject_init(void);	/* Objects/pcompactobject.c */
   EXTERNFN void psyco_initarray(void);	/* Modules/parray.c */
   EXTERNFN void psyco_initmath(void);	/* Modules/pmath.c */
 #endif /* !ALL_STATIC */
@@ -133,6 +138,8 @@ inline void initialize_all_files(void) {
   psy_stringobject_init();	/* Objects/pstringobject.c */
   psy_tupleobject_init();	/* Objects/ptupleobject.c */
   psy_typeobject_init();	/* Objects/ptypeobject.c */
+  psyco_compact_init();	/* Objects/compactobject.c */
+  psy_compactobject_init();	/* Objects/pcompactobject.c */
   psyco_initarray();	/* Modules/parray.c */
   psyco_initmath();	/* Modules/pmath.c */
 }

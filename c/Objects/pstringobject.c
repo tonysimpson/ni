@@ -41,6 +41,15 @@ static bool compute_char(PsycoObject* po, vinfo_t* v)
 	return true;
 }
 
+static PyObject* direct_compute_char(vinfo_t* v, char* data)
+{
+	char c;
+	c = (char) direct_read_vinfo(vinfo_getitem(v, CHARACTER_CHAR), data);
+	if (c == -1 && PyErr_Occurred())
+		return NULL;
+	return PyString_FromStringAndSize(&c, 1);
+}
+
 
 inline vinfo_t* PsycoCharacter_NEW(vinfo_t* chrval)
 {
@@ -148,6 +157,22 @@ static bool compute_strslice(PsycoObject* po, vinfo_t* v)
 	/* move the resulting non-virtual Python object back into 'v' */
 	vinfo_move(po, v, newobj);
 	return true;
+}
+
+static PyObject* direct_compute_strslice(vinfo_t* v, char* data)
+{
+	PyObject* source;
+	long start, length;
+	PyObject* result = NULL;
+	source = direct_xobj_vinfo(vinfo_getitem(v, STRSLICE_SOURCE), data);
+	start  = direct_read_vinfo(vinfo_getitem(v, STRSLICE_START),  data);
+	length = direct_read_vinfo(vinfo_getitem(v, iFIX_SIZE),       data);
+	if (!PyErr_Occurred() && source != NULL && PyString_Check(source)) {
+		char* p = PyString_AS_STRING(source);
+		result = PyString_FromStringAndSize(p+start, length);
+	}
+	Py_XDECREF(source);
+	return result;
 }
 
 inline vinfo_t* PsycoStrSlice_NEW(vinfo_t* source, vinfo_t* start, vinfo_t* len)
@@ -1015,6 +1040,23 @@ static bool compute_bufstr(PsycoObject* po, vinfo_t* v)
 	return true;
 }
 
+static PyObject* direct_compute_bufstr(vinfo_t* v, char* data)
+{
+	PyObject* bufobj;
+	long length;
+	PyObject* result = NULL;
+	length = direct_read_vinfo(vinfo_getitem(v, iFIX_SIZE),     data);
+	bufobj = direct_xobj_vinfo(vinfo_getitem(v, BUFSTR_BUFOBJ), data);
+	
+	if (!PyErr_Occurred() && bufobj != NULL) {
+		/* patch 'bufobj' as explained in compute_bufstr() */
+		result = (PyObject*)
+			cimpl_cb_normalize((stringlike_t*) bufobj, length);
+	}
+	Py_XDECREF(bufobj);
+	return result;
+}
+
 
 static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 {
@@ -1157,15 +1199,21 @@ void psy_stringobject_init(void)
 		Psyco_DefineMeta(nm->nb_remainder, pstring_mod);
 	}
 
-        INIT_SVIRTUAL(psyco_computed_char, compute_char, 0, 0);
+        INIT_SVIRTUAL(psyco_computed_char, compute_char,
+		      direct_compute_char, 0, 0, 0);
         INIT_SVIRTUAL(psyco_computed_strslice, compute_strslice,
+		      direct_compute_strslice,
+                      (1 << STRSLICE_SOURCE),
                       NW_STRSLICES_NORMAL, NW_STRSLICES_FUNCALL);
 #if USE_CATSTR
+#  error direct_compute_catstr is missing
         INIT_SVIRTUAL(psyco_computed_catstr, compute_catstr,
                       NW_CATSTRS_NORMAL, NW_CATSTRS_FUNCALL);
 #endif
 #if USE_BUFSTR
 	INIT_SVIRTUAL(psyco_computed_bufstr, compute_bufstr,
+		      direct_compute_bufstr,
+                      (1 << BUFSTR_BUFOBJ),
 		      NW_BUFSTRS_NORMAL, NW_BUFSTRS_NORMAL);
 #endif
 

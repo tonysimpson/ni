@@ -63,6 +63,30 @@ static bool compute_tuple(PsycoObject* po, vinfo_t* v)
 	return true;
 }
 
+static PyObject* direct_compute_tuple(vinfo_t* v, char* data)
+{
+	int i, tuple_end;
+	PyObject* result;
+	
+	tuple_end = v->array->count;
+	extra_assert(tuple_end == iTUPLE_OB_ITEM +
+		CompileTime_Get(v->array->items[iFIX_SIZE]->source)->value);
+
+	result = PyTuple_New(tuple_end - iTUPLE_OB_ITEM);
+	if (result == NULL)
+		return NULL;
+	
+	for (i=iTUPLE_OB_ITEM; i<tuple_end; i++) {
+		PyObject* obj = direct_xobj_vinfo(v->array->items[i], data);
+		if (obj == NULL) {
+			Py_DECREF(result);
+			return NULL;
+		}
+		PyTuple_SET_ITEM(result, i-iTUPLE_OB_ITEM, obj);
+	}
+	return result;
+}
+
 DEFINEFN
 vinfo_t* PsycoTuple_New(int count, vinfo_t** source)
 {
@@ -223,5 +247,8 @@ void psy_tupleobject_init(void)
 	}
 
         INIT_SVIRTUAL(psyco_computed_tuple, compute_tuple,
+		      direct_compute_tuple,
+                      (-1 << iTUPLE_OB_ITEM),  /* sign bit of bitfield will
+                                                  be extended indefinitely */
                       NW_TUPLES_NORMAL, NW_TUPLES_FUNCALL);
 }

@@ -212,6 +212,16 @@ inline CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
  *  compute_fn_t compute_fn;
  *     the function to be called to move the vinfo_t out of virtual-time.
  *
+ *  direct_compute_fn_t direct_compute_fn
+ *     a non-meta function that computes the PyObject* out of raw data.
+ *     'compute_fn' is the meta version of 'direct_compute_fn'.
+ *
+ *  long pyobject_mask
+ *     a bitfield, one bit per item in the vinfo_t's array: the bit is set
+ *     to 1 if the array item represents a PyObject (and hence needs to be
+ *     forced to have a reference if the virtual object escapes the current
+ *     scope, which so far is only possible through compactobject attrs).
+ *
  *  signed char nested_weight[2];
  *     a value > 0 prevents infinite nesting of virtual 'vinfo_t's inside
  *     of other virtual 'vinfo_t's: the sum of all 'nested_weight' fields
@@ -223,11 +233,15 @@ inline CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
 #define NESTED_WEIGHT_END   15
 #define NWI_NORMAL          0  /* use nested_weight[0] */
 #define NWI_FUNCALL         1  /* use nested_weight[1] */
-#define INIT_SVIRTUAL(sv, fn, w_normal, w_funcall)   do {	\
-	(sv).compute_fn = fn;					\
-	(sv).nested_weight[NWI_NORMAL] = w_normal;		\
-	(sv).nested_weight[NWI_FUNCALL] = w_funcall;		\
+#define INIT_SVIRTUAL(sv, fn, directfn, objmask, w_normal, w_funcall) do { \
+	(sv).compute_fn = fn;                                              \
+	(sv).direct_compute_fn = directfn;                                 \
+	(sv).pyobject_mask = objmask;                                      \
+	(sv).nested_weight[NWI_NORMAL] = w_normal;                         \
+	(sv).nested_weight[NWI_FUNCALL] = w_funcall;                       \
 } while (0)
+#define INIT_SVIRTUAL_NOCALL(sv, fn, w_normal)                             \
+		INIT_SVIRTUAL(sv, fn, NULL, 0, w_normal, NW_FORCE)
 
 /* some weights for common virtual-time objects, grouped here to better
    show their relative importance. A careful tuning is required to avoid
@@ -354,6 +368,8 @@ inline bool compute_vinfo(vinfo_t* vi, PsycoObject* po) {
 }
 EXTERNFN bool psyco_limit_nested_weight(PsycoObject* po, vinfo_array_t* array,
 					int nw_index, signed char nw_end);
+EXTERNFN long direct_read_vinfo(vinfo_t* vi, char* data);
+EXTERNFN PyObject* direct_xobj_vinfo(vinfo_t* vi, char* data);
 
 inline bool vinfo_known_equal(vinfo_t* v, vinfo_t* w) {
 	return (v->source == w->source &&
