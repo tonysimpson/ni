@@ -201,6 +201,7 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
             return '?'
 
     def send_head(self):
+        global codebufs # CT
         self.trace_prev = None
         self.trace_next = None
         self.trace_addr = ()
@@ -409,6 +410,12 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-type", "text/plain")
             self.end_headers()
             return f
+
+        ## CT: simple reload feature
+        if self.path == "/reload":
+            codebufs = xam.readdump(FILENAME)
+            self.path = "/all"
+            return self.send_head()
         
         self.send_error(404, "Invalid path")
         return None
@@ -435,4 +442,5 @@ if __name__ == '__main__':
         DIRECTORY = os.path.dirname(DIRECTORY)
     tracefilename = os.path.join(DIRECTORY, 'psyco.trace')
     codebufs = xam.readdump(filename)
+    FILENAME = filename # CT hack
     test(CodeBufHTTPHandler)
