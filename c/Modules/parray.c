@@ -219,9 +219,20 @@ static bool parray_ass_item(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,vinfo_t* v
 /* array creation: we know the result is of type ArrayType.
    XXX we should also decode a constant-time description character. */
 DEF_KNOWN_RET_TYPE_2(pa_array, cimpl_array, CfReturnRef|CfPyErrIfNull, arraytype)
+
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
-DEF_KNOWN_RET_TYPE_3(parray_new, arraytype->tp_new,
-                     CfReturnRef|CfPyErrIfNull, arraytype)
+static vinfo_t* parray_new(PsycoObject* po, PyTypeObject* type,
+			   vinfo_t* varg, vinfo_t* vkw)
+{
+	vinfo_t* result = psyco_generic_call(po, arraytype->tp_new,
+					     CfReturnRef|CfPyErrIfNull,
+					     "lvv", type, varg, vkw);
+	if (result != NULL) {
+		set_array_item(po, result, OB_TYPE,
+			       vinfo_new(CompileTime_New((long) arraytype)));
+	}
+	return result;
+}
 #endif
 
 /***************************************************************/
@@ -231,39 +242,39 @@ INITIALIZATIONFN
 void psyco_initarray(void)
 {
 	PyObject* md = Psyco_DefineMetaModule("array");
+	PyObject* arrayobj;
 	struct metadescr_s* descr;
+	PySequenceMethods* m;
 
-	/* get array.ArrayType */
+	if (md == NULL)
+		return;
+	
+	/* get array.array and array.ArrayType */
+	arrayobj = Psyco_GetModuleObject(md, "array", NULL);
 	arraytype = (PyTypeObject*)
 		Psyco_GetModuleObject(md, "ArrayType", &PyType_Type);
 
-	/* the following requires arraytype to have been actually found */
-	if (arraytype != NULL) {
-		PySequenceMethods* m = arraytype->tp_as_sequence;
-		Psyco_DefineMeta(m->sq_length,   psyco_generic_mut_ob_size);
-		Psyco_DefineMeta(m->sq_item,     parray_item);
-		/*Psyco_DefineMeta(m->sq_ass_item, parray_ass_item);*/
-		
-		/* map array.array() to its meta-implementation pa_array() */
-		cimpl_array = Psyco_DefineModuleC(md, "array", METH_VARARGS,
-                                                  &pa_array, &parray_new);
-	}
-	Py_XDECREF(md);
-
-	/* we need a valid cimpl_array() for the sequel */
-	if (cimpl_array == NULL)
+	/* bail out if not found */
+	if (arrayobj == NULL || arraytype == NULL) {
+		Py_DECREF(md);
 		return;
-	
+	}
+
+	m = arraytype->tp_as_sequence;
+	Psyco_DefineMeta(m->sq_length,   psyco_generic_mut_ob_size);
+	Psyco_DefineMeta(m->sq_item,     parray_item);
+	/*Psyco_DefineMeta(m->sq_ass_item, parray_ass_item);*/
+		
+	/* map array.array() to its meta-implementation pa_array() */
+	cimpl_array = Psyco_DefineModuleC(md, "array", METH_VARARGS,
+					  &pa_array, &parray_new);
+
 	for (descr=metadescriptors; descr->typecode!=0; descr++) {
 		/* There seem to be no better way to get Python's
 		   original array descriptors than to create dummy
 		   arrays */
-		PyObject* array;
-		PyObject* args = Py_BuildValue("(c)", (char) descr->typecode);
-		if (!args)
-			return;
-		array = (*cimpl_array) (NULL, args);
-		Py_DECREF(args);
+		PyObject* array = PyObject_CallFunction(arrayobj, "c",
+						(char) descr->typecode);
 		if (!array) {
 			PyErr_Clear();
 			debug_printf(("psyco: note: cannot create an array of "
@@ -278,5 +289,5 @@ void psyco_initarray(void)
 			Py_DECREF(array);
 		}
 	}
-
+	Py_DECREF(md);
 }
