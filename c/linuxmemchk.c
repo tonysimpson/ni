@@ -1,6 +1,6 @@
 /* custom checking allocators a la Electric Fence */
-#include "psyco.h"
-#ifdef HEAVY_MEM_CHECK
+#include "linuxmemchk.h"
+#if HEAVY_MEM_CHECK
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>

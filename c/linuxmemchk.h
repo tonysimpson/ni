@@ -1,4 +1,5 @@
-#ifdef HEAVY_MEM_CHECK
+#include "psyco.h"
+#if HEAVY_MEM_CHECK
 
 #include <Python.h>
 #undef PyCore_MALLOC

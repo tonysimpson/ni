@@ -14,23 +14,27 @@
  /* define for extra assert()'s */
 # define ALL_CHECKS
 
- /* define for a few debugging outputs */
-# define VERBOSE_LEVEL   1   /* 0, 1 or 2 */
+ /* level of debugging outputs: 0 = none, 1 = a few, 2 = a lot */
+# ifndef VERBOSE_LEVEL
+#  define VERBOSE_LEVEL   1   /* 0, 1 or 2 */
+# endif
 
 #ifndef MS_WIN32
 
- /* define for *heavy* memory checking */
-# define HEAVY_MEM_CHECK
- /* define for **really** **heavy** memory checking */
-/*#undef HEAVY_HEAVY_MEM_CHECK*/
+ /* define for *heavy* memory checking: 0 = off, 1 = reasonably heavy,
+                                        2 = unreasonably heaving */
+# ifndef HEAVY_MEM_CHECK
+#  define HEAVY_MEM_CHECK   0
+# endif
 
 #endif
 
  /* define to write produced blocks of code into a file
     See 'xam.py' */
-# define CODE_DUMP_FILE    "psyco.dump"
+# ifndef NO_CODE_DUMP
+#  define CODE_DUMP_FILE    "psyco.dump"
+# endif
 # define CODE_DUMP_AT_END_ONLY
-# define SPEC_DICT_SIGNATURE   0x98247b9d   /* arbitrary */
 
 #endif  /* !DISABLE_DEBUG */
 
@@ -118,9 +122,12 @@
 # define inline      static
 #endif
 
-#ifdef HEAVY_MEM_CHECK
+#ifndef HEAVY_MEM_CHECK
+# define HEAVY_MEM_CHECK   0
+#endif
+#if HEAVY_MEM_CHECK
 # include "linuxmemchk.h"
-# ifdef HEAVY_HEAVY_MEM_CHECK
+# if HEAVY_MEM_CHECK > 1
 #  define PSYCO_NO_LINKED_LISTS
 # endif
 #endif
@@ -130,10 +137,10 @@
 typedef int bool;
 #endif
 #ifndef false
-static const bool false = 0;
+# define false   0
 #endif
 #ifndef true
-static const bool true = 1;
+# define true    1
 #endif
 
 
