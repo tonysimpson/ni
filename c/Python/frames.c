@@ -5,6 +5,8 @@
 #include "../vcompiler.h"
 #include "../Objects/pobject.h"
 
+#include <opcode.h>
+
 
  /***************************************************************/
 
@@ -255,7 +257,7 @@ PyObject* PsycoCode_CompileFrame(PyFrameObject* f, int recursion)
 }
 
 DEFINEFN
-bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f)
+bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering)
 {
 	PyObject* tdict;
 	PyFrameRuntime* fruntime;
@@ -313,8 +315,14 @@ bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f)
 		   last instruction of any code object is a RETURN_VALUE. */
 		PyObject** p;
 		int new_i = PyString_GET_SIZE(co->co_code) - 1;
-		   /* RETURN_VALUE */
-		psyco_assert(PyString_AS_STRING(co->co_code)[new_i] == 83);
+		psyco_assert(PyString_AS_STRING(co->co_code)[new_i]
+                             == RETURN_VALUE);
+#if PY_VERSION_HEX >= 0x02030000   /* 2.3 */
+		/* dubious compatibility hack for Python 2.3, in which f_lasti
+		   no longer always refer to the instruction that will be
+		   executed just after the current trace hook returns */
+	        new_i -= entering;
+#endif
 		f->f_lasti = new_i;
 		f->f_iblock = 0;
 

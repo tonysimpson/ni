@@ -214,7 +214,7 @@ inline bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
 	f->f_tstate->use_tracing = 1;
 	f->f_tstate->tracing--;
 	/* run the compiled code */
-	r = PsycoCode_Run(codebuf, f);
+	r = PsycoCode_Run(codebuf, f, what == PyTrace_CALL);
 	f->f_tstate->tracing++;
 	Py_DECREF(codebuf);
 #endif

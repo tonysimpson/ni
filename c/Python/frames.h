@@ -37,7 +37,7 @@ EXTERNFN PyObject* PsycoCode_CompileFrame(PyFrameObject* f, int recursion);
    initialized by ceval.c but not yet run.  For code compiled by
    PsycoCode_CompileFrame, the frame must be in the same state as when it
    was compiled. */
-EXTERNFN bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f);
+EXTERNFN bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering);
 
 #endif /* HAVE_DYN_COMPILE */
 

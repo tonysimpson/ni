@@ -30,7 +30,9 @@ C_FLAGS_P = -g
 OPTS     = ${OPTS_${mode}}
 C_FLAGS  = -DNDEBUG ${C_FLAGS_${mode}} -Wall -Wstrict-prototypes -fPIC ${OPTS} ${incl}
 LD_FLAGS = -shared
-OUTDIR   = ../build/lib.linux-i686-${PY_VER}/psyco
+BUILDDIR = ../build
+LIBDIR   = lib.linux-i686-${PY_VER}
+OUTDIR   = ${BUILDDIR}/${LIBDIR}/psyco
 OUTPUT   = ${OUTDIR}/_psyco.so
 
 ifdef cvs
@@ -52,11 +54,13 @@ main: build_ext build_py
 dyn: ${OUTDIR}/dyn-tag build_py
 
 build_ext: build_py
+	-rm ${BUILDDIR}/current
 	@echo -----------------------------------
 	@echo ${BUILD_VERSION}
 	@echo -----------------------------------
 	gcc ${LD_FLAGS} ${C_FLAGS} -DALL_STATIC=1 psyco.c -o ${OUTPUT}
 	echo ${BUILD_VERSION} > ${OUTDIR}/build-version
+	ln -s ${LIBDIR} ${BUILDDIR}/current
 
 build_py:
 	cd ..; $(python) setup.py build_py
@@ -67,9 +71,11 @@ include dyn-Makefile
 	gcc ${C_FLAGS} -DALL_STATIC=0 -c $< -o $@
 
 ${OUTDIR}/dyn-tag: ${O_FILES}
+	-rm ${BUILDDIR}/current
 	gcc ${LD_FLAGS} $^ -o ${OUTPUT}
 	echo ${BUILD_VERSION} > ${OUTDIR}/build-version
 	echo dyn-tag >> ${OUTDIR}/build-version
+	ln -s ${LIBDIR} ${BUILDDIR}/current
 	touch $@
 
 clean:
