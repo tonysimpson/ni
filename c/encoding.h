@@ -14,13 +14,8 @@
     optimizations. */
 #define COMPACT_ENCODING   1
 
-/* Define to 1 to use EBP as the stack frame base.
-   Define to 0 to always refer to variables via ESP. */
+/* Define to 0 to use EBP as any other register, or to 1 to reserve it */
 #define EBP_IS_RESERVED    0
-
-#if EBP_IS_RESERVED
-# error "not usable right now; code misses prolog and epilog to set/restore EBP"
-#endif
 
 
 typedef enum {
@@ -144,7 +139,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 
 
 /* note: the following macro starts writing at code+1 */
-#if EBP_IS_RESERVED
+#if 0
 /* access stack by [EBP-n] where 'n' is fixed for the variable */
 #define MODRM_EBP_BASE(middle, stack_pos)       do {                    \
   extra_assert(0 < (stack_pos) && (stack_pos) <= RUNTIME_STACK_MAX);    \

@@ -16,10 +16,9 @@
  * We consider that we can call C functions with arbitrary values in
  * all registers but ESP, and that only EAX, ECX and EDX will be
  * clobbered.
- * If EBP_IS_RESERVED is set to 1, the frame pointer is in EBP,
- * just as in normal C compiled functions. The instruction encodings
- * to access an EBP-relative memory address are one byte shorter than
- * the ESP-relative encodings.
+ * We do not use EBP as the frame pointer, unlike normal C compiled
+ * functions. This makes instruction encodings one byte longer
+ * (ESP-relative instead of EBP-relative).
  */
 
 DEFINEVAR
