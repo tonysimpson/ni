@@ -28,11 +28,14 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_repr': 'self-nested tuples and lists not supported',
         'test_builtin': 'vars() and locals() not supported',
         'test_inspect': 'does not run even in Python (when called the way classicregrtest.py calls it) and leaves buggy temp files around',
+        'test_trace': 'no line tracing with Psyco',
         }
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'
 #    SKIP['test_operator'] = NO_SYS_EXC
 #    SKIP['test_strop'] = NO_SYS_EXC
+if sys.version_info[:2] >= (2,3):
+    SKIP['test_threadedtempfile'] = 'Python bug: Python test just hangs up'
 
 if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
     SKIP['test_popen2'] = 'gets confused by Psyco debugging output to stderr'
@@ -40,15 +43,10 @@ if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
 GROUP_TESTS = 5    # number of tests to run per Python process
 
 
-for dir in sys.path:
-    file = os.path.join(dir, "string.py")
-    if os.path.isfile(file):
-        test = os.path.join(dir, "test")
-        if os.path.isdir(test):
-            # Add the "test" directory to PYTHONPATH.
-            sys.path = sys.path + [test]
+if '' in sys.path:
+    sys.path.remove('')  # don't import the test.py in this directory!
 
-import regrtest, test_support
+from test import regrtest, test_support
 
 repeat_counter = 4
 
