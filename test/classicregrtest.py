@@ -1,4 +1,6 @@
-import sys, os, StringIO, psyco
+import sys, os, StringIO, psyco, psyco.logger
+
+LOGFILE = 'log-regrtest-psyco'
 
 
 #NO_SYS_GETFRAME = """using sys._getframe() fails with Psyco"""
@@ -30,6 +32,8 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_inspect': 'does not run even in Python (when called the way classicregrtest.py calls it) and leaves buggy temp files around',
         'test_trace': 'no line tracing with Psyco',
         'test_threaded_import': 'Python hang-ups',
+        'test_hotshot': "PyEval_SetProfile(NULL,NULL) doesn't allow Psyco to take control back",
+        'test_coercion': 'uses eval() with locals',
         }
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'
@@ -56,6 +60,10 @@ def alltests():
     import random
     # randomize the list of tests, but try to ensure that we start with
     # not-already-seen tests and only after go on with the rest
+    try:
+        os.unlink(LOGFILE)
+    except OSError:
+        pass
     filename = "tmp_tests_passed"
     try:
         f = open(filename)
@@ -102,7 +110,7 @@ def alltests():
         print "Release mode",
     for key in d.keys():
         if key == key.upper() and type(d[key]) == type(0):
-            print "%s=%d" % (key, d[key]),
+            print "%s=%s" % (key, hex(d[key])),
     print
 
 def python_check(test):
@@ -129,7 +137,10 @@ def main(testlist, verbose=0, use_resources=None):
         testlist = filter(python_check, testlist)
 
     # Psyco selective compilation is only activated here
-    psyco.jit(1)
+    psyco.log(LOGFILE, 'a')
+    for test in testlist:
+        psyco.logger.write('with test ' + test, 1)
+    psyco.full()
     #print "sleeping, time for a Ctrl-C !..."
     #import time; time.sleep(1.5)
 

@@ -10,7 +10,12 @@ import random
 import operator
 import string
 import psyco
-from psyco.classes import *
+#psyco.full()
+#from psyco.classes import *
+psyco.log()
+psyco.profile()
+__metaclass__ = type
+
 
 random.seed(0)
 
@@ -39,8 +44,6 @@ def makeMatrix(I, J, fill=0.0):
     return m
 
 class NN:
-    __psyco__bind__ = []   # disable automatic rebinding, so that we
-                           # can do it manually and compare the timings
     
     def __init__(self, ni, nh, no):
         # number of input, hidden, and output nodes
@@ -182,7 +185,6 @@ def demo():
 if __name__ == '__main__':
     v, t1 = time(demo)
     v, t2 = time(demo)
-    psyco.bind(NN)
     v, t3 = time(demo)
     v, t4 = time(demo)
     v, t5 = time(demo)
