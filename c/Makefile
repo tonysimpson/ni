@@ -39,9 +39,9 @@ HEADERS3   = Objects/pabstract.h     \
 	     Objects/pclassobject.h    \
 	     Objects/pdescrobject.h    \
 	     Objects/pdictobject.h    \
+	     Objects/pfloatobject.h    \
 	     Objects/pfuncobject.h    \
 	     Objects/pintobject.h    \
-	     Objects/pfloatobject.h	\
 	     Objects/piterobject.h    \
 	     Objects/plistobject.h    \
 	     Objects/plongobject.h    \
@@ -56,9 +56,9 @@ SOURCES3   = Objects/pabstract.c     \
 	     Objects/pclassobject.c    \
 	     Objects/pdescrobject.c    \
 	     Objects/pdictobject.c    \
+	     Objects/pfloatobject.c    \
 	     Objects/pfuncobject.c    \
 	     Objects/pintobject.c    \
-	     Objects/pfloatobject.c	\
 	     Objects/piterobject.c    \
 	     Objects/plistobject.c    \
 	     Objects/plongobject.c    \
@@ -73,9 +73,9 @@ OBJECTS3   = Objects/pabstract.o     \
 	     Objects/pclassobject.o    \
 	     Objects/pdescrobject.o    \
 	     Objects/pdictobject.o    \
+	     Objects/pfloatobject.o    \
 	     Objects/pfuncobject.o    \
 	     Objects/pintobject.o    \
-	     Objects/pfloatobject.o	\
 	     Objects/piterobject.o    \
 	     Objects/plistobject.o    \
 	     Objects/plongobject.o    \
