@@ -3123,6 +3123,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		}
 #endif
 		SAVE_NEXT_INSTR(next_instr);
+		psyco_delete_unused_vars(po, &mp->entries);
 		code1 = psyco_compile(po, mp, true);
 		if (code1 != NULL)
 			goto finished;

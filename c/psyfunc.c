@@ -188,7 +188,6 @@ static PsycoObject* psyco_build_frame(PyCodeObject* co, vinfo_t* vglobals,
   po->stack_depth += sizeof(long);
   LOC_CONTINUATION = vinfo_new(RunTime_NewStack(po->stack_depth, REG_NONE,
                                                 false, false));
-  psyco_assert_coherent(po);
   return po;
 }
 
@@ -287,8 +286,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   finfo = psyco_finfo(mypo);
 
   /* compile the function (this frees mypo) */
-  codebuf = psyco_compile_code(mypo,
-                               psyco_first_merge_point(mypo->pr.merge_points));
+  codebuf = psyco_compile_code(mypo, PsycoObject_Ready(mypo));
 
   /* get the run-time argument sources and push them on the stack
      and write the actual CALL */
@@ -602,7 +600,7 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 			
 			/* compile the function */
 			codebuf = (PyObject*) psyco_compile_code(po,
-				psyco_first_merge_point(po->pr.merge_points));
+						PsycoObject_Ready(po));
 		}
 		/* cache 'codebuf' (note that this is not necessary, as
 		   multiple calls to psyco_compile_code() will just return

@@ -61,9 +61,6 @@ vinfo_t* PsycoCharacter_New(vinfo_t* chrval)
 /* string slices.                                              */
 static source_virtual_t psyco_computed_strslice;
 
-#define STRSLICE_SOURCE  CHARACTER_TOTAL
-#define STRSLICE_START   (STRSLICE_SOURCE+1)
-#define STRSLICE_TOTAL   (STRSLICE_START+1)
 /* a virtual string obtained as a slice of a source string STRSLICE_SOURCE.
    The slice range is defined as [STRSLICE_START:STRSLICE_START+FIX_SIZE] */
 
@@ -99,7 +96,8 @@ static bool compute_strslice(PsycoObject* po, vinfo_t* v, bool forking)
 		return false;
 
 	/* forget fields that were only relevant in virtual-time */
-        vinfo_array_shrink(po, v, CHARACTER_TOTAL);
+        vinfo_setitem(po, v, STRSLICE_SOURCE, NULL);
+        vinfo_setitem(po, v, STRSLICE_START,  NULL);
 
 	/* move the resulting non-virtual Python object back into 'v' */
 	vinfo_move(po, v, newobj);
@@ -123,9 +121,6 @@ inline vinfo_t* PsycoStrSlice_NEW(vinfo_t* source, vinfo_t* start, vinfo_t* len)
 /***************************************************************/
 /* string concatenations.                                      */
 static source_virtual_t psyco_computed_catstr;
-
-#define CATSTR_LIST  CHARACTER_TOTAL
-#define CATSTR_TOTAL (CATSTR_LIST+1)
 
 /* a virtual string defined as the concatenation of all the strings
    in a given list. The list must not be user-visible nor shared in
@@ -309,7 +304,7 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v, bool forking)
 
  complete:
 	/* forget fields that were only relevant in virtual-time */
-        vinfo_array_shrink(po, v, CHARACTER_TOTAL);
+        vinfo_setitem(po, v, CATSTR_LIST, NULL);
 
 	/* move the resulting non-virtual Python object back into 'v' */
 	vinfo_move(po, v, newobj);

@@ -105,9 +105,12 @@ EXTERNFN void psyco_stabilize(vcompatible_t* lastmatch);
    XXX implemented as a list object holding CodeBufferObjects in no
    XXX particular order. Must be optimized for reasonably fast searches
    XXX if the lists become large (more than just a few items).
+
+   The list starts with PyIntObjects whose numbers tell which local variables
+   may safely be deleted at that point.
 */
 struct global_entries_s {
-	PyObject* fatlist;      /* list of CodeBufferObjects */
+	PyObject* fatlist;      /* list of PyIntObjects then CodeBufferObjects */
 };
 
 /* initialize a global_entries_t structure */
@@ -122,6 +125,16 @@ inline void psyco_ge_init(global_entries_t* ge) {
 inline int register_codebuf(global_entries_t* ge, CodeBufferObject* codebuf) {
 	return PyList_Append(ge->fatlist, (PyObject*) codebuf);
 }
+
+/* for mergepoints.c */
+inline void psyco_ge_unused_var(global_entries_t* ge, int num)
+{
+	PyObject* o = PyInt_FromLong(num);
+	if (o == NULL || PyList_Append(ge->fatlist, o))
+		OUT_OF_MEMORY();
+}
+
+EXTERNFN void psyco_delete_unused_vars(PsycoObject* po, global_entries_t* ge);
 
 
 /*****************************************************************/

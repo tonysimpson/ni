@@ -1296,6 +1296,29 @@ inline bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
 
 
 DEFINEFN
+void psyco_delete_unused_vars(PsycoObject* po, global_entries_t* ge)
+{
+  int i, limit;
+  PyObject* plist = ge->fatlist;
+  extra_assert(PyList_Check(plist));
+  limit = PyList_GET_SIZE(plist);
+  for (i=0; i<limit; i++)
+    {
+      int num;
+      PyObject* o1 = PyList_GET_ITEM(plist, i);
+      if (!PyInt_Check(o1))
+        break;
+      num = PyInt_AS_LONG(o1);
+      /* delete variable 'num' (it might already be unset) */
+      /* note that if psyco_delete_unused_vars() is called by
+         psyco_compile_code(), before any buffer is allocated,
+         it may not emit any code. */
+      vinfo_decref(LOC_LOCALS_PLUS[num], po);
+      LOC_LOCALS_PLUS[num] = psyco_vi_Zero();
+    }
+}
+
+DEFINEFN
 vcompatible_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns)
 {
   static vcompatible_t result;  /* argh, a global variable -- well, the rest of
@@ -1308,7 +1331,11 @@ vcompatible_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns)
   i = PyList_GET_SIZE(plist);
   while (i--)    /* the most dummy algorithm: step by step in the list, */
     {            /* checking for a match at each step.                  */
-      CodeBufferObject* codebuf = (CodeBufferObject*) PyList_GET_ITEM(plist, i);
+      CodeBufferObject* codebuf;
+      PyObject* o1 = PyList_GET_ITEM(plist, i);
+      if (!CodeBuffer_Check(o1))
+        break;
+      codebuf = (CodeBufferObject*) o1;
       result.matching = codebuf;
       result.diff = NullArray;
       extra_assert(CodeBuffer_Check(codebuf));

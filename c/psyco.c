@@ -137,9 +137,19 @@ void psyco_dump_code_buffers(void)
 {
   static int is_dumping = 0;
   FILE* f;
+
+#if CODE_DUMP >= 3
+  static int alt = 1;
+  char filename[200];
+  sprintf(filename, "%s-%d", CODE_DUMP_FILE, alt);
+  alt = 3-alt;
+#else
+  char* filename = CODE_DUMP_FILE;
+#endif
+  
   if (is_dumping) return;
   is_dumping = 1;
-  f = fopen(CODE_DUMP_FILE, "wb");
+  f = fopen(filename, "wb");
   if (f != NULL)
     {
       CodeBufferObject* obj;
@@ -148,7 +158,7 @@ void psyco_dump_code_buffers(void)
       int bufcount = 0;
       long* buftable;
       PyErr_Fetch(&exc, &val, &tb);
-      debug_printf(1, ("writing " CODE_DUMP_FILE "\n"));
+      debug_printf(1, ("writing %s\n", filename));
 
       for (obj=psyco_codebuf_chained_list; obj != NULL; obj=obj->chained_list)
         bufcount++;

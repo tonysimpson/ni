@@ -213,7 +213,6 @@ inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
 	rsrc = RunTime_NewStack(po->stack_depth, REG_NONE,
 				false, false);
 	LOC_CONTINUATION = vinfo_new(rsrc);
-	psyco_assert_coherent(po);
 	return (PyObject*) po;
 
  fail:
@@ -234,7 +233,7 @@ PyObject* PsycoCode_CompileCode(PyCodeObject* co,
 
 	/* compile the function */
 	po = (PsycoObject*) o;
-	mp = psyco_first_merge_point(po->pr.merge_points);
+	mp = PsycoObject_Ready(po);
 	return (PyObject*) psyco_compile_code(po, mp);
 }
 
@@ -250,6 +249,8 @@ PyObject* PsycoCode_CompileFrame(PyFrameObject* f, int recursion)
 	/* compile the function */
 	po = (PsycoObject*) o;
 	mp = psyco_exact_merge_point(po->pr.merge_points, po->pr.next_instr);
+	if (mp != NULL)
+		psyco_delete_unused_vars(po, &mp->entries);
 	return (PyObject*) psyco_compile_code(po, mp);
 }
 

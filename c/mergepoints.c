@@ -34,8 +34,8 @@
 #define HAS_JREL_INSTR(op)   (op == JUMP_FORWARD ||   \
                               op == JUMP_IF_FALSE ||  \
                               op == JUMP_IF_TRUE ||   \
-                              IS_FOR_OPCODE(op) ||    \
-                              op == SETUP_LOOP ||     \
+                              op == FOR_OPCODE ||     \
+                              /*    SETUP_LOOP replaced by FOR_OPCODE */    \
                               op == SETUP_EXCEPT ||   \
                               op == SETUP_FINALLY)
 
@@ -43,7 +43,8 @@
                               op == CONTINUE_LOOP)
 
 /* instructions whose target may be jumped to several times: */
-#define HAS_J_MULTIPLE(op)   (op == SETUP_LOOP ||     \
+#define HAS_J_MULTIPLE(op)   (op == FOR_OPCODE ||     \
+                              /*    SETUP_LOOP replaced by FOR_OPCODE */    \
                               op == SETUP_EXCEPT ||   \
                               op == SETUP_FINALLY)
 
@@ -141,7 +142,8 @@
                            op == CALL_FUNCTION_KW ||          \
                            op == CALL_FUNCTION_VAR_KW ||      \
                            op == MAKE_FUNCTION ||             \
-                           op == BUILD_SLICE)
+                           op == BUILD_SLICE ||               \
+                           op == SETUP_LOOP)
 
 #define SUPPORTED_COMPARE_ARG(oparg)  ( \
                               (oparg) == Py_LT ||  \
@@ -159,9 +161,9 @@
 
  /***************************************************************/
 #ifdef FOR_ITER
-# define IS_FOR_OPCODE(op)      (op == FOR_ITER)
+# define FOR_OPCODE              FOR_ITER
 #else
-# define IS_FOR_OPCODE(op)      (op == FOR_LOOP)
+# define FOR_OPCODE              FOR_LOOP
 #endif
 
 #ifdef GET_ITER
@@ -250,29 +252,261 @@ static const char instr_control_flow[256] = {
 
 
 struct instrnode_s {
-  int next;     /* ptr to the next instruction if MP_NO_MERGEPT, else -1 */
-  int inpaths;  /* number of incoming paths to this point */
-  bool mp;      /* set a mergepoint here? */
+  struct instrnode_s* next1;  /* next instruction */
+  struct instrnode_s* next2;  /* next instr (jump target) */
+  struct instrnode_s* next3;  /* next instr (exception handler) */
+  unsigned char opcode;   /* copy of the instruction opcode */
+  unsigned char back;     /* # of bytes to go back to find the instruction */
+  unsigned char inpaths;  /* number of incoming paths to this point */
+  unsigned char pending;  /* parse bytecode pending */
+  global_entries_t* mp;   /* set a mergepoint here?  (see MPSET_XXX) */
+  int mask;      /* mask of bits for needed variables */
+  int storemask; /* mask of bits for stored variables */
 };
 
-inline int set_merge_point(struct instrnode_s* instrnodes, int instr)
+#define MPSET_NEVER  ((global_entries_t*) NULL)
+#define MPSET_MAYBE  ((global_entries_t*) -1)
+#define MPSET_YES    ((global_entries_t*) -2)
+
+inline int set_merge_point(struct instrnode_s* node)
 {
   int runaway = 100;
-  int bestchoice = instr;
-  while (instrnodes[instr].next >= 0 && !instrnodes[instr].mp && --runaway)
+  struct instrnode_s* bestchoice = node;
+  while (node->next1 != NULL && (node->mp == MPSET_NEVER) && --runaway)
     {
-      instr = instrnodes[instr].next;
-      if (instrnodes[instr].inpaths >= 2)
-        bestchoice = instr;
+      node = node->next1;
+      if (node->inpaths >= 2)
+        bestchoice = node;
     }
-  if (instrnodes[instr].mp)
+  if (node->mp == MPSET_YES)
     return 0;        /* found an already-set merge point */
   else
     {
-      extra_assert(!instrnodes[bestchoice].mp);
-      instrnodes[bestchoice].mp = true;  /* set merge point */
+      extra_assert(bestchoice->mp != MPSET_YES);
+      bestchoice->mp = MPSET_YES;  /* set merge point */
       return 1;
     }
+}
+
+#if 0
+static void set_exc_handler(struct instrnode_s* nodes,
+                            struct instrnode_s* target)
+{
+  while (nodes < target)
+    {
+      nodes->next3 = target;
+      nodes++;
+    }
+}
+#endif
+
+/* how many variables fit in the 'int' bitfield of instrnode_s */
+#define VARS_PER_PASS   (sizeof(int)*8-1)
+
+inline bool back_propagate_mask(struct instrnode_s* instrnodes,
+                                struct instrnode_s* node,
+                                int var0)
+{
+  bool modif = false;
+  int prevmask, mask, oparg;
+  while (node > instrnodes)
+    {
+      node--;
+      oparg = node->mask;
+      node -= node->back;  /* skip back argument */
+      if (node->next1 != NULL)
+        {
+          prevmask = mask = node->mask;
+          mask |= node->next1->mask;
+          if (node->next2 != NULL)
+            {
+              mask |= node->next2->mask;
+              if (node->next3 != NULL)
+                  mask |= node->next3->mask;
+            }
+          if (node->opcode == STORE_FAST)
+            {
+              int bit = oparg - var0;
+              if (0 <= bit && bit < VARS_PER_PASS)
+                mask &= ~(1<<bit);
+            }
+          if (mask != prevmask)
+            {
+              node->mask = mask;
+              modif = true;
+            }
+        }
+      
+    }
+  return modif;
+}
+
+#if 0
+inline void clear_var_uses(struct instrnode_s* instrnodes,
+                           struct instrnode_s* node)
+{
+  while (node > instrnodes)
+    {
+      node--;
+      node -= node->back;  /* skip back argument */
+      node->storemask = 0;
+    }
+}
+#endif
+
+inline void mark_var_uses(struct instrnode_s* instrnodes,
+                          struct instrnode_s* node,
+                          int var0)
+{
+  while (node > instrnodes)
+    {
+      int m1 = 1<<VARS_PER_PASS;
+      node--;
+      if (node->back)
+        {
+          int oparg = node->mask;
+          node -= node->back;  /* skip back argument */
+          if (node->opcode == LOAD_FAST || node->opcode == DELETE_FAST)
+            {
+              int bit = oparg - var0;
+              if (0 <= bit && bit < VARS_PER_PASS)
+                m1 |= (1<<bit);
+            }
+        }
+      node->mask = m1;
+      node->storemask = 0;
+    }
+}
+
+inline int function_args_mask(int var0, int ninitialized)
+{
+  int bits = ninitialized - var0;
+  if (bits <= 0)
+    return 0;
+  else if (bits >= VARS_PER_PASS)
+    return -1;
+  else
+    return (1<<bits)-1;
+}
+
+static void forward_propagate(struct instrnode_s* node, int newmask, int var0)
+{
+  while ((newmask |= node->storemask) != node->storemask)
+    {
+      node->storemask = newmask;
+      if (!node->next1)
+        break;
+      if (node->mp)
+        {
+          /* at each mergepoint, we only keep variables that are
+             also present in mode->mask. */
+          newmask &= node->mask;
+        }
+      if (node->opcode == STORE_FAST)
+        {
+          /* after each STORE_FAST, add the corresponding bit into newmask */
+          int oparg = node[1].mask;
+          int bit = oparg - var0;
+          if (0 <= bit && bit < VARS_PER_PASS)
+            newmask |= (1<<bit);
+        }
+      if (node->next2)
+        {
+          forward_propagate(node->next2, newmask, var0);
+          if (node->next3)
+            forward_propagate(node->next3, newmask, var0);
+        }
+      node = node->next1;
+    }
+}
+
+#if 0
+inline void propagate_stores(struct instrnode_s* instrnodes,
+                             struct instrnode_s* node)
+{
+  while (node > instrnodes)
+    {
+      node--;
+      node -= node->back;  /* skip back argument */
+      if (node->opcode == STORE_FAST)
+        if (node->next1)
+          {
+            forward_propagate(node->next1, node->storemask);
+            if (node->next2)
+              forward_propagate(node->next2, node->storemask);
+          }
+    }
+}
+#endif
+
+inline void find_unused_vars(struct instrnode_s* instrnodes,
+                             struct instrnode_s* node,
+                             int var0)
+{
+  while (node > instrnodes)
+    {
+      node--;
+      node -= node->back;  /* skip back argument */
+      if (node->mp)
+        {
+          /* if at that mergepoint we have no use for a variable,
+             write a note to say it can be deleted.  */
+          int remove = node->storemask & ~node->mask;
+          int i;
+          assert(node->mask & (1<<VARS_PER_PASS));
+          for (i=var0; remove; i++, remove>>=1)
+            if (remove & 1)
+              psyco_ge_unused_var(node->mp, i);
+        }
+    }
+}
+
+static void analyse_variables(struct instrnode_s* instrnodes,
+                              struct instrnode_s* end,
+                              PyCodeObject* co)
+{
+  int var0;
+  int nlocals = co->co_nlocals;
+  int ninitialized = co->co_argcount;
+  if (co->co_flags & CO_VARKEYWORDS) ninitialized++;
+  if (co->co_flags & CO_VARARGS)     ninitialized++;
+  
+  for (var0 = 0; var0 < nlocals; var0 += VARS_PER_PASS)
+    {
+      mark_var_uses(instrnodes, end, var0);
+      while (back_propagate_mask(instrnodes, end, var0))
+        ;
+      forward_propagate(instrnodes, (function_args_mask(var0, ninitialized) |
+                                     (1<<VARS_PER_PASS)), var0);
+      /*propagate_stores(instrnodes, end);*/
+      find_unused_vars(instrnodes, end, var0);
+    }
+
+#if 0
+  /* debugging dump */
+  {
+    int i;
+    fprintf(stderr, "mergepoints.c: %s:\n", PyCodeObject_NAME(co));
+    for (i=0; instrnodes<end; i++,instrnodes++)
+      if (instrnodes->mp)
+        {
+          PyObject* plist = instrnodes->mp->fatlist;
+          int j;
+          fprintf(stderr, "  line %d:   %d ", PyCode_Addr2Line(co, i), i);
+          for (j=0; j<PyList_GET_SIZE(plist); j++)
+            {
+              int num;
+              PyObject* o1 = PyList_GET_ITEM(plist, j);
+              if (!PyInt_Check(o1))
+                break;
+              num = PyInt_AS_LONG(o1);
+              o1 = PyTuple_GetItem(co->co_varnames, num);
+              fprintf(stderr, " [%s]", PyString_AsString(o1));
+            }
+          fprintf(stderr, "\n");
+        }
+  }
+#endif
 }
 
 DEFINEFN
@@ -285,7 +519,11 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
   unsigned char* source = (unsigned char*) PyString_AS_STRING(co->co_code);
   size_t ibytes = (length+1) * sizeof(struct instrnode_s);
   struct instrnode_s* instrnodes;
-  int i, lasti, count, oparg = 0;
+  int i, lasti, count;
+  bool modif;
+  PyTryBlock blockstack[CO_MAXBLOCKS];
+  int iblock;
+  int valid_controlflow = 1;
 
   if (length == 0)
     {
@@ -299,78 +537,166 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
     OUT_OF_MEMORY();
   memset(instrnodes, 0, ibytes);
 
-  /* parse the bytecode once, filling the instrnodes[].next/inpaths fields */
+  /* parse the bytecode once, filling the instrnodes[].opcode,back,mask fields */
+  iblock = 0;
   for (i=0; i<length; )
     {
+      int oparg = 0;
       int i0 = i;
-      char flags;
-      int jtarget, next;
+      int btop;
       unsigned char op = source[i++];
+      instrnodes[i0].opcode = op;
       if (HAS_ARG(op))
-	{
-	  i += 2;
-	  oparg = (source[i-1]<<8) + source[i-2];
-	  if (op == EXTENDED_ARG)
-	    {
-	      op = source[i++];
-	      assert(HAS_ARG(op) && op != EXTENDED_ARG);
-	      i += 2;
-	      oparg = oparg<<16 | ((source[i-1]<<8) + source[i-2]);
-	    }
-          if (op == SETUP_EXCEPT)
-            mp_flags |= MP_FLAGS_HAS_EXCEPT;
-          if (op == SETUP_FINALLY)
-            mp_flags |= MP_FLAGS_HAS_FINALLY;
-	}
-      flags = instr_control_flow[(int) op];
-      if (flags == 0)
-	if (op != COMPARE_OP || !SUPPORTED_COMPARE_ARG(oparg))
-	  {
-	    /* unsupported instruction */
-            debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
-                            ("unsupported opcode %d at %s:%d\n",
-                             (int) op, PyCodeObject_NAME(co), i0));
-	    PyMem_FREE(instrnodes);
-	    Py_INCREF(Py_None);
-	    return Py_None;
-	  }
-      if (flags & (MP_HAS_JREL|MP_HAS_JABS))
         {
-          jtarget = oparg;
-          if (flags & MP_HAS_JREL)
-            jtarget += i;
-          if (flags & MP_HAS_J_MULTIPLE)
-            instrnodes[jtarget].inpaths = 99;
-          else
-            instrnodes[jtarget].inpaths++;
+          i += 2;
+          oparg = (source[i-1]<<8) + source[i-2];
+          if (op == EXTENDED_ARG)
+            {
+              op = source[i++];
+              assert(HAS_ARG(op) && op != EXTENDED_ARG);
+              i += 2;
+              oparg = oparg<<16 | ((source[i-1]<<8) + source[i-2]);
+            }
+          instrnodes[i0+1].back = instrnodes[i-1].back = (i-1) - i0;
+          instrnodes[i0+1].mask = instrnodes[i-1].mask = oparg;  /* save oparg */
         }
-      else
-        jtarget = -1;  /* no jump target */
-      if (flags & MP_IS_JUMP)
-        next = jtarget;
-      else
+      for (btop = iblock; btop--; )
         {
-          next = i;
-          if (flags & MP_IS_CTXDEP)
-            instrnodes[next].inpaths = 99;
-          else
-            instrnodes[next].inpaths++;
+          if (i0 >= blockstack[btop].b_handler)
+            iblock = btop;  /* pop block */
+          else if (blockstack[btop].b_type == SETUP_EXCEPT ||
+                   blockstack[btop].b_type == SETUP_FINALLY) {
+            /* control flow may jump to the b_handler at any time */
+            instrnodes[i0].next3 = instrnodes + blockstack[btop].b_handler;
+            break;
+          }
         }
-      instrnodes[i0].next = (flags & MP_NO_MERGEPT) ? next : -1;
+      switch (op)
+        {
+        case SETUP_EXCEPT:
+        case SETUP_FINALLY:
+        case SETUP_LOOP:
+          switch (op) {
+          case SETUP_EXCEPT:  mp_flags |= MP_FLAGS_HAS_EXCEPT;  break;
+          case SETUP_FINALLY: mp_flags |= MP_FLAGS_HAS_FINALLY; break;
+          }
+          assert(iblock == 0 || oparg <= blockstack[iblock-1].b_handler);
+          assert(iblock < CO_MAXBLOCKS);
+          blockstack[iblock].b_type = op;
+          blockstack[iblock].b_handler = i + oparg;
+          iblock++;
+          break;
+
+        case BREAK_LOOP:
+          /* break the innermost loop */
+          btop = iblock;
+          do {
+            assert(btop>0);
+            btop--;
+          } while (blockstack[btop].b_type != SETUP_LOOP &&
+                   blockstack[btop].b_type != SETUP_FINALLY);
+          if (blockstack[btop].b_type == SETUP_LOOP)
+            {  /* jump to the loop bottom */
+              instrnodes[i0].next3 = instrnodes + blockstack[btop].b_handler;
+            }
+          else
+            {  /* argh, this gets messy */
+              valid_controlflow = 0;
+            }
+          break;
+
+        case CONTINUE_LOOP:
+          btop = iblock;
+          do {
+            assert(btop>0);
+            btop--;
+          } while (blockstack[btop].b_type != SETUP_LOOP &&
+                   blockstack[btop].b_type != SETUP_FINALLY);
+          if (blockstack[btop].b_type == SETUP_LOOP)
+            {  /* jump to the loop head */
+              instrnodes[i0].next3 = instrnodes + oparg;
+            }
+          else
+            {  /* argh, this gets messy */
+              valid_controlflow = 0;
+            }
+          break;
+        }
     }
 
+  /* control flow analysis */
+  instrnodes[0].pending = 1;
+  do
+    {
+      modif = false;
+      for (i=0; i<length; i++)
+        if (instrnodes[i].pending == 1)
+          {
+            unsigned char op = instrnodes[i].opcode;
+            int oparg = instrnodes[i+1].mask;
+            int nextinstr = i+1 + instrnodes[i+1].back;
+            char flags = instr_control_flow[(int) op];
+            if (flags == 0)
+              if (op != COMPARE_OP || !SUPPORTED_COMPARE_ARG(oparg))
+                {
+                  /* unsupported instruction */
+                  debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
+                               ("unsupported opcode %d at %s:%d\n",
+                                (int) op, PyCodeObject_NAME(co), i));
+                  PyMem_FREE(instrnodes);
+                  Py_INCREF(Py_None);
+                  return Py_None;
+                }
+            if (flags & (MP_HAS_JREL|MP_HAS_JABS))
+              {
+                int jtarget = oparg;
+                if (flags & MP_HAS_JREL)
+                  jtarget += nextinstr;
+                instrnodes[jtarget].pending |= 1;
+                if (flags & MP_HAS_J_MULTIPLE || !++instrnodes[jtarget].inpaths)
+                  instrnodes[jtarget].inpaths = 99;
+                instrnodes[i].next2 = instrnodes + jtarget;
+              }
+            
+            if (!(flags & MP_IS_JUMP))
+              {
+                instrnodes[nextinstr].pending |= 1;
+                if (flags & MP_IS_CTXDEP || !++instrnodes[nextinstr].inpaths)
+                  instrnodes[nextinstr].inpaths = 99;
+                instrnodes[i].next1 = instrnodes + nextinstr;
+              }
+            if (!(flags & MP_NO_MERGEPT))
+              instrnodes[i].mp = MPSET_MAYBE;
+            
+            /* compact the next1-next2-next3 */
+            if (instrnodes[i].next2 == NULL)
+              {
+                instrnodes[i].next2 = instrnodes[i].next3;
+                instrnodes[i].next3 = NULL;
+              }
+            if (instrnodes[i].next1 == NULL)
+              {
+                instrnodes[i].next1 = instrnodes[i].next2;
+                instrnodes[i].next2 = instrnodes[i].next3;
+                instrnodes[i].next3 = NULL;
+              }
+            instrnodes[i].pending = 3;
+            modif = true;
+          }
+    } while (modif);
+
   /* set and count merge points */
-  instrnodes[0].mp = true;  /* there is a merge point at the beginning */
+  instrnodes[0].mp = MPSET_YES;    /* there is a merge point at the beginning */
   count = 1;
   lasti = 0;
-  for (i=0; i<length; i++)
+  for (i=1; i<length; i++)
     if (instrnodes[i].inpaths > 0)
       {
         /* set merge points when there are more than one incoming path */
         /* ensure there are merge points at regular intervals */
         if (instrnodes[i].inpaths >= 2 || i-lasti > MAX_UNINTERRUPTED_RANGE)
           {
-            count += set_merge_point(instrnodes, i);
+            count += set_merge_point(instrnodes + i);
             lasti = i;
           }
       }
@@ -384,14 +710,21 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
   mp = (mergepoint_t*) PyString_AS_STRING(s);
 
   for (i=0; i<length; i++)
-    if (instrnodes[i].mp)
-      {
-	mp->bytecode_position = i;
-	psyco_ge_init(&mp->entries);
-	mp++;
-      }
+    {
+      if (instrnodes[i].mp != MPSET_YES)
+        instrnodes[i].mp = NULL;
+      else
+        {
+          mp->bytecode_position = i;
+          instrnodes[i].mp = &mp->entries;
+          psyco_ge_init(&mp->entries);
+          mp++;
+        }
+    }
   extra_assert(mp - (mergepoint_t*) PyString_AS_STRING(s) == count);
   mp->bytecode_position = mp_flags;
+  if (valid_controlflow)
+    analyse_variables(instrnodes, instrnodes+length, co);
   PyMem_FREE(instrnodes);
   return s;
 }

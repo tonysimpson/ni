@@ -10,17 +10,33 @@
 #include "pabstract.h"
 
 
+/* all flavors of virtual strings */
+#define VIRTUALSTR_FIRST  FIELDS_TOTAL(FIX_size)
+#define VIRTUALSTR_LAST   (VIRTUALSTR_FIRST+1)   /* <-- keep up-to-date !! */
+
+/* virtual string slices */
+#define STRSLICE_SOURCE   VIRTUALSTR_FIRST
+#define STRSLICE_START    (STRSLICE_SOURCE+1)
+#define STRSLICE_TOTAL    (STRSLICE_START+1)
+
+/* virtual string concatenations */
+#define CATSTR_LIST       VIRTUALSTR_FIRST
+#define CATSTR_TOTAL      (CATSTR_LIST+1)
+
+/* all string representations end with the actual character data: */
 #define STR_ob_sval       FARRAY(UNSIGNED_FIELD(PyStringObject, char, ob_sval, \
-                                                FIX_size))
+                                                (defield_t) VIRTUALSTR_LAST))
 #define iSTR_OB_SVAL      FIELD_INDEX(STR_ob_sval)
 
 #define CHARACTER_char    UNSIGNED_FIELD(PyStringObject, char, ob_sval, \
-                                         FIX_size)
+                                         (defield_t) VIRTUALSTR_LAST)
 #define iCHARACTER_CHAR   FIELD_INDEX(CHARACTER_char)
 #define CHARACTER_TOTAL   FIELDS_TOTAL(CHARACTER_char)
 
-#define CHARACTER_short   UNSIGNED_FIELD(PyStringObject, short,ob_sval, FIX_size)
-#define CHARACTER_long    UNSIGNED_FIELD(PyStringObject, long, ob_sval, FIX_size)
+#define CHARACTER_short   FARRAY(UNSIGNED_FIELD(PyStringObject, short,ob_sval, \
+                                         (defield_t) VIRTUALSTR_LAST))
+#define CHARACTER_long    FARRAY(UNSIGNED_FIELD(PyStringObject, long, ob_sval, \
+                                         (defield_t) VIRTUALSTR_LAST))
 
 
 #define PsycoString_Check(tp) PyType_TypeCheck(tp, &PyString_Type)

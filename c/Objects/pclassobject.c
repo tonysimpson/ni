@@ -32,7 +32,7 @@ static bool compute_method(PsycoObject* po, vinfo_t* methobj, bool forking)
 	vinfo_t* im_func;
 	vinfo_t* im_self;
 	vinfo_t* im_class;
-        if (forking) return true;
+        if (forking) return psyco_forking(po, methobj->array);
 	
 	/* get the fields from the Python object 'methobj' */
 	im_func = vinfo_getitem(methobj, iMETHOD_IM_FUNC);

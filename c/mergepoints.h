@@ -70,5 +70,14 @@ inline int psyco_mp_flags(PyObject* mergepoints)
   return ((int*) endptr)[-1];
 }
 
+/* end of PsycoObject construction */
+inline mergepoint_t* PsycoObject_Ready(PsycoObject* po) {
+	mergepoint_t* mp;
+	psyco_assert_coherent(po);
+	mp = psyco_first_merge_point(po->pr.merge_points);
+	psyco_delete_unused_vars(po, &mp->entries);
+        return mp;
+}
+
 
 #endif /* _MERGEPOINTS_H */
