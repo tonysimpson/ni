@@ -315,11 +315,18 @@ inline bool back_propagate_mask(struct instrnode_s* instrnodes,
         {
           prevmask = mask = node->mask;
           mask |= node->next1->mask;
+          /*fprintf(stderr, "propagate1 %d <- %d\n",
+            node-instrnodes, node->next1-instrnodes);*/
           if (node->next2 != NULL)
             {
               mask |= node->next2->mask;
-              if (node->next3 != NULL)
-                  mask |= node->next3->mask;
+              /*fprintf(stderr, "propagate2 %d <- %d\n",
+                node-instrnodes, node->next1-instrnodes);*/
+              if (node->next3 != NULL) {
+                mask |= node->next3->mask;
+                /*fprintf(stderr, "propagate3 %d <- %d\n",
+                  node-instrnodes, node->next1-instrnodes);*/
+              }
             }
           if (node->opcode == STORE_FAST)
             {
@@ -329,6 +336,8 @@ inline bool back_propagate_mask(struct instrnode_s* instrnodes,
             }
           if (mask != prevmask)
             {
+              /*fprintf(stderr, "mask of %d:  %x -> %x\n",
+                node-instrnodes, mask, node->mask);*/
               node->mask = mask;
               modif = true;
             }
@@ -355,6 +364,7 @@ inline void mark_var_uses(struct instrnode_s* instrnodes,
               int bit = oparg - var0;
               if (0 <= bit && bit < VARS_PER_PASS)
                 m1 |= (1<<bit);
+              /*fprintf(stderr, "load_fast at opcode %d: %x\n", node-instrnodes, m1);*/
             }
         }
       node->mask = m1;
@@ -451,7 +461,7 @@ static void analyse_variables(struct instrnode_s* instrnodes,
   /* debugging dump */
   {
     int i;
-    fprintf(stderr, "mergepoints.c: %s:\n", PyCodeObject_NAME(co));
+    fprintf(stderr, "mergepoints.c: %s: [listing of deleted vars]\n", PyCodeObject_NAME(co));
     for (i=0; instrnodes<end; i++,instrnodes++)
       if (instrnodes->mp)
         {
@@ -625,7 +635,6 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
                 int jtarget = oparg;
                 if (flags & MP_HAS_JREL)
                   jtarget += nextinstr;
-                instrnodes[jtarget].pending |= 1;
                 if (flags & MP_HAS_J_MULTIPLE || !++instrnodes[jtarget].inpaths)
                   instrnodes[jtarget].inpaths = 99;
                 instrnodes[i].next2 = instrnodes + jtarget;
@@ -633,7 +642,6 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
             
             if (!(flags & MP_IS_JUMP))
               {
-                instrnodes[nextinstr].pending |= 1;
                 if (flags & MP_IS_CTXDEP || !++instrnodes[nextinstr].inpaths)
                   instrnodes[nextinstr].inpaths = 99;
                 instrnodes[i].next1 = instrnodes + nextinstr;
@@ -653,7 +661,17 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
                 instrnodes[i].next2 = instrnodes[i].next3;
                 instrnodes[i].next3 = NULL;
               }
-            instrnodes[i].pending = 3;
+            if (instrnodes[i].next1 != NULL)
+              {
+                instrnodes[i].next1->pending |= 1;
+                if (instrnodes[i].next2 != NULL)
+                  {
+                    instrnodes[i].next2->pending |= 1;
+                    if (instrnodes[i].next3 != NULL)
+                      instrnodes[i].next3->pending |= 1;
+                  }
+              }
+            instrnodes[i].pending = 3;  /* the current instruction is done */
             modif = true;
           }
     } while (modif);
