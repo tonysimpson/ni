@@ -65,6 +65,7 @@ static bool parse_range_args(PsycoObject* po, vinfo_t* vargs,
 		ihigh = intobj_as_long(po, PsycoTuple_GET_ITEM(vargs, 0));
 		if (ihigh == NULL) return false;
 		ilow = psyco_vi_Zero();
+		vinfo_incref(ihigh);
 		break;
 	/*case 3:
 		istep = intobj_as_long(po, PsycoTuple_GET_ITEM(vargs, 2));
@@ -76,11 +77,13 @@ static bool parse_range_args(PsycoObject* po, vinfo_t* vargs,
 		ihigh = intobj_as_long(po, PsycoTuple_GET_ITEM(vargs, 1));
 		if (ihigh == NULL) return false;
 		vinfo_incref(ilow);
+		vinfo_incref(ihigh);
 		break;
 	default:
 		return false;
 	}
 	*iilen = get_len_of_range(po, ilow, ihigh);
+	vinfo_decref(ihigh, po);
 	if (*iilen == NULL) {
 		vinfo_decref(ilow, po);
 		return false;
