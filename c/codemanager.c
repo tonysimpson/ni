@@ -75,6 +75,7 @@ CodeBufferObject* psyco_new_code_buffer_size(int size)
 
 #ifdef CODE_DUMP_FILE
 DEFINEVAR CodeBufferObject* psyco_codebuf_chained_list = NULL;
+DEFINEVAR void** psyco_codebuf_spec_dict_list = NULL;
 #endif
 
 DEFINEFN
@@ -138,6 +139,7 @@ static void codebuf_dealloc(CodeBufferObject* self)
 {
 #ifdef CODE_DUMP_FILE
   CodeBufferObject** ptr = &psyco_codebuf_chained_list;
+  void** chain;
   while (*ptr != NULL)
     {
       if (*ptr == self)
@@ -147,6 +149,9 @@ static void codebuf_dealloc(CodeBufferObject* self)
         }
       ptr = &((*ptr)->chained_list);
     }
+  for (chain = psyco_codebuf_spec_dict_list; chain; chain=(void**)*chain)
+    if (self->codeptr < (code_t*)chain && (code_t*)chain <= self->codeend)
+      assert(!"releasing a code buffer with a spec_dict");
 #endif
   if (VERBOSE_LEVEL > 1)
     debug_printf(("psyco: releasing code buffer %p at %p\n",

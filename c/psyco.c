@@ -68,10 +68,7 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   int extras, i, minargcnt, inputargs, rtcount, ncells, nfrees;
 
   if (merge_points == Py_None)
-    {
-      array_delete(arginfo, NULL);
-      return BF_UNSUPPORTED;
-    }
+    goto unsupported;
   
   globals = PyFunction_GET_GLOBALS(function);
   defaults = PyFunction_GET_DEFAULTS(function);
@@ -79,13 +76,13 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   nfrees = PyTuple_GET_SIZE(co->co_freevars);
   if (co->co_flags & (CO_VARARGS | CO_VARKEYWORDS))
     {
-      PyErr_SetString(PyExc_PsycoError, "* and ** arguments not supported yet");
-      goto error;
+      debug_printf(("psyco: unsupported: functions with * or ** arguments\n"));
+      goto unsupported;
     }
   if (ncells != 0 || nfrees != 0)
     {
-      PyErr_SetString(PyExc_PsycoError, "free and cell variables not supported yet");
-      goto error;
+      debug_printf(("psyco: unsupported: functions with free or cell variables\n"));
+      goto unsupported;
     }
   minargcnt = co->co_argcount - (defaults ? PyTuple_GET_SIZE(defaults) : 0);
   inputargs = arginfo->count;
@@ -164,10 +161,7 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
 
   /* the rest of locals is uninitialized */
   for (; i<co->co_nlocals; i++)
-    {
-      vinfo_incref(psyco_viZero);
-      LOC_LOCALS_PLUS[i] = psyco_viZero;
-    }
+    LOC_LOCALS_PLUS[i] = psyco_vi_Zero();
   /* the rest of the array is the currently empty stack,
      set to NULL by array_new(). */
   
@@ -183,6 +177,10 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
  error:
   array_delete(arginfo, NULL);
   return NULL;
+
+ unsupported:
+  array_delete(arginfo, NULL);
+  return BF_UNSUPPORTED;
 }
 
 DEFINEFN
@@ -323,6 +321,10 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
         psyco_dump_code_buffers();
 #endif
 
+	if (result==NULL)
+		extra_assert(PyErr_Occurred());
+	else
+		extra_assert(!PyErr_Occurred());
 	return result;
 }
 
@@ -404,11 +406,6 @@ static PyObject* Psyco_proxy(PyObject* self, PyObject* args)
 }
 
 #ifdef CODE_DUMP_FILE
-struct sd_s {
-  PyObject* spec_dict;
-  long kflags;
-  long signature;
-};
 static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
 {
   int i = array->count;
@@ -450,6 +447,7 @@ void psyco_dump_code_buffers(void)
     {
       CodeBufferObject* obj;
       PyObject *exc, *val, *tb;
+      void** chain;
 #ifdef CODE_DUMP_SYMBOLS
       int i1;
       PyObject* global_addrs = PyDict_New();
@@ -490,43 +488,44 @@ void psyco_dump_code_buffers(void)
               Py_DECREF(key);
             }
 #endif
-          if (nsize > sizeof(struct sd_s) &&
-              ((struct sd_s*)(obj->codeptr+nsize))[-1].signature ==
-              SPEC_DICT_SIGNATURE)   /* unelegant hack */
+        }
+
+      for (chain = psyco_codebuf_spec_dict_list; chain; chain=(void**)*chain)
+        {
+          PyObject* spec_dict = (PyObject*)(chain[-1]);
+          int i = 0;
+          PyObject *key, *value;
+          fprintf(f, "spec_dict %p\n", chain);
+          while (PyDict_Next(spec_dict, &i, &key, &value))
             {
-              struct sd_s* sd = ((struct sd_s*)(obj->codeptr+nsize)) - 1;
-              int i = 0;
-              PyObject *key, *value;
-              fprintf(f, "spec_dict\n");
-              while (PyDict_Next(sd->spec_dict, &i, &key, &value))
+              PyObject* repr;
+              if (PyInt_Check(key))
                 {
-                  PyObject* repr;
-                  if (PyInt_Check(key))
-                    {
 #ifdef CODE_DUMP_SYMBOLS
-                      PyDict_SetItem(global_addrs, key, Py_None);
+                  PyDict_SetItem(global_addrs, key, Py_None);
 #endif
-                      repr = (key->ob_type->tp_as_number->nb_hex)(key);
-                    }
-                  else
-                    {
-#ifdef CODE_DUMP_SYMBOLS
-                      PyObject* key = PyInt_FromLong((long) key);
-                      assert(key);
-                      PyDict_SetItem(global_addrs, key, Py_None);
-                      Py_DECREF(key);
-#endif
-                      repr = PyObject_Repr(key);
-                    }
-                  assert(!PyErr_Occurred());
-                  assert(PyString_Check(repr));
-                  assert(CodeBuffer_Check(value));
-                  fprintf(f, "%p %s\n", ((CodeBufferObject*)value)->codeptr,
-                          PyString_AsString(repr));
-                  Py_DECREF(repr);
+                  repr = (key->ob_type->tp_as_number->nb_hex)(key);
                 }
-              fprintf(f, "\n");
+              else
+                {
+#ifdef CODE_DUMP_SYMBOLS
+                  key = PyInt_FromLong((long) key);
+                  assert(key);
+                  PyDict_SetItem(global_addrs, key, Py_None);
+#endif
+                  repr = PyObject_Repr(key);
+#ifdef CODE_DUMP_SYMBOLS
+                  Py_DECREF(key);
+#endif
+                }
+              assert(!PyErr_Occurred());
+              assert(PyString_Check(repr));
+              assert(CodeBuffer_Check(value));
+              fprintf(f, "%p %s\n", ((CodeBufferObject*)value)->codeptr,
+                      PyString_AsString(repr));
+              Py_DECREF(repr);
             }
+          fprintf(f, "\n");
         }
 #ifdef CODE_DUMP_SYMBOLS
       {

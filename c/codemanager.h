@@ -42,6 +42,7 @@ struct CodeBufferObject_s {
 
 #ifdef CODE_DUMP_FILE
 EXTERNVAR CodeBufferObject* psyco_codebuf_chained_list;
+EXTERNVAR void** psyco_codebuf_spec_dict_list;
 #endif
 
 
