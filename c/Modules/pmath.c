@@ -145,7 +145,7 @@ CIMPL_MATH_FUNC1("fabs", fabs, fabs)
 CIMPL_MATH_FUNC1("floor", floor, floor)
 CIMPL_MATH_FUNC2("fmod", fmod, fmod)
 CIMPL_MATH_FUNC2("hypot", hypot, hypot)
-CIMPL_MATH_FUNC2("power", power, pow)
+/*CIMPL_MATH_FUNC2("power", power, pow)*/
 CIMPL_MATH_FUNC2("pow", pow, pow)
 CIMPL_MATH_FUNC1("sin", sin, sin)
 CIMPL_MATH_FUNC1("sinh", sinh, sinh)
@@ -166,7 +166,7 @@ PMATH_FUNC1("fabs", fabs)
 PMATH_FUNC1("floor", floor)
 PMATH_FUNC2("fmod", fmod)
 PMATH_FUNC2("hypot", hypot)
-PMATH_FUNC2("power", power) 
+/*PMATH_FUNC2("power", power)*/
 PMATH_FUNC2("pow", pow)
 PMATH_FUNC1("sin", sin)
 PMATH_FUNC1("sinh", sinh)
@@ -191,7 +191,7 @@ void psyco_initmath(void)
     Psyco_DefineModuleFn(md, "floor", METH_VARARGS, pmath_floor);
     Psyco_DefineModuleFn(md, "fmod", METH_VARARGS, pmath_fmod);
     Psyco_DefineModuleFn(md, "hypot", METH_VARARGS, pmath_hypot);
-    Psyco_DefineModuleFn(md, "power", METH_VARARGS, pmath_power);
+    /*Psyco_DefineModuleFn(md, "power", METH_VARARGS, pmath_power);*/
     Psyco_DefineModuleFn(md, "pow", METH_VARARGS, pmath_pow);
     Psyco_DefineModuleFn(md, "sin", METH_VARARGS, pmath_sin);
     Psyco_DefineModuleFn(md, "sinh", METH_VARARGS, pmath_sinh);
