@@ -253,8 +253,10 @@ static void hack_refcounts(vinfo_array_t* source, int delta, int mvalue)
   while (i--)
     if (source->items[i] != NULL)
       {
-        *(short*)(&source->items[i]->refcount) += delta;
-        if ((source->items[i]->refcount & 0x10000) == mvalue)
+        long rc = source->items[i]->refcount;
+        rc = ((rc + delta) & 0xFFFF) + (rc & 0x10000);
+        source->items[i]->refcount = rc;
+        if ((rc & 0x10000) == mvalue)
           {
             source->items[i]->refcount ^= 0x10000;
             if (source->items[i]->array != NullArray)
