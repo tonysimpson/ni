@@ -8,6 +8,7 @@
 
 #include "../psyco.h"
 #include "../cstruct.h"
+#include <idispatcher.h>
 #include "pyver.h"
 #include <compile.h>
 #include <frameobject.h>
@@ -52,17 +53,21 @@ EXTERNFN PyObject* psyco_find_frame(PyObject* o);
 EXTERNFN PyFrameObject* psyco_emulate_frame(PyObject* o);
 
 EXTERNFN PyObject* psyco_get_globals(void);
-EXTERNFN PyObject* psyco_get_locals(void); /* this one implemented in psyco.c */
+/* PyObject* psyco_get_locals(void); this one implemented in psyco.c */
 
 
 /* to keep a trace of the Psyco stack frames */
 struct stack_frame_info_s {
+#if NEED_STACK_FRAME_HACK
 	int link_stack_depth;  /* -1 if there is an inline frame following */
+#endif
 	PyCodeObject* co;
 	PyObject* globals;  /* NULL if not compile-time */
 };
 inline stack_frame_info_t* finfo_last(stack_frame_info_t* finfo) {
+#if NEED_STACK_FRAME_HACK
 	if (finfo->link_stack_depth < 0) finfo -= finfo->link_stack_depth;
+#endif
 	return finfo;
 }
 

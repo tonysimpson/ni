@@ -7,62 +7,251 @@
 
 
 #include "../psyco.h"
-#include "ivm-insns.h"
+#define MACHINE_CODE_FORMAT    "ivm"
+#define HAVE_FP_FN_CALLS       0
 
 
-#define REG_TOTAL   0   /* the virtual machine has only a stack */
+#define REG_TOTAL   0           /* the virtual machine has only a stack */
 
-typedef enum {
-	CC_TOS           = 0,   /* flag is on the top of the stack */
-	CC_NEG_TOS       = 1,   /* negation of CC_TOS */
-#define CC_TOTAL       2
-        CC_ALWAYS_FALSE  = 2,   /* pseudo condition codes for known outcomes */
-        CC_ALWAYS_TRUE   = 3,
-        CC_ERROR         = -1 } condition_code_t;
+/* the 'flags' condition codes are stored on the stack as well,
+   which makes our vm very unprocessor-like. We abuse condition_code_t
+   to actually hold the stack position where the 'current flags' are
+   stored. If moreover the last bit of condition_code_t is set, then
+   the 'flag' is actually the negation of the value in the stack. */
+typedef int condition_code_t;
+#define CC_TOTAL       RunTime_StackMax
+#define HAVE_CCREG     0
+
+/* pseudo condition codes for known outcomes */
+#define CC_ALWAYS_FALSE   (CC_TOTAL)
+#define CC_ALWAYS_TRUE    (CC_TOTAL|1)
+#define CC_ERROR          (-1)
+
+#define INVERT_CC(cc)    ((condition_code_t)((int)(cc) ^ 1))
 
 
 /* processor-depend part of PsycoObject */
 #define PROCESSOR_PSYCOOBJECT_FIELDS                                            \
 	int stack_depth;   /* the size of data currently pushed in the stack */ \
-	vinfo_t* ccreg;            /* processor condition codes (aka flags)  */
+        int minimal_stack_size;   /* total stack size that we are sure about */
+#define INIT_PROCESSOR_PSYCOOBJECT(po)           \
+          ((po)->minimal_stack_size = VM_INITIAL_MINIMAL_STACK_SIZE)
 
+#define PROCESSOR_FROZENOBJECT_FIELDS                                           \
+	unsigned short minimal_extra_stack_words;   /* ~= minimal_stack_size */
+#define SAVE_PROCESSOR_FROZENOBJECT(fpo, po)     do {			\
+	int extra_stack_words = ((po)->minimal_stack_size -		\
+				 (po)->stack_depth) / sizeof(long);	\
+	if (extra_stack_words < 0)					\
+		extra_stack_words = 0;					\
+	else if (extra_stack_words > 0xFFFF)				\
+		extra_stack_words = 0xFFFF;				\
+	(fpo)->minimal_extra_stack_words = extra_stack_words;		\
+} while (0)
+#define RESTORE_PROCESSOR_FROZENOBJECT(fpo, po)  do {			\
+	(po)->minimal_stack_size = (po)->stack_depth +			\
+		(fpo)->minimal_extra_stack_words * sizeof(long);	\
+} while (0)
+
+#define CHECK_STACK_SPACE()      do {						\
+	if (po->stack_depth >= po->minimal_stack_size) {			\
+		BEGIN_CODE							\
+		INSN_stackgrow();						\
+		END_CODE							\
+		po->minimal_stack_size = po->stack_depth + VM_EXTRA_STACK_SIZE;	\
+        }									\
+	META_assertdepth(po->stack_depth);					\
+} while(0)
+
+
+#define CURRENT_STACK_POSITION(rtsource)  (                             \
+        (po->stack_depth - getstack(rtsource)) / sizeof(long))
 
 /* release a run-time vinfo_t */
-#define RTVINFO_RELEASE(rtsource)       do {				\
-	/* pop an item off the stack only if it is close to the top */	\
-	switch (current_stack_position(rtsource)) {			\
-	case 0:								\
-		insn_pop();						\
-		break;							\
-	case 1:								\
-		insn_pop2nd();						\
-		break;							\
-	default:							\
-		break;  /* not removed */				\
-	}								\
-} while (0)
+/* #define RTVINFO_RELEASE(rtsource)       do {				\ */
+/* 	// pop an item off the stack only if it is close to the top   	\ */
+/* 	switch (CURRENT_STACK_POSITION(rtsource)) {			\ */
+/* 	case 0:								\ */
+/* 		INSN_pop(); INSN_POPPED(1);				\ */
+/* 		break;							\ */
+/* 	case 1:								\ */
+/* 		INSN_pop2nd(); ???					\ */
+/* 		break;							\ */
+/* 	default:							\ */
+/* 		break;  // not removed					\ */
+/* 	}								\ */
+/* } while (0) */
+#define RTVINFO_RELEASE(rtsource)   do { /* nothing */ } while (0)
 
 /* move a run-time vinfo_t */
 #define RTVINFO_MOVE(rtsource, vtarget)   do { /*nothing*/ } while (0)
 
 /* for PsycoObject_Duplicate() */
-#define DUPLICATE_PROCESSOR(result, po)   do {	\
-	if (po->ccreg != NULL)			\
-		result->ccreg = po->ccreg->tmp;	\
-	result->stack_depth = po->stack_depth;	\
+#define DUPLICATE_PROCESSOR(result, po)   do {			\
+	result->stack_depth = po->stack_depth;			\
+	result->minimal_stack_size = po->minimal_stack_size;	\
 } while (0)
 
 #define RTVINFO_CHECK(po, vsource, found) do { /*nothing*/ } while (0)
 #define RTVINFO_CHECKED(po, found)        do { /*nothing*/ } while (0)
 
+#define ABOUT_TO_CALL_SUBFUNCTION(finfo)  do {  \
+  word_t* _arg;                                 \
+  INSN_pyenter(&_arg);                          \
+  *_arg = (word_t)(finfo);                      \
+} while (0)
+#define RETURNED_FROM_SUBFUNCTION()       do {  \
+  INSN_pyleave();                               \
+} while (0)
+
+
+/*****************************************************************/
+ /***   Emit common instructions                                ***/
+
+#define EXTERN_BINARY_INSTRO(insn)                                              \
+  EXTERNFN vinfo_t* bininstr##insn(PsycoObject* po, bool ovf, bool nonneg,      \
+                                   vinfo_t* v1, vinfo_t* v2);
+#define EXTERN_UNARY_INSTRO(insn)                                               \
+  EXTERNFN vinfo_t* unaryinstr##insn(PsycoObject* po, bool ovf, bool nonneg,    \
+                                     vinfo_t* v1);
+#define EXTERN_BINARY_INSTR(insn)                                               \
+  EXTERNFN vinfo_t* bininstr##insn(PsycoObject* po, bool nonneg,                \
+                                   vinfo_t* v1, vinfo_t* v2);
+#define EXTERN_UNARY_INSTR(insn)                                                \
+  EXTERNFN vinfo_t* unaryinstr##insn(PsycoObject* po, bool nonneg,              \
+                                     vinfo_t* v1);
+
+EXTERN_BINARY_INSTRO(add)
+EXTERN_BINARY_INSTR (or)
+EXTERN_BINARY_INSTR (and)
+EXTERN_BINARY_INSTRO(sub)
+EXTERN_BINARY_INSTR (xor)
+EXTERN_BINARY_INSTRO(mul)
+EXTERN_BINARY_INSTR (lshift)
+EXTERN_BINARY_INSTR (rshift)
+EXTERN_UNARY_INSTR  (inv)
+EXTERN_UNARY_INSTRO (neg)
+EXTERN_UNARY_INSTRO (abs)
+
+EXTERNFN condition_code_t bininstrcmp(PsycoObject* po, int base_py_op,
+                                      vinfo_t* v1, vinfo_t* v2);
+EXTERNFN vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
+                               long immed_true, long immed_false);
+
+#define BINARY_INSTR_ADD(ovf, nonneg)  bininstradd(po,     ovf,   nonneg, v1, v2)
+#define BINARY_INSTR_OR( ovf, nonneg)  bininstror (po,            nonneg, v1, v2)
+#define BINARY_INSTR_AND(ovf, nonneg)  bininstrand(po,            nonneg, v1, v2)
+#define BINARY_INSTR_SUB(ovf, nonneg)  bininstrsub(po,     ovf,   nonneg, v1, v2)
+#define BINARY_INSTR_XOR(ovf, nonneg)  bininstrxor(po,            nonneg, v1, v2)
+#define BINARY_INSTR_MUL(ovf, nonneg)  bininstrmul(po,     ovf,   nonneg, v1, v2)
+#define BINARY_INSTR_LSHIFT(  nonneg)  bininstrlshift(po,         nonneg, v1, v2)
+#define BINARY_INSTR_RSHIFT(  nonneg)  bininstrrshift(po,         nonneg, v1, v2)
+#define BINARY_INSTR_CMP(base_py_op)   bininstrcmp(po, base_py_op,  v1, v2)
+#define BINARY_INSTR_COND(cc, i1, i2)  bininstrcond(po, cc,         i1, i2)
+#define UNARY_INSTR_INV(ovf,  nonneg)  unaryinstrinv(po,      nonneg, v1)
+#define UNARY_INSTR_NEG(ovf,  nonneg)  unaryinstrneg(po, ovf, nonneg, v1)
+#define UNARY_INSTR_ABS(ovf,  nonneg)  unaryinstrabs(po, ovf, nonneg, v1)
+
+EXTERNFN vinfo_t* bint_add_i(PsycoObject* po, vinfo_t* rt1, long value2,
+                             bool unsafe);
+EXTERNFN vinfo_t* bint_mul_i(PsycoObject* po, vinfo_t* v1, long value2,
+                             bool ovf);
+EXTERNFN vinfo_t* bint_lshift_i(PsycoObject* po, vinfo_t* v1, int counter);
+EXTERNFN vinfo_t* bint_rshift_i(PsycoObject* po, vinfo_t* v1, int counter);
+EXTERNFN vinfo_t* bint_urshift_i(PsycoObject* po, vinfo_t* v1, int counter);
+EXTERNFN condition_code_t bint_cmp_i(PsycoObject* po, int base_py_op,
+                                     vinfo_t* rt1, long immed2);
+EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 
 /***************************************************************/
  /***   some macro for code emission                          ***/
 
-#define ALIGN_PAD_CODE_PTR()     do { /*nothing*/ } while (0)
-#define ALIGN_WITH_BYTE(byte)    do { /*nothing*/ } while (0)
+#define NEED_CC()   do { /* nothing -- no real flag register */ } while (0)
+
+#define CHECK_NONZERO_FROM_RT(src, rcc)   (rcc = getstack(src))
+
+#define SAVE_REGS_FN_CALLS   NEED_CC()
+
+#define TEMP_SAVE_REGS_FN_CALLS       do { /* nothing */ } while (0)
+
+#define TEMP_RESTORE_REGS_FN_CALLS    do { /* nothing */ } while (0)
+
+#define JUMP_TO(target)               do {      \
+  word_t* _arg;                                 \
+  INSN_jumpfar(&_arg);                          \
+  *_arg = (word_t) target;                      \
+} while (0)
+
+#define FAR_COND_JUMP_TO(target, condition)   do {      \
+  word_t* _arg;                                         \
+  INSN_rtcc_push(condition);                            \
+  INSN_jcondfar(&_arg);                                 \
+  *_arg = (word_t) target;                              \
+} while(0)
+
+#define MAXIMUM_SIZE_OF_FAR_JUMP  (sizeof(code_t)+sizeof(word_t)+sizeof(code_t))
+
+
+#define CALL_SET_ARG_IMMED(immed, arg_index, nb_args)     do {  \
+  INSN_immed(immed);                                            \
+  INSNPUSHED(1);                                                \
+} while (0)
+#define CALL_SET_ARG_FROM_RT(source, arg_index, nb_args)  do {  \
+  INSN_rt_push(source);                                         \
+  INSNPUSHED(1);                                                \
+} while (0)
+#define CALL_SET_ARG_FROM_ADDR(source, arg_index, nb_args) do { \
+  INSN_ref_push(CURRENT_STACK_POSITION(source));                \
+  INSNPUSHED(1);                                                \
+} while (0)
+#define CALL_C_FUNCTION(target, nb_args)   do {                         \
+  word_t* _arg;                                                         \
+  switch (nb_args) {                                                    \
+  case 0: INSN_ccall0(&_arg); break;                                    \
+  case 1: INSN_ccall1(&_arg); break;                                    \
+  case 2: INSN_ccall2(&_arg); break;                                    \
+  case 3: INSN_ccall3(&_arg); break;                                    \
+  case 4: INSN_ccall4(&_arg); break;                                    \
+  case 5: INSN_ccall5(&_arg); break;                                    \
+  case 6: INSN_ccall6(&_arg); break;                                    \
+  case 7: INSN_ccall7(&_arg); break;                                    \
+  default: psyco_fatal_msg("too many arguments to C function call");    \
+  }                                                                     \
+  *_arg = (word_t)(target);                                             \
+  INSNPOPPED((nb_args)-1);  /* can be -1, if nb_args is 0 */            \
+} while (0)
+
+
+#define STACK_CORRECTION(stack_correction)   do {                       \
+  if ((stack_correction) < 0)                                           \
+    INSN_settos((-(stack_correction)) / sizeof(long));                  \
+  else if ((stack_correction) > 0)                                      \
+    INSN_pushn((stack_correction) / sizeof(long));                      \
+} while (0)
+
+#define FUNCTION_RET(popbytes)      do {                                        \
+  INSN_ret((popbytes) / sizeof(long) + 1);   /* +1 for the retaddr itself */    \
+} while (0)
+
+
+#define ALIGN_CODE_MASK  (sizeof(long)-1)
+
+#define ALIGN_PAD_CODE_PTR()     do {                                           \
+  code = (code_t*)((((long)code) + ALIGN_CODE_MASK) & ~ALIGN_CODE_MASK);        \
+} while (0)
+
+#define ALIGN_WITH_BYTE(byte)    do {           \
+  while (((long)code) & ALIGN_CODE_MASK)        \
+    *code++ = byte;                             \
+} while (0)
+
 #define ALIGN_WITH_NOP()         do { /*nothing*/ } while (0)
-#define ALIGN_NO_FILL()          do { /*nothing*/ } while (0)
+
+#if ALL_CHECKS
+#define ALIGN_NO_FILL() ALIGN_WITH_BYTE(0xFF)   /* debugging */
+#else
+#define ALIGN_NO_FILL() ALIGN_PAD_CODE_PTR()
+#endif
 
 
 #endif /* _IENCODING_H */

@@ -1,5 +1,5 @@
-
 #include "ipyencoding.h"
+#include "../pycodegen.h"
 
 
 DEFINEFN
@@ -101,11 +101,4 @@ bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w)
                 END_CODE
 	}
 	return could_eat;
-}
-
-DEFINEFN
-void consume_reference(PsycoObject* po, vinfo_t* vi)
-{
-	if (!eat_reference(vi))
-		psyco_incref_v(po, vi);
 }

@@ -1,6 +1,6 @@
 #include "pstringobject.h"
 #include "pstructmember.h"
-#include <ipyencoding.h>
+#include "../pycodegen.h"
 
 #if USE_CATSTR
 #include "plistobject.h"

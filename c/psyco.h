@@ -142,7 +142,7 @@
 # define psyco_assert(x) ((void)((x) || psyco_fatal_msg(#x)))
 #else
 /* The VC++ preprocessor is not even able to produce from #x a C string that
-   is correctly escape for the VC++ compiler !! */
+   is correctly escaped for the VC++ compiler !! */
 # define psyco_assert(x) ((void)((x) || psyco_fatal_msg("assertion failed")))
 #endif
 #define psyco_fatal_msg(msg)  psyco_fatal_error(msg, __FILE__, __LINE__)

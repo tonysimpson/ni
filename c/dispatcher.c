@@ -467,7 +467,7 @@ void fpo_build(FrozenPsycoObject* fpo, PsycoObject* po)
   clear_tmp_marks(&po->vlocals);
   fz_build(fpo, &po->vlocals);
   fpo->fz_stuff.fz_stack_depth = po->stack_depth;
-  fpo->fz_last_used_reg = (int) po->last_used_reg;
+  SAVE_PROCESSOR_FROZENOBJECT(fpo, po);
   fpo->fz_pyc_data = pyc_data_new(&po->pr);
 }
 
@@ -479,13 +479,37 @@ void fpo_release(FrozenPsycoObject* fpo)
   fz_release(fpo);
 }
 
+static void fpo_find_regs_array(vinfo_array_t* source, PsycoObject* po)
+{
+  int i = source->count;
+  while (i--)
+    {
+      vinfo_t* a = source->items[i];
+      if (a != NULL)
+        {
+#if REG_TOTAL > 0
+          Source src = a->source;
+          if (is_runtime(src) && !is_reg_none(src))
+            REG_NUMBER(po, getreg(src)) = a;
+#endif
+#if HAVE_CCREG
+          else
+            if (psyco_vsource_cc(src) != CC_ALWAYS_FALSE)
+              po->ccreg = a;
+#endif
+          if (a->array != NullArray)
+            fpo_find_regs_array(a->array, po);
+        }
+    }
+}
+
 DEFINEFN
 PsycoObject* fpo_unfreeze(FrozenPsycoObject* fpo)
 {
   /* rebuild a PsycoObject from 'this' */
   PsycoObject* po = PsycoObject_New(fz_top_array_count(fpo));
   po->stack_depth = get_stack_depth(fpo);
-  po->last_used_reg = (reg_t) fpo->fz_last_used_reg;
+  RESTORE_PROCESSOR_FROZENOBJECT(fpo, po);
   fz_unfreeze(&po->vlocals, fpo);
   fpo_find_regs_array(&po->vlocals, po);
   frozen_copy(&po->pr, fpo->fz_pyc_data);
@@ -515,9 +539,8 @@ PsycoObject* fpo_unfreeze(FrozenPsycoObject* fpo)
 
 typedef struct respawn_s {
   CodeBufferObject* self;
-  code_t* write_jmp;
-  char cond;
-  short respawn_cnt;
+  void* write_jmp;
+  int respawn_cnt;
   CodeBufferObject* respawn_from;
 } respawn_t;
 
@@ -575,11 +598,8 @@ static code_t* do_respawn(respawn_t* rs)
   psyco_assert(codebuf->snapshot.fz_respawned_from == rs->respawn_from);
 
   /* fix the jump to point to 'codebuf->codestart' */
-  code = rs->write_jmp;
-/*   if (rs->cond == CC_ALWAYS_TRUE) */
-/*     JUMP_TO(codebuf->codestart); */
-/*   else */
-    FAR_COND_JUMP_TO((code_t*)codebuf->codestart, rs->cond);
+  change_cond_jump_target(rs->write_jmp, (code_t*)codebuf->codestart);
+  
   /* cannot Py_DECREF(cp->self) because the current function is returning into
      that code now, but any time later is fine: use the trash of codemanager.c */
   psyco_trash_object((PyObject*) rs->self);
@@ -628,6 +648,7 @@ void psyco_respawn_detected(PsycoObject* po)
      Use is_respawning() to bypass the creation of all references when
      compiling during respawn. */
   po->code = codebuf->codestart;
+  INIT_CODE_EMISSION(po->code);
 }
 
 DEFINEFN
@@ -656,15 +677,14 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
       /* fill in the respawn_t structure */
       extra_assert(po->respawn_proxy != NULL);
       rs->self = codebuf;
-      rs->write_jmp = calling_code;
-      rs->cond = jmpcondition;
       rs->respawn_cnt = po->respawn_cnt;
       rs->respawn_from = po->respawn_proxy;
 
       /* write the jump to the proxy */
       po->code = calling_code;
       po->codelimit = calling_limit;
-      conditional_jump_to(po, (code_t*)codebuf->codestart, jmpcondition);
+      rs->write_jmp = conditional_jump_to(po, (code_t*)codebuf->codestart,
+                                          jmpcondition);
       dump_code_buffers();
     }
   else
@@ -673,6 +693,7 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
          beginning of the trash memory for
          the next instructions */
       po->code = (code_t*) po->respawn_proxy->codestart;
+      INIT_CODE_EMISSION(po->code);
     }
 }
 
@@ -737,6 +758,7 @@ void PsycoObject_EmergencyCodeRoom(PsycoObject* po)
     {
       /* respawning case: trash everything written so far */
       po->code = (code_t*) po->respawn_proxy->codestart;
+      INIT_CODE_EMISSION(po->code);
     }
 }
 
@@ -1005,13 +1027,13 @@ static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
         break;
 
       case CompileTime:
-        if (KNOWN_SOURCE(a)->value != CompileTime_Get(bsource)->value)
+        if (CompileTime_Get(a->source)->value != CompileTime_Get(bsource)->value)
           {
             if ((CompileTime_Get(bsource)->refcount1_flags &
                  SkFlagFixed) != 0)
               return false;  /* b's value is fixed */
-            if ((KNOWN_SOURCE(a)->refcount1_flags &
-                 SkFlagFixed) != 0 && KNOWN_SOURCE(a)->value == 0)
+            if ((CompileTime_Get(a->source)->refcount1_flags &
+                 SkFlagFixed) != 0 && CompileTime_Get(a->source)->value == 0)
               return false;  /* hack: */
             /* fixed known-to-be-zero values have a special
                role to play with local variables: undefined
@@ -1092,19 +1114,19 @@ static bool compatible_array(vinfo_array_t* aa, int count,
      shared structures. */
 
   /* special-case test. See comments below. */
-#define CHECK_FOR_NULL(a)                                               \
-      if (a != NULL) {                                                  \
-        /* if there is no proved progress, and 'a'                      \
-           might just have been promoted,                               \
-           then we have to let compilation go on */                     \
-        if (*result == NullArray &&                                     \
-            is_compiletime(a->source) &&                                \
-            ((KNOWN_SOURCE(a)->refcount1_flags & SkFlagFixed) != 0))    \
-          return false;                                                 \
-        /* if we are not too deep in the array, then we might as        \
-           well try compiling with this extra information */            \
-        if (recdepth <= 2)                                              \
-          return false;                                                 \
+#define CHECK_FOR_NULL(a)                                                       \
+      if (a != NULL) {                                                          \
+        /* if there is no proved progress, and 'a'                              \
+           might just have been promoted,                                       \
+           then we have to let compilation go on */                             \
+        if (*result == NullArray &&                                             \
+            is_compiletime(a->source) &&                                        \
+            ((CompileTime_Get(a->source)->refcount1_flags & SkFlagFixed) != 0)) \
+          return false;                                                         \
+        /* if we are not too deep in the array, then we might as                \
+           well try compiling with this extra information */                    \
+        if (recdepth <= 2)                                                      \
+          return false;                                                         \
       }
 
   int i;
@@ -1433,6 +1455,7 @@ CodeBufferObject* psyco_unify_code(PsycoObject* po, vcompatible_t* lastmatch)
      Anything but the final JMP will trigger the creation of a new code
      buffer. */
   po->code = localbuf;
+  INIT_CODE_EMISSION(po->code);
   po->codelimit = NULL;
   psyco_unify(po, lastmatch, &target);
   return target;
@@ -1589,6 +1612,9 @@ typedef struct { /* produced at compile time and read by the dispatcher */
 
 #if PROMOTION_TACTIC == 1
   rt_local_buf_t* local_chained_list;
+# if CODE_DUMP
+  long zero_tag;
+# endif
 #endif
 } rt_promotion_t;
 
@@ -1709,6 +1735,7 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
     fs->local_chained_list = buf;
     
     po->code = result;
+    INIT_CODE_EMISSION(po->code);
     codeend = psyco_compile(po, mp, false);
     psyco_shrink_code_buffer(codebuf, codeend);
     /* XXX don't know what to do with reference to 'codebuf' */
@@ -1810,6 +1837,9 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
 
 #if PROMOTION_TACTIC == 1
   fs->local_chained_list = NULL;
+# if CODE_DUMP
+  fs->zero_tag = 0;
+# endif
 #endif
   
   return (code_t*)(fs+1);  /* end of code == end of 'fs' structure */

@@ -112,7 +112,7 @@ static vinfo_t* pint_invert(PsycoObject* po, vinfo_t* intobj)
 	vinfo_t* ival = PsycoInt_AS_LONG(po, intobj);
 	if (ival == NULL)
 		return NULL;
-	result = integer_not(po, ival);
+	result = integer_inv(po, ival);
 	if (result != NULL)
 		result = PsycoInt_FROM_LONG(result);
 	return result;

@@ -35,8 +35,7 @@ static void fix_run_time_args(PsycoObject * po, vinfo_array_t* target,
               }
               po->stack_depth += sizeof(long);
               /* arguments get borrowed references */
-              b->source = RunTime_NewStack(po->stack_depth, REG_NONE,
-                                                false, false);
+              b->source = RunTime_NewStack(po->stack_depth, false, false);
             }
           extra_assert(b == target->items[i]);
           a->tmp = NULL;
@@ -186,7 +185,7 @@ static PsycoObject* psyco_build_frame(struct fncall_arg_s* fncall,
   po = PsycoObject_New(fncall->po_size);
   po->stack_depth = INITIAL_STACK_DEPTH;
   po->vlocals.count = fncall->po_size;
-  po->last_used_reg = REG_LOOP_START;
+  INIT_PROCESSOR_PSYCOOBJECT(po);
   po->pr.auto_recursion = AUTO_RECURSION(recursion);
 
   /* duplicate the inputvinfos. If two arguments share some common part, they
@@ -221,8 +220,7 @@ static PsycoObject* psyco_build_frame(struct fncall_arg_s* fncall,
 
   /* set up the CALL return address */
   po->stack_depth += sizeof(long);
-  LOC_CONTINUATION = vinfo_new(RunTime_NewStack(po->stack_depth, REG_NONE,
-                                                false, false));
+  LOC_CONTINUATION = vinfo_new(RunTime_NewStack(po->stack_depth, false, false));
   return po;
 }
 
@@ -802,7 +800,7 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	/* run! */
 	Py_INCREF(codebuf);
 	result = psyco_processor_run((CodeBufferObject*) codebuf,
-                                     initial_stack, &finfo);
+                                     initial_stack, &finfo, tdict);
 	Py_DECREF(codebuf);
 	psyco_trash_object(NULL);  /* free any trashed object now */
 

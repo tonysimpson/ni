@@ -4,26 +4,6 @@
 #include "ipyencoding.h"
 
 
-DEFINEFN void fpo_find_regs_array(vinfo_array_t* source, PsycoObject* po)
-{
-  int i = source->count;
-  while (i--)
-    {
-      vinfo_t* a = source->items[i];
-      if (a != NULL)
-        {
-          Source src = a->source;
-          if (is_runtime(src) && !is_reg_none(src))
-            REG_NUMBER(po, getreg(src)) = a;
-          else if (psyco_vsource_cc(src) != CC_ALWAYS_FALSE)
-            po->ccreg = a;
-          if (a->array != NullArray)
-            fpo_find_regs_array(a->array, po);
-        }
-    }
-}
-
-
 /***************************************************************/
  /***   the hard processor-dependent part of dispatching:     ***/
   /***   Unification.                                          ***/
@@ -178,7 +158,7 @@ static void data_update_stack(vinfo_t* a, RunTimeSource bsource,
           rg = REG_NONE;
         }
       /* Now 'a' is at 'dststack', but might still be in 'rg' too */
-      a->source = RunTime_NewStack(dststack, rg, false, false);
+      a->source = RunTime_New1(dststack, rg, false, false);
       ORIGINAL_VINFO(dststack) = a; /* 'a' is now there */
       
       if (code > dm->code_limit)

@@ -2,7 +2,7 @@
 #include "pintobject.h"
 #include "pboolobject.h"
 #include "pstringobject.h"
-#include <ipyencoding.h>
+#include "../pycodegen.h"
 
 
 #if USE_RUNTIME_SWITCHES

@@ -52,7 +52,7 @@ inline PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
 	po = PsycoObject_New(INDEX_LOC_LOCALS_PLUS + extras);
 	po->stack_depth = INITIAL_STACK_DEPTH;
 	po->vlocals.count = INDEX_LOC_LOCALS_PLUS + extras;
-	po->last_used_reg = REG_LOOP_START;
+	INIT_PROCESSOR_PSYCOOBJECT(po);
 	po->pr.auto_recursion = AUTO_RECURSION(recursion);
 
 	/* initialize po->vlocals */
@@ -74,8 +74,7 @@ inline PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
 			/* XXX do something more intelligent for cell and
 			       free vars */
 			/* arguments get borrowed references */
-			rsrc = RunTime_NewStack(po->stack_depth, REG_NONE,
-					       false, false);
+			rsrc = RunTime_NewStack(po->stack_depth, false, false);
 			v = vinfo_new(rsrc);
 		}
 		LOC_LOCALS_PLUS[i] = v;
@@ -96,8 +95,7 @@ inline PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
 
 	/* set up the CALL return address */
 	po->stack_depth += sizeof(long);
-	rsrc = RunTime_NewStack(po->stack_depth, REG_NONE,
-				false, false);
+	rsrc = RunTime_NewStack(po->stack_depth, false, false);
 	LOC_CONTINUATION = vinfo_new(rsrc);
 	psyco_assert_coherent(po);
 	return (PyObject*) po;
@@ -133,7 +131,7 @@ inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
 	po = PsycoObject_New(INDEX_LOC_LOCALS_PLUS + extras);
 	po->stack_depth = INITIAL_STACK_DEPTH;
 	po->vlocals.count = INDEX_LOC_LOCALS_PLUS + extras;
-	po->last_used_reg = REG_LOOP_START;
+	INIT_PROCESSOR_PSYCOOBJECT(po);
 	po->pr.auto_recursion = AUTO_RECURSION(recursion);
 
 	/* initialize po->vlocals */
@@ -153,8 +151,7 @@ inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
 		while (i > co->co_nlocals) {
 			po->stack_depth += sizeof(long);
 			/* borrowed references from the frame object */
-			rsrc = RunTime_NewStack(po->stack_depth, REG_NONE,
-						false, false);
+			rsrc = RunTime_NewStack(po->stack_depth, false, false);
 			v = vinfo_new(rsrc);
 			LOC_LOCALS_PLUS[--i] = v;
 		}
@@ -169,8 +166,7 @@ inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
 	/* initialize the keyword arguments dict */
 	if (co->co_flags & CO_VARKEYWORDS) {
 		po->stack_depth += sizeof(long);
-		rsrc = RunTime_NewStack(po->stack_depth, REG_NONE,
-					false, false);
+		rsrc = RunTime_NewStack(po->stack_depth, false, false);
 		v = vinfo_new(rsrc);
 		/* known to be a dict */
                 /*Psyco_AssertType(NULL, v, &PyDict_Type);*/
@@ -182,8 +178,7 @@ inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
 	/* initialize the extra arguments tuple */
 	if (co->co_flags & CO_VARARGS) {
 		po->stack_depth += sizeof(long);
-		rsrc = RunTime_NewStack(po->stack_depth, REG_NONE,
-					false, false);
+		rsrc = RunTime_NewStack(po->stack_depth, false, false);
 		v = vinfo_new(rsrc);
 		/* known to be a tuple */
 		rsrc = CompileTime_New((long) &PyTuple_Type);
@@ -197,8 +192,7 @@ inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
 		       free vars */
 		po->stack_depth += sizeof(long);
 		/* arguments get borrowed references */
-		rsrc = RunTime_NewStack(po->stack_depth, REG_NONE,
-					false, false);
+		rsrc = RunTime_NewStack(po->stack_depth, false, false);
 		v = vinfo_new(rsrc);
 		LOC_LOCALS_PLUS[--i] = v;
 	}
@@ -212,8 +206,7 @@ inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
 
 	/* set up the CALL return address */
 	po->stack_depth += sizeof(long);
-	rsrc = RunTime_NewStack(po->stack_depth, REG_NONE,
-				false, false);
+	rsrc = RunTime_NewStack(po->stack_depth, false, false);
 	LOC_CONTINUATION = vinfo_new(rsrc);
 	return (PyObject*) po;
 
@@ -294,7 +287,7 @@ bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering)
 	/* run! */
         Py_INCREF(codebuf);
 	result = psyco_processor_run((CodeBufferObject*) codebuf,
-				     initial_stack, &finfo);
+				     initial_stack, &finfo, tdict);
 	Py_DECREF(codebuf);
 	psyco_trash_object(NULL);  /* free any trashed object now */
 
@@ -405,7 +398,9 @@ stack_frame_info_t* psyco_finfo(PsycoObject* caller, PsycoObject* callee)
 	}
 	p = current;
 	current += inlining + 1;
+#if NEED_STACK_FRAME_HACK
 	p->link_stack_depth = -inlining;
+#endif
 	p->co = callee->pr.co;
 	sglobals = callee->vlocals.items[INDEX_LOC_GLOBALS]->source;
 	if (is_compiletime(sglobals))
@@ -526,8 +521,10 @@ static PyObject* pvisitframes(PyObject*(*callback)(PyObject*,void*),
 				p->fi = f1;
 				p->next = revlist;
 				revlist = p;
+#if NEED_STACK_FRAME_HACK
 				if ((*f1)->link_stack_depth == 0)
 					break; /* stack top is an inline frame */
+#endif
 			}
 
 			/* now actually visit them in the correct order */

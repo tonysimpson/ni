@@ -10,6 +10,7 @@
 #if ALL_STATIC
 # include "iprocessor.c"
 # include "idispatcher.c"
+# include "iencoding.c"
 # include "ipyencoding.c"
 #else /* if !ALL_STATIC */
   EXTERNFN void psyco_processor_init(void);	/* iprocessor.c */

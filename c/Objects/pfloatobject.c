@@ -1,6 +1,9 @@
 #include "pfloatobject.h"
 #include "plongobject.h"
 
+#if HAVE_FP_FN_CALLS
+
+
 static int
 cimpl_fp_cmp(double a, double b) {
     return (a < b) ? -1 : (a > b) ? 1 : 0;
@@ -402,3 +405,10 @@ void psy_floatobject_init(void)
 
     INIT_SVIRTUAL(psyco_computed_float, compute_float, 0, 0);
 }
+
+#else /* !HAVE_FP_FN_CALLS */
+INITIALIZATIONFN
+void psy_floatobject_init(void)
+{
+}
+#endif /* !HAVE_FP_FN_CALLS */

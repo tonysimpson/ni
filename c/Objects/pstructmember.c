@@ -2,7 +2,7 @@
 #include "pstringobject.h"
 #include "pintobject.h"
 #include "pfloatobject.h"
-#include <ipyencoding.h>
+#include "../pycodegen.h"
 
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 
@@ -39,6 +39,7 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 		/* XXX assumes sizeof(int) == sizeof(long) */
 		rdf = FMUT(DEF_ARRAY(long, 0));
 		break;
+#if HAVE_FP_FN_CALLS
 	case T_FLOAT:  /* read a long, turn it into a float */
 		rdf = FMUT(DEF_ARRAY(float, 0));
 		w1 = psyco_get_field_offset(po, addr, rdf, l->offset);
@@ -60,6 +61,7 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 		}
 		v = PsycoFloat_FROM_DOUBLE(w1, w2);
 		return v;
+#endif
 	case T_STRING:  /* read a char*, turn it into a string */
 		rdf = FMUT(DEF_ARRAY(char*, 0));
 		w1 = psyco_get_field_offset(po, addr, rdf, l->offset);

@@ -12,7 +12,9 @@
  */
 
 #include "../initialize.h"
-
+#if HAVE_FP_FN_CALLS    /* disable float optimizations if functions with
+                           float/double arguments are not implemented
+                           in the back-end */
 
 #ifndef _MSC_VER
 #ifndef __STDC__
@@ -186,3 +188,10 @@ void psyco_initmath(void)
 
     Py_XDECREF(md);
 }
+
+#else /* !HAVE_FP_FN_CALLS */
+INITIALIZATIONFN
+void psyco_initmath(void)
+{
+}
+#endif /* !HAVE_FP_FN_CALLS */

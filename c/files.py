@@ -33,6 +33,7 @@ SRC = [
     Source('cstruct.c',		'psyco_cstruct_init'),
     Source('alarm.c',		'psyco_alarm_init'),
     Source('codemanager.c'),
+    Source('codegen.c',		'psyco_codegen_init'),
     Source('mergepoints.c'),
     Source('linuxmemchk.c'),
     Source('Python/pycompiler.c',	'psyco_pycompiler_init'),
@@ -65,9 +66,15 @@ PROCESSOR_SRC = {
     'i386': [
         Source('iprocessor.c',	'psyco_processor_init'),
         Source('idispatcher.c'),
+        Source('iencoding.c'),
         Source('ipyencoding.c'),
         ],
     'ivm': [
+        Source('iprocessor.c'),
+        Source('idispatcher.c'),
+        Source('iencoding.c'),
+        Source('ipyencoding.c'),
+        Source('ivm-insns.c'),
         ],
     }
 

@@ -7,6 +7,8 @@
 
 
 #include "../psyco.h"
+#define MACHINE_CODE_FORMAT    "i386"
+#define HAVE_FP_FN_CALLS       1
 
 
  /* set to 0 to emit code that runs on 386 and 486 */
@@ -78,6 +80,7 @@ typedef enum {
         CC_ERROR         = -1 } condition_code_t;
 
 #define INVERT_CC(cc)    ((condition_code_t)((int)(cc) ^ 1))
+#define HAVE_CCREG       1
 
 
 /* the registers we want Psyco to use in compiled code,
@@ -98,6 +101,21 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   vinfo_t* reg_array[REG_TOTAL];   /* the 'vinfo_t' currently stored in regs */ \
   vinfo_t* ccreg;                  /* processor condition codes (aka flags)  */ \
   reg_t last_used_reg;             /* the most recently used register        */
+#define INIT_PROCESSOR_PSYCOOBJECT(po)                                          \
+  (po->last_used_reg = REG_LOOP_START)
+
+#define PROCESSOR_FROZENOBJECT_FIELDS                   \
+  short fz_last_used_reg;
+#define SAVE_PROCESSOR_FROZENOBJECT(fpo, po)            \
+  (fpo->fz_last_used_reg = (int) po->last_used_reg)
+#define RESTORE_PROCESSOR_FROZENOBJECT(fpo, po)         \
+  (po->last_used_reg = (reg_t) fpo->fz_last_used_reg)
+
+#define INIT_CODE_EMISSION(code)         do { /* nothing */ } while (0)
+#define POST_CODEBUFFER_SIZE             0
+
+#define CHECK_STACK_SPACE()              do { /* nothing */ } while (0)
+
 
 /*****************************************************************/
  /***   Production of code (common instruction encodings)       ***/
@@ -262,6 +280,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
      SUB    (group 5)
      XOR    (group 6)
      CMP    (group 7)  */
+
 /* The following macro encodes  "INSTR register, immediate"  */
 #define COMMON_INSTR_IMMED(group, rg, value) do {       \
   long _v;                                              \
@@ -340,9 +359,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define CHECK_ABS_OVERFLOW   CC_S
 
 /* Encodes a check (zero/non-zero) on the given 'source' */
-#define CHECK_ZERO_CONDITION      CC_E
-#define CHECK_NONZERO_CONDITION   INVERT_CC(CHECK_ZERO_CONDITION)
-#define CHECK_NONZERO_FROM_RT(source)             do {                          \
+#define CHECK_NONZERO_FROM_RT(source, rcc)        do {                          \
   NEED_CC_SRC(source);                                                          \
   if (RSOURCE_REG_IS_NONE(source))                                              \
     {                                                                           \
@@ -351,6 +368,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
     }                                                                           \
   else                                                                          \
     CHECK_NONZERO_REG(RSOURCE_REG(source));                                     \
+  rcc = CC_NE;  /* a.k.a. NZ flag */                                            \
 } while (0)
 #define CHECK_NONZERO_REG(rg)    (              \
   code[0] = 0x85,      /* TEST reg, reg */      \
@@ -419,6 +437,48 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define SHIFT_SIGNED_RIGHT_BY(rg, cnt)   SHIFT_GENERIC1(rg, cnt, 7)
 #define SHIFT_SIGNED_RIGHT_CL(rg)        SHIFT_GENERICCL(rg, 7)
 
+
+EXTERNFN vinfo_t* bininstrgrp(PsycoObject* po, int group, bool ovf,
+                                   bool nonneg, vinfo_t* v1, vinfo_t* v2);
+EXTERNFN vinfo_t* bininstrmul(PsycoObject* po, bool ovf,
+                                   bool nonneg, vinfo_t* v1, vinfo_t* v2);
+EXTERNFN vinfo_t* bininstrshift(PsycoObject* po, int group,
+                                   bool nonneg, vinfo_t* v1, vinfo_t* v2);
+EXTERNFN condition_code_t bininstrcmp(PsycoObject* po, int base_py_op,
+                                      vinfo_t* v1, vinfo_t* v2);
+EXTERNFN vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
+                                   long immed_true, long immed_false);
+EXTERNFN vinfo_t* unaryinstrgrp(PsycoObject* po, int group, bool ovf,
+                                   bool nonneg, vinfo_t* v1);
+EXTERNFN vinfo_t* unaryinstrabs(PsycoObject* po, bool ovf,
+                                   bool nonneg, vinfo_t* v1);
+
+#define BINARY_INSTR_ADD(ovf, nonneg)  bininstrgrp(po, 0, ovf, nonneg, v1, v2)
+#define BINARY_INSTR_OR( ovf, nonneg)  bininstrgrp(po, 1, ovf, nonneg, v1, v2)
+#define BINARY_INSTR_AND(ovf, nonneg)  bininstrgrp(po, 4, ovf, nonneg, v1, v2)
+#define BINARY_INSTR_SUB(ovf, nonneg)  bininstrgrp(po, 5, ovf, nonneg, v1, v2)
+#define BINARY_INSTR_XOR(ovf, nonneg)  bininstrgrp(po, 6, ovf, nonneg, v1, v2)
+#define BINARY_INSTR_MUL(ovf, nonneg)  bininstrmul(po,    ovf, nonneg, v1, v2)
+#define BINARY_INSTR_LSHIFT(  nonneg)  bininstrshift(po, 4,    nonneg, v1, v2)
+#define BINARY_INSTR_RSHIFT(  nonneg)  bininstrshift(po, 7,    nonneg, v1, v2)
+#define BINARY_INSTR_CMP(base_py_op)   bininstrcmp(po, base_py_op,     v1, v2)
+#define BINARY_INSTR_COND(cc, i1, i2)  bininstrcond(po, cc,            i1, i2)
+#define UNARY_INSTR_INV(ovf,  nonneg)  unaryinstrgrp(po, 2, ovf, nonneg, v1)
+#define UNARY_INSTR_NEG(ovf,  nonneg)  unaryinstrgrp(po, 3, ovf, nonneg, v1)
+#define UNARY_INSTR_ABS(ovf,  nonneg)  unaryinstrabs(po,    ovf, nonneg, v1)
+
+EXTERNFN vinfo_t* bint_add_i(PsycoObject* po, vinfo_t* rt1, long value2,
+                             bool unsafe);
+EXTERNFN vinfo_t* bint_mul_i(PsycoObject* po, vinfo_t* v1, long value2,
+                             bool ovf);
+EXTERNFN vinfo_t* bint_lshift_i(PsycoObject* po, vinfo_t* v1, int counter);
+EXTERNFN vinfo_t* bint_rshift_i(PsycoObject* po, vinfo_t* v1, int counter);
+EXTERNFN vinfo_t* bint_urshift_i(PsycoObject* po, vinfo_t* v1, int counter);
+EXTERNFN condition_code_t bint_cmp_i(PsycoObject* po, int base_py_op,
+                                     vinfo_t* rt1, long immed2);
+EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
+
+/*****************************************************************/
 
 /* PUSH the value described in the 'source' of a run-time vinfo_t */
 #define PUSH_FROM_RT(source)   do {                     \
@@ -511,6 +571,11 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   *code++ = (imm8);                                     \
 } while (0)
 
+#define ABOUT_TO_CALL_SUBFUNCTION(finfo)                \
+  SAVE_IMMED_TO_EBP_BASE((long)(finfo), INITIAL_STACK_DEPTH)
+#define RETURNED_FROM_SUBFUNCTION()                     \
+  SAVE_IMM8_TO_EBP_BASE(-1, INITIAL_STACK_DEPTH)
+
 #define LOAD_REG_FROM_RT(source, dst)			\
   INSTR_MODRM_FROM_RT(source, 0x8B, (dst)<<3)   /* MOV dst, (...) */
 
@@ -555,6 +620,12 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define CALL_SET_ARG_FROM(source, arg_index, nb_args)     do {  \
   PUSH_FROM(source);                                            \
   po->stack_depth += 4;                                         \
+} while (0)
+#define CALL_SET_ARG_FROM_ADDR_CLOBBER_REG   REG_ANY_CALLER_SAVED
+#define CALL_SET_ARG_FROM_ADDR(source, arg_index, nb_args) do {         \
+  LOAD_ADDRESS_FROM_RT(source, CALL_SET_ARG_FROM_ADDR_CLOBBER_REG);     \
+  CALL_SET_ARG_FROM_RT(RunTime_New(CALL_SET_ARG_FROM_ADDR_CLOBBER_REG,  \
+                                   false, false), arg_index, nb_args);  \
 } while (0)
 #define CALL_C_FUNCTION(target, nb_args)   do { \
   code[0] = 0xE8;    /* CALL */                 \
@@ -708,6 +779,27 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   *(long*)(code+2) = (addr);                            \
   *(long*)(code+6) = (immed);                           \
   code += 10;                                           \
+} while (0)
+
+#define FUNCTION_RET(popbytes)      do {                                \
+  /* emit a 'RET xxx' instruction that pops and jumps to the address    \
+     which is now at the top of the stack, and finishes to clean the    \
+     stack by removing everything left past the return address          \
+     (typically the arguments, although it could be anything). */       \
+  int _b = popbytes;                                                    \
+  extra_assert(0 < _b);                                                 \
+  if (_b >= 0x8000)                                                     \
+    {                                                                   \
+      /* uncommon case: too many stuff left in the stack for the 16-bit \
+         immediate we can encoding in RET */                            \
+      POP_REG(REG_386_EDX);                                             \
+      STACK_CORRECTION(-_b);                                            \
+      PUSH_REG(REG_386_EDX);                                            \
+      _b = 0;                                                           \
+    }                                                                   \
+  code[0] = 0xC2;   /* RET imm16 */                                     \
+  *(short*)(code+1) = _b;                                               \
+  code += 3;                                                            \
 } while (0)
 
 
@@ -877,8 +969,12 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   code += 6;                                            \
   *(long*)(code-4) = (addr) - code;                     \
 } while (0)
+#define CHANGE_JUMP_TO(addr)                do {        \
+  *(long*)(code-4) = (addr) - code;                     \
+} while (0)
 
 #define SIZE_OF_FAR_JUMP                   5
+#define MAXIMUM_SIZE_OF_FAR_JUMP    SIZE_OF_FAR_JUMP
 #define SIZE_OF_SHORT_CONDITIONAL_JUMP     2    /* Jcond rel8 */
 #define RANGE_OF_SHORT_CONDITIONAL_JUMP  127    /* max. positive offset */
 

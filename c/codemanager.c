@@ -1,4 +1,5 @@
 #include "codemanager.h"
+#include <ipyencoding.h>
 
 
 #define BUFFER_SIGNATURE    0xE673B506   /* arbitrary */
@@ -128,6 +129,7 @@ static CodeBufferObject* new_code_buffer(PsycoObject* po, global_entries_t* ge,
       b->codestart = get_next_buffer(plimit);
       SET_CODEMODE(b, "(compiling)");
     }
+  INIT_CODE_EMISSION((code_t*) b->codestart);
   
   debug_printf(3, ("%s code buffer %p\n",
                    proxy_to==NULL ? "new" : "proxy", b->codestart));
@@ -226,10 +228,11 @@ void psyco_emergency_enlarge_buffer(code_t** pcode, code_t** pcodelimit)
 {
   code_t* code = *pcode;
   code_t* nextcode;
-  if (code - *pcodelimit > GUARANTEED_MINIMUM - SIZE_OF_FAR_JUMP)
+  if (code - *pcodelimit > GUARANTEED_MINIMUM - MAXIMUM_SIZE_OF_FAR_JUMP)
     Py_FatalError("psyco: code buffer overflowing");
 
   nextcode = get_next_buffer(pcodelimit);
+  INIT_CODE_EMISSION(nextcode);
   debug_printf(2, ("emergency enlarge buffer %p -> %p\n", code, nextcode));
   JUMP_TO(nextcode);
   close_buffer_use(code);

@@ -3,6 +3,7 @@ import re
 
 explicitnumber = {
     '0x010100f0': '1.1.1',   # bugfix release, no change in hex version
+    '0x010200a0': '1.2',     # alpha
     }
 
 FILES = {

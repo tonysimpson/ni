@@ -3,7 +3,7 @@
 #include "codemanager.h"
 #include "mergepoints.h"
 #include "Python/pycompiler.h"
-#include <ipyencoding.h>
+#include "pycodegen.h"
 #include <idispatcher.h>
 
 
@@ -127,10 +127,12 @@ void vinfo_release(vinfo_t* vi, PsycoObject* po)
     sk_decref(CompileTime_Get(vi->source));
     break;
     
+#if HAVE_CCREG
   case VirtualTime:
     if (po != NULL && vi == po->ccreg)
       po->ccreg = NULL;
     break;
+#endif
   }
 
   /* must be after the switch because psyco_decref_rt() did use the
@@ -138,8 +140,10 @@ void vinfo_release(vinfo_t* vi, PsycoObject* po)
   if (vi->array != NullArray)
     array_delete(vi->array, po);
 
+#if HAVE_CCREG
   /* only virtual-time vinfos are allowed in po->ccreg */
   extra_assert(po == NULL || vi != po->ccreg);
+#endif
   psyco_llfree_vinfo(vi);
 }
 
@@ -251,11 +255,13 @@ static void coherent_array(vinfo_array_t* source, PsycoObject* po, int found[],
         default:
           psyco_fatal_msg("gettime() corrupted");
         }
+#if HAVE_CCREG
         if (psyco_vsource_cc(src) != CC_ALWAYS_FALSE)
           {
             extra_assert(po->ccreg == source->items[i]);
             found[REG_TOTAL] = 1;
           }
+#endif
 	if (source->items[i]->array != NullArray)
           coherent_array(source->items[i]->array, po, found,
                          !is_compiletime(src));
@@ -321,8 +327,10 @@ void psyco_assert_coherent1(PsycoObject* po, bool full)
   if (full)
     {
       RTVINFO_CHECKED(po, found);
+#if HAVE_CCREG
       if (!found[REG_TOTAL])
         extra_assert(po->ccreg == NULL);
+#endif
       hack_refcounts(&po->vlocals, -1, 0);
       hack_refcounts(&debug_extra_refs, -1, 0);
       err = nonnull_refcount(&po->vlocals);
@@ -654,25 +662,17 @@ typedef struct {
 	CodeBufferObject*	self;
 	PsycoObject* 		po;
 	resume_fn_t		resume_fn;
-	code_t*			write_jmp;
-	condition_code_t	cond;
+	void*			jump_to_fix;
 } coding_pause_t;
 
 static code_t* do_resume_coding(coding_pause_t* cp)
 {
   /* called when entering a coding_pause (described by 'cp') */
-  code_t* code;
-  code_t* target = (cp->resume_fn) (cp->po, cp+1);
+  code_t* target = (cp->resume_fn) (cp->po, cp+1); /* resume compilation work */
 
-  /* fix the jump to point to 'target' */
-  /* safety check: do not write a JMP whose target is itself...
-     would make an endless loop */
-  code = cp->write_jmp;
-  psyco_assert(target != code);
-  if (cp->cond == CC_ALWAYS_TRUE)
-    JUMP_TO(target);
-  else
-    FAR_COND_JUMP_TO(target, cp->cond);
+  /* then fix the jump to point to 'target' */
+  change_cond_jump_target(cp->jump_to_fix, target);
+  
   /* cannot Py_DECREF(cp->self) because the current function is returning into
      that code now, but any time later is fine: use the trash of codemanager.c */
   dump_code_buffers();
@@ -714,14 +714,13 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
   cp->self = codebuf;
   cp->po = po;
   cp->resume_fn = resume_fn;
-  cp->write_jmp = calling_code;
-  cp->cond = jmpcondition;
   memcpy(cp+1, extra, extrasize);
 
   /* write the jump to the proxy */
   po->code = calling_code;
   po->codelimit = calling_limit;
-  conditional_jump_to(po, (code_t*) codebuf->codestart, jmpcondition);
+  cp->jump_to_fix = conditional_jump_to(po, (code_t*) codebuf->codestart,
+					jmpcondition);
   dump_code_buffers();
 }
 
@@ -827,9 +826,9 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
       */
       CodeBufferObject* oldcodebuf;
       code_t* codeend;
-      setup_conditional_code_bounds(po, po2);
+      void* extra = setup_conditional_code_bounds(po, po2, condition);
       codeend = psyco_unify(po2, cmp, &oldcodebuf);
-      make_code_conditional(po, codeend, condition);
+      make_code_conditional(po, codeend, condition, extra);
       /* XXX store reference to oldcodebuf somewhere */
     }
   else

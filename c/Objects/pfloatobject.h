@@ -5,6 +5,10 @@
 #ifndef _PSY_FLOATOBJECT_H
 #define _PSY_FLOATOBJECT_H
 
+#include <iencoding.h>
+#if HAVE_FP_FN_CALLS    /* disable float optimizations if functions with
+                           float/double arguments are not implemented
+                           in the back-end */
 #include "pobject.h"
 #include "pabstract.h"
 #include "pintobject.h"
@@ -71,5 +75,7 @@ cimpl_fp_from_long(long value, double* result);
 EXTERNFN void 
 cimpl_fp_from_float(float value, double* result);
 
+
+#endif /* HAVE_FP_FN_CALLS */
 
 #endif /* _PSY_FLOATOBJECT_H */

@@ -95,12 +95,15 @@ for name in ['PSYCO_DEBUG', 'VERBOSE_LEVEL',
 if PROCESSOR is None:
     try:
         PROCESSOR = autodetect()
-    except ProcessorAutodetectError, e:
-        print '%s: %s' % (e.__class__.__name__, e)
-        print 'Set PROCESSOR to one of the supported processor names in setup.py, line 9.'
-        sys.exit(2)
+    except ProcessorAutodetectError:
+        PROCESSOR = 'ivm'  # fall back to the generic virtual machine
     print "PROCESSOR = %r" % PROCESSOR
-processor_dir = 'c/' + PROCESSOR
+processor_dir = os.path.join('c', PROCESSOR)
+localsetup = os.path.join(processor_dir, 'localsetup.py')
+if os.path.isfile(localsetup):
+    d = globals().copy()
+    d['__file__'] = localsetup
+    execfile(localsetup, d)
 
 if ALL_STATIC:
     sources = [SOURCEDIR + '/' + MAINFILE]
@@ -121,7 +124,7 @@ if sys.platform == 'win32':
 
 
 setup (	name="psyco",
-      	version="1.1.1",
+      	version="1.2",
       	description="Psyco, the Python specializing compiler",
       	author="Armin Rigo",
         author_email="arigo@users.sourceforge.net",

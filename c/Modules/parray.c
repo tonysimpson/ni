@@ -107,6 +107,7 @@ static vinfo_t* p_l_getitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi) {
 				FMUT(DEF_ARRAY(long, 0)));
 }
 
+#if HAVE_FP_FN_CALLS
 static vinfo_t* p_f_getitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi)
 {
 	defield_t rdf = FMUT(DEF_ARRAY(float, 0));
@@ -145,6 +146,10 @@ static vinfo_t* p_d_getitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi)
 
 	return PsycoFloat_FROM_DOUBLE(fval1, fval2);
 }
+#else
+#  define p_f_getitem   NULL
+#  define p_d_getitem   NULL
+#endif
 
 
 inline bool generic_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,
@@ -235,6 +240,7 @@ static bool p_l_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi, vinfo_t* v) {
 				FMUT(DEF_ARRAY(long, 0)));
 }
 
+#if HAVE_FP_FN_CALLS
 #define p_f_setitem  NULL
 /*
 static bool p_f_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi, vinfo_t* v) {
@@ -263,6 +269,10 @@ static bool p_d_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi, vinfo_t* v) {
         vinfo_decref(w1, po);
 	return result;
 }
+#else
+#  define p_f_setitem   NULL
+#  define p_d_setitem   NULL
+#endif
 
 
 /* list of meta-implementations of descriptor-specific getitem() and setitem() */

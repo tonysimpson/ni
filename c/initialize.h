@@ -49,6 +49,7 @@
 # include "cstruct.c"
 # include "alarm.c"
 # include "codemanager.c"
+# include "codegen.c"
 # include "mergepoints.c"
 # include "linuxmemchk.c"
 # include "Python/pycompiler.c"
@@ -79,6 +80,7 @@
   EXTERNFN void psyco_profile_init(void);	/* profile.c */
   EXTERNFN void psyco_cstruct_init(void);	/* cstruct.c */
   EXTERNFN void psyco_alarm_init(void);	/* alarm.c */
+  EXTERNFN void psyco_codegen_init(void);	/* codegen.c */
   EXTERNFN void psyco_pycompiler_init(void);	/* Python/pycompiler.c */
   EXTERNFN void psyco_frames_init(void);	/* Python/frames.c */
   EXTERNFN void psyco_bltinmodule_init(void);	/* Python/pbltinmodule.c */
@@ -108,6 +110,7 @@ inline void initialize_all_files(void) {
   psyco_profile_init();	/* profile.c */
   psyco_cstruct_init();	/* cstruct.c */
   psyco_alarm_init();	/* alarm.c */
+  psyco_codegen_init();	/* codegen.c */
   psyco_pycompiler_init();	/* Python/pycompiler.c */
   psyco_frames_init();	/* Python/frames.c */
   psyco_bltinmodule_init();	/* Python/pbltinmodule.c */

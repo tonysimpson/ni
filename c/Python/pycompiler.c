@@ -4,6 +4,7 @@
 #include "../mergepoints.h"
 #include "../codemanager.h"
 #include "../psyfunc.h"
+#include "../pycodegen.h"
 
 #include "../Objects/pabstract.h"
 #include "../Objects/pintobject.h"
@@ -19,7 +20,7 @@
 
 
 #define KNOWN_VAR(type, varname, loc)   \
-    type varname = (type)(KNOWN_SOURCE(loc)->value)
+    type varname = (type)(CompileTime_Get(loc->source)->value)
 
 #ifdef FOR_ITER
 # define OLD_STYLE_LOOP   0
@@ -1054,8 +1055,8 @@ static code_t* do_changed_global(changed_global_t* cg)
 	/* XXX don't know what to do with the reference returned by
 	   XXX psyco_compile_code() */
 
-	extra_assert(target != code);
-	JUMP_TO(target);  /* code a jump from the original code */
+        /* code a jump from the original code */
+        dictitem_update_jump(code, target);
 
         Py_DECREF(cg->varname);
 	Py_DECREF(cg->previousvalue);
@@ -1142,16 +1143,15 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		CodeBufferObject* onchangebuf;
 		PsycoObject* po1 = po;
 		changed_global_t* cg;
-		code_t* macrocode;
 		code_t* newcodelimit;
 		result = ep->me_value;
 
 		/* if the object is changed later we will jump to
 		   a proxy which we prepare now */
 		onchangebuf = psyco_new_code_buffer(NULL, NULL, &newcodelimit);
-		po = dictitem_check_change(po, (code_t*) onchangebuf->codestart,
-					   globals, ep);
-		macrocode = po->code;
+		dictitem_check_change(po, (code_t*) onchangebuf->codestart,
+				      globals, ep);
+		po = PsycoObject_Duplicate(po);
 		/* make the new 'po' point to the proxy buffer */
 		po->code = (code_t*) onchangebuf->codestart;
 		po->codelimit = newcodelimit;
@@ -1162,7 +1162,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		cg->po = po;
 		cg->varname = key;             Py_INCREF(key);
 		cg->previousvalue = result;    Py_INCREF(result);
-		cg->originalmacrocode = macrocode;
+		cg->originalmacrocode = po1->code;
 		SHRINK_CODE_BUFFER(onchangebuf, (code_t*)(cg+1), "load_global");
 
 		/* done with the proxy, go on in the main code sequence */
@@ -2098,6 +2098,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 	extra_assert(!PycException_Occurred(po));
 	psyco_assert_coherent(po);    /* this test is expensive */
+
+        /* are we potentially running out of stack space? */
+        CHECK_STACK_SPACE();
 
 	/* save 'next_instr' and 'respawn_cnt' */
 	SAVE_NEXT_INSTR(next_instr);  /* could be optimized, not needed in the
@@ -3095,7 +3098,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	extra_assert(!PycException_Occurred(po));
 	extra_assert(mp == psyco_next_merge_point(po->pr.merge_points,
                                                   next_instr));
-	
+
 	/* are we running out of space in the current code buffer? */
 	if ((po->codelimit - po->code) < BUFFER_MARGIN) {
 		if (is_respawning(po)) {

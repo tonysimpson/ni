@@ -1,0 +1,588 @@
+
+DEFINEFN code_t* psyco_insn_not(code_t* code)
+{
+INSN_EMIT_opcode(1);
+setlatestopcode(1);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_inv(code_t* code)
+{
+INSN_EMIT_opcode(2);
+setlatestopcode(2);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_abso(code_t* code)
+{
+INSN_EMIT_opcode(3);
+setlatestopcode(3);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_nego(code_t* code)
+{
+INSN_EMIT_opcode(4);
+setlatestopcode(4);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_load1(code_t* code)
+{
+INSN_EMIT_opcode(5);
+setlatestopcode(5);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_load1u(code_t* code)
+{
+INSN_EMIT_opcode(6);
+setlatestopcode(6);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_load2(code_t* code)
+{
+INSN_EMIT_opcode(7);
+setlatestopcode(7);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_load2u(code_t* code)
+{
+INSN_EMIT_opcode(8);
+setlatestopcode(8);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_load4(code_t* code)
+{
+INSN_EMIT_opcode(9);
+setlatestopcode(9);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_or(code_t* code)
+{
+INSN_EMIT_opcode(10);
+setlatestopcode(10);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_and(code_t* code)
+{
+INSN_EMIT_opcode(11);
+setlatestopcode(11);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_xor(code_t* code)
+{
+INSN_EMIT_opcode(12);
+setlatestopcode(12);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_addo(code_t* code)
+{
+INSN_EMIT_opcode(13);
+setlatestopcode(13);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_subo(code_t* code)
+{
+INSN_EMIT_opcode(14);
+setlatestopcode(14);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_mulo(code_t* code)
+{
+INSN_EMIT_opcode(15);
+setlatestopcode(15);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_lshift(code_t* code)
+{
+INSN_EMIT_opcode(16);
+setlatestopcode(16);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_rshift(code_t* code)
+{
+INSN_EMIT_opcode(17);
+setlatestopcode(17);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_urshift(code_t* code)
+{
+INSN_EMIT_opcode(18);
+setlatestopcode(18);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_cmpeq(code_t* code)
+{
+INSN_EMIT_opcode(19);
+setlatestopcode(19);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_cmplt(code_t* code)
+{
+INSN_EMIT_opcode(20);
+setlatestopcode(20);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_cmpltu(code_t* code)
+{
+INSN_EMIT_opcode(21);
+setlatestopcode(21);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_pop(code_t* code)
+{
+INSN_EMIT_opcode(22);
+setlatestopcode(22);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_settos(code_t* code, int arg1)
+{
+if (arg1 == 0) {
+INSN_EMIT_opcode(23);
+INSN_EMIT_void(arg1);
+setlatestopcode(23);
+return(code);
+}
+else {
+if ((1 <= arg1) && (arg1 <= 255)) {
+INSN_EMIT_opcode(24);
+INSN_EMIT_byte(arg1);
+setlatestopcode(24);
+return(code);
+}
+else {
+if (1 <= arg1) {
+INSN_EMIT_opcode(25);
+INSN_EMIT_int(arg1);
+setlatestopcode(25);
+return(code);
+}
+else {
+psyco_fatal_msg("invalid_mode(settos)");
+return NULL;
+}
+}
+}
+}
+
+DEFINEFN code_t* psyco_insn_pushn(code_t* code, word_t arg1)
+{
+if ((-128 <= arg1) && (arg1 <= 127)) {
+INSN_EMIT_opcode(26);
+INSN_EMIT_char(arg1);
+setlatestopcode(26);
+return(code);
+}
+else {
+if (1) {
+INSN_EMIT_opcode(27);
+INSN_EMIT_word_t(arg1);
+setlatestopcode(27);
+return(code);
+}
+else {
+psyco_fatal_msg("invalid_mode(pushn)");
+return NULL;
+}
+}
+}
+
+DEFINEFN code_t* psyco_insn_immed(code_t* code, word_t arg1)
+{
+if (arg1 == 0) {
+INSN_EMIT_opcode(28);
+INSN_EMIT_void(arg1);
+setlatestopcode(28);
+return(code);
+}
+else {
+if (arg1 == 1) {
+INSN_EMIT_opcode(29);
+INSN_EMIT_void(arg1);
+setlatestopcode(29);
+return(code);
+}
+else {
+if ((-128 <= arg1) && (arg1 <= 127)) {
+INSN_EMIT_opcode(30);
+INSN_EMIT_char(arg1);
+setlatestopcode(30);
+return(code);
+}
+else {
+if (1) {
+INSN_EMIT_opcode(31);
+INSN_EMIT_word_t(arg1);
+setlatestopcode(31);
+return(code);
+}
+else {
+psyco_fatal_msg("invalid_mode(immed)");
+return NULL;
+}
+}
+}
+}
+}
+
+DEFINEFN code_t* psyco_insn_s_push(code_t* code, int arg1)
+{
+if (arg1 == 0) {
+INSN_EMIT_opcode(32);
+INSN_EMIT_void(arg1);
+setlatestopcode(32);
+return(code);
+}
+else {
+if ((1 <= arg1) && (arg1 <= 255)) {
+INSN_EMIT_opcode(33);
+INSN_EMIT_byte(arg1);
+setlatestopcode(33);
+return(code);
+}
+else {
+if (1 <= arg1) {
+INSN_EMIT_opcode(34);
+INSN_EMIT_int(arg1);
+setlatestopcode(34);
+return(code);
+}
+else {
+psyco_fatal_msg("invalid_mode(s_push)");
+return NULL;
+}
+}
+}
+}
+
+DEFINEFN code_t* psyco_insn_s_pop(code_t* code, int arg1)
+{
+if (arg1 == 0) {
+INSN_EMIT_opcode(35);
+INSN_EMIT_void(arg1);
+setlatestopcode(35);
+return(code);
+}
+else {
+if ((1 <= arg1) && (arg1 <= 255)) {
+INSN_EMIT_opcode(36);
+INSN_EMIT_byte(arg1);
+setlatestopcode(36);
+return(code);
+}
+else {
+if (1 <= arg1) {
+INSN_EMIT_opcode(37);
+INSN_EMIT_int(arg1);
+setlatestopcode(37);
+return(code);
+}
+else {
+psyco_fatal_msg("invalid_mode(s_pop)");
+return NULL;
+}
+}
+}
+}
+
+DEFINEFN code_t* psyco_insn_ref_push(code_t* code, word_t arg1)
+{
+if ((-128 <= arg1) && (arg1 <= 127)) {
+INSN_EMIT_opcode(38);
+INSN_EMIT_char(arg1);
+setlatestopcode(38);
+return(code);
+}
+else {
+if (1) {
+INSN_EMIT_opcode(39);
+INSN_EMIT_word_t(arg1);
+setlatestopcode(39);
+return(code);
+}
+else {
+psyco_fatal_msg("invalid_mode(ref_push)");
+return NULL;
+}
+}
+}
+
+DEFINEFN code_t* psyco_insn_stackgrow(code_t* code)
+{
+INSN_EMIT_opcode(40);
+setlatestopcode(40);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_assertdepth(code_t* code, word_t arg1)
+{
+if ((-128 <= arg1) && (arg1 <= 127)) {
+INSN_EMIT_opcode(41);
+INSN_EMIT_char(arg1);
+setlatestopcode(41);
+return(code);
+}
+else {
+if (1) {
+INSN_EMIT_opcode(42);
+INSN_EMIT_word_t(arg1);
+setlatestopcode(42);
+return(code);
+}
+else {
+psyco_fatal_msg("invalid_mode(assertdepth)");
+return NULL;
+}
+}
+}
+
+DEFINEFN code_t* psyco_insn_jcondnear(code_t* code, code_t** arg1)
+{
+INSN_EMIT_opcode(43);
+INSN_EMIT_placeholder_byte(arg1);
+setlatestopcode(43);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_jcondfar(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(44);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(44);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_jumpfar(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(45);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(45);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_cbuild1(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(46);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(46);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_cbuild2(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(47);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(47);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_store1(code_t* code)
+{
+INSN_EMIT_opcode(48);
+setlatestopcode(48);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_store2(code_t* code)
+{
+INSN_EMIT_opcode(49);
+setlatestopcode(49);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_store4(code_t* code)
+{
+INSN_EMIT_opcode(50);
+setlatestopcode(50);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_incref(code_t* code)
+{
+INSN_EMIT_opcode(51);
+setlatestopcode(51);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_decref(code_t* code)
+{
+INSN_EMIT_opcode(52);
+setlatestopcode(52);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_decrefnz(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(53);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(53);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_exitframe(code_t* code)
+{
+INSN_EMIT_opcode(54);
+setlatestopcode(54);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_ret(code_t* code, int arg1)
+{
+if (arg1 == 0) {
+INSN_EMIT_opcode(55);
+INSN_EMIT_void(arg1);
+setlatestopcode(55);
+return(code);
+}
+else {
+if ((1 <= arg1) && (arg1 <= 255)) {
+INSN_EMIT_opcode(56);
+INSN_EMIT_byte(arg1);
+setlatestopcode(56);
+return(code);
+}
+else {
+if (1 <= arg1) {
+INSN_EMIT_opcode(57);
+INSN_EMIT_int(arg1);
+setlatestopcode(57);
+return(code);
+}
+else {
+psyco_fatal_msg("invalid_mode(ret)");
+return NULL;
+}
+}
+}
+}
+
+DEFINEFN code_t* psyco_insn_retval(code_t* code)
+{
+INSN_EMIT_opcode(58);
+setlatestopcode(58);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_pushretval(code_t* code)
+{
+INSN_EMIT_opcode(59);
+setlatestopcode(59);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_pyenter(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(60);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(60);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_pyleave(code_t* code)
+{
+INSN_EMIT_opcode(61);
+setlatestopcode(61);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_vmcall(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(62);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(62);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_ccall0(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(63);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(63);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_ccall1(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(64);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(64);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_ccall2(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(65);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(65);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_ccall3(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(66);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(66);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_ccall4(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(67);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(67);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_ccall5(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(68);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(68);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_ccall6(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(69);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(69);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_ccall7(code_t* code, word_t** arg1)
+{
+INSN_EMIT_opcode(70);
+INSN_EMIT_placeholder_long(arg1);
+setlatestopcode(70);
+return(code);
+}
+
+DEFINEFN code_t* psyco_insn_checkdict(code_t* code, word_t** arg1, word_t** arg2, word_t** arg3, word_t** arg4, word_t** arg5)
+{
+INSN_EMIT_opcode(71);
+INSN_EMIT_placeholder_long(arg1);
+INSN_EMIT_placeholder_long(arg2);
+INSN_EMIT_placeholder_long(arg3);
+INSN_EMIT_placeholder_long(arg4);
+INSN_EMIT_placeholder_long(arg5);
+setlatestopcode(71);
+return(code);
+}

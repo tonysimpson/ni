@@ -24,7 +24,7 @@ def warn(msg):
 #
 # Version checks
 #
-__version__ = 0x010100f0
+__version__ = 0x010200a0
 if _psyco.PSYVER != __version__:
     raise error, "version mismatch between Psyco parts, reinstall it"
 
@@ -46,7 +46,8 @@ PYTHON_SUPPORT = hasattr(_psyco, 'turbo_code')
 
 
 if hasattr(_psyco, 'ALL_CHECKS') and hasattr(_psyco, 'VERBOSE_LEVEL'):
-    print >> sys.stderr, 'psyco: running in debugging mode'
+    print >> sys.stderr, ('psyco: running in debugging mode on %s' %
+                          _psyco.PROCESSOR)
 
 
 ###########################################################################

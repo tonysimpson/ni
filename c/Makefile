@@ -3,6 +3,9 @@
 # H = heavy mem check
 mode = O
 
+# PROCESSOR = i386
+PROCESSOR = ivm
+
 
 # OPTS    = -DPSYCO_DEBUG=1 -DBIG_BUFFER_SIZE=0x100000 -DVERBOSE_LEVEL=0 -DCODE_DUMP=1 -DHEAVY_MEM_CHECK=0
 OPTS_G    = -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=1 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=1
@@ -13,6 +16,12 @@ C_FLAGS_O = -O3
 
 OPTS_OG   = -DPSYCO_DEBUG=0 -DVERBOSE_LEVEL=3 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=0
 C_FLAGS_OG= -O3 -g
+
+OPTS_FASTG= -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=1 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=1
+C_FLAGS_FASTG= -O3 -g
+
+OPTS_DG    = -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=1 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=1 -DMETA_ASSERT_DEPTH
+C_FLAGS_DG = -g
 
 OPTS_V    = -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=3 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=1
 C_FLAGS_V = -g
@@ -33,8 +42,6 @@ OPTS_T    = -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=1 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=1 
 C_FLAGS_T = -g
 
 
-PROCESSOR = i386
-# PROCESSOR = ivm
 OPTS     = ${OPTS_${mode}}
 C_FLAGS  = -I${PROCESSOR} -DNDEBUG ${C_FLAGS_${mode}} -Wall -Wstrict-prototypes -fPIC -fno-strict-aliasing ${OPTS} ${incl}
 LD_FLAGS = -shared
@@ -55,7 +62,7 @@ PY_VER  := $(shell $(python) -c "import sys; print '%d.%d' % sys.version_info[:2
 PY_VER_EX := $(shell $(python) -V 2>&1)
 incl    := $(shell $(python) mkincl.py)
 
-BUILD_VERSION = Compiling mode ${mode} for ${PY_VER_EX}
+BUILD_VERSION = Compiling mode ${mode} for ${PY_VER_EX} on ${PROCESSOR}
 
 main: build_ext build_py
 
@@ -63,9 +70,9 @@ dyn: ${OUTDIR}/dyn-tag build_py
 
 build_ext: build_py
 	rm -f ${BUILDDIR}/current
-	@echo -----------------------------------
+	@echo -------------------------------------------
 	@echo ${BUILD_VERSION}
-	@echo -----------------------------------
+	@echo -------------------------------------------
 	gcc ${LD_FLAGS} ${C_FLAGS} -DALL_STATIC=1 psyco.c -o ${OUTPUT}
 	echo ${BUILD_VERSION} > ${OUTDIR}/build-version
 	ln -s ${LIBDIR} ${BUILDDIR}/current

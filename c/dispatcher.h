@@ -9,6 +9,7 @@
 #include "psyco.h"
 #include "vcompiler.h"
 #include "processor.h"
+#include "codegen.h"
 
 
 /* a frozen PsycoObject is a snapshot of an actual PsycoObject,
@@ -37,7 +38,7 @@ struct FrozenPsycoObject_s {
 #else
   vinfo_array_t* fz_vlocals;       /* verbatim copy */
 #endif
-  short fz_last_used_reg;
+  PROCESSOR_FROZENOBJECT_FIELDS
   short fz_respawned_cnt;
   CodeBufferObject* fz_respawned_from;
   pyc_data_t* fz_pyc_data;  /* only partially allocated */

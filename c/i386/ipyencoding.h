@@ -6,7 +6,6 @@
 #define _IPYENCODING_H
 
 
-#include "../psyco.h"
 #include "../processor.h"
 #include "../dispatcher.h"
 
@@ -60,28 +59,29 @@
   *(long*)(code-4) = ((code_t*)(jmptarget)) - code;                             \
 } while (0)
 
-#define DICT_ITEM_UPDCHANGED(code, index)        do {                   \
+#define DICT_ITEM_MACRO_SPACE  40
+
+#define DICT_ITEM_UPDCHANGED(index)        do {                         \
+  code -= DICT_ITEM_MACRO_SPACE;                                        \
   *(long*)(code+3) = (index) - MA_SIZE_TO_LAST_USED;                    \
   *(long*)(code+14) = (index)*sizeof(PyDictEntry) +                     \
                                   offsetof(PyDictEntry, me_key);        \
   *(long*)(code+26) = (index)*sizeof(PyDictEntry) +                     \
                                   offsetof(PyDictEntry, me_value);      \
-  code += 40;                                                           \
 } while (0)
 
 
 /* A cleaner interface to the two big macros above: quickly
    checking for a change in a dictionary of globals.
    XXX 'dict' must never be released! */
-inline PsycoObject* dictitem_check_change(PsycoObject* po,
-                                          code_t* onchange_target,
-                                          PyDictObject* dict, PyDictEntry* ep)
+inline void dictitem_check_change(PsycoObject* po,
+                                  code_t* onchange_target,
+                                  PyDictObject* dict, PyDictEntry* ep)
 {
   int index        = ep - dict->ma_table;
   PyObject* key    = ep->me_key;
   PyObject* result = ep->me_value;
   reg_t mprg;
-  PsycoObject* po_copy;
   
   Py_INCREF(key);    /* XXX these become immortal */
   Py_INCREF(result); /* XXX                       */
@@ -89,27 +89,28 @@ inline PsycoObject* dictitem_check_change(PsycoObject* po,
   BEGIN_CODE
   NEED_CC();
   NEED_FREE_REG(mprg);
-  END_CODE
-		
-  po_copy = PsycoObject_Duplicate(po);
-
   /* write code that quickly checks that the same
      object is still in place in the dictionary */
-  BEGIN_CODE
   LOAD_REG_FROM_IMMED(mprg, (long) dict);
   DICT_ITEM_IFCHANGED(code, index, key, result, onchange_target, mprg);
   END_CODE
-
-  return po_copy;
 }
 
 inline code_t* dictitem_update_nochange(code_t* originalmacrocode,
                                         PyDictObject* dict, PyDictEntry* new_ep)
 {
   int index = new_ep - dict->ma_table;
-  originalmacrocode += SIZE_OF_LOAD_REG_FROM_IMMED;
-  DICT_ITEM_UPDCHANGED(originalmacrocode, index);
+  code_t* code = originalmacrocode;
+  DICT_ITEM_UPDCHANGED(index);
   return originalmacrocode;
+}
+
+inline void dictitem_update_jump(code_t* originalmacrocode, code_t* target)
+{
+  code_t* code = originalmacrocode;
+  code -= DICT_ITEM_MACRO_SPACE;
+  extra_assert(target != code);
+  JUMP_TO(target);
 }
 
 
@@ -230,10 +231,9 @@ inline void psyco_incref_rt(PsycoObject* po, vinfo_t* v)
   END_CODE
 }
 
-/* emit Py_INCREF(v) */
-inline bool psyco_incref_v(PsycoObject* po, vinfo_t* v)
+/* emit Py_INCREF(v) for non-virtual v */
+inline void psyco_incref_nv(PsycoObject* po, vinfo_t* v)
 {
-  if (!compute_vinfo(v, po)) return false;
   if (!is_compiletime(v->source))
     psyco_incref_rt(po, v);
   else
@@ -242,7 +242,6 @@ inline bool psyco_incref_v(PsycoObject* po, vinfo_t* v)
       INC_KNOWN_OB_REFCNT((PyObject*) CompileTime_Get(v->source)->value);
       END_CODE
     }
-  return true;
 }
 
 /* emit Py_DECREF(v) for run-time v. Used by vcompiler.c when releasing a
@@ -261,49 +260,12 @@ inline void psyco_decref_rt(PsycoObject* po, vinfo_t* v)
   END_CODE
 }
 
-/* emit Py_DECREF(v) for any v */
-inline void psyco_decref_v(PsycoObject* po, vinfo_t* v)
+/* emit Py_DECREF(o) for a compile-time o */
+inline void psyco_decref_c(PsycoObject* po, PyObject* o)
 {
-  switch (gettime(v->source)) {
-    
-  case RunTime:
-    psyco_decref_rt(po, v);
-    break;
-
-  case CompileTime:
-    BEGIN_CODE
-    DEC_KNOWN_OB_REFCNT_NZ((PyObject*) CompileTime_Get(v->source)->value);
-    END_CODE
-    break;
-  }
-}
-
-
-/* can eat a reference if we had one in the first place, and
-   if no one else will require it (i.e. there is only one reference
-   left to 'vi') */
-inline bool eat_reference(vinfo_t* vi)
-{
-  if (has_rtref(vi->source) && vi->refcount == 1)
-    {
-      vi->source = remove_rtref(vi->source);
-      return true;
-    }
-  else
-    return false;
-}
-
-/* force a reference to be consumed */
-EXTERNFN void consume_reference(PsycoObject* po, vinfo_t* vi);
-
-/* make sure we have a reference on 'vi' */
-inline void need_reference(PsycoObject* po, vinfo_t* vi)
-{
-  if ((vi->source & (TimeMask | RunTime_NoRef)) == (RunTime | RunTime_NoRef))
-    {
-      vi->source = add_rtref(vi->source);
-      psyco_incref_rt(po, vi);
-    }
+  BEGIN_CODE
+  DEC_KNOWN_OB_REFCNT_NZ(o);
+  END_CODE
 }
 
 
@@ -341,6 +303,28 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
   code[6] = 0xE8;               /* CALL cimpl_finalize_frame_locals */  \
   code += 11;                                                           \
   *(long*)(code-4) = (code_t*)(&cimpl_finalize_frame_locals) - code;    \
+} while (0)
+
+#define WRITE_FRAME_EPILOGUE(retval, nframelocal)   do {                        \
+  /* load the return value into EAX for regular functions, EBX for functions    \
+     with a prologue */                                                         \
+  if (retval != SOURCE_DUMMY) {                                                 \
+    reg_t rg = nframelocal>0 ? REG_ANY_CALLEE_SAVED : REG_FUNCTIONS_RETURN;     \
+    LOAD_REG_FROM(retval, rg);                                                  \
+  }                                                                             \
+                                                                                \
+  if (nframelocal > 0)                                                          \
+    {                                                                           \
+      /* psyco_emit_header() was used; first clear the stack only up to and not \
+         including the frame-local data */                                      \
+      int framelocpos = getstack(LOC_CONTINUATION->array->items[0]->source);    \
+      STACK_CORRECTION(framelocpos - po->stack_depth);                          \
+      po->stack_depth = framelocpos;                                            \
+                                                                                \
+      /* perform Python-specific cleanup */                                     \
+      FINALIZE_FRAME_LOCALS(nframelocal);                                       \
+      LOAD_REG_FROM_REG(REG_FUNCTIONS_RETURN, REG_ANY_CALLEE_SAVED);            \
+    }                                                                           \
 } while (0)
 
 /* implemented in pycompiler.c */

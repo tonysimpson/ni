@@ -255,6 +255,7 @@ void psyco_dump_code_buffers(void)
     {
       CodeBufferObject* obj;
       PyObject *exc, *val, *tb;
+      long buftablepos;
       void** chain;
       int bufcount = 0;
       long* buftable;
@@ -264,7 +265,9 @@ void psyco_dump_code_buffers(void)
       for (obj=psyco_codebuf_chained_list; obj != NULL; obj=obj->chained_list)
         bufcount++;
       buftable = PyMem_NEW(long, bufcount);
+      fprintf(f, "Psyco dump [%s]\n", MACHINE_CODE_FORMAT);
       fwrite(&bufcount, sizeof(bufcount), 1, f);
+      buftablepos = ftell(f);
       fwrite(buftable, sizeof(long), bufcount, f);
 
       /* give the address of an arbitrary symbol from the Python interpreter
@@ -334,7 +337,7 @@ void psyco_dump_code_buffers(void)
               PsycoObject_Delete(live_po);
           }
         psyco_assert(i==bufcount);
-        fseek(f, sizeof(bufcount), 0);
+        fseek(f, buftablepos, 0);
         fwrite(buftable, sizeof(long), bufcount, f);
       }
       PyMem_FREE(buftable);
@@ -370,13 +373,10 @@ static PyObject* psyco_get_locals_msg(char* msg, int flag)
 	static int already_logged = 0;
 	PyObject* o;
 	PyObject* result;
-	PyObject* zero = PyInt_FromLong(0);
-	assert(zero != NULL);
 
-	o = psyco_find_frame(zero);
-	Py_DECREF(zero);
+	o = psyco_find_frame(Py_False);
 	if (o == NULL)
-		return PyDict_New();  /* error */
+		return PyDict_New();  /* no frame at all -- no locals */
 	
 	if (!PyFrame_Check(o)) {
 		/* it is a Psyco frame -- no locals available */
@@ -401,19 +401,21 @@ static PyObject* psyco_get_locals_msg(char* msg, int flag)
 				buffer[i] = msg[i];
 		}
 		buffer[i] = 0;
-		PyErr_Warn(w, buffer);
-		result = PyDict_New();
+		if (PyErr_Warn(w, buffer))
+			result = NULL;
+		else
+			result = PyDict_New();
 	}
 	else {
 		PyFrame_FastToLocals((PyFrameObject*) o);
 		result = ((PyFrameObject*) o)->f_locals;
+		Py_INCREF(result);
 	}
 	Py_DECREF(o);
 	return result;
 }
 
-DEFINEFN
-PyObject* psyco_get_locals(void)
+static PyObject* psyco_get_locals(void)
 {
 	return psyco_get_locals_msg("no locals() in functions bound by Psyco",
 				    0x01);
@@ -519,19 +521,16 @@ Psyco_globals(PyObject* self, PyObject* args)
 static PyObject *
 Psyco_locals(PyObject* self, PyObject* args)
 {
-	PyObject* d;
-
 	if (!PyArg_ParseTuple(args, ":locals"))
 		return NULL;
-	d = psyco_get_locals();
-	Py_INCREF(d);
-	return d;
+	return psyco_get_locals();
 }
 
 static PyObject* builtinevaluator(PyObject* args, char* oname)
 {
 	PyObject *o;
 	PyObject *cmd;
+	PyObject *freeme;
 	PyObject *globals = Py_None, *locals = Py_None;
 
 	o = need_cpsyco_obj(oname);
@@ -547,11 +546,20 @@ static PyObject* builtinevaluator(PyObject* args, char* oname)
 	}
 	else if (globals == Py_None) {
 		globals = psyco_get_globals();
-		if (locals == Py_None)
+		if (locals == Py_None) {
 			locals = psyco_get_locals_msg("eval()/execfile()"
 						      WARN_IMPLICIT_LOCALS,
 						      0x02);
-		return PyObject_CallFunction(o, "OOO", cmd, globals, locals);
+			if (locals == NULL)
+				return NULL;
+			freeme = locals;
+		}
+		else {
+			freeme = NULL;
+		}
+		o = PyObject_CallFunction(o, "OOO", cmd, globals, locals);
+		Py_XDECREF(freeme);
+		return o;
 	}
 
 	/* fallback */
@@ -578,9 +586,7 @@ Psyco_vars(PyObject *self, PyObject *args)
 {
 	PyObject* o;
 	if (PyTuple_Size(args) == 0) {
-		PyObject* d = psyco_get_locals();
-		Py_INCREF(d);
-		return d;
+		return psyco_get_locals();
 	}
 	/* fallback */
 	o = need_cpsyco_obj("original_vars");
@@ -596,12 +602,15 @@ Psyco_dir(PyObject *self, PyObject *args)
 	PyObject* o;
 	if (PyTuple_Size(args) == 0) {
 		PyObject* locals = psyco_get_locals();
-		PyObject* result = PyDict_Keys(locals);
-		if (PyList_Sort(result) != 0) {
-			Py_XDECREF(result);
-			result = NULL;
+		if (locals == NULL)
+			return NULL;
+		o = PyDict_Keys(locals);
+		Py_DECREF(locals);
+		if (o != NULL && PyList_Sort(o) != 0) {
+			Py_DECREF(o);
+			o = NULL;
 		}
-		return result;
+		return o;
 	}
 	/* fallback */
 	o = need_cpsyco_obj("original_dir");
@@ -625,16 +634,21 @@ Psyco_input(PyObject *self, PyObject *args)
 		PyObject* locals = psyco_get_locals_msg("input()"
 							WARN_IMPLICIT_LOCALS,
 							0x04);
-		o = need_cpsyco_obj("original_eval");
-		if (o == NULL)
-			return NULL;
-		return PyObject_CallFunction(o, "OOO", cmd, globals, locals);
+		if (locals == NULL) {
+			o = NULL;
+		}
+		else {
+			o = need_cpsyco_obj("original_eval");
+			if (o != NULL)
+				o = PyObject_CallFunction(o, "OOO", cmd,
+							  globals, locals);
+			Py_DECREF(locals);
+		}
+		Py_DECREF(cmd);
+		return o;
 	}
-	/* fallback */
-	o = need_cpsyco_obj("original_input");
-	if (o == NULL)
-		return NULL;
-	return PyObject_CallObject(o, args);
+	/* error in original_raw_input() */
+	return NULL;
 }
 
 static PyObject* hooks_busy(void)
@@ -973,6 +987,9 @@ void init_psyco(void)
     return;
   if (PyModule_AddIntConstant(CPsycoModule, "MEASURE_ALL_THREADS",
                               MEASURE_ALL_THREADS))
+    return;
+  if (PyModule_AddStringConstant(CPsycoModule, "PROCESSOR",
+                                 MACHINE_CODE_FORMAT))
     return;
 
   initialize_all_files();

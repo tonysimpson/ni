@@ -6,14 +6,10 @@
 #define _IDISPATCHER_H
 
 #include "../vcompiler.h"
-#include "../processor.h"
+#include "../codegen.h"
 #include "iencoding.h"
 
-
-/***************************************************************/
- /***   Freezing                                              ***/
-
-EXTERNFN void fpo_find_regs_array(vinfo_array_t* source, PsycoObject* po);
+#define NEED_STACK_FRAME_HACK    1
 
 
 /***************************************************************/
@@ -45,6 +41,8 @@ EXTERNFN void fz_find_runtimes(vinfo_array_t* aa, FrozenPsycoObject* fpo,
 
 struct ipromotion_s {
   INTERNAL_PROMOTION_FIELDS
+  /* more stuff follows, this structure is only the head of what
+     dispatch.c defines as rt_promotion_t */
 };
 
 
@@ -97,8 +95,8 @@ inline void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promotion
 /***************************************************************/
  /***   Misc.                                                 ***/
 
-inline void conditional_jump_to(PsycoObject* po, code_t* target,
-                                condition_code_t condition)
+inline void* conditional_jump_to(PsycoObject* po, code_t* target,
+                                 condition_code_t condition)
 {
   BEGIN_CODE
   switch (condition) {
@@ -111,21 +109,33 @@ inline void conditional_jump_to(PsycoObject* po, code_t* target,
     FAR_COND_JUMP_TO(target, condition);
   }
   END_CODE
+  return po->code;
+}
+
+inline void change_cond_jump_target(void* tag, code_t* newtarget)
+{
+  code_t* code = (code_t*) tag;
+  /* safety check: do not write a JMP whose target is itself...
+     would make an endless loop */
+  psyco_assert(newtarget != code-5 && newtarget != code-6);
+  CHANGE_JUMP_TO(newtarget);
 }
 
 /* reserve a small buffer of code behind po->code in which conditional
    code can be stored.  See make_code_conditional(). */
-inline void setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2)
+inline void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2,
+                                           condition_code_t condition)
 {
   code_t* code2 = po->code + SIZE_OF_SHORT_CONDITIONAL_JUMP;
   po2->code = code2;
   po2->codelimit = code2 + RANGE_OF_SHORT_CONDITIONAL_JUMP;
+  return NULL;
 }
 
 /* mark a small buffer reserved by setup_conditional_code_bounds() to be
    only executed if 'condition' holds. */
 inline void make_code_conditional(PsycoObject* po, code_t* codeend,
-                                  condition_code_t condition)
+                                  condition_code_t condition, void* extra)
 {
   code_t* target;
   code_t* code2 = po->code + SIZE_OF_SHORT_CONDITIONAL_JUMP;

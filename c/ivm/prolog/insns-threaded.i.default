@@ -1,0 +1,1100 @@
+static const void* opcodetable[] = {
+  &&lblorigin,    /* 0 */
+  &&lblopcode1,  /* [not] */
+  &&lblopcode2,  /* [inv] */
+  &&lblopcode3,  /* [abso] */
+  &&lblopcode4,  /* [nego] */
+  &&lblopcode5,  /* [load1] */
+  &&lblopcode6,  /* [load1u] */
+  &&lblopcode7,  /* [load2] */
+  &&lblopcode8,  /* [load2u] */
+  &&lblopcode9,  /* [load4] */
+  &&lblopcode10,  /* [or] */
+  &&lblopcode11,  /* [and] */
+  &&lblopcode12,  /* [xor] */
+  &&lblopcode13,  /* [addo] */
+  &&lblopcode14,  /* [subo] */
+  &&lblopcode15,  /* [mulo] */
+  &&lblopcode16,  /* [lshift] */
+  &&lblopcode17,  /* [rshift] */
+  &&lblopcode18,  /* [urshift] */
+  &&lblopcode19,  /* [cmpeq] */
+  &&lblopcode20,  /* [cmplt] */
+  &&lblopcode21,  /* [cmpltu] */
+  &&lblopcode22,  /* [pop] */
+  &&lblopcode23,  /* [settos(0)] */
+  &&lblopcode24,  /* [settos(1:255)] */
+  &&lblopcode25,  /* [settos(1:maxint)] */
+  &&lblopcode26,  /* [pushn(char)] */
+  &&lblopcode27,  /* [pushn(int)] */
+  &&lblopcode28,  /* [immed(0)] */
+  &&lblopcode29,  /* [immed(1)] */
+  &&lblopcode30,  /* [immed(char)] */
+  &&lblopcode31,  /* [immed(int)] */
+  &&lblopcode32,  /* [s_push(0)] */
+  &&lblopcode33,  /* [s_push(1:255)] */
+  &&lblopcode34,  /* [s_push(1:maxint)] */
+  &&lblopcode35,  /* [s_pop(0)] */
+  &&lblopcode36,  /* [s_pop(1:255)] */
+  &&lblopcode37,  /* [s_pop(1:maxint)] */
+  &&lblopcode38,  /* [ref_push(char)] */
+  &&lblopcode39,  /* [ref_push(int)] */
+  &&lblopcode40,  /* [stackgrow] */
+  &&lblopcode41,  /* [assertdepth(char)] */
+  &&lblopcode42,  /* [assertdepth(int)] */
+  &&lblopcode43,  /* [jcondnear(indirect(code_t))] */
+  &&lblopcode44,  /* [jcondfar(indirect(word_t))] */
+  &&lblopcode45,  /* [jumpfar(indirect(word_t))] */
+  &&lblopcode46,  /* [cbuild1(indirect(word_t))] */
+  &&lblopcode47,  /* [cbuild2(indirect(word_t))] */
+  &&lblopcode48,  /* [store1] */
+  &&lblopcode49,  /* [store2] */
+  &&lblopcode50,  /* [store4] */
+  &&lblopcode51,  /* [incref] */
+  &&lblopcode52,  /* [decref] */
+  &&lblopcode53,  /* [decrefnz(indirect(word_t))] */
+  &&lblopcode54,  /* [exitframe] */
+  &&lblopcode55,  /* [ret(0)] */
+  &&lblopcode56,  /* [ret(1:255)] */
+  &&lblopcode57,  /* [ret(1:maxint)] */
+  &&lblopcode58,  /* [retval] */
+  &&lblopcode59,  /* [pushretval] */
+  &&lblopcode60,  /* [pyenter(indirect(word_t))] */
+  &&lblopcode61,  /* [pyleave] */
+  &&lblopcode62,  /* [vmcall(indirect(word_t))] */
+  &&lblopcode63,  /* [ccall0(indirect(word_t))] */
+  &&lblopcode64,  /* [ccall1(indirect(word_t))] */
+  &&lblopcode65,  /* [ccall2(indirect(word_t))] */
+  &&lblopcode66,  /* [ccall3(indirect(word_t))] */
+  &&lblopcode67,  /* [ccall4(indirect(word_t))] */
+  &&lblopcode68,  /* [ccall5(indirect(word_t))] */
+  &&lblopcode69,  /* [ccall6(indirect(word_t))] */
+  &&lblopcode70,  /* [ccall7(indirect(word_t))] */
+  &&lblopcode71,  /* [checkdict(indirect(word_t), indirect(word_t), indirect(word_t), indirect(word_t), indirect(word_t))] */
+#if PSYCO_DEBUG
+  &&lblorigin,    /* 72 */
+  &&lblorigin,    /* 73 */
+  &&lblorigin,    /* 74 */
+  &&lblorigin,    /* 75 */
+  &&lblorigin,    /* 76 */
+  &&lblorigin,    /* 77 */
+  &&lblorigin,    /* 78 */
+  &&lblorigin,    /* 79 */
+  &&lblorigin,    /* 80 */
+  &&lblorigin,    /* 81 */
+  &&lblorigin,    /* 82 */
+  &&lblorigin,    /* 83 */
+  &&lblorigin,    /* 84 */
+  &&lblorigin,    /* 85 */
+  &&lblorigin,    /* 86 */
+  &&lblorigin,    /* 87 */
+  &&lblorigin,    /* 88 */
+  &&lblorigin,    /* 89 */
+  &&lblorigin,    /* 90 */
+  &&lblorigin,    /* 91 */
+  &&lblorigin,    /* 92 */
+  &&lblorigin,    /* 93 */
+  &&lblorigin,    /* 94 */
+  &&lblorigin,    /* 95 */
+  &&lblorigin,    /* 96 */
+  &&lblorigin,    /* 97 */
+  &&lblorigin,    /* 98 */
+  &&lblorigin,    /* 99 */
+  &&lblorigin,    /* 100 */
+  &&lblorigin,    /* 101 */
+  &&lblorigin,    /* 102 */
+  &&lblorigin,    /* 103 */
+  &&lblorigin,    /* 104 */
+  &&lblorigin,    /* 105 */
+  &&lblorigin,    /* 106 */
+  &&lblorigin,    /* 107 */
+  &&lblorigin,    /* 108 */
+  &&lblorigin,    /* 109 */
+  &&lblorigin,    /* 110 */
+  &&lblorigin,    /* 111 */
+  &&lblorigin,    /* 112 */
+  &&lblorigin,    /* 113 */
+  &&lblorigin,    /* 114 */
+  &&lblorigin,    /* 115 */
+  &&lblorigin,    /* 116 */
+  &&lblorigin,    /* 117 */
+  &&lblorigin,    /* 118 */
+  &&lblorigin,    /* 119 */
+  &&lblorigin,    /* 120 */
+  &&lblorigin,    /* 121 */
+  &&lblorigin,    /* 122 */
+  &&lblorigin,    /* 123 */
+  &&lblorigin,    /* 124 */
+  &&lblorigin,    /* 125 */
+  &&lblorigin,    /* 126 */
+  &&lblorigin,    /* 127 */
+  &&lblorigin,    /* 128 */
+  &&lblorigin,    /* 129 */
+  &&lblorigin,    /* 130 */
+  &&lblorigin,    /* 131 */
+  &&lblorigin,    /* 132 */
+  &&lblorigin,    /* 133 */
+  &&lblorigin,    /* 134 */
+  &&lblorigin,    /* 135 */
+  &&lblorigin,    /* 136 */
+  &&lblorigin,    /* 137 */
+  &&lblorigin,    /* 138 */
+  &&lblorigin,    /* 139 */
+  &&lblorigin,    /* 140 */
+  &&lblorigin,    /* 141 */
+  &&lblorigin,    /* 142 */
+  &&lblorigin,    /* 143 */
+  &&lblorigin,    /* 144 */
+  &&lblorigin,    /* 145 */
+  &&lblorigin,    /* 146 */
+  &&lblorigin,    /* 147 */
+  &&lblorigin,    /* 148 */
+  &&lblorigin,    /* 149 */
+  &&lblorigin,    /* 150 */
+  &&lblorigin,    /* 151 */
+  &&lblorigin,    /* 152 */
+  &&lblorigin,    /* 153 */
+  &&lblorigin,    /* 154 */
+  &&lblorigin,    /* 155 */
+  &&lblorigin,    /* 156 */
+  &&lblorigin,    /* 157 */
+  &&lblorigin,    /* 158 */
+  &&lblorigin,    /* 159 */
+  &&lblorigin,    /* 160 */
+  &&lblorigin,    /* 161 */
+  &&lblorigin,    /* 162 */
+  &&lblorigin,    /* 163 */
+  &&lblorigin,    /* 164 */
+  &&lblorigin,    /* 165 */
+  &&lblorigin,    /* 166 */
+  &&lblorigin,    /* 167 */
+  &&lblorigin,    /* 168 */
+  &&lblorigin,    /* 169 */
+  &&lblorigin,    /* 170 */
+  &&lblorigin,    /* 171 */
+  &&lblorigin,    /* 172 */
+  &&lblorigin,    /* 173 */
+  &&lblorigin,    /* 174 */
+  &&lblorigin,    /* 175 */
+  &&lblorigin,    /* 176 */
+  &&lblorigin,    /* 177 */
+  &&lblorigin,    /* 178 */
+  &&lblorigin,    /* 179 */
+  &&lblorigin,    /* 180 */
+  &&lblorigin,    /* 181 */
+  &&lblorigin,    /* 182 */
+  &&lblorigin,    /* 183 */
+  &&lblorigin,    /* 184 */
+  &&lblorigin,    /* 185 */
+  &&lblorigin,    /* 186 */
+  &&lblorigin,    /* 187 */
+  &&lblorigin,    /* 188 */
+  &&lblorigin,    /* 189 */
+  &&lblorigin,    /* 190 */
+  &&lblorigin,    /* 191 */
+  &&lblorigin,    /* 192 */
+  &&lblorigin,    /* 193 */
+  &&lblorigin,    /* 194 */
+  &&lblorigin,    /* 195 */
+  &&lblorigin,    /* 196 */
+  &&lblorigin,    /* 197 */
+  &&lblorigin,    /* 198 */
+  &&lblorigin,    /* 199 */
+  &&lblorigin,    /* 200 */
+  &&lblorigin,    /* 201 */
+  &&lblorigin,    /* 202 */
+  &&lblorigin,    /* 203 */
+  &&lblorigin,    /* 204 */
+  &&lblorigin,    /* 205 */
+  &&lblorigin,    /* 206 */
+  &&lblorigin,    /* 207 */
+  &&lblorigin,    /* 208 */
+  &&lblorigin,    /* 209 */
+  &&lblorigin,    /* 210 */
+  &&lblorigin,    /* 211 */
+  &&lblorigin,    /* 212 */
+  &&lblorigin,    /* 213 */
+  &&lblorigin,    /* 214 */
+  &&lblorigin,    /* 215 */
+  &&lblorigin,    /* 216 */
+  &&lblorigin,    /* 217 */
+  &&lblorigin,    /* 218 */
+  &&lblorigin,    /* 219 */
+  &&lblorigin,    /* 220 */
+  &&lblorigin,    /* 221 */
+  &&lblorigin,    /* 222 */
+  &&lblorigin,    /* 223 */
+  &&lblorigin,    /* 224 */
+  &&lblorigin,    /* 225 */
+  &&lblorigin,    /* 226 */
+  &&lblorigin,    /* 227 */
+  &&lblorigin,    /* 228 */
+  &&lblorigin,    /* 229 */
+  &&lblorigin,    /* 230 */
+  &&lblorigin,    /* 231 */
+  &&lblorigin,    /* 232 */
+  &&lblorigin,    /* 233 */
+  &&lblorigin,    /* 234 */
+  &&lblorigin,    /* 235 */
+  &&lblorigin,    /* 236 */
+  &&lblorigin,    /* 237 */
+  &&lblorigin,    /* 238 */
+  &&lblorigin,    /* 239 */
+  &&lblorigin,    /* 240 */
+  &&lblorigin,    /* 241 */
+  &&lblorigin,    /* 242 */
+  &&lblorigin,    /* 243 */
+  &&lblorigin,    /* 244 */
+  &&lblorigin,    /* 245 */
+  &&lblorigin,    /* 246 */
+  &&lblorigin,    /* 247 */
+  &&lblorigin,    /* 248 */
+  &&lblorigin,    /* 249 */
+  &&lblorigin,    /* 250 */
+  &&lblorigin,    /* 251 */
+  &&lblorigin,    /* 252 */
+  &&lblorigin,    /* 253 */
+  &&lblorigin,    /* 254 */
+  &&lblorigin,    /* 255 */
+#endif
+};
+goto *opcodetable[bytecode_nextopcode()];
+
+lblorigin:
+psyco_fatal_msg("invalid vm opcode");
+
+lblopcode1:  /* [not] */
+{
+word_t local1;
+word_t local2;
+local1 = !accum;
+local2 = local1;
+accum = local2;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode2:  /* [inv] */
+{
+word_t local1;
+word_t local2;
+local1 = ~accum;
+local2 = local1;
+accum = local2;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode3:  /* [abso] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = abso(accum);
+local2 = ovf_check(abso, macro_args(accum));
+local3 = local2;
+local4 = local1;
+stack_nth(-1) = local4;
+accum = local3;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode4:  /* [nego] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = -accum;
+local2 = ovf_check(nego, macro_args(accum));
+local3 = local2;
+local4 = local1;
+stack_nth(-1) = local4;
+accum = local3;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode5:  /* [load1] */
+{
+word_t local1;
+word_t local2;
+local1 = *(char*)accum;
+local2 = local1;
+accum = local2;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode6:  /* [load1u] */
+{
+word_t local1;
+word_t local2;
+local1 = *(unsigned char*)accum;
+local2 = local1;
+accum = local2;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode7:  /* [load2] */
+{
+word_t local1;
+word_t local2;
+local1 = *(short*)accum;
+local2 = local1;
+accum = local2;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode8:  /* [load2u] */
+{
+word_t local1;
+word_t local2;
+local1 = *(unsigned short*)accum;
+local2 = local1;
+accum = local2;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode9:  /* [load4] */
+{
+word_t local1;
+word_t local2;
+local1 = *(long*)accum;
+local2 = local1;
+accum = local2;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode10:  /* [or] */
+{
+word_t local1;
+word_t local2;
+local1 = stack_nth(0) | accum;
+local2 = local1;
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode11:  /* [and] */
+{
+word_t local1;
+word_t local2;
+local1 = stack_nth(0) & accum;
+local2 = local1;
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode12:  /* [xor] */
+{
+word_t local1;
+word_t local2;
+local1 = stack_nth(0) ^ accum;
+local2 = local1;
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode13:  /* [addo] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = stack_nth(0)+accum;
+local2 = ovf_check(addo, macro_args(stack_nth(0), accum));
+local3 = local2;
+local4 = local1;
+stack_nth(0) = local4;
+accum = local3;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode14:  /* [subo] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = stack_nth(0)-accum;
+local2 = ovf_check(subo, macro_args(stack_nth(0), accum));
+local3 = local2;
+local4 = local1;
+stack_nth(0) = local4;
+accum = local3;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode15:  /* [mulo] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = stack_nth(0)*accum;
+local2 = ovf_check(mulo, macro_args(stack_nth(0), accum));
+local3 = local2;
+local4 = local1;
+stack_nth(0) = local4;
+accum = local3;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode16:  /* [lshift] */
+{
+word_t local1;
+word_t local2;
+local1 = stack_nth(0) << accum;
+local2 = local1;
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode17:  /* [rshift] */
+{
+word_t local1;
+word_t local2;
+local1 = stack_nth(0) >> accum;
+local2 = local1;
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode18:  /* [urshift] */
+{
+word_t local1;
+word_t local2;
+local1 = ((unsigned)stack_nth(0)) >> accum;
+local2 = local1;
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode19:  /* [cmpeq] */
+{
+word_t local1;
+word_t local2;
+local1 = stack_nth(0) == accum;
+local2 = local1;
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode20:  /* [cmplt] */
+{
+word_t local1;
+word_t local2;
+local1 = stack_nth(0) < accum;
+local2 = local1;
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode21:  /* [cmpltu] */
+{
+word_t local1;
+word_t local2;
+local1 = ((unsigned)stack_nth(0)) < ((unsigned)accum);
+local2 = local1;
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode22:  /* [pop] */
+{
+word_t local1;
+local1 = stack_nth(0);
+accum = local1;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode23:  /* [settos(0)] */
+{
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode24:  /* [settos(1:255)] */
+{
+word_t local1;
+word_t local2;
+local1 = bytecode_next(code_t);
+stack_shift(local1-1);
+local2 = stack_nth(0);
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode25:  /* [settos(1:maxint)] */
+{
+word_t local1;
+word_t local2;
+local1 = bytecode_next(word_t);
+stack_shift(local1-1);
+local2 = stack_nth(0);
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode26:  /* [pushn(char)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(char);
+local2 = accum;
+stack_nth(-1) = local2;
+stack_shift(-1);
+stack_shift((-local1));
+local3 = stack_nth(0);
+accum = local3;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode27:  /* [pushn(int)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(word_t);
+local2 = accum;
+stack_nth(-1) = local2;
+stack_shift(-1);
+stack_shift((-local1));
+local3 = stack_nth(0);
+accum = local3;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode28:  /* [immed(0)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = 0;
+local2 = local1;
+local3 = accum;
+stack_nth(-1) = local3;
+accum = local2;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode29:  /* [immed(1)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = 1;
+local2 = local1;
+local3 = accum;
+stack_nth(-1) = local3;
+accum = local2;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode30:  /* [immed(char)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(char);
+local2 = local1;
+local3 = accum;
+stack_nth(-1) = local3;
+accum = local2;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode31:  /* [immed(int)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(word_t);
+local2 = local1;
+local3 = accum;
+stack_nth(-1) = local3;
+accum = local2;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode32:  /* [s_push(0)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = accum;
+local2 = local1;
+local3 = accum;
+stack_nth(-1) = local3;
+accum = local2;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode33:  /* [s_push(1:255)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = bytecode_next(code_t);
+local2 = stack_nth(local1-1);
+local3 = local2;
+local4 = accum;
+stack_nth(-1) = local4;
+accum = local3;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode34:  /* [s_push(1:maxint)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = bytecode_next(word_t);
+local2 = stack_nth(local1-1);
+local3 = local2;
+local4 = accum;
+stack_nth(-1) = local4;
+accum = local3;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode35:  /* [s_pop(0)] */
+{
+word_t local1;
+accum = accum;
+local1 = stack_nth(0);
+accum = local1;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode36:  /* [s_pop(1:255)] */
+{
+word_t local1;
+word_t local2;
+local1 = bytecode_next(code_t);
+stack_nth(local1-1) = accum;
+local2 = stack_nth(0);
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode37:  /* [s_pop(1:maxint)] */
+{
+word_t local1;
+word_t local2;
+local1 = bytecode_next(word_t);
+stack_nth(local1-1) = accum;
+local2 = stack_nth(0);
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode38:  /* [ref_push(char)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = bytecode_next(char);
+local2 = (word_t) &stack_nth(local1-1);
+local3 = local2;
+local4 = accum;
+stack_nth(-1) = local4;
+accum = local3;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode39:  /* [ref_push(int)] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = bytecode_next(word_t);
+local2 = (word_t) &stack_nth(local1-1);
+local3 = local2;
+local4 = accum;
+stack_nth(-1) = local4;
+accum = local3;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode40:  /* [stackgrow] */
+{
+impl_stackgrow(VM_EXTRA_STACK_SIZE);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode41:  /* [assertdepth(char)] */
+{
+word_t local1;
+local1 = bytecode_next(char);
+/* debugging assertion */
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode42:  /* [assertdepth(int)] */
+{
+word_t local1;
+local1 = bytecode_next(word_t);
+/* debugging assertion */
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode43:  /* [jcondnear(indirect(code_t))] */
+{
+word_t local1;
+word_t local2;
+local1 = bytecode_next(code_t);
+impl_jcond(accum, nextip+local1);
+local2 = stack_nth(0);
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode44:  /* [jcondfar(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+local1 = bytecode_next(word_t);
+impl_jcond(accum, local1);
+local2 = stack_nth(0);
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode45:  /* [jumpfar(indirect(word_t))] */
+{
+word_t local1;
+local1 = bytecode_next(word_t);
+impl_jump(local1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode46:  /* [cbuild1(indirect(word_t))] */
+{
+word_t local1;
+local1 = bytecode_next(word_t);
+impl_cbuild1(local1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode47:  /* [cbuild2(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+local1 = bytecode_next(word_t);
+impl_cbuild2(local1, accum);
+local2 = stack_nth(0);
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode48:  /* [store1] */
+{
+word_t local1;
+*(char*)stack_nth(0) = accum;
+local1 = stack_nth(1);
+accum = local1;
+stack_shift_pos(2);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode49:  /* [store2] */
+{
+word_t local1;
+*(short*)stack_nth(0) = accum;
+local1 = stack_nth(1);
+accum = local1;
+stack_shift_pos(2);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode50:  /* [store4] */
+{
+word_t local1;
+*(long*)stack_nth(0) = accum;
+local1 = stack_nth(1);
+accum = local1;
+stack_shift_pos(2);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode51:  /* [incref] */
+{
+word_t local1;
+impl_incref(accum);
+local1 = stack_nth(0);
+accum = local1;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode52:  /* [decref] */
+{
+word_t local1;
+impl_decref(accum);
+local1 = stack_nth(0);
+accum = local1;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode53:  /* [decrefnz(indirect(word_t))] */
+{
+word_t local1;
+local1 = bytecode_next(word_t);
+impl_decrefnz(local1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode54:  /* [exitframe] */
+{
+word_t local1;
+impl_exitframe(stack_nth(1), stack_nth(0), accum);
+local1 = stack_nth(2);
+accum = local1;
+stack_shift_pos(3);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode55:  /* [ret(0)] */
+{
+impl_ret(accum);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode56:  /* [ret(1:255)] */
+{
+word_t local1;
+word_t local2;
+local1 = bytecode_next(code_t);
+impl_ret(accum);
+stack_shift(local1-1);
+local2 = stack_nth(0);
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode57:  /* [ret(1:maxint)] */
+{
+word_t local1;
+word_t local2;
+local1 = bytecode_next(word_t);
+impl_ret(accum);
+stack_shift(local1-1);
+local2 = stack_nth(0);
+accum = local2;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode58:  /* [retval] */
+{
+word_t local1;
+retval = accum;
+local1 = stack_nth(0);
+accum = local1;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode59:  /* [pushretval] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = retval;
+local2 = local1;
+local3 = accum;
+stack_nth(-1) = local3;
+accum = local2;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode60:  /* [pyenter(indirect(word_t))] */
+{
+word_t local1;
+local1 = bytecode_next(word_t);
+impl_pyenter(local1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode61:  /* [pyleave] */
+{
+impl_pyleave;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode62:  /* [vmcall(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = bytecode_next(word_t);
+local2 = impl_vmcall(local1);
+impl_stackgrow(VM_INITIAL_MINIMAL_STACK_SIZE);
+local3 = local2;
+local4 = accum;
+stack_nth(-1) = local4;
+accum = local3;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode63:  /* [ccall0(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+local1 = bytecode_next(word_t);
+local2 = impl_ccall(0, local1, macro_noarg);
+local3 = local2;
+local4 = accum;
+stack_nth(-1) = local4;
+accum = local3;
+stack_shift(-1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode64:  /* [ccall1(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(word_t);
+local2 = impl_ccall(1, local1, macro_args(accum));
+local3 = local2;
+accum = local3;
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode65:  /* [ccall2(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(word_t);
+local2 = impl_ccall(2, local1, macro_args(accum, stack_nth(0)));
+local3 = local2;
+accum = local3;
+stack_shift_pos(1);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode66:  /* [ccall3(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(word_t);
+local2 = impl_ccall(3, local1, macro_args(accum, stack_nth(0), stack_nth(1)));
+local3 = local2;
+accum = local3;
+stack_shift_pos(2);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode67:  /* [ccall4(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(word_t);
+local2 = impl_ccall(4, local1, macro_args(accum, stack_nth(0), stack_nth(1), stack_nth(2)));
+local3 = local2;
+accum = local3;
+stack_shift_pos(3);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode68:  /* [ccall5(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(word_t);
+local2 = impl_ccall(5, local1, macro_args(accum, stack_nth(0), stack_nth(1), stack_nth(2), stack_nth(3)));
+local3 = local2;
+accum = local3;
+stack_shift_pos(4);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode69:  /* [ccall6(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(word_t);
+local2 = impl_ccall(6, local1, macro_args(accum, stack_nth(0), stack_nth(1), stack_nth(2), stack_nth(3), stack_nth(4)));
+local3 = local2;
+accum = local3;
+stack_shift_pos(5);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode70:  /* [ccall7(indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = bytecode_next(word_t);
+local2 = impl_ccall(7, local1, macro_args(accum, stack_nth(0), stack_nth(1), stack_nth(2), stack_nth(3), stack_nth(4), stack_nth(5)));
+local3 = local2;
+accum = local3;
+stack_shift_pos(6);
+}
+goto *opcodetable[bytecode_nextopcode()];
+
+lblopcode71:  /* [checkdict(indirect(word_t), indirect(word_t), indirect(word_t), indirect(word_t), indirect(word_t))] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+word_t local4;
+word_t local5;
+local1 = bytecode_next(word_t);
+local2 = bytecode_next(word_t);
+local3 = bytecode_next(word_t);
+local4 = bytecode_next(word_t);
+local5 = bytecode_next(word_t);
+impl_checkdict(local1, local2, local3, local4, local5);
+}
+goto *opcodetable[bytecode_nextopcode()];
+

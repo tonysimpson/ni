@@ -38,6 +38,22 @@ except ImportError:
                 return 1
         return 0
 
+def machine_code_dump(data, originaddr, format):
+    if format == 'ivm':
+        import ivmdump
+        result = ivmdump.dump(data, originaddr)
+    elif format == 'i386':
+        f = open(tmpfile, 'wb')
+        f.write(data)
+        f.close()
+        try:
+            g = os.popen(objdump % {'file': tmpfile, 'origin': originaddr}, 'r')
+            result = g.readlines()
+            g.close()
+        finally:
+            os.unlink(tmpfile)
+    return result
+
 def load_symbol_file(filename, symb1, addr1):
     d = {}
     g = os.popen(symbollister % filename, "r")
@@ -53,7 +69,7 @@ def load_symbol_file(filename, symb1, addr1):
         delta = addr1 - d[symb1]
     else:
         delta = 0
-        print "Warning: no symbol '%s' in '%s'" % (symb1, filename)
+        print >> sys.stderr,"Warning: no symbol '%s' in '%s'" % (symb1, filename)
     for key, value in d.items():
         symbols[value + delta] = key
 
@@ -166,16 +182,8 @@ class CodeBuf:
                     ]
             else:
                 self.cache_text = []
-            f = open(tmpfile, 'wb')
-            f.write(data)
-            f.close()
-            try:
-                g = os.popen(objdump % {'file': tmpfile, 'origin': addr},
-                             'r')
-                self.cache_text += g.readlines()
-                g.close()
-            finally:
-                os.unlink(tmpfile)
+            self.cache_text += machine_code_dump(data, addr,
+                                                 CodeBuf.machine_code_format)
             return self.cache_text
         if attr == 'disass_text':
             txt = self.cache_text
@@ -347,16 +355,26 @@ class RunTimeVInfo(VInfo):
         text = "Run-time source,"
         reg = self.source >> 28
         stack = self.source & 0x03FFFFFC
-        if 0 <= reg < 8:
-            text += " in register %s" % self.REG_NAMES[reg].upper()
-            if stack:
-                text += " and"
-        if stack:
-            if self.stackdepth is None:
-                sd = ""
+        if CodeBuf.machine_code_format == 'ivm':
+            if reg:
+                text += " in a register ??????"
+            if not stack:
+                text += " not in stack ??????"
             else:
-                sd = "[ESP+0x%x] or " % (self.stackdepth - stack)
-            text += " in stack %sfrom top %d" % (sd, stack)
+                text += " in stack [%d] or from top #%d" % (
+                    (self.stackdepth-stack)/4,
+                    stack/4)
+        else:
+            if 0 <= reg < 8:
+                text += " in register %s" % self.REG_NAMES[reg].upper()
+                if stack:
+                    text += " and"
+            if stack:
+                if self.stackdepth is None:
+                    sd = ""
+                else:
+                    sd = "[ESP+0x%x] or " % (self.stackdepth - stack)
+                text += " in stack %sfrom top %d" % (sd, stack)
         if not (self.source & 0x08000000):
             text += " holding a reference"
         if self.source & 0x04000000:
@@ -375,6 +393,7 @@ class VirtualTimeVInfo(VInfo):
         return "Virtual-time (%x)" % self.vs
 
 def readdump(filename = 'psyco.dump'):
+    re_header = re.compile(r"Psyco dump [[](\w+?)[]]")
     re_symb1 = re.compile(r"(\w+?)[:]\s0x([0-9a-fA-F]+)")
     re_codebuf = re.compile(r"CodeBufferObject 0x([0-9a-fA-F]+) (\-?\d+) \'(.*?)\' \'(.*?)\' (\-?\d+) \'(.*?)\'$")
     re_specdict = re.compile(r"spec_dict 0x([0-9a-fA-F]+)")
@@ -384,6 +403,11 @@ def readdump(filename = 'psyco.dump'):
     
     codebufs = []
     dumpfile = open(filename, 'rb')
+    match = re_header.match(dumpfile.readline())
+    if not match:
+        raise ValueError, "'%s' does not look like a Psyco dump" % filename
+    CodeBuf.machine_code_format = match.group(1)
+    
     bufcount, = struct.unpack("i", dumpfile.read(4))
     buftable = list(struct.unpack("l"*bufcount, dumpfile.read(4*bufcount)))
     buftable.reverse()

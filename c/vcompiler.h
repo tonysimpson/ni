@@ -46,6 +46,10 @@ inline long gettime(Source s)        { return s & TimeMask; }
  *
  **/
 
+#if REG_TOTAL > 8
+# error "fix the masks below"
+#endif
+
 /* flags */
 #define RunTime_StackMask    0x03FFFFFC
 #define RunTime_StackMax     RunTime_StackMask
@@ -56,24 +60,38 @@ inline long gettime(Source s)        { return s & TimeMask; }
 #define RunTime_FlagsMask    RunTime_NoRef
 
 /* construction */
-inline RunTimeSource RunTime_NewStack(int stack_position, reg_t reg,
-				      bool ref, bool nonneg) {
-	long result = RunTime + stack_position + ((long) reg << 28);
+inline RunTimeSource RunTime_New1(int stack_position,
+#if REG_TOTAL > 0
+				  reg_t reg,
+#endif
+				  bool ref, bool nonneg)
+{
+	long result = RunTime + stack_position;
+#if REG_TOTAL > 0
+	result += (long) reg << 28;
+#endif
 	if (!ref)
 		result += RunTime_NoRef;
 	if (nonneg)
 		result += RunTime_NonNeg;
 	return (RunTimeSource) result;
 }
-inline RunTimeSource RunTime_New(reg_t reg, bool ref, bool nonneg) {
-	return RunTime_NewStack(RunTime_StackNone, reg, ref, nonneg);
-}
+#if REG_TOTAL > 0
+# define RunTime_NewStack(stackpos, ref, nonneg)		\
+            RunTime_New1(stackpos, REG_NONE, ref, nonneg)
+# define RunTime_New(reg, ref, nonneg)				\
+            RunTime_New1(RunTime_StackNone, reg, ref, nonneg)
+#else
+# define RunTime_NewStack  RunTime_New1
+#endif
 
 /* field inspection */
 inline bool has_rtref(Source s) {
 	return (s & (TimeMask|RunTime_NoRef)) == RunTime;
 }
+#if REG_TOTAL > 0
 inline reg_t getreg(RunTimeSource s)     { CHKTIME(s, RunTime); return (reg_t)(s >> 28); }
+#endif
 inline bool is_reg_none(RunTimeSource s) { CHKTIME(s, RunTime); return s < 0; }
 inline int getstack(RunTimeSource s)     { CHKTIME(s, RunTime); return s & RunTime_StackMask; }
 inline bool is_runtime_with_reg(Source s) {
@@ -85,6 +103,7 @@ inline bool is_rtnonneg(RunTimeSource s) { CHKTIME(s, RunTime); return s & RunTi
 /* mutation */
 inline RunTimeSource remove_rtref(RunTimeSource s) { CHKTIME(s, RunTime); return s | RunTime_NoRef; }
 inline RunTimeSource add_rtref(RunTimeSource s)    { CHKTIME(s, RunTime); return s & ~RunTime_NoRef; }
+#if REG_TOTAL > 0
 inline RunTimeSource set_rtreg_to(RunTimeSource s, reg_t newreg) {
 	CHKTIME(s, RunTime);
 	return (s & ~RunTime_RegMask) | ((long) newreg << 28);
@@ -93,6 +112,7 @@ inline RunTimeSource set_rtreg_to_none(RunTimeSource s) {
 	CHKTIME(s, RunTime);
 	return s | ((long) REG_NONE << 28);
 }
+#endif
 inline RunTimeSource set_rtstack_to(RunTimeSource s, int stack) {
 	CHKTIME(s, RunTime);
 	extra_assert(getstack(s) == RunTime_StackNone);
@@ -238,10 +258,10 @@ inline source_virtual_t* VirtualTime_Get(VirtualTimeSource s) {
 
 EXTERNVAR source_virtual_t psyco_vsource_not_important;
 
-#define SOURCE_NOT_IMPORTANT     VirtualTime_New(&psyco_vsource_not_important)
-#define SOURCE_DUMMY             RunTime_New(REG_NONE, false, false)
-#define SOURCE_DUMMY_WITH_REF    RunTime_New(REG_NONE, true, false)
-#define SOURCE_ERROR             ((Source) -1)
+#define SOURCE_NOT_IMPORTANT    VirtualTime_New(&psyco_vsource_not_important)
+#define SOURCE_DUMMY            RunTime_NewStack(RunTime_StackNone, false, false)
+#define SOURCE_DUMMY_WITH_REF   RunTime_NewStack(RunTime_StackNone, true, false)
+#define SOURCE_ERROR            ((Source) -1)
 
 
 
