@@ -58,20 +58,20 @@ inline int get_stack_depth(FrozenPsycoObject* fpo) {
 
 
 /* psyco_compatible():
-   search in the given global_entries_t for a match to the living PsycoObject.
-   Return the best match in *matching. The result is either COMPATIBLE,
-   INCOMPATIBLE (no match), or an actual vinfo_t* of 'po' which is a compile-
-   time value that should be un-promoted to run-time.
+   search in the given global_entries_t for a match to the live PsycoObject.
+   The best match is returned in *matching. The function result is NULL if no
+   match is found; otherwise, it is an array of the 'vinfo_t*' of 'po' which
+   are compile-time but should be un-promoted to run-time. In particular, the
+   array is empty (==NullArray) if an exact match is found. A non-empty
+   returned array must be released by 'array_release()'.
    
-   If the result is COMPATIBLE, this call leaves the dispatcher in a
+   If the result is NullArray, this call leaves the dispatcher in a
    unstable state; it must be fixed by calling one of the psyco_unify()
    functions below, or by psyco_stabilize().
 */
-#define COMPATIBLE    NULL
-#define INCOMPATIBLE  ((vinfo_t*) 1)
-
-EXTERNFN vinfo_t* psyco_compatible(PsycoObject* po, global_entries_t* pattern,
-				   CodeBufferObject** matching);
+EXTERNFN vinfo_array_t* psyco_compatible(PsycoObject* po,
+                                         global_entries_t* pattern,
+                                         CodeBufferObject** matching);
 
 EXTERNFN void psyco_stabilize(CodeBufferObject* lastmatch);
 

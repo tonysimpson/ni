@@ -507,12 +507,12 @@ code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
                       bool continue_compilation)
 {
   CodeBufferObject* oldcodebuf;
-  vinfo_t* diff = mp==NULL ? INCOMPATIBLE :
+  vinfo_array_t* diff = mp==NULL ? NULL :
                      psyco_compatible(po, &mp->entries, &oldcodebuf);
 
   /*psyco_assert_cleared_tmp_marks(&po->vlocals);  -- not needed -- */
   
-  if (diff == COMPATIBLE)
+  if (diff == NullArray)  /* exact match, jump there */
     {
       code_t* code2 = psyco_unify(po, &oldcodebuf);
       Py_DECREF(oldcodebuf);
@@ -520,7 +520,7 @@ code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
     }
   else
     {
-      if (po->codelimit - po->code <= BUFFER_MARGIN && diff == INCOMPATIBLE)
+      if (po->codelimit - po->code <= BUFFER_MARGIN && diff == NULL)
         {
           /* Running out of space in this buffer. */
           
@@ -549,10 +549,13 @@ code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
           Py_DECREF(codebuf);
         }
       
-      if (diff != INCOMPATIBLE)
+      if (diff != NULL)   /* partial match */
         {
-          /* diff points to a vinfo_t: make it run-time */
-          psyco_unfix(po, diff);
+          /* diff points to an array of vinfo_ts: make them run-time */
+          int i;
+          for (i=diff->count; i--; )
+            psyco_unfix(po, diff->items[i]);
+          array_release(diff);
           /* start over (maybe we have already seen this new state) */
           return psyco_compile(po, mp, continue_compilation);
         }
@@ -570,13 +573,13 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
                         condition_code_t condition)
 {
   CodeBufferObject* oldcodebuf;
-  vinfo_t* diff = mp==NULL ? INCOMPATIBLE :
+  vinfo_array_t* diff = mp==NULL ? NULL :
                      psyco_compatible(po, &mp->entries, &oldcodebuf);
   PsycoObject* po2 = PsycoObject_Duplicate(po);
 
   extra_assert(condition < CC_TOTAL);
 
-  if (diff == COMPATIBLE)
+  if (diff == NullArray)  /* exact match */
     {
       /* try to emit:
                            JNcond Label
@@ -610,6 +613,7 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
          coding_pause(); it will write a Jcond to a proxy
          which will perform the actual compilation later.
       */
+      array_release(diff);
       psyco_coding_pause(po2, condition, &psyco_resume_compile, NULL, 0);
       po->code = po2->code;
     }
@@ -623,12 +627,12 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
   code_t* code1;
   CodeBufferObject* codebuf;
   CodeBufferObject* oldcodebuf;
-  vinfo_t* diff = mp==NULL ? INCOMPATIBLE :
+  vinfo_array_t* diff = mp==NULL ? NULL :
                      psyco_compatible(po, &mp->entries, &oldcodebuf);
 
   /*psyco_assert_cleared_tmp_marks(&po->vlocals);  -- not needed -- */
 
-  if (diff == COMPATIBLE)
+  if (diff == NullArray)  /* exact match */
     return psyco_unify_code(po, oldcodebuf);
 
   /* start a new buffer */
@@ -637,9 +641,12 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
     OUT_OF_MEMORY();
   po->code = codebuf->codeptr;
   
-  if (diff != INCOMPATIBLE)
+  if (diff != NULL)   /* partial match */
     {
-      psyco_unfix(po, diff);
+      int i;
+      for (i=diff->count; i--; )
+        psyco_unfix(po, diff->items[i]);
+      array_release(diff);
       /* start over (maybe we have already seen this new state) */
       code1 = psyco_compile(po, mp, false);
     }

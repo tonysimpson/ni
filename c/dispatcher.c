@@ -258,7 +258,8 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
 
 /*****************************************************************/
 
-static vinfo_t* compatible_array(vinfo_array_t* aa, vinfo_array_t* bb)
+static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
+                             vinfo_array_t** result)
 {
   /* 'aa' is the array from the live PsycoObject. 'bb' is from the snapshop.
      Test for compatibility. More precisely, it must be allowable for the
@@ -274,9 +275,9 @@ static vinfo_t* compatible_array(vinfo_array_t* aa, vinfo_array_t* bb)
      virtual-time values, being shared or not is irrelevant to the compilation
      process.
      
-     Return value of compatible_array(): as in psyco_compatible().
+     Return value of compatible_array(): false if incompatible, otherwise
+     fills the 'result' array with the variables to un-promote.
   */
-  vinfo_t* result = COMPATIBLE;
   int i;
   int count = bb->count;
   if (aa->count != count)
@@ -285,14 +286,14 @@ static vinfo_t* compatible_array(vinfo_array_t* aa, vinfo_array_t* bb)
 	{                      /*   in 'bb' are all NULL.                     */
 	  for (i=aa->count; i<count; i++)
 	    if (bb->items[i] != NULL)
-	      return INCOMPATIBLE;   /* differs */
+	      return false;   /* differs */
 	  count = aa->count;
 	}
       else      /* array too long; fail unless all the extra items are NULL */
 	{
 	  for (i=aa->count; i>count; )
 	    if (aa->items[--i] != NULL)
-	      return INCOMPATIBLE;   /* differs */
+	      return false;   /* differs */
 	}
     }
   for (i=0; i<count; i++)
@@ -350,25 +351,32 @@ static vinfo_t* compatible_array(vinfo_array_t* aa, vinfo_array_t* bb)
                       if ((KNOWN_SOURCE(b)->refcount1_flags &
                            SkFlagFixed) != 0)
                         goto incompatible;  /* b's value is fixed */
-                      /* approximative match, might un-promote 'a' from
-                         compile-time to run-time. */
-                      //fprintf(stderr, "psyco: compatible_array() with vinfo_t* a=%p, b=%p\n", a, b);
-                      if (result == COMPATIBLE)
-                        result = a;
+                      else {
+                        /* approximative match, might un-promote 'a' from
+                           compile-time to run-time. */
+                        //fprintf(stderr, "psyco: compatible_array() with vinfo_t* a=%p, b=%p\n", a, b);
+                        int i, ocount = (*result)->count;
+                        /* do not add several time the same value to the array */
+                        for (i=0; i<ocount; i++)
+                          if ((*result)->items[i] == a)
+                            break;
+                        if (i==ocount)
+                          {
+                            *result = array_grow1(*result, ocount+1);
+                            (*result)->items[ocount] = a;
+                          }
+                      }
                     }
                 }
             }
           if (a->array != b->array)
             {                     /* can only be equal if both ==NullArray */
-              vinfo_t* subresult = compatible_array(a->array, b->array);
-              if (subresult == INCOMPATIBLE)
+              if (!compatible_array(a->array, b->array, result))
                 goto incompatible;
-              if (result == COMPATIBLE)
-                result = subresult;
             }
         }
     }
-  return result;
+  return true;
 
  incompatible:     /* we have to reset the 'tmp' fields to NULL,
                       but only as far as we actually progressed */
@@ -379,54 +387,57 @@ static vinfo_t* compatible_array(vinfo_array_t* aa, vinfo_array_t* bb)
 	if (bb->items[i]->array != NullArray)
 	  clear_tmp_marks(bb->items[i]->array);
       }
-  return INCOMPATIBLE;
+  return false;
 }
 
 DEFINEFN
-vinfo_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns,
-                          CodeBufferObject** matching)
+vinfo_array_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns,
+                                CodeBufferObject** matching)
 {
   int i;
-  vinfo_t* result = INCOMPATIBLE;
+  vinfo_array_t* bestresult = NULL;
   PyObject* plist = patterns->fatlist;
   extra_assert(PyList_Check(plist));
   i = PyList_GET_SIZE(plist);
   while (i--)    /* the most dummy algorithm: step by step in the list, */
     {            /* checking for a match at each step.                  */
-      vinfo_t* diff;
+      vinfo_array_t* differences = NullArray;
       CodeBufferObject* codebuf = (CodeBufferObject*) PyList_GET_ITEM(plist, i);
       extra_assert(CodeBuffer_Check(codebuf));
       /* invariant: all snapshot.fz_vlocals in the fatlist have
          all their 'tmp' fields set to NULL. */
       assert_cleared_tmp_marks(codebuf->snapshot.fz_vlocals);
-      diff = compatible_array(&po->vlocals, codebuf->snapshot.fz_vlocals);
-      if (diff != INCOMPATIBLE)
+      if (compatible_array(&po->vlocals, codebuf->snapshot.fz_vlocals,
+                           &differences))
 	{
           /* compatible_array() leaves data in the 'tmp' fields.
              It must be cleared unless it is the final result of
              psyco_compatible() itself. */
-	  if (diff == COMPATIBLE)
+	  if (differences == NullArray)
 	    {
               /* Total match */
 	      *matching = codebuf;
-	      return COMPATIBLE;
+	      return NullArray;
 	    }
           else
             {
               /* Partial match, clear 'tmp' fields */
               clear_tmp_marks(codebuf->snapshot.fz_vlocals);
-              if (result == INCOMPATIBLE)
+              if (bestresult != NULL)
                 {
-                  /* Record the first partial match we find */
-                  *matching = codebuf;
-                  result = diff;
+                  if (bestresult->count <= differences->count)
+                    continue;  /* not better than the previous partial match */
+                  array_release(bestresult);
                 }
+              /* Record the first partial match we found */
+              bestresult = differences;
+              *matching = codebuf;
             }
 	}
       else   /* compatible_array() should have reset all 'tmp' fields */
 	assert_cleared_tmp_marks(codebuf->snapshot.fz_vlocals);
     }
-  return result;
+  return bestresult;
 }
 
 DEFINEFN
