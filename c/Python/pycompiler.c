@@ -2398,6 +2398,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		break;
 
 #ifdef RETURN_NONE
+                /* This opcode was temporarily added to the Python 2.3 CVS.
+                   Now it is gone again, so the following will probably
+                   never be compiled into Psyco anyway. */
 	case RETURN_NONE:
 		v = psyco_vi_None();
 		PycException_Raise(po, vinfo_new(VirtualTime_New(&EReturn)), v);
