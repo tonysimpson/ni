@@ -224,12 +224,16 @@ EXTERNFN
 vinfo_t* integer_abs  (PsycoObject* po, vinfo_t* v1, bool ovf);
 /* Comparison: 'py_op' is one of Python's rich comparison numbers
    Py_LT, Py_LE, Py_EQ, Py_NE, Py_GT, Py_GE
-   optionally together with COMPARE_UNSIGNED */
+   optionally together with COMPARE_UNSIGNED, CHEAT_MAXINT. */
 EXTERNFN condition_code_t integer_cmp  (PsycoObject* po, vinfo_t* v1,
 					vinfo_t* v2, int py_op);
 EXTERNFN condition_code_t integer_cmp_i(PsycoObject* po, vinfo_t* v1,
 					long value2, int py_op);
 #define COMPARE_UNSIGNED  8
+#define CHEAT_MAXINT     16  /* assume only a constant can be exactly
+                                LONG_MIN or LONG_MAX */
+#define COMPARE_BASE_MASK 7
+#define COMPARE_OP_MASK  15
 
 /* Return one of two constants, depending on the condition code */
 EXTERNFN vinfo_t* integer_conditional(PsycoObject* po, condition_code_t cc,

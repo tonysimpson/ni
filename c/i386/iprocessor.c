@@ -1645,7 +1645,8 @@ vinfo_t* integer_mul_i(PsycoObject* po, vinfo_t* v1, long value2)
 
 /* forward */
 static condition_code_t int_cmp_i(PsycoObject* po, vinfo_t* rt1,
-                                  long immed2, condition_code_t result);
+                                  long immed2, condition_code_t result,
+                                  bool cheat_maxint);
 
 DEFINEFN
 vinfo_t* integer_lshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
@@ -1655,13 +1656,13 @@ vinfo_t* integer_lshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
   if (is_compiletime(v2->source))
     return integer_lshift_i(po, v1, CompileTime_Get(v2->source)->value);
 
-  cc = int_cmp_i(po, v2, LONG_BIT, CC_uGE);
+  cc = int_cmp_i(po, v2, LONG_BIT, CC_uGE, false);
   if (cc == CC_ERROR)
     return NULL;
 
   if (runtime_condition_f(po, cc))
     {
-      cc = int_cmp_i(po, v2, 0, CC_L);
+      cc = int_cmp_i(po, v2, 0, CC_L, false);
       if (cc == CC_ERROR)
         return NULL;
       if (runtime_condition_f(po, cc))
@@ -1710,13 +1711,13 @@ vinfo_t* integer_rshift(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
   if (is_compiletime(v2->source))
     return integer_rshift_i(po, v1, CompileTime_Get(v2->source)->value);
 
-  cc = int_cmp_i(po, v2, LONG_BIT, CC_uGE);
+  cc = int_cmp_i(po, v2, LONG_BIT, CC_uGE, false);
   if (cc == CC_ERROR)
     return NULL;
 
   if (runtime_condition_f(po, cc))
     {
-      cc = int_cmp_i(po, v2, 0, CC_L);
+      cc = int_cmp_i(po, v2, 0, CC_L, false);
       if (cc == CC_ERROR)
         return NULL;
       if (runtime_condition_f(po, cc))
@@ -1888,7 +1889,7 @@ static const condition_code_t inverted_results[16] = {
 
 static condition_code_t immediate_compare(long a, long b, int py_op)
 {
-  switch (py_op) {
+  switch (py_op & COMPARE_OP_MASK) {
     case Py_LT:  return a < b  ? CC_ALWAYS_TRUE : CC_ALWAYS_FALSE;
     case Py_LE:  return a <= b ? CC_ALWAYS_TRUE : CC_ALWAYS_FALSE;
     case Py_EQ|COMPARE_UNSIGNED:
@@ -1913,7 +1914,8 @@ static condition_code_t immediate_compare(long a, long b, int py_op)
 }
 
 static condition_code_t int_cmp_i(PsycoObject* po, vinfo_t* rt1,
-                                  long immed2, condition_code_t result)
+                                  long immed2, condition_code_t result,
+                                  bool cheat_maxint)
 {
   extra_assert(is_runtime(rt1->source));
   /* detect easy cases */
@@ -1965,6 +1967,14 @@ static condition_code_t int_cmp_i(PsycoObject* po, vinfo_t* rt1,
             return CC_ALWAYS_FALSE;
           case CC_GE:   /* rt1 >= LONG_MIN */
             return CC_ALWAYS_TRUE;
+          case CC_E:    /* rt1 == LONG_MIN */
+          case CC_LE:   /* rt1 <= LONG_MIN */
+            if (cheat_maxint) return CC_ALWAYS_FALSE;
+            break;
+          case CC_NE:   /* rt1 != LONG_MIN */
+          case CC_G:    /* rt1 >  LONG_MIN */
+            if (cheat_maxint) return CC_ALWAYS_TRUE;
+            break;
           default:
             ; /* pass */
           }
@@ -1979,6 +1989,12 @@ static condition_code_t int_cmp_i(PsycoObject* po, vinfo_t* rt1,
             return CC_ALWAYS_FALSE;
           case CC_uLE:  /* (unsigned) rt1 <= LONG_MAX */
             return CC_ALWAYS_TRUE;
+          case CC_uGE:  /* (unsigned) rt1 >= LONG_MAX */
+            if (cheat_maxint) return CC_ALWAYS_FALSE;
+            break;
+          case CC_uL:   /* (unsigned) rt1 <  LONG_MAX */
+            if (cheat_maxint) return CC_ALWAYS_TRUE;
+            break;
           default:
             ; /* pass */
           }
@@ -1988,6 +2004,14 @@ static condition_code_t int_cmp_i(PsycoObject* po, vinfo_t* rt1,
         return CC_ALWAYS_TRUE;
       case CC_G:    /* rt1 >  LONG_MAX */
         return CC_ALWAYS_FALSE;
+      case CC_E:    /* rt1 == LONG_MAX */
+      case CC_GE:   /* rt1 >= LONG_MAX */
+        if (cheat_maxint) return CC_ALWAYS_FALSE;
+        break;
+      case CC_NE:   /* rt1 != LONG_MAX */
+      case CC_L:    /* rt1 <  LONG_MAX */
+        if (cheat_maxint) return CC_ALWAYS_TRUE;
+        break;
       default:
         ; /* pass */
       }
@@ -2016,7 +2040,7 @@ condition_code_t integer_cmp(PsycoObject* po, vinfo_t* v1,
     {
     same_source:
       /* comparing equal sources */
-      switch (py_op & ~ COMPARE_UNSIGNED) {
+      switch (py_op & COMPARE_BASE_MASK) {
       case Py_LE:
       case Py_EQ:
       case Py_GE:
@@ -2037,18 +2061,19 @@ condition_code_t integer_cmp(PsycoObject* po, vinfo_t* v1,
         vinfo_t* tmp;
         /* invert the two operands because the processor has only CMP xxx,immed
            and not CMP immed,xxx */
-        result = inverted_results[py_op];
+        result = inverted_results[py_op & COMPARE_OP_MASK];
         tmp = v1;
         v1 = v2;
         v2 = tmp;
       }
   else
     {
-      result = direct_results[py_op];
+      result = direct_results[py_op & COMPARE_OP_MASK];
     }
   if (is_compiletime(v2->source))
     {
-      result = int_cmp_i(po, v1, CompileTime_Get(v2->source)->value, result);
+      result = int_cmp_i(po, v1, CompileTime_Get(v2->source)->value,
+                         result, py_op & CHEAT_MAXINT);
     }
   else
     {
@@ -2073,7 +2098,9 @@ condition_code_t integer_cmp_i(PsycoObject* po, vinfo_t* v1,
       return immediate_compare(a, value2, py_op);
     }
   else
-    return int_cmp_i(po, v1, value2, direct_results[py_op]);
+    return int_cmp_i(po, v1, value2,
+                     direct_results[py_op & COMPARE_OP_MASK],
+                     py_op & CHEAT_MAXINT);
 }
 
 #if 0

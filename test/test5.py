@@ -117,6 +117,92 @@ def f9(n):
     return g5(3), g5(n)
 
 
+# virtual string tests
+
+TEST = ['userhru', 'uiadsfz', '', '1', 'if', '623', 'opad', 'oa8ua',
+        '09q34rx093q', '\x00',
+        'qw09exdqw0e9dqw9e8d8qw9r8qw', '',
+        '\x1d\xd7\xae\xa2\x06\x10\x1a\x00a\xff\xf6\xee\x15\xa2\xea\x89',
+        'akjsdfhqweirewru 3498cr 3849rx398du389du389dur398d31623']
+
+def s1():
+    s = ''
+    for t in TEST:
+        s += t
+    return s
+
+def s2():
+    return "some" + "another"
+
+def s3():
+    return TEST[0] + '.'
+
+def s4():
+    return '.' + TEST[0]
+
+def s5():
+    return TEST[0] + (TEST[1] + TEST[2])
+
+def s6():
+    s = ''
+    for t in TEST:
+        s = t + s
+    return s
+
+def s7():
+    return int(TEST[-1][5:10] == 'fhqwe')
+
+def s8():
+    return TEST[-2][5:10][3]
+
+def s9():
+    return TEST[-1][:-1][1:][2:-3]
+
+def s10():
+    return int('t' < TEST[1][:1] == 'u')
+
+def s11():
+    return int('ia' == TEST[1][1:3] < 'ib' and
+               'dsf' == TEST[1][-4:-1] < 'dsf!' and
+               'dsfz' == TEST[1][-4:] <= 'dsfz')
+
+def s12():
+    return int(TEST[0] + TEST[1] != 'userhruuiadsfz')
+
+def s13():
+    return int(TEST[3] + TEST[5] == TEST[-1][-4:])
+
+def teststrings():
+    print `s1()`
+    print `s2()`
+    print `s3()`
+    print `s4()`
+    print `s5()`
+    print `s6()`
+    print `s7()`
+    print `s8()`
+    print `s9()`
+    print `s10()`
+    print `s11()`
+    print `s12()`
+    print `s13()`
+
+def testslices(s):
+    "Test the various paths the code can take in pstring_slice()."
+    print `s[:-9999]`
+    print `s[:9999]`
+    print `s[:]`
+    print `s[-9999:-9999]`
+    print `s[-9999:9999]`
+    print `s[-9999:]`
+    print `s[1:-9999]`
+    print `s[1:9999]`
+    print `s[1:]`
+    print `s[9999:-9999]`
+    print `s[9999:9999]`
+    print `s[9999:]`
+
+
 if __name__ == '__main__':
     import time
     print "break!"

@@ -9,8 +9,8 @@
 #include "pobject.h"
 #include "pabstract.h"
 
-/*#undef USE_CATSTR -- trying to use only bufstring virtual strings instead*/
-#define USE_BUFSTR
+#define USE_CATSTR 0  /*trying to use only bufstring virtual strings instead*/
+#define USE_BUFSTR 1
 
 
 /* various ways to access the actual character data */
@@ -31,13 +31,13 @@
 #define STRSLICE_START    (STRSLICE_SOURCE+1)
 #define STRSLICE_TOTAL    (STRSLICE_START+1)
 
-#ifdef USE_CATSTR
+#if USE_CATSTR
 /* virtual string concatenations */
 #define CATSTR_LIST       VIRTUALSTR_FIRST
 #define CATSTR_TOTAL      (CATSTR_LIST+1)
 #endif
 
-#ifdef USE_BUFSTR
+#if USE_BUFSTR
 /* virtual overallocated-buffer concatenations */
 #define BUFSTR_BUFOBJ     VIRTUALSTR_FIRST
 #define BUFSTR_TOTAL      (BUFSTR_BUFOBJ+1)

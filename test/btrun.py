@@ -483,3 +483,32 @@ exceptions.TypeError
 
 >>> assert_true(PY21 or test5.f9(sys.maxint) == (4, 2147483648L))
 Ok
+
+>>> test5.teststrings()
+'userhruuiadsfz1if623opadoa8ua09q34rx093q\x00qw09exdqw0e9dqw9e8d8qw9r8qw\x1d\xd7\xae\xa2\x06\x10\x1a\x00a\xff\xf6\xee\x15\xa2\xea\x89akjsdfhqweirewru 3498cr 3849rx398du389du389dur398d31623'
+'someanother'
+'userhru.'
+'.userhru'
+'userhruuiadsfz'
+'akjsdfhqweirewru 3498cr 3849rx398du389du389dur398d31623\x1d\xd7\xae\xa2\x06\x10\x1a\x00a\xff\xf6\xee\x15\xa2\xea\x89qw09exdqw0e9dqw9e8d8qw9r8qw\x0009q34rx093qoa8uaopad623if1uiadsfzuserhru'
+1
+'a'
+'sdfhqweirewru 3498cr 3849rx398du389du389dur398d3'
+1
+1
+0
+1
+
+>>> test5.testslices('hello')
+''
+'hello'
+'hello'
+''
+'hello'
+'hello'
+''
+'ello'
+'ello'
+''
+''
+''

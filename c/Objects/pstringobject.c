@@ -2,12 +2,14 @@
 #include "pstructmember.h"
 #include <ipyencoding.h>
 
-#ifdef USE_CATSTR
+#if USE_CATSTR
 #include "plistobject.h"
 #endif
 
 
 static PyObject* pempty_string;
+
+static vinfo_t* pstr_memory_source(PsycoObject* po, vinfo_t* s);
 
 
 /***************************************************************/
@@ -161,24 +163,8 @@ inline vinfo_t* PsycoStrSlice_NEW(vinfo_t* source, vinfo_t* start, vinfo_t* len)
 	return result;
 }
 
-static vinfo_t* strslice_real_source(PsycoObject* po, vinfo_t* s)
-{
-	if (s->source == VirtualTime_New(&psyco_computed_strslice)) {
-		/* get a ptr to the real source memory
-		   without forcing the strslice out of
-		   virtual-time */
-		vinfo_t* start = vinfo_getitem(s, STRSLICE_START);
-		vinfo_t* src = vinfo_getitem(s, STRSLICE_SOURCE);
-		if (src != NULL && start != NULL) {
-			return integer_add(po, src, start, false);
-		}
-	}
-	vinfo_incref(s);
-	return s;
-}
 
-
-#ifdef USE_CATSTR
+#if USE_CATSTR
 /***************************************************************/
 /* string concatenations.                                      */
 static source_virtual_t psyco_computed_catstr;
@@ -281,9 +267,7 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v)
 		slen = psyco_get_const(po, s, FIX_size);
 		if (slen == NULL)
 			goto fail;
-		release_me = s = strslice_real_source(po, s);
-		if (s == NULL)
-			goto fail;
+		release_me = s = pstr_memory_source(po, s);
 		if (is_compiletime(slen->source)) {
 			int l = CompileTime_Get(slen->source)->value;
 			if (1 <= l && l <= sizeof(long)) {
@@ -427,8 +411,10 @@ static vinfo_t* pstring_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 		vinfo_incref(a);
 		return a;
 	}
-	
+
+        a = pstr_memory_source(po, a);
 	result = psyco_get_field_array(po, a, STR_sval, i);
+        vinfo_decref(a, po);
 	if (result == NULL)
 		return NULL;
 
@@ -448,11 +434,11 @@ static vinfo_t* pstring_slice(PsycoObject* po, vinfo_t* a,
 	if (vlen == NULL)
 		return NULL;
 
-	cc = integer_cmp(po, j, vlen, Py_GE|COMPARE_UNSIGNED);
+	cc = integer_cmp(po, j, vlen, Py_GT|COMPARE_UNSIGNED|CHEAT_MAXINT);
 	if (cc == CC_ERROR)
 		goto fail;
 	if (runtime_condition_f(po, cc)) {
-		/* j < 0 or j >= vlen */
+		/* j < 0 or j > vlen */
 		cc = integer_cmp_i(po, j, 0, Py_LT);
 		if (cc == CC_ERROR)
 			goto fail;
@@ -461,29 +447,28 @@ static vinfo_t* pstring_slice(PsycoObject* po, vinfo_t* a,
 			return vinfo_new(CompileTime_New((long) pempty_string));
 		}
 		else {
-			/* j >= vlen */
+			/* j > vlen */
 			j = vlen;
-
-			/* this also tracks the case where j==vlen in the
-			   first place, for the following test */
-			cc = integer_cmp_i(po, i, 0, Py_LE);
-			if (cc == CC_ERROR)
-				goto fail;
-			if (runtime_condition_f(po, cc)) {
-				/* i <= 0 */
-				if (Psyco_KnownType(a) == &PyString_Type) {
-					/* a[0:len(a)] */
-					vinfo_incref(a);
-					return a;
-				}
-			}
-			else
-				assert_nonneg(i);
 		}
 	}
         assert_nonneg(j);
 
-	cc = integer_cmp(po, i, j, Py_GT|COMPARE_UNSIGNED);
+	if (j == vlen &&   /* if j is known to be vlen */
+	    Psyco_KnownType(a) == &PyString_Type) {
+		cc = integer_cmp_i(po, i, 0, Py_LE);
+		if (cc == CC_ERROR)
+			goto fail;
+		if (runtime_condition_f(po, cc)) {
+			/* i <= 0 */
+			/* a[i:j] is a */
+			vinfo_incref(a);
+			return a;
+		}
+		else
+			assert_nonneg(i);
+	}
+
+	cc = integer_cmp(po, i, j, Py_GT|COMPARE_UNSIGNED|CHEAT_MAXINT);
 	if (cc == CC_ERROR)
 		goto fail;
 	if (runtime_condition_f(po, cc)) {
@@ -538,7 +523,7 @@ static vinfo_t* pstring_slice(PsycoObject* po, vinfo_t* a,
 	return result;
 }
 
-#ifdef USE_CATSTR
+#if USE_CATSTR
 static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 {
 	PyTypeObject* btp = Psyco_NeedType(po, b);
@@ -726,11 +711,9 @@ inline int psyco_richmemcmp(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 		}
 	}
 
-	/* optimize slices */
-	w = strslice_real_source(po, w);
-	v = strslice_real_source(po, v);
-	if (v == NULL || w == NULL)
-		goto fail1;
+	/* optimize slices and bufstrs */
+	w = pstr_memory_source(po, w);
+	v = pstr_memory_source(po, v);
 	
 	/* is 'minlen' a known and small value? */
 	if (is_compiletime(minlen->source)) {
@@ -793,7 +776,6 @@ inline int psyco_richmemcmp(PsycoObject* po, vinfo_t* v, vinfo_t* w,
  fail2:
 	vinfo_xdecref(wtest, po);
 	vinfo_xdecref(vtest, po);
- fail1:
 	vinfo_xdecref(v, po);
 	vinfo_xdecref(w, po);
 	return -1;
@@ -844,7 +826,7 @@ static vinfo_t* pstring_richcompare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int
 }
 
 
-#ifdef USE_BUFSTR
+#if USE_BUFSTR
 /***************************************************************/
 /* buffer-based over-allocated concatenations.                 */
 static source_virtual_t psyco_computed_bufstr;
@@ -1084,7 +1066,7 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 		if (lenc == NULL)
 			return NULL;
 
-		breal = strslice_real_source(po, b);
+		breal = pstr_memory_source(po, b);
 
 		/* if 'a' is already a bufstring, let it grow */
 		if (a->source == VirtualTime_New(&psyco_computed_bufstr)) {
@@ -1109,8 +1091,10 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 			vinfo_decref(lenc, po);
 			return NULL;
 		}
-		else
+		else {
+			Psyco_AssertType(po, v, &PsycoBufStr_Type);
 			return PsycoBufStr_NEW(v, lenc);
+		}
 	}
 
 	/* fallback */
@@ -1123,6 +1107,31 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 
 /***************************************************************/
 
+
+static vinfo_t* pstr_memory_source(PsycoObject* po, vinfo_t* s)
+{
+	if (s->source == VirtualTime_New(&psyco_computed_strslice)) {
+		/* get a ptr to the real source memory
+		   without forcing the strslice out of
+		   virtual-time */
+		vinfo_t* start = vinfo_getitem(s, STRSLICE_START);
+		vinfo_t* src = vinfo_getitem(s, STRSLICE_SOURCE);
+		if (src != NULL && start != NULL) {
+			return integer_add(po, src, start, false);
+		}
+	}
+#if USE_BUFSTR
+	if (s->source == VirtualTime_New(&psyco_computed_bufstr)) {
+		vinfo_t* cb = vinfo_getitem(s, BUFSTR_BUFOBJ);
+		if (cb != NULL)
+			s = cb;
+	}
+#endif
+	vinfo_incref(s);
+	return s;
+}
+
+
 INITIALIZATIONFN
 void psy_stringobject_init(void)
 {
@@ -1131,7 +1140,7 @@ void psy_stringobject_init(void)
 	Psyco_DefineMeta(m->sq_length, psyco_generic_immut_ob_size);
 	Psyco_DefineMeta(m->sq_item, pstring_item);
 	Psyco_DefineMeta(m->sq_slice, pstring_slice);
-#if defined(USE_CATSTR) || defined(USE_BUFSTR)
+#if USE_CATSTR || USE_BUFSTR
 	Psyco_DefineMeta(m->sq_concat, pstring_concat);
 #endif
         Psyco_DefineMeta(PyString_Type.tp_richcompare, pstring_richcompare);
@@ -1144,11 +1153,11 @@ void psy_stringobject_init(void)
         INIT_SVIRTUAL(psyco_computed_char, compute_char, 0, 0);
         INIT_SVIRTUAL(psyco_computed_strslice, compute_strslice,
                       NW_STRSLICES_NORMAL, NW_STRSLICES_FUNCALL);
-#ifdef USE_CATSTR
+#if USE_CATSTR
         INIT_SVIRTUAL(psyco_computed_catstr, compute_catstr,
                       NW_CATSTRS_NORMAL, NW_CATSTRS_FUNCALL);
 #endif
-#ifdef USE_BUFSTR
+#if USE_BUFSTR
 	INIT_SVIRTUAL(psyco_computed_bufstr, compute_bufstr,
 		      NW_BUFSTRS_NORMAL, NW_BUFSTRS_NORMAL);
 #endif
