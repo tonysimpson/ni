@@ -1,6 +1,10 @@
 #include "pdictobject.h"
 
 
+#if NEW_STYLE_TYPES
+# define           DICT_MA_USED    QUARTER(offsetof(PyDictObject, ma_used))
+#endif
+
 DEFINEFN
 vinfo_t* PsycoDict_New(PsycoObject* po)
 {
@@ -16,10 +20,15 @@ vinfo_t* PsycoDict_New(PsycoObject* po)
 	return v;
 }
 
+static vinfo_t* psyco_dict_length(PsycoObject* po, vinfo_t* vi)
+{
+	return read_array_item(po, vi, DICT_MA_USED);
+}
+
 
 DEFINEFN
 void psy_dictobject_init()
 {
 	PyMappingMethods *m = PyDict_Type.tp_as_mapping;
-	Psyco_DefineMeta(m->mp_length, psyco_generic_mut_ob_size);
+	Psyco_DefineMeta(m->mp_length, psyco_dict_length);
 }

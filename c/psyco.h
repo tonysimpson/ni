@@ -10,39 +10,61 @@
 #include <structmember.h>   /* for offsetof() */
 #include <compile.h>        /* for PyCodeObject */
 
-#ifndef DISABLE_DEBUG
- /* define for extra assert()'s */
-# define ALL_CHECKS
 
- /* level of debugging outputs: 0 = none, 1 = a few, 2 = a lot */
-# ifndef VERBOSE_LEVEL
-#  define VERBOSE_LEVEL   1   /* 0, 1 or 2 */
+/*****************************************************************/
+ /***   Various customizable parameters (use your compilers'    ***/
+  /***   option to override them, e.g. -DXXX=value in gcc)       ***/
+
+ /* set to 0 to disable all debugging checks and output */
+#ifndef PSYCO_DEBUG
+# ifdef NDEBUG
+#  define PSYCO_DEBUG   0
+# else
+#  define PSYCO_DEBUG   1
 # endif
-
-#ifndef MS_WIN32
-
- /* define for *heavy* memory checking: 0 = off, 1 = reasonably heavy,
-                                        2 = unreasonably heaving */
-# ifndef HEAVY_MEM_CHECK
-#  define HEAVY_MEM_CHECK   0
-# endif
-
 #endif
 
- /* define to write produced blocks of code into a file
-    See 'xam.py' */
-# ifndef NO_CODE_DUMP
-#  define CODE_DUMP_FILE    "psyco.dump"
-# endif
-# define CODE_DUMP_AT_END_ONLY
 
-#endif  /* !DISABLE_DEBUG */
+ /* define to 1 for extra assert()'s */
+#ifndef ALL_CHECKS
+# define ALL_CHECKS    (PSYCO_DEBUG ? 1 : 0)
+#endif
+
+ /* level of debugging outputs: 0 = none, 1 = a few, 2 = more,
+    3 = detailled, 4 = full execution trace */
+#ifndef VERBOSE_LEVEL
+# define VERBOSE_LEVEL   (PSYCO_DEBUG ? 0 : 0)
+#endif
+
+ /* define for *heavy* memory checking: 0 = off, 1 = reasonably heavy,
+                                        2 = unreasonably heavy */
+#ifndef HEAVY_MEM_CHECK
+# define HEAVY_MEM_CHECK   (PSYCO_DEBUG ? 0 : 0)
+#endif
+#ifdef MS_WIN32
+# undef HEAVY_MEM_CHECK
+# define HEAVY_MEM_CHECK   0  /* not supported on Windows */
+#endif
+
+ /* define to write produced blocks of code into a file; see 'xam.py'
+       0 = off, 1 = only manually (from a debugger),
+       2 = only when returning from Psyco,
+       3 = every time a new code block is built */
+#ifndef CODE_DUMP
+# define CODE_DUMP         (PSYCO_DEBUG ? 1 : 0)
+#endif
+
+#if CODE_DUMP && !defined(CODE_DUMP_FILE)
+# define CODE_DUMP_FILE    "psyco.dump"
+#endif
 
  /* define to inline the most common functions in the produced code
     (should be enabled unless you want to trade code size for speed) */
-#define INLINE_COMMON_FUNCTIONS
+#ifndef INLINE_COMMON_FUNCTIONS
+# define INLINE_COMMON_FUNCTIONS     1
+#endif
 
-#if defined(CODE_DUMP_FILE) && defined(HAVE_DLFCN_H)
+#if CODE_DUMP && defined(HAVE_DLFCN_H)
  /* define to locate shared symbols and write them in CODE_DUMP_FILE
     requires the GNU extension dladdr() in <dlfcn.h>
     Not really useful, only finds non-static symbols. */
@@ -57,50 +79,43 @@
    Can be relatively large, but not so large that special allocation
    routines (like mmap) are invoked. We rely on the fact that
    PyObject_REALLOC will not move the memory around when shrinking
-   a block of BIG_BUFFER_SIZE+sizeof(CodeBufferObject) bytes. */
-#ifdef DISABLE_DEBUG
-# define BIG_BUFFER_SIZE  0x7F00
-#else
-# define BIG_BUFFER_SIZE  0x7F0
+   a block of BIG_BUFFER_SIZE+sizeof(CodeBufferObject) bytes.
+   Numbers too large might cause serious fragmentation of the heap.
+   In debugging mode, we use a small size to stress the buffer-
+   continuation coding routines. */
+#ifndef BIG_BUFFER_SIZE
+# define BIG_BUFFER_SIZE  (PSYCO_DEBUG ? 0x100+BUFFER_MARGIN : 0x3F00)
 #endif
 
 /* A safety margin for occasional overflows: we might write a few
    instructions too much before we realize we wrote past 'codelimit'.
    XXX carefully check that it is impossible to overflow by more
    We need more than 128 bytes because of the way conditional jumps
-   are emitted; see pycompiler.c */
-#define BUFFER_MARGIN    (192 + GUARANTEED_MINIMUM)
+   are emitted; see pycompiler.c.
+   XXX actually there are too many places that might emit an
+   unbounded size of code. This is a Big Bug. I won't attempt to
+   fix it now because it should be done together with Psyco's rewrite
+   towards flexible code-emitting back-ends. For now just pretent that
+   a quite large value will be OK. */
+#ifndef BUFFER_MARGIN
+# define BUFFER_MARGIN    (1920 + GUARANTEED_MINIMUM)
+#endif
 
 /* When emitting code, all called functions can assume that they
    have at least this amount of room to write their code. If they
    might need more, they have to allocate new buffers and write a
    jump to these from the original code (jumps can be done in less
    than GUARANTEED_MINIMUM bytes). */
-#define GUARANTEED_MINIMUM    32
-
-
-#ifdef ALL_CHECKS
-# define MALLOC_CHECK_    2  /* GCC malloc() checks */
-# undef NDEBUG
-# include <assert.h>
-# define extra_assert(x)  assert(x)
-#else
-# define extra_assert(x)  (void)0  /* nothing */
+#ifndef GUARANTEED_MINIMUM
+# define GUARANTEED_MINIMUM    64
 #endif
 
-#ifndef VERBOSE_LEVEL
-# define VERBOSE_LEVEL   0
-#else
-# define VERBOSE
+
+#ifndef ALL_STATIC
+# define ALL_STATIC  0   /* make all functions static; set to 1 by hack.c */
 #endif
 
-#ifdef VERBOSE
-# define debug_printf(args)   (printf args, fflush(stdout))
-#else
-# define debug_printf(args)   (void)0  /* nothing */
-#endif
-
-#ifdef ALL_STATIC
+#if ALL_STATIC
 # define EXTERNVAR   staticforward
 # define EXTERNFN    static
 # define DEFINEVAR   statichere
@@ -112,19 +127,35 @@
 # define DEFINEFN
 #endif
 
-#ifdef INLINE_COMMON_FUNCTIONS
-# ifdef MS_WIN32
-#  define inline	__inline static
-# else
-#  define inline      __inline__ static   /* is this GCC-specific? */
-# endif
+#if ALL_CHECKS
+# define MALLOC_CHECK_    2  /* GCC malloc() checks */
+# undef NDEBUG
+# include <assert.h>
+# define extra_assert(x)  assert(x)
+#else
+# define extra_assert(x)  (void)0  /* nothing */
+#endif
+
+#if VERBOSE_LEVEL
+# define debug_printf(args)   (printf args, fflush(stdout))
+#else
+# define debug_printf(args)   (void)0  /* nothing */
+#endif
+#if VERBOSE_LEVEL >= 4
+# define TRACE_EXECUTION(msg)   do {                                    \
+                       BEGIN_CODE  EMIT_TRACE(msg);  END_CODE } while (0)
+EXTERNFN void psyco_trace_execution(char* msg, void* code_position);
+#else
+# define TRACE_EXECUTION(msg)   do { } while (0) /* nothing */
+#endif
+
+
+#if INLINE_COMMON_FUNCTIONS
+# define inline      __inline static
 #else
 # define inline      static
 #endif
 
-#ifndef HEAVY_MEM_CHECK
-# define HEAVY_MEM_CHECK   0
-#endif
 #if HEAVY_MEM_CHECK
 # include "linuxmemchk.h"
 # if HEAVY_MEM_CHECK > 1
@@ -203,11 +234,18 @@ EXTERNFN PsycoFunctionObject* psyco_PsycoFunction_New(PyFunctionObject* func,
                                                       int rec);
 
 
-#if defined(CODE_DUMP_FILE) && !defined(CODE_DUMP_AT_END_ONLY)
+#if CODE_DUMP
 EXTERNFN void psyco_dump_code_buffers(void);
-#else
-# define psyco_dump_code_buffers()    do { } while (0) /* nothing */
 #endif
+#if CODE_DUMP >= 3
+# define dump_code_buffers()    psyco_dump_code_buffers()
+#else
+# define dump_code_buffers()    do { } while (0) /* nothing */
+#endif
+
+/* to display code object names */
+#define PyCodeObject_NAME(co)   (co->co_name ? PyString_AS_STRING(co->co_name)  \
+                                 : "<anonymous code object>")
 
 
 /* defined in pycompiler.c */

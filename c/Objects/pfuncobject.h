@@ -10,6 +10,13 @@
 #include "pabstract.h"
 
 
+/***************************************************************/
+/* virtual functions.                                          */
+/* 'fdefaults' may be NULL.                                    */
+EXTERNFN vinfo_t* PsycoFunction_New(PsycoObject* po, vinfo_t* fcode,
+                                    vinfo_t* fglobals, vinfo_t* fdefaults);
+
+
 EXTERNFN void psy_funcobject_init(void);
 
 #endif /* _PSY_FUNCOBJECT_H */

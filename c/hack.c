@@ -7,10 +7,10 @@
 
 /* means that all .c files are meant to be compiler together,
     with all symbols 'static' */
-#define ALL_STATIC
+#define ALL_STATIC      1
 
-/* disable all debugging code */
-/*#define DISABLE_DEBUG*/
+/* you can disable all debugging code by setting PSYCO_DEBUG to 0 */
+/*#define PSYCO_DEBUG  0*/
 
 
 #include "psyco.h"
@@ -44,35 +44,3 @@
 #include "linuxmemchk.c"
 #include "selective.c"
 #include "psyco.c"   /* must be the last one for CODE_DUMP_AT_END_ONLY to work */
-
-
- /***************************************************************/
-/***   Debug dumping of state                                  ***/
- /***************************************************************/
-
-/* #ifdef PSYCO_DUMP */
-/* static int psyco_dump() */
-/* { */
-/*   int i; */
-/*   PyObject* source = psyco_ge_mainloop.fatlist; */
-/*   FILE* f = fopen("psyco.dump", "wb"); */
-/*   if (f == NULL) */
-/*     return -1; */
-
-/*   for (i=0; i<PyList_Size(source); i++) */
-/*     { */
-/*       CodeBufferObject* codebuf = (CodeBufferObject*) PyList_GetItem(source, i); */
-/*       int size; */
-/*       assert(codebuf != NULL && CodeBuffer_Check(codebuf)); */
-/*       size = codebuf->codesize; */
-/*       if (size == -1) */
-/*         size = BIG_BUFFER_SIZE - GUARANTEED_MINIMUM; */
-/*       fprintf(f, "CodeBufferObject %p %d %d\n", */
-/*               codebuf->codeptr, codebuf->codesize, size); */
-/*       fwrite(codebuf->codeptr, 1, size, f); */
-/*     } */
-  
-/*   return fclose(f); */
-/* } */
-/* void* psyco_just_a_dummy_pointer = &psyco_dump; */
-/* #endif */

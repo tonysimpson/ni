@@ -69,11 +69,9 @@ static glue_run_code_fn glue_run_code_1;
 
 DEFINEFN
 PyObject* psyco_processor_run(CodeBufferObject* codebuf,
-                              long initial_stack[])
+                              long initial_stack[], int argc)
 {
-  return glue_run_code_1(codebuf->codeptr,
-                         initial_stack + codebuf->snapshot.fz_arguments_count,
-                         initial_stack);
+  return glue_run_code_1(codebuf->codeptr, initial_stack + argc, initial_stack);
 }
 
 /* call a C function with a variable number of arguments */
@@ -120,12 +118,34 @@ DEFINEFN
 code_t* psyco_finish_return(PsycoObject* po, NonVirtualSource retval)
 {
   code_t* code = po->code;
+  int retpos = getstack(po->vlocals.items[INDEX_LOC_CONTINUATION]->source);
+
+  /* load the return value into EAX */
   if (retval != SOURCE_DUMMY)
     LOAD_REG_FROM(retval, REG_FUNCTIONS_RETURN);
-  STACK_CORRECTION(INITIAL_STACK_DEPTH + 4 + po->arguments_count * 4
-                   - po->stack_depth);
-  code[0] = 0xC2;   // RET
-  *(short*)(code+1) = po->arguments_count * 4;
+
+  /* 'retpos' is the position in the stack of the return value. */
+  /* clean up the stack up to that position */
+  extra_assert(retpos != RunTime_StackNone);
+  STACK_CORRECTION(retpos - po->stack_depth);
+
+  /* emit a 'RET xxx' instruction that pops and jumps to the address
+     which is now at the top of the stack, and finishes to clean the
+     stack by removing everything left past the return address
+     (typically the arguments, although it could be anything). */
+  retpos -= INITIAL_STACK_DEPTH+4;
+  extra_assert(0<=retpos);
+  if (retpos >= 0x8000)
+    {
+      /* uncommon case: too many stuff left in the stack for the 16-bit
+         immediate we can encoding in RET */
+      POP_REG(REG_386_EDX);
+      STACK_CORRECTION(-retpos);
+      PUSH_REG(REG_386_EDX);
+      retpos = 0;
+    }
+  code[0] = 0xC2;   // RET imm16
+  *(short*)(code+1) = retpos;
   PsycoObject_Delete(po);
   return code+3;
 }
@@ -182,7 +202,7 @@ void* psyco_jump_proxy(PsycoObject* po, void* fn, int restore, int nb_args)
 
     /* make 'fs' point just after the end of the code, aligned */
   result = (void*)(((long)code + 3) & ~ 3);
-#ifdef CODE_DUMP_FILE
+#if CODE_DUMP
   while (code != (char*) result)
     *code++ = 0xFE;   /* fill with invalid instructions */
 #endif
@@ -1021,7 +1041,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
                         if (argtags[i] == 'a' || argtags[i] == 'A')
                             args[i] = (long)malloc( ((vinfo_array_t*)args[i])->count );
                         
-#ifdef ALL_CHECKS
+#if ALL_CHECKS
                         if (argtags[i] == 'r')
                             Py_FatalError("psyco_generic_call(): arg mode "
                             "incompatible with CfPure");
@@ -1150,7 +1170,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		vresult = new_rtvinfo(po, REG_FUNCTIONS_RETURN, false);
 		vresult = generic_call_check(po, flags, vresult);
 		vinfo_xdecref(vresult, po);
-#ifdef ALL_CHECKS
+#if ALL_CHECKS
 		if (vresult != NULL)
 			vresult = (vinfo_t*) 1;  /* anything non-NULL */
 #endif
@@ -1165,7 +1185,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 
 DEFINEFN
 vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
-			  Source argsources[])
+			  Source argsources[], int argcount)
 {
 	/* this is a simplified version of psyco_generic_call() which
 	   assumes Psyco's calling convention instead of the C's. */
@@ -1177,9 +1197,9 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 		NEED_REGISTER(i);
 	initial_depth = po->stack_depth;
 	p = argsources;
-	for (i=codebuf->snapshot.fz_arguments_count; i--; p++)
-		CALL_SET_ARG_FROM_RT(*p, i,codebuf->snapshot.fz_arguments_count);
-	CALL_C_FUNCTION(codebuf->codeptr,  codebuf->snapshot.fz_arguments_count);
+	for (i=argcount; i--; p++)
+		CALL_SET_ARG_FROM_RT(*p, i, argcount);
+	CALL_C_FUNCTION(codebuf->codeptr,   argcount);
 	po->stack_depth = initial_depth;  /* callee removes arguments */
 	END_CODE
 	return generic_call_check(po, CfReturnRef|CfPyErrIfNull,
@@ -1228,12 +1248,12 @@ condition_code_t integer_NON_NULL(PsycoObject* po, vinfo_t* vi)
 	   asking ourselves if it is NULL or not. So the following
 	   vinfo_decref() will not emit a Py_DECREF() that would
 	   clobber the condition code. We check all this. */
-#ifdef ALL_CHECKS
+#if ALL_CHECKS
 	assert(!has_rtref(vi->source));
 	{ code_t* code1 = po->code;
 #endif
 	vinfo_decref(vi, po);
-#ifdef ALL_CHECKS
+#if ALL_CHECKS
 	assert(po->code == code1); }
 #endif
 	return result;
@@ -1623,12 +1643,12 @@ vinfo_t* integer_urshift_i(PsycoObject* po, vinfo_t* v1, long counter)
 
 DEFINEFN
 vinfo_t* integer_not(PsycoObject* po, vinfo_t* v1)
-  GENERIC_UNARY_INSTR(UNARY_INSTR_ON_REG(3, rg), ~a,
+  GENERIC_UNARY_INSTR(UNARY_INSTR_ON_REG(2, rg), ~a,
                            false, false, CC_ALWAYS_FALSE)
 
 DEFINEFN
 vinfo_t* integer_neg(PsycoObject* po, vinfo_t* v1, bool ovf)
-  GENERIC_UNARY_INSTR(UNARY_INSTR_ON_REG(2, rg), -a,
+  GENERIC_UNARY_INSTR(UNARY_INSTR_ON_REG(3, rg), -a,
                            ovf, c == (-LONG_MAX-1), CC_O)
 
 DEFINEFN

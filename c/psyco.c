@@ -9,11 +9,6 @@
 #include "Objects/ptupleobject.h"
 
 
-#if defined(CODE_DUMP_FILE) && defined(CODE_DUMP_AT_END_ONLY)
-# undef psyco_dump_code_buffers
-EXTERNFN void psyco_dump_code_buffers(void);
-#endif
-
  /***************************************************************/
 /***   Frame and arguments building                            ***/
  /***************************************************************/
@@ -35,9 +30,10 @@ static void fix_run_time_args(PsycoObject * po, vinfo_array_t* target,
             {
               if (target->items[i] == NULL)
                 continue;  /* item was removed by psyco_simplify_array() */
-              if (sources != NULL)
-                sources[po->arguments_count] = a->source;
-              po->arguments_count++;
+              if (sources != NULL) {
+                int argc = (po->stack_depth-INITIAL_STACK_DEPTH) / sizeof(long);
+                sources[argc] = a->source;
+              }
               po->stack_depth += sizeof(long);
               /* arguments get borrowed references */
               b->source = RunTime_NewStack(po->stack_depth, REG_NONE,
@@ -93,7 +89,7 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
           int n = co->co_argcount < minargcnt ? minargcnt : co->co_argcount;
           PyErr_Format(PyExc_TypeError,
                        "%.200s() takes %s %d %sargument%s (%d given)",
-                       PyString_AsString(co->co_name),
+                       PyCodeObject_NAME(co),
                        minargcnt == co->co_argcount ? "exactly" :
                          (inputargs < n ? "at least" : "at most"),
                        n,
@@ -169,8 +165,11 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   po->pr.co = co;
   Py_INCREF(co);  /* XXX never freed */
   pyc_data_build(po, merge_points);
-  
-  po->stack_depth += sizeof(long);  /* count the CALL return address */
+
+  /* set up the CALL return address */
+  po->stack_depth += sizeof(long);
+  LOC_CONTINUATION = vinfo_new(RunTime_NewStack(po->stack_depth, REG_NONE,
+                                                false));
   psyco_assert_coherent(po);
   return po;
 
@@ -192,7 +191,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,
   vinfo_array_t* arginfo;
   Source* sources;
   vinfo_t* result;
-  int i;
+  int i, argcount;
 
   int tuple_size = PsycoTuple_Load(arg_tuple);
   if (tuple_size == -1)
@@ -200,6 +199,11 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,
       /* XXX calling with an unknown-at-compile-time number of arguments
          is not implemented, revert to the default behaviour */
 
+  /* the processor condition codes will be messed up soon */
+  BEGIN_CODE
+  NEED_CC();
+  END_CODE
+  
   /* prepare a frame */
   arginfo = array_new(tuple_size);
   for (i=0; i<tuple_size; i++)
@@ -216,6 +220,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,
       psyco_virtualize_exception(po);
       return NULL;
     }
+  argcount = get_arguments_count(&mypo->vlocals);
 
   /* compile the function (this frees mypo) */
   codebuf = psyco_compile_code(mypo,
@@ -223,7 +228,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,
 
   /* get the run-time argument sources and push them on the stack
      and write the actual CALL */
-  result = psyco_call_psyco(po, codebuf, sources);
+  result = psyco_call_psyco(po, codebuf, sources, argcount);
   PyCore_FREE(sources);
   return result;
 
@@ -306,16 +311,19 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
                            psyco_first_merge_point(po->pr.merge_points));
 	
 	/* get the actual arguments */
-	assert(codebuf->snapshot.fz_arguments_count == PyTuple_GET_SIZE(arg));
+	/*extra_assert(get_arguments_count(codebuf->snapshot.fz_vlocals) ==
+	  PyTuple_GET_SIZE(arg));
+	  --- crashed if the codebuf has no snapshot, e.g. unify code bufs */
 	initial_stack = (long*) (&PyTuple_GET_ITEM(arg, 0));
 
 	/* run! */
-	result = psyco_processor_run(codebuf, initial_stack);
+	result = psyco_processor_run(codebuf, initial_stack,
+				     PyTuple_GET_SIZE(arg));
 	
 	Py_DECREF(codebuf);
 	psyco_trash_object(NULL);  /* free any trashed object now */
 
-#ifdef CODE_DUMP_FILE
+#if CODE_DUMP >= 2
         psyco_dump_code_buffers();
 #endif
 
@@ -406,7 +414,7 @@ static PyObject* Psyco_proxy(PyObject* self, PyObject* args)
 	return (PyObject*) psyco_PsycoFunction_New(function, recursion);
 }
 
-#ifdef CODE_DUMP_FILE
+#if CODE_DUMP
 static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
 {
   int i = array->count;
@@ -471,7 +479,7 @@ void psyco_dump_code_buffers(void)
           fprintf(f, "CodeBufferObject %p %d %d '%s' '%s' %d '%s'\n",
                   obj->codeptr, nsize, get_stack_depth(&obj->snapshot),
                   co?PyString_AsString(co->co_filename):"",
-                  co?PyString_AsString(co->co_name):"",
+                  co?PyCodeObject_NAME(co):"",
                   co?obj->snapshot.fz_pyc_data->next_instr:-1,
                   obj->codemode);
           d = PyDict_New();
@@ -548,7 +556,15 @@ void psyco_dump_code_buffers(void)
       PyErr_Restore(exc, val, tb);
     }
 }
+#endif  /* CODE_DUMP */
+
+#if VERBOSE_LEVEL >= 4
+DEFINEFN void psyco_trace_execution(char* msg, void* code_position)
+{
+  debug_printf(("psyco: trace %p for %s\n", code_position, msg));
+}
 #endif
+
 
 /*****************************************************************/
 
@@ -607,8 +623,12 @@ void init_psyco(void)
   if (PyModule_AddObject(CPsycoModule, "PsycoFunctionType",
 			 (PyObject*) &PsycoFunction_Type))
     return;
-#ifdef ALL_CHECKS
-  if (PyModule_AddIntConstant(CPsycoModule, "ALL_CHECKS", 1))
+#if ALL_CHECKS
+  if (PyModule_AddIntConstant(CPsycoModule, "ALL_CHECKS", ALL_CHECKS))
+    return;
+#endif
+#if VERBOSE_LEVEL
+  if (PyModule_AddIntConstant(CPsycoModule, "VERBOSE_LEVEL", VERBOSE_LEVEL))
     return;
 #endif
 #ifdef PY_PSYCO_MODULE

@@ -12,23 +12,16 @@ static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
 	vinfo_t* seq;
 	vinfo_t* index;
 	vinfo_t* result;
-	vinfo_t* index_plus_1;
 	
 	seq = get_array_item(po, v, SEQITER_IT_SEQ);
 	if (seq == NULL)
 		return NULL;
 
-	index = get_array_item(po, v, SEQITER_IT_INDEX);
+	index = read_array_item(po, v, SEQITER_IT_INDEX);
 	if (index == NULL)
-		return NULL;
-	index_plus_1 = integer_add_i(po, index, 1);
-	if (index_plus_1 == NULL)
 		return NULL;
 
 	result = PsycoSequence_GetItem(po, seq, index);
-
-	set_array_item(po, v, SEQITER_IT_INDEX, index_plus_1);
-
 	if (result == NULL) {
 		vinfo_t* matches = PycException_Matches(po, PyExc_IndexError);
 		if (runtime_NON_NULL_t(po, matches)) {
@@ -36,6 +29,25 @@ static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
 					      psyco_vi_None());
 		}
 	}
+	else {
+		/* very remotely potential incompatibility: when exhausted,
+		   the internal iterator index is not incremented. Python
+		   is not consistent in this respect. This could be an
+		   issue if an iterator of a mutable object is not
+		   immediately deleted when exhausted. Well, I guess that
+		   muting an object we iterate over is generally considered
+		   as DDIWWY (Don't Do It -- We Warned You.) */
+		vinfo_t* index_plus_1 = integer_add_i(po, index, 1);
+		if (index_plus_1 == NULL) {
+			vinfo_decref(result, po);
+			result = NULL;
+		}
+		else {
+			write_array_item(po, v, SEQITER_IT_INDEX, index_plus_1);
+			vinfo_decref(index_plus_1, po);
+		}
+	}
+	vinfo_decref(index, po);
 	return result;
 }
 

@@ -29,6 +29,9 @@ EXTERNFN void psyco_pycompiler_init(void);
 #endif
 
 
+#define MAX3(a,b,c)  ((a)>(b)?((a)>(c)?(a):(c)):(b)>(c)?(b):(c))
+
+
 /*****************************************************************/
  /***   Common constants                                        ***/
 
@@ -218,8 +221,10 @@ inline bool psyco_knowntobe(vinfo_t* vi, long value) {
 /*****************************************************************/
  /***   Exception utilities                                     ***/
 
-/* Psyco equivalent of PyErr_Occurred() */
-inline vinfo_t* PsycoErr_Occurred(PsycoObject* po) {
+/* Psyco meta-equivalent of PyErr_Occurred(). Not to be confused with
+   PycException_Occurred(), which tells whether a Psyco-level exception
+   is currently set. */
+inline vinfo_t* psyco_PyErr_Occurred(PsycoObject* po) {
 	if (PycException_Occurred(po) && PycException_IsPython(po)) {
 		return psyco_vi_One();
 	}

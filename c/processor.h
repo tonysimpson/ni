@@ -29,7 +29,7 @@ EXTERNFN void psyco_processor_init(void);
    the 'codebuf'.
 */
 EXTERNFN PyObject* psyco_processor_run(CodeBufferObject* codebuf,
-                                       long initial_stack[]);
+                                       long initial_stack[], int argc);
 
 /* return a new vinfo_t* meaning `in the processor flags, true if <cc>',
    as an integer 0 or 1. The source of the vinfo_t* is compile-time
@@ -239,7 +239,14 @@ inline void psyco_call_void(PsycoObject* po, void* c_function) {
    the run-time sources for the arguments, as specified by
    psyco_build_frame(). */
 EXTERNFN vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
-                                   Source argsources[]);
+                                   Source argsources[], int argcount);
+
+inline int get_arguments_count(vinfo_array_t* vlocals) {
+	int retpos = getstack(vlocals->items[INDEX_LOC_CONTINUATION]->source);
+	extra_assert(retpos != RunTime_StackNone);
+	return (retpos - (INITIAL_STACK_DEPTH+4)) / 4;
+}
+
 
 /*****************************************************************/
  /***   Emit common instructions                                ***/

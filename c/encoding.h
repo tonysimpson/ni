@@ -860,8 +860,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
 /* correct the stack pointer */
 #define STACK_CORRECTION(stack_correction)   do {                       \
   if ((stack_correction) != 0) {                                        \
-    NEED_CC();                                                          \
-    if (COMPACT_ENCODING &&                                             \
+    if (COMPACT_ENCODING && po->ccreg == NULL &&                        \
         -128 <= (stack_correction) && (stack_correction) < 128) {       \
       code[0] = 0x83;   /* SUB			*/                      \
       code[1] = 0xEC;   /*     ESP, imm8	*/                      \
@@ -869,10 +868,11 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
       code += 3;                                                        \
     }                                                                   \
     else {                                                              \
-      code[0] = 0x81;   /* SUB			*/                      \
-      code[1] = 0xEC;   /*     ESP, imm32	*/                      \
-      *(long*)(code+2) = (stack_correction);                            \
-      code += 6;                                                        \
+      code[0] = 0x8D;				/* LEA		   */   \
+      code[1] = 0x84 | ((char)REG_386_ESP)<<3;	/*   ESP,	   */   \
+      code[2] = 0x24;				/*     [ESP+imm32] */   \
+      *(long*)(code+3) = -(stack_correction);                           \
+      code += 7;                                                        \
     }                                                                   \
   }                                                                     \
 } while (0)
@@ -894,6 +894,15 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
    else {                                               \
      LOAD_REG_FROM(vi->source, rg);                     \
    }                                                    \
+} while (0)
+
+#define EMIT_TRACE(msg)      do {               \
+  TEMP_SAVE_REGS_FN_CALLS;                      \
+  PUSH_IMMED((long) code);                      \
+  PUSH_IMMED((long) (msg));                     \
+  CALL_C_FUNCTION(psyco_trace_execution, 2);    \
+  STACK_CORRECTION(-8);                         \
+  TEMP_RESTORE_REGS_FN_CALLS;                   \
 } while (0)
 
 

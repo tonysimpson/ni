@@ -326,7 +326,7 @@ inline void vinfo_setitem(PsycoObject* po, vinfo_t* vi, int index,
 
 /* array management */
 EXTERNFN void clear_tmp_marks(vinfo_array_t* array);
-#ifdef ALL_CHECKS
+#if ALL_CHECKS
 EXTERNFN void assert_cleared_tmp_marks(vinfo_array_t* array);
 #else
 inline void assert_cleared_tmp_marks(vinfo_array_t* array) { }   /* nothing */
@@ -361,7 +361,6 @@ struct PsycoObject_s {
 
   /* compiler private variables for producing and optimizing code */
   reg_t last_used_reg;         /* the most recently used register            */
-  int arguments_count;         /* # run-time arguments given to the function */
   int respawn_cnt;                  /* see psyco_prepare_respawn()           */
   CodeBufferObject* respawn_proxy;  /* see psyco_prepare_respawn()           */
   pyc_data_t pr;               /* private language-dependent data            */
@@ -445,7 +444,7 @@ EXTERNFN void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
 				 void* extra, int extrasize);
 
 /* management functions; see comments in compiler.c */
-#ifdef ALL_CHECKS
+#if ALL_CHECKS
 EXTERNFN void psyco_assert_coherent(PsycoObject* po);
 #else
 inline void psyco_assert_coherent(PsycoObject* po) { }   /* nothing */

@@ -36,9 +36,11 @@
    could be done).
 */
 
-#define INDEX_LOC_GLOBALS       0   /* globals() dict object */
-#define INDEX_LOC_LOCALS_PLUS   1   /* start of local variables + stack */
+#define INDEX_LOC_CONTINUATION  0   /* return address in the stack */
+#define INDEX_LOC_GLOBALS       1   /* globals() dict object */
+#define INDEX_LOC_LOCALS_PLUS   2   /* start of local variables + stack */
 
+#define LOC_CONTINUATION    (po->vlocals.items[INDEX_LOC_CONTINUATION])
 #define LOC_GLOBALS         (po->vlocals.items[INDEX_LOC_GLOBALS])
 #define LOC_LOCALS_PLUS     (po->vlocals.items + INDEX_LOC_LOCALS_PLUS)
 

@@ -28,7 +28,8 @@ EXTERNFN vinfo_t* PsycoTuple_New(int count, vinfo_t** source);
 
 /* get the (possibly virtual) array of items in the tuple,
    returning the length of the tuple or -1 if it fails (items not known).
-   The items are then found in tuple->array->items[TUPLE_OB_ITEM+i]. */
+   The items are then found in tuple->array->items[TUPLE_OB_ITEM+i].
+   Never sets a PycException. */
 EXTERNFN int PsycoTuple_Load(vinfo_t* tuple);
 
 

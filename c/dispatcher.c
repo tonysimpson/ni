@@ -16,9 +16,8 @@ void fpo_build(FrozenPsycoObject* fpo, PsycoObject* po)
   clear_tmp_marks(&po->vlocals);
   fpo->fz_vlocals = array_new(po->vlocals.count);
   duplicate_array(fpo->fz_vlocals, &po->vlocals);
-  fpo->fz_stuff.as_int =
-    (po->stack_depth<<8) | ((int) po->last_used_reg);
-  fpo->fz_arguments_count = po->arguments_count;
+  fpo->fz_stuff.fz_stack_depth = po->stack_depth;
+  fpo->fz_last_used_reg = (int) po->last_used_reg;
   fpo->fz_pyc_data = pyc_data_new(&po->pr);
 }
 
@@ -55,8 +54,7 @@ PsycoObject* fpo_unfreeze(FrozenPsycoObject* fpo)
   /* rebuild a PsycoObject from 'this' */
   PsycoObject* po = PsycoObject_New(fpo->fz_vlocals->count);
   po->stack_depth = get_stack_depth(fpo);
-  po->last_used_reg = (reg_t)(fpo->fz_stuff.as_int & 0xFF);
-  po->arguments_count = fpo->fz_arguments_count;
+  po->last_used_reg = (reg_t) fpo->fz_last_used_reg;
   assert_cleared_tmp_marks(fpo->fz_vlocals);
   duplicate_array(&po->vlocals, fpo->fz_vlocals);
   clear_tmp_marks(fpo->fz_vlocals);
@@ -159,7 +157,7 @@ static code_t* do_respawn(respawn_t* rs)
   /* cannot Py_DECREF(cp->self) because the current function is returning into
      that code now, but any time later is fine: use the trash of codemanager.c */
   psyco_trash_object((PyObject*) rs->self);
-  psyco_dump_code_buffers();
+  dump_code_buffers();
   /* XXX don't know what to do with this reference to codebuf */
   return codebuf->codeptr;
 }
@@ -247,7 +245,7 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
       /*   else */
         FAR_COND_JUMP_TO(codebuf->codeptr, jmpcondition);
       END_CODE
-      psyco_dump_code_buffers();
+      dump_code_buffers();
     }
   else
     po->code = po->respawn_proxy->codeptr;  /* respawning: come back at the
@@ -520,28 +518,46 @@ static code_t* data_update_stack(code_t* code, struct dmove_s* dm,
   while (i--)
     {
       vinfo_t* b = bb->items[i];
-      if (b != NULL)
+      if (b != NULL && b->tmp != NULL)
         {
+          vinfo_t* a = b->tmp;   /* source value */
+          b->tmp = NULL;  /* don't consider the same 'b' more than once */
+          
           if (is_runtime(b->source))
             {
               char rg, rgb;
               vinfo_t* overridden;
-              vinfo_t* a = b->tmp;   /* source value */
               long dststack = RUNTIME_STACK(b);
               long srcstack = RUNTIME_STACK(a);
 
-              /* check for values passing from no-reference to reference
-                 or vice-versa */
-              if (((a->source ^ b->source) & RunTime_NoRef) != 0)
-                {
-                  /* from 'with ref' to 'no ref' is forbidden
-                     by psyco_compatible() */
-                  extra_assert((a->source & RunTime_NoRef) != 0);
-                  RTVINFO_IN_REG(a);
-                  rg = RUNTIME_REG(a);
-                  INC_OB_REFCNT(rg);
-                  a->source &= ~RunTime_NoRef;
-                }
+              /* check for values passing from no-reference to reference */
+              if ((b->source & RunTime_NoRef) == 0) {  /* destination has ref */
+                if ((a->source & RunTime_NoRef) == 0)   /* source has ref too */
+                  {
+                    /* remove the reference from 'a' because it now belongs
+                       to 'b' ('b->source' itself is in the frozen snapshot
+                       and must not be modified!) */
+                    a->source = remove_rtref(a->source);
+                  }
+                else
+                  {
+                    /* create a new reference for 'b'. Note that if the same
+                       'a' is copied to several 'b's during data_update_stack()
+                       as is allowed by graph quotient detection in
+                       psyco_compatible(), then only the first copy will get
+                       the original reference owned by 'a' (if any) and for
+                       the following copies the following increfing code is
+                       executed as well. */
+                    RTVINFO_IN_REG(a);
+                    rg = RUNTIME_REG(a);
+                    INC_OB_REFCNT(rg);
+                  }
+              }
+              /* 'a' must no longer own a reference at this point.
+                 The case of 'b' wanting no reference but 'a' having one
+                 is forbidden by psyco_compatible() because decrefing 'a'
+                 would potentially leave a freed pointer in 'b'. */
+              extra_assert(!has_rtref(a->source));
               
               rgb = RUNTIME_REG(b);
               if (rgb != REG_NONE)
@@ -596,10 +612,45 @@ static code_t* data_update_stack(code_t* code, struct dmove_s* dm,
   return code;
 }
 
+static code_t* data_free_unused(code_t* code, struct dmove_s* dm,
+                                vinfo_array_t* aa)
+{
+  /* decref any object that would be present in 'po' but not at all in
+     the snapshot. Note that it is uncommon that this function actually
+     finds any unused object at all. */
+  int i = aa->count;
+  while (i--)
+    {
+      vinfo_t* a = aa->items[i];
+      if (a != NULL)
+        {
+          if (has_rtref(a->source))
+            {
+              PsycoObject* po = dm->po;
+              code_t* saved_code;
+              a->source = remove_rtref(a->source);
+              
+              saved_code = po->code;
+              po->code = code;
+              psyco_decref_rt(po, a);
+              code = po->code;
+              po->code = saved_code;
+
+              if (code > dm->code_limit)
+                /* oops, buffer overflow. Start a new buffer */
+                code = data_new_buffer(code, dm);
+            }
+          if (a->array != NullArray)
+            code = data_free_unused(code, dm, a->array);
+        }
+    }
+  return code;
+}
+
 DEFINEFN
 code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
 {
-  /* Update 'this' to match 'target', then jump to 'target'. */
+  /* Update 'po' to match 'target', then jump to 'target'. */
 
   int i;
   struct dmove_s dm;
@@ -609,13 +660,6 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
   char pops[REG_TOTAL+2];
 
   psyco_assert_coherent(po);
-  if (sdepth > po->stack_depth)
-    {
-      /* more items in the target stack (uncommon case).
-         Let the stack grow. */
-      STACK_CORRECTION(sdepth - po->stack_depth);
-      po->stack_depth = sdepth;
-    }
   dm.usages_size = sdepth + sizeof(vinfo_t**);
   dm.usages = (char*) PyCore_MALLOC(dm.usages_size);
   if (dm.usages == NULL)
@@ -629,8 +673,21 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
   dm.code_limit = po->codelimit == NULL ? code : po->codelimit;
   dm.private_codebuf = NULL;
 
+  if (sdepth > po->stack_depth)
+    {
+      /* more items in the target stack (uncommon case).
+         Let the stack grow. */
+      STACK_CORRECTION(sdepth - po->stack_depth);
+      po->stack_depth = sdepth;
+    }
+
   /* update the stack */
   code = data_update_stack(code, &dm, target_codebuf->snapshot.fz_vlocals);
+
+  /* decref any object that would be present in 'po' but not at all in
+     the snapshot (data_update_stack() has removed the 'ref' tag of all
+     vinfo_ts it actually used from 'po') */
+  code = data_free_unused(code, &dm, &po->vlocals);
 
   /* update the registers (1): reg-to-reg moves and exchanges */
   memset(pops, -1, sizeof(pops));
@@ -654,7 +711,7 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
                   else
                     LOAD_REG_FROM_REG(i, rg);
                   /* an update is omitted because we are about to
-                     release 'this' anyway: 'REG_NUMBER(po, i) = a;' */
+                     release 'po' anyway: 'REG_NUMBER(po, i) = a;' */
                 }
               dm.copy_regs[i] = NULL;
             }
@@ -689,6 +746,9 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
       dm.copy_regs[(int) reg] = NULL;
       po->stack_depth -= 4;
     }
+  if (code > dm.code_limit)  /* start a new buffer if we wrote past the end */
+    code = data_new_buffer(code, &dm);
+  
   /* update the registers (3): stack-to-register loads */
   for (i=0; i<REG_TOTAL; i++)
     {
@@ -709,7 +769,6 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
     code = data_new_buffer(code, &dm);
   
   PyCore_FREE(dm.usages);
-  psyco_stabilize(target_codebuf);
   if (dm.private_codebuf == NULL)
     Py_INCREF(target_codebuf);      /* no new buffer created */
   else
@@ -720,7 +779,7 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
       /* add a jump from the original code buffer to the new one */
       code = po->code;
       JUMP_TO(dm.private_codebuf->codeptr);
-      psyco_dump_code_buffers();
+      dump_code_buffers();
     }
   PsycoObject_Delete(po);
   return code;
@@ -837,7 +896,7 @@ int psyco_simplify_array(vinfo_array_t* array)
 
 #if PROMOTION_TACTIC == 1
 typedef struct rt_local_buf_s {
-# ifdef CODE_DUMP_FILE
+# if CODE_DUMP
   long signature;
 # endif
   struct rt_local_buf_s* next;
@@ -854,7 +913,7 @@ typedef struct { /* produced at compile time and read by the dispatcher */
   
 #if PROMOTION_TACTIC == 0
   PyObject* spec_dict;    /* local cache (promotions to already-seen values) */
-# ifdef CODE_DUMP_FILE
+# if CODE_DUMP
   void** chained_list;    /* must be last, with spec_dict just before */
 # endif
 #endif
@@ -979,7 +1038,7 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
   {
     code_t* codeend;
     rt_local_buf_t* buf = (rt_local_buf_t*) codebuf->codeptr;
-# ifdef CODE_DUMP_FILE
+# if CODE_DUMP
     buf->signature = 0x66666666;
 # endif
     buf->next = fs->local_chained_list;
@@ -995,7 +1054,7 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
   }
 #endif
 
-  psyco_dump_code_buffers();
+  dump_code_buffers();
   return result;
 }
 
@@ -1063,6 +1122,7 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
 #endif
   void* do_promotion;
 
+  TRACE_EXECUTION("PROMOTION");
   BEGIN_CODE
 #if PROMOTION_FAST_COMMON_CASE
   RTVINFO_IN_REG(fix);
@@ -1109,7 +1169,7 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
   fs->spec_dict = PyDict_New();
   if (fs->spec_dict == NULL)
     OUT_OF_MEMORY();
-# ifdef CODE_DUMP_FILE
+# if CODE_DUMP
   fs->chained_list = psyco_codebuf_spec_dict_list;
   psyco_codebuf_spec_dict_list = (void**)&fs->chained_list;
 # endif
@@ -1193,6 +1253,7 @@ code_t* psyco_finish_fixed_switch(PsycoObject* po, vinfo_t* fix, long kflags,
   CHKTIME(fix->source, RunTime);
   extra_assert(fix->array->count == 0);  /* cannot fix array values,
                                             because of known_to_be_default() */
+  TRACE_EXECUTION("FIXED_SWITCH");
   BEGIN_CODE
   NEED_CC();
   RTVINFO_IN_REG(fix);

@@ -27,11 +27,11 @@ inline void psyco_dispatcher_init(void) { }
    snapshots around in memory; keep them as small as possible. */
 struct FrozenPsycoObject_s {
   union {
-    int as_int;   /* last_used_reg in bits 0-7 and stack_depth in the rest */
+    int fz_stack_depth;
     struct respawn_s* respawning;
   } fz_stuff;
   vinfo_array_t* fz_vlocals;
-  short fz_arguments_count;
+  short fz_last_used_reg;
   short fz_respawned_cnt;
   CodeBufferObject* fz_respawned_from;
   pyc_data_t* fz_pyc_data;  /* only partially allocated */
@@ -53,7 +53,7 @@ EXTERNFN PsycoObject* fpo_unfreeze(FrozenPsycoObject* fpo);
 
 /* inspection */
 inline int get_stack_depth(FrozenPsycoObject* fpo) {
-	return fpo->fz_stuff.as_int >> 8;
+	return fpo->fz_stuff.fz_stack_depth;
 }
 
 

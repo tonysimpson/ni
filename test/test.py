@@ -121,8 +121,11 @@ def go(f, *args):
     print '^^^ computed by Psyco in %s seconds' % t1
     v2, t2 = time(f, *args)
     if v1 == v2:
-        print 'Python got the same result in %s seconds, Psyco is %.2f times faster' %\
-            (t2, (t2/float(t1)))
+        if t1 and t2:
+            s = ', Psyco is %.2f times faster' % (t2/float(t1))
+        else:
+            s = ''
+        print 'Python got the same result in %s seconds%s' % (t2, s)
     else:
         print v2
         print '^^^ by Python in %s seconds' % t2

@@ -14,6 +14,8 @@ DEFINEFN int do_selective(void *v, PyFrameObject *frame, int what, PyObject *arg
   if (what == PyTrace_CALL) {
     code = frame->f_code->co_code;
     name = frame->f_code->co_name;
+    if (name == NULL)
+      return 0;
     g = frame->f_globals;
 
     /* Get the current tick counter value */
@@ -35,9 +37,16 @@ DEFINEFN int do_selective(void *v, PyFrameObject *frame, int what, PyObject *arg
     if (value != FUN_BOUND) {
       if (value++ >= ticks) {
         tmp = PyDict_GetItem(g, name);
-        if (tmp != NULL) {
+        if (tmp != NULL && PyFunction_Check(tmp)) {
           /* Rebind function to a proxy */
-          debug_printf(("psyco: compiling function %s\n", PyString_AS_STRING(name)));
+#if VERBOSE_LEVEL
+          PyObject* modulename = PyDict_GetItemString(g, "__name__");
+          debug_printf(("psyco: rebinding function %s.%s\n",
+                        (modulename && PyString_Check(modulename))
+                            ? PyString_AS_STRING(modulename) : "<anonymous>",
+                        PyString_Check(name)
+                            ? PyString_AS_STRING(name) : "<anonymous>"));
+#endif
           value = FUN_BOUND;
           tmp = (PyObject*)psyco_PsycoFunction_New((PyFunctionObject*)tmp, MAX_RECURSION);
           if (tmp == NULL)

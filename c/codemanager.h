@@ -13,8 +13,8 @@
 /* define to store the end of the code in CodeBufferObjects */
 /*#undef STORE_CODE_END*/
 
-#ifdef CODE_DUMP_FILE
-# define STORE_CODE_END   /* always needed by CODE_DUMP_FILE */
+#if CODE_DUMP
+# define STORE_CODE_END   /* always needed by CODE_DUMP */
 #endif
 
 
@@ -34,13 +34,13 @@ struct CodeBufferObject_s {
 #ifdef STORE_CODE_END
 	code_t* codeend;
 	char* codemode;
-#ifdef CODE_DUMP_FILE
+# if CODE_DUMP
 	CodeBufferObject* chained_list;
-#endif
+# endif
 #endif
 };
 
-#ifdef CODE_DUMP_FILE
+#if CODE_DUMP
 EXTERNVAR CodeBufferObject* psyco_codebuf_chained_list;
 EXTERNVAR void** psyco_codebuf_spec_dict_list;
 #endif

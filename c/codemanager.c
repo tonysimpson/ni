@@ -20,7 +20,7 @@
   b = (CodeBufferObject*) PyObject_INIT(o, &CodeBuffer_Type);   \
   b->codeptr = (codepointer);                                   \
   SET_CODE_END(!setcodelimit);                                  \
-  if (VERBOSE_LEVEL > 1)                                        \
+  if (VERBOSE_LEVEL > 2)                                        \
     debug_printf(("psyco: %s code buffer %p\n",                 \
          extrasize ? "new" : "proxy", b->codeptr));             \
                                                                 \
@@ -68,13 +68,13 @@ CodeBufferObject* psyco_new_code_buffer_size(int size)
   b = (CodeBufferObject*) PyObject_INIT(o, &CodeBuffer_Type);
   b->codeptr = (code_t*) (b + 1);
   b->po = NULL;
-  if (VERBOSE_LEVEL > 1)
+  if (VERBOSE_LEVEL > 2)
     debug_printf(("psyco: new_code_buffer_size(%d) %p\n", size, b->codeptr));
   return b;
 }
 #endif
 
-#ifdef CODE_DUMP_FILE
+#if CODE_DUMP
 DEFINEVAR CodeBufferObject* psyco_codebuf_chained_list = NULL;
 DEFINEVAR void** psyco_codebuf_spec_dict_list = NULL;
 #endif
@@ -86,10 +86,10 @@ void psyco_shrink_code_buffer(CodeBufferObject* obj, int nsize)
   extra_assert(0 < nsize && nsize <= BIG_BUFFER_SIZE - GUARANTEED_MINIMUM);
   ndata = PyObject_REALLOC(obj, sizeof(CodeBufferObject) + nsize);
   //printf("psyco: shrink_code_buffer %p to %d\n", obj->codeptr, nsize);
-  if (VERBOSE_LEVEL > 1)
+  if (VERBOSE_LEVEL > 2)
     debug_printf(("psyco: disassemble %p %p    (%d bytes)\n", obj->codeptr,
                   obj->codeptr + nsize, nsize));
-  else
+  else if (VERBOSE_LEVEL > 1)
     debug_printf(("[%d]", nsize));
   assert(ndata == obj);   /* don't know what to do if this is not the case */
 #ifdef STORE_CODE_END
@@ -97,7 +97,7 @@ void psyco_shrink_code_buffer(CodeBufferObject* obj, int nsize)
   obj->codeend = obj->codeptr + nsize;
   obj->codemode = "normal";
 #endif
-#ifdef CODE_DUMP_FILE
+#if CODE_DUMP
   obj->chained_list = psyco_codebuf_chained_list;
   psyco_codebuf_chained_list = obj;
 #endif
@@ -138,7 +138,7 @@ static PyObject* codebuf_repr(CodeBufferObject* self)
 
 static void codebuf_dealloc(CodeBufferObject* self)
 {
-#ifdef CODE_DUMP_FILE
+#if CODE_DUMP
   CodeBufferObject** ptr = &psyco_codebuf_chained_list;
   void** chain;
   while (*ptr != NULL)
@@ -154,7 +154,7 @@ static void codebuf_dealloc(CodeBufferObject* self)
     if (self->codeptr < (code_t*)chain && (code_t*)chain <= self->codeend)
       assert(!"releasing a code buffer with a spec_dict");
 #endif
-  if (VERBOSE_LEVEL > 1)
+  if (VERBOSE_LEVEL > 2)
     debug_printf(("psyco: releasing code buffer %p at %p\n",
                   self->codeptr, self));
   fpo_release(&self->snapshot);

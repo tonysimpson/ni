@@ -130,6 +130,7 @@ static const unsigned char other_opcodes[] = {
   GET_ITER,
   SET_LINENO,
   CALL_FUNCTION,
+  MAKE_FUNCTION,
   0 };
 
 #define SUPPORTED_COMPARE_ARG(oparg)  ( \
@@ -139,11 +140,11 @@ static const unsigned char other_opcodes[] = {
                               (oparg) == Py_NE ||  \
                               (oparg) == Py_GT ||  \
                               (oparg) == Py_GE ||  \
-                              (oparg) == IS        ||  \
-                              (oparg) == IS_NOT    ||  \
-                              (oparg) == IN        ||  \
-                              (oparg) == NOT_IN    ||  \
-                              (oparg) == EXC_MATCH ||  \
+                              (oparg) == PyCmp_IS        ||  \
+                              (oparg) == PyCmp_IS_NOT    ||  \
+                              (oparg) == PyCmp_IN        ||  \
+                              (oparg) == PyCmp_NOT_IN    ||  \
+                              (oparg) == PyCmp_EXC_MATCH ||  \
                               0)
 
 static PyObject* CodeMergePoints = NULL;
@@ -197,7 +198,7 @@ inline PyObject* build_merge_points(PyCodeObject* co)
   
   for (i=0; i<length; )
     {
-#ifdef VERBOSE
+#if VERBOSE_LEVEL
       int i0 = i;
 #endif
       char flags;
@@ -219,9 +220,10 @@ inline PyObject* build_merge_points(PyCodeObject* co)
 	if (op != COMPARE_OP || !SUPPORTED_COMPARE_ARG(oparg))
 	  {
 	    /* unsupported instruction */
-#ifdef VERBOSE
-            printf("psyco: unsupported instruction: bytecode %d at %s:%d\n",
-                   (int) op, PyString_AS_STRING(co->co_name), i0);
+#if VERBOSE_LEVEL
+            debug_printf(("psyco: unsupported instruction: "
+                          "bytecode %d at %s:%d\n",
+                          (int) op, PyCodeObject_NAME(co), i0));
 #endif            
 	    PyCore_FREE(paths);
 	    Py_INCREF(Py_None);

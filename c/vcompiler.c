@@ -193,7 +193,7 @@ void clear_tmp_marks(vinfo_array_t* array)
       }
 }
 
-#ifdef ALL_CHECKS
+#if ALL_CHECKS
 DEFINEFN
 void assert_cleared_tmp_marks(vinfo_array_t* array)
 {
@@ -225,7 +225,7 @@ bool array_contains(vinfo_array_t* array, vinfo_t* vi)
   return false;
 }
 
-#ifdef ALL_CHECKS
+#if ALL_CHECKS
 static void coherent_array(vinfo_array_t* source, PsycoObject* po, int found[])
 {
   int i = source->count;
@@ -378,7 +378,6 @@ PsycoObject* psyco_duplicate(PsycoObject* po)
   /* the rest of the data is copied with no change */
   result->stack_depth = po->stack_depth;
   result->last_used_reg = po->last_used_reg;
-  result->arguments_count = po->arguments_count;
   result->respawn_cnt = po->respawn_cnt;
   result->respawn_proxy = po->respawn_proxy;
   result->code = po->code;
@@ -426,7 +425,7 @@ static code_t* do_resume_coding(coding_pause_t* cp)
     FAR_COND_JUMP_TO(target, cp->cond);
   /* cannot Py_DECREF(cp->self) because the current function is returning into
      that code now, but any time later is fine: use the trash of codemanager.c */
-  psyco_dump_code_buffers();
+  dump_code_buffers();
   psyco_trash_object((PyObject*) cp->self);
   return target;
 }
@@ -479,7 +478,7 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
   else
     FAR_COND_JUMP_TO(codebuf->codeptr, jmpcondition);
   END_CODE
-  psyco_dump_code_buffers();
+  dump_code_buffers();
 }
 
 /* for psyco_coding_pause(): a resume function that simply resumes compilation.
@@ -537,7 +536,7 @@ code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
                                           mp != NULL ? &mp->entries : NULL);
         if (codebuf == NULL)
           OUT_OF_MEMORY();
-#ifdef CODE_DUMP_FILE
+#if CODE_DUMP
         codebuf->chained_list = psyco_codebuf_chained_list;
         psyco_codebuf_chained_list = codebuf;
 #endif
@@ -568,9 +567,9 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
                         condition_code_t condition)
 {
   CodeBufferObject* oldcodebuf;
-  vinfo_array_t* diff = mp==NULL ? NULL :
-                     psyco_compatible(po, &mp->entries, &oldcodebuf);
   PsycoObject* po2 = PsycoObject_Duplicate(po);
+  vinfo_array_t* diff = mp==NULL ? NULL :
+                     psyco_compatible(po2, &mp->entries, &oldcodebuf);
 
   extra_assert(condition < CC_TOTAL);
 
@@ -656,7 +655,7 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
   /* we have written some code into a new codebuf, now shrink it to
      its actual size */
   psyco_shrink_code_buffer(codebuf, code1 - codebuf->codeptr);
-  psyco_dump_code_buffers();
+  dump_code_buffers();
   return codebuf;
 }
 

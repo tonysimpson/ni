@@ -69,7 +69,7 @@ vinfo_t* PsycoEval_CallObjectWithKeywords(PsycoObject* po,
 	return result;
 
    use_proxy:
-	if (PsycoErr_Occurred(po))
+	if (PycException_Occurred(po))
 		return NULL;
 	return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
 				  CfReturnRef|CfPyErrIfNull,

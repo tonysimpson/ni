@@ -260,7 +260,7 @@ static vinfo_t* pbuiltin_apply(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 	switch (tuplesize) {
 	case 3:
 		kwdict = PsycoTuple_GET_ITEM(vargs, 2);
-		if (Psyco_TypeSwitch(po, alist, &psyfs_dict) != 0) {
+		if (Psyco_TypeSwitch(po, kwdict, &psyfs_dict) != 0) {
 			/* 'kwdict' is not a dictionary */
 			break;
 		}
@@ -280,7 +280,7 @@ static vinfo_t* pbuiltin_apply(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 		return retval;
 	}
 
-	if (PsycoErr_Occurred(po))
+	if (PycException_Occurred(po))
 		return NULL;
 	return psyco_generic_call(po, cd_apply.cd_function,
 				  CfReturnRef|CfPyErrIfNull,
@@ -296,9 +296,6 @@ static vinfo_t* pbuiltin_divmod(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 					  PsycoTuple_GET_ITEM(vargs, 0),
 					  PsycoTuple_GET_ITEM(vargs, 1));
 	}
-
-	if (PsycoErr_Occurred(po))
-		return NULL;
 	return psyco_generic_call(po, cd_divmod.cd_function,
 				  CfReturnRef|CfPyErrIfNull,
 				  "lv", NULL, vargs);

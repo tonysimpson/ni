@@ -66,8 +66,20 @@ for key, value in htmlentitydefs.entitydefs.items():
 def htmlquote(text):
     return ''.join([revmap.get(c,c) for c in text])
 
+def lineaddresses(line):
+    result = []
+    i = 0
+    while 1:
+        match = re_addr.search(line, i)
+        if not match:
+            break
+        i = match.end()
+        addr = long(match.group(1), 16)
+        result.append(addr)
+    return result
 
-LOC_LOCALS_PLUS = 1
+
+LOC_LOCALS_PLUS = 2
 
 class CodeBuf:
     
@@ -138,7 +150,7 @@ class CodeBuf:
                         maybe[codebuf] = 1
             for codebuf in maybe.keys():
                 for line in codebuf.disass_text:
-                    for addr in codebuf.addresses(line):
+                    for addr in lineaddresses(line):
                         if start <= addr < end:
                             self.reverse_lookup.append((addr-start, codebuf))
             return self.reverse_lookup
@@ -159,22 +171,10 @@ class CodeBuf:
             del self.reverse_lookup
         except:
             pass
-
-    def addresses(self, line):
-        result = []
-        i = 0
-        while 1:
-            match = re_addr.search(line, i)
-            if not match:
-                break
-            i = match.end()
-            addr = long(match.group(1), 16)
-            result.append(addr)
-        return result
     
 ##    def build_reverse_lookup(self):
 ##        for line in self.disass_text:
-##            for addr in self.addresses(line):
+##            for addr in lineaddresses(line):
 ##                sym = symbols.get(addr)
 ##                if isinstance(sym, CodeBuf):
 ##                    sym.reverse_lookup.append((addr-sym.addr, self))
@@ -199,7 +199,7 @@ class CodeBuf:
                     line = linetext(line, self.addr + ofs)
                 if sources != [self]*len(sources):
                     data.append('\n')
-            for addr in self.addresses(line):
+            for addr in lineaddresses(line):
                 sym = symbols.get(addr)
                 if sym:
                     line = '%s\t(%s)' % (line, symtext(sym, addr, self))

@@ -2,15 +2,28 @@
 #
 ###  Fix the Python include path for your system.
 #
-# PY_INCLUDE = /home/arigo/cvs/python/dist/src/Include
 PY_INCLUDE = /usr/include/python2.2
-# PY_INCLUDE = /users/arigo/include/python2.2
-# PY_INCLUDE = /home/arigo/include/python2.1
 #
 #
-CC         = gcc
-C_FLAGS    = -g -Wall -Wstrict-prototypes  # -O3 -DDISABLE_DEBUG
-LINK_FLAGS = -shared
+CC             = gcc
+LINK_FLAGS     = -shared
+DEBUG_FLAGS    = -g -Wall -Wstrict-prototypes
+RELEASE_FLAGS  = -O3 -DPSYCO_DEBUG=0
+#
+# pick one of the following mode or make your own.
+# see psyco.h for the range and meaning of the defines.
+#
+# release mode:
+#C_FLAGS = ${RELEASE_FLAGS}
+#
+# lightweight debugging checks (recommended for now):
+C_FLAGS = ${DEBUG_FLAGS} -DVERBOSE_LEVEL=0 -DCODE_DUMP=1 -DHEAVY_MEM_CHECK=0
+#
+# usual debugging mode:
+#C_FLAGS = ${DEBUG_FLAGS} -DVERBOSE_LEVEL=1 -DCODE_DUMP=2 -DHEAVY_MEM_CHECK=0
+#
+# heavy debugging, fully verbose with instruction tracing:
+#C_FLAGS = ${DEBUG_FLAGS} -DVERBOSE_LEVEL=4 -DCODE_DUMP=3 -DHEAVY_MEM_CHECK=1
 #
 ##############################################################################
 
