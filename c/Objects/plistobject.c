@@ -155,6 +155,7 @@ static vinfo_t* plist_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 				       "list index out of range");
 		return NULL;
 	}
+        assert_nonneg(i);
 
 	if (a->source == VirtualTime_New(&psyco_computed_vlist) &&
 	    is_compiletime(i->source)) {
@@ -220,6 +221,7 @@ static bool plist_ass_item(PsycoObject* po, vinfo_t* a, vinfo_t* i, vinfo_t* v)
 				       "list assignment index out of range");
 		return false;
 	}
+        assert_nonneg(i);
 
 	if (a->source == VirtualTime_New(&psyco_computed_vlist) &&
 	    is_compiletime(i->source)) {

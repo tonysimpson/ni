@@ -175,13 +175,17 @@ EXTERNFN void psyco_debug_printf(char* msg, ...);
 EXTERNVAR PyObject* psyco_logger;
 EXTERNFN void psyco_flog(char* msg, ...);
 
-#if VERBOSE_LEVEL >= 4
+#if (VERBOSE_LEVEL >= 4) || defined(PSYCO_TRACE)
 # define TRACE_EXECUTION(msg)         do {                                    \
   BEGIN_CODE  EMIT_TRACE(msg, psyco_trace_execution);  END_CODE } while (0)
 # define TRACE_EXECUTION_NOERR(msg)   do {                                    \
   BEGIN_CODE  EMIT_TRACE(msg, psyco_trace_execution_noerr);  END_CODE } while (0)
 EXTERNFN void psyco_trace_execution(char* msg, void* code_position);
+# if defined(PSYCO_TRACE)
+#  define psyco_trace_execution_noerr psyco_trace_execution
+# else
 EXTERNFN void psyco_trace_execution_noerr(char* msg, void* code_position);
+# endif
 #else
 # define TRACE_EXECUTION(msg)         do { } while (0) /* nothing */
 # define TRACE_EXECUTION_NOERR(msg)   do { } while (0) /* nothing */

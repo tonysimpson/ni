@@ -45,7 +45,7 @@ inline vinfo_t* PsycoCharacter_NEW(vinfo_t* chrval)
 	result->array->items[iOB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyString_Type)));
 	result->array->items[iFIX_SIZE] = psyco_vi_One();
-	result->array->items[CHARACTER_CHAR] = chrval;
+	result->array->items[CHARACTER_CHAR] = chrval;  assert_nonneg(chrval);
 	return result;
 }
 
@@ -152,9 +152,9 @@ inline vinfo_t* PsycoStrSlice_NEW(vinfo_t* source, vinfo_t* start, vinfo_t* len)
 	result->array = array_new(STRSLICE_TOTAL);
 	result->array->items[iOB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyString_Type)));
-	result->array->items[iFIX_SIZE]       = len;
+	result->array->items[iFIX_SIZE]       = len;    assert_nonneg(len);
 	result->array->items[STRSLICE_SOURCE] = source;
-	result->array->items[STRSLICE_START]  = start;
+	result->array->items[STRSLICE_START]  = start;  assert_nonneg(start);
 	return result;
 }
 
@@ -372,8 +372,8 @@ inline vinfo_t* PsycoCatStr_NEW(PsycoObject* po,
 	result->array = array_new(CATSTR_TOTAL);
 	result->array->items[iOB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyString_Type)));
-	result->array->items[iFIX_SIZE]    = totallength;
-	result->array->items[CATSTR_LIST]  = list;
+	result->array->items[iFIX_SIZE]= totallength; assert_nonneg(totallength);
+	result->array->items[CATSTR_LIST] = list;
 	return result;
 }
 
@@ -414,6 +414,7 @@ static vinfo_t* pstring_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 				       "string index out of range");
 		return NULL;
 	}
+	assert_nonneg(i);
 
 	if (psyco_knowntobe(vlen, 1) &&
 	    Psyco_KnownType(a) == &PyString_Type) {
@@ -437,7 +438,6 @@ static vinfo_t* pstring_slice(PsycoObject* po, vinfo_t* a,
 	vinfo_t* slicelen;
 	vinfo_t* slicestart = NULL;
 	vinfo_t* result = NULL;
-	bool i_could_be_neg = true;
 
 	vlen = psyco_get_const(po, a, FIX_size);
 	if (vlen == NULL)
@@ -473,32 +473,31 @@ static vinfo_t* pstring_slice(PsycoObject* po, vinfo_t* a,
 				}
 			}
 			else
-				i_could_be_neg = false;
+				assert_nonneg(i);
 		}
 	}
+        assert_nonneg(j);
 
 	cc = integer_cmp(po, i, j, Py_GT|COMPARE_UNSIGNED);
 	if (cc == CC_ERROR)
 		goto fail;
 	if (runtime_condition_f(po, cc)) {
 		/* i < 0 or i > j */
-		if (!i_could_be_neg)
-			cc = CC_ALWAYS_FALSE;
-		else {
-			cc = integer_cmp_i(po, i, 0, Py_LT);
-			if (cc == CC_ERROR)
-				goto fail;
-		}
+		cc = integer_cmp_i(po, i, 0, Py_LT);
+		if (cc == CC_ERROR)
+			goto fail;
 		if (runtime_condition_f(po, cc)) {
 			/* i < 0 */
 			i = psyco_vi_Zero();
 		}
 		else {
+			assert_nonneg(i);
 			/* i > j */
 			return vinfo_new(CompileTime_New((long) pempty_string));
 		}
 	}
 	else {
+		assert_nonneg(i);
 		vinfo_incref(i);
 	}
 	slicestart = i;

@@ -165,7 +165,7 @@ static defield_t getdictoffset(PsycoObject* po, vinfo_t* obj, vinfo_t** varindex
 		return NO_PREV_FIELD;
 	if (dictoffset < 0) {
 		vinfo_t* size1;
-		vinfo_t* ob_size = psyco_get_field(po, obj, VAR_size);
+		vinfo_t* ob_size = psyco_get_field(po, obj, VAR_signed_size);
 		if (ob_size == NULL)
 			return NO_PREV_FIELD;
 		size1 = integer_abs(po, ob_size, false);

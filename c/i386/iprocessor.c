@@ -1228,7 +1228,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 		PUSH_CC_FLAGS();
 	for (i=0; i<REG_TOTAL; i++)
 		NEED_REGISTER(i);
-	finfo->stack_depth = po->stack_depth;
+	finfo_last(finfo)->link_stack_depth = po->stack_depth;
 	SAVE_IMMED_TO_EBP_BASE((long) finfo, INITIAL_STACK_DEPTH);
 	initial_depth = po->stack_depth;
 	CALL_SET_ARG_IMMED(-1, argcount, argcount+1);
@@ -1245,13 +1245,30 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 			   new_rtvinfo(po, REG_FUNCTIONS_RETURN, true, false));
 }
 
+DEFINEFN
+void psyco_inline_enter(PsycoObject* po)
+{
+	struct stack_frame_info_s* finfo = psyco_finfo(NULL, po);
+	BEGIN_CODE
+	SAVE_IMMED_TO_EBP_BASE((long) finfo, INITIAL_STACK_DEPTH);
+	END_CODE
+}
+
+DEFINEFN
+void psyco_inline_exit (PsycoObject* po)
+{
+	BEGIN_CODE
+	SAVE_IMM8_TO_EBP_BASE(-1, INITIAL_STACK_DEPTH);
+	END_CODE
+}
+
 DEFINEFN struct stack_frame_info_s**
 psyco_next_stack_frame(struct stack_frame_info_s** finfo)
 {
 	/* Hack to pick directly from the machine stack the stored
 	   "stack_frame_info_t*" pointers */
 	return (struct stack_frame_info_s**)
-		(((char*) finfo) - (*finfo)->stack_depth);
+		(((char*) finfo) - finfo_last(*finfo)->link_stack_depth);
 }
 
 
@@ -1920,21 +1937,57 @@ static condition_code_t int_cmp_i(PsycoObject* po, vinfo_t* rt1,
         ; /* pass */
       }
     }
-  else if (immed2 < 0 && is_rtnonneg(rt1->source))  /* rt1>=0 && immed2<0 */
+  else if (immed2 < 0)
     {
+      if (is_rtnonneg(rt1->source))  /* rt1>=0 && immed2<0 */
+        {
+          switch (result) {
+          case CC_E:    /* rt1 == immed2 */
+          case CC_L:    /* rt1 <  immed2 */
+          case CC_LE:   /* rt1 <= immed2 */
+          case CC_uG:   /* (unsigned) rt1 >  immed2 */
+          case CC_uGE:  /* (unsigned) rt1 >= immed2 */
+            return CC_ALWAYS_FALSE;
+          case CC_NE:   /* rt1 != immed2 */
+          case CC_GE:   /* rt1 >= immed2 */
+          case CC_G:    /* rt1 >  immed2 */
+          case CC_uLE:  /* (unsigned) rt1 <= immed2 */
+          case CC_uL:   /* (unsigned) rt1 <  immed2 */
+            return CC_ALWAYS_TRUE;
+          default:
+            ; /* pass */
+          }
+        }
+      if (immed2 == LONG_MIN)
+        {
+          switch (result) {
+          case CC_L:    /* rt1 <  LONG_MIN */
+            return CC_ALWAYS_FALSE;
+          case CC_GE:   /* rt1 >= LONG_MIN */
+            return CC_ALWAYS_TRUE;
+          default:
+            ; /* pass */
+          }
+        }
+    }
+  else if (immed2 == LONG_MAX)
+    {
+      if (is_rtnonneg(rt1->source))   /* if we know that rt1>=0 */
+        {
+          switch (result) {
+          case CC_uG:   /* (unsigned) rt1 >  LONG_MAX */
+            return CC_ALWAYS_FALSE;
+          case CC_uLE:  /* (unsigned) rt1 <= LONG_MAX */
+            return CC_ALWAYS_TRUE;
+          default:
+            ; /* pass */
+          }
+        }
       switch (result) {
-      case CC_E:    /* rt1 == immed2 */
-      case CC_L:    /* rt1 <  immed2 */
-      case CC_LE:   /* rt1 <= immed2 */
-      case CC_uG:   /* (unsigned) rt1 >  immed2 */
-      case CC_uGE:  /* (unsigned) rt1 >= immed2 */
-        return CC_ALWAYS_FALSE;
-      case CC_NE:   /* rt1 != immed2 */
-      case CC_GE:   /* rt1 >= immed2 */
-      case CC_G:    /* rt1 >  immed2 */
-      case CC_uLE:  /* (unsigned) rt1 <= immed2 */
-      case CC_uL:   /* (unsigned) rt1 <  immed2 */
+      case CC_LE:   /* rt1 <= LONG_MAX */
         return CC_ALWAYS_TRUE;
+      case CC_G:    /* rt1 >  LONG_MAX */
+        return CC_ALWAYS_FALSE;
       default:
         ; /* pass */
       }

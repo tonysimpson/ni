@@ -564,14 +564,14 @@ static code_t* do_respawn(respawn_t* rs)
      instruction where it left. It will probably re-emit a few machine
      instructions -- not needed, they will be trashed, but this has
      rebuilt the correct PsycoObject state. This occurs when eventually
-     a positive DETECT_RESPAWN() is issued. */
+     a positive detect_respawn() is issued. */
   po->respawn_cnt = - respawn_cnt;
   po->respawn_proxy = codebuf;
 
   code = GLOBAL_ENTRY_POINT(po);
   
   SHRINK_CODE_BUFFER(codebuf, code, "respawned");
-  /* make sure DETECT_RESPAWN() succeeded */
+  /* make sure detect_respawn() succeeded */
   psyco_assert(codebuf->snapshot.fz_respawned_from == rs->respawn_from);
 
   /* fix the jump to point to 'codebuf->codestart' */

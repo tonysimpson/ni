@@ -62,6 +62,7 @@ EXTERNVAR source_virtual_t ERtPython;  /* Exception raised by Python */
 EXTERNVAR source_virtual_t EReturn;    /* 'return' statement */
 EXTERNVAR source_virtual_t EBreak;     /* 'break' statement */
 EXTERNVAR source_virtual_t EContinue;  /* 'continue' statement */
+EXTERNVAR source_virtual_t EInline;    /* inline a frame inside a parent frame */
 
 
 /* Check whether a pseudo-exception is currently set */
@@ -119,7 +120,6 @@ EXTERNFN void psyco_virtualize_exception(PsycoObject* po);
 /* fetch a Python exception set at run-time (that is, a ERtPython) and turn into
    a pseudo-exception. This is a no-op if !PycException_Is(po, &ERtPython). */
 EXTERNFN void PycException_Fetch(PsycoObject* po);
-
 
 /*****************************************************************/
  /***   Promotion                                               ***/
@@ -324,6 +324,7 @@ inline void pyc_data_duplicate(pyc_data_t* target, pyc_data_t* source) {
 	memcpy(target, source, sizeof(pyc_data_t));
 	target->exc = NULL;
         target->val = NULL;
+        target->tb  = NULL;
 	Py_XINCREF(target->changing_globals);
 }
 

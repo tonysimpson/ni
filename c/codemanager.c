@@ -81,14 +81,12 @@ static void close_buffer_use(code_t* code)
         {
           extra_assert(b->inuse);
           ALIGN_NO_FILL();
-          if (code <= ((code_t*) b) - (BUFFER_MARGIN+2*GUARANTEED_MINIMUM))
-            {
-              /* unlock the buffer */
-              psyco_memory_usage += (char*) code - b->position;
-              b->position = (char*) code;
-              b->inuse = false;
-            }
-          else
+          /* unlock the buffer */
+          psyco_memory_usage += (char*) code - b->position;
+          b->position = (char*) code;
+          b->inuse = false;
+          
+          if (code > ((code_t*) b) - (BUFFER_MARGIN+2*GUARANTEED_MINIMUM))
             {
               /* buffer nearly full, remove it from the chained list */
               codemanager_buf_t** bb;
@@ -161,6 +159,14 @@ CodeBufferObject* psyco_proxy_code_buffer(PsycoObject* po, global_entries_t* ge)
 {
   return new_code_buffer(po, ge, po->code, NULL);
 }
+
+#if 0    /* not used any more */
+DEFINEFN
+CodeBufferObject* psyco_minimal_code_buffer(code_t* code)
+{
+  return new_code_buffer(NULL, NULL, code, NULL);
+}
+#endif
 
 #if 0    /* not used in this version */
 DEFINEFN
@@ -249,6 +255,9 @@ void psyco_dump_bigbuffers(FILE* f)
       size_t size = b->position-start;
       fprintf(f, "BigBuffer 0x%lx %d\n", (long) start, size);
       fwrite(start, 1, size, f);
+      if (b->inuse)
+        fprintf(stderr, "warning, BigBuffer at %p still in use\n",
+                b->position);
     }
 }
 #endif

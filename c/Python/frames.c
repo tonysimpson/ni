@@ -386,12 +386,16 @@ bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering)
 #define FRAME_STACK_ALLOC_BY	83   /* about 1KB */
 
 DEFINEFN
-stack_frame_info_t* psyco_finfo(PsycoObject* callee)
+stack_frame_info_t* psyco_finfo(PsycoObject* caller, PsycoObject* callee)
 {
-	Source sglobals;
 	static stack_frame_info_t* current = NULL;
 	static stack_frame_info_t* end = NULL;
-	if (current == end) {
+	
+	Source sglobals;
+	stack_frame_info_t* p;
+	int inlining = caller != NULL && caller->pr.is_inlining;
+	
+	if (end - current <= inlining) {
 		psyco_memory_usage += sizeof(stack_frame_info_t) *
 			FRAME_STACK_ALLOC_BY;
 		current = PyMem_NEW(stack_frame_info_t, FRAME_STACK_ALLOC_BY);
@@ -399,14 +403,25 @@ stack_frame_info_t* psyco_finfo(PsycoObject* callee)
 			OUT_OF_MEMORY();
 		end = current + FRAME_STACK_ALLOC_BY;
 	}
-	current->co = callee->pr.co;
+	p = current;
+	current += inlining + 1;
+	p->link_stack_depth = -inlining;
+	p->co = callee->pr.co;
 	sglobals = callee->vlocals.items[INDEX_LOC_GLOBALS]->source;
 	if (is_compiletime(sglobals))
-		current->globals = (PyObject*) CompileTime_Get(sglobals)->value;
+		p->globals = (PyObject*) CompileTime_Get(sglobals)->value;
 	else
-		current->globals = NULL;  /* uncommon */
-	
-	return current++;
+		p->globals = NULL;  /* uncommon */
+	if (inlining) {
+		(p+1)->co = caller->pr.co;
+		sglobals = caller->vlocals.items[INDEX_LOC_GLOBALS]->source;
+		if (is_compiletime(sglobals))
+			(p+1)->globals = (PyObject*)
+				CompileTime_Get(sglobals)->value;
+		else
+			(p+1)->globals = NULL;  /* uncommon */
+	}
+	return p;
 }
 
 DEFINEFN
@@ -488,8 +503,11 @@ static PyObject* pvisitframes(PyObject*(*callback)(PyObject*,void*),
 			struct sfitmp_s* p;
 			PyObject* o;
 			PyObject* g;
+			long tag;
 			stack_frame_info_t** f1;
 			stack_frame_info_t** finfo;
+			stack_frame_info_t* fdata;
+			stack_frame_info_t* flimit;
 			finfo = *(fstart->psy_frames_start);
 
 			/* Enumerate the frames and store them in a
@@ -508,6 +526,8 @@ static PyObject* pvisitframes(PyObject*(*callback)(PyObject*,void*),
 				p->fi = f1;
 				p->next = revlist;
 				revlist = p;
+				if ((*f1)->link_stack_depth == 0)
+					break; /* stack top is an inline frame */
 			}
 
 			/* now actually visit them in the correct order */
@@ -516,17 +536,26 @@ static PyObject* pvisitframes(PyObject*(*callback)(PyObject*,void*),
 				/* a Psyco frame is represented as
 				   (co, globals, address_of(*fi)) */
 				if (result == NULL) {
-					g = (*p->fi)->globals;
-					if (g == NULL)
-						g = f->f_globals;
-					o = Py_BuildValue("OOl",
-							  (*p->fi)->co,
-							  g,
-							  (long)(p->fi));
-					if (o == NULL)
-						OUT_OF_MEMORY();
-					result = callback(o, data);
-					Py_DECREF(o);
+					tag = (long)(p->fi);
+					fdata = *p->fi;
+					flimit = finfo_last(fdata);
+					while (1) {
+						g = fdata->globals;
+						if (g == NULL)
+							g = f->f_globals;
+						o = Py_BuildValue("OOl",
+								  fdata->co, g,
+								  tag);
+						if (o == NULL)
+							OUT_OF_MEMORY();
+						result = callback(o, data);
+						Py_DECREF(o);
+						if (result != NULL)
+							break;
+						if (fdata == flimit)
+							break;
+						fdata++, tag--;
+					}
 				}
 				revlist = p->next;
 				PyMem_FREE(p);

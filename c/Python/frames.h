@@ -57,12 +57,17 @@ EXTERNFN PyObject* psyco_get_locals(void); /* this one implemented in psyco.c */
 
 /* to keep a trace of the Psyco stack frames */
 struct stack_frame_info_s {
-	int stack_depth;
+	int link_stack_depth;  /* -1 if there is an inline frame following */
 	PyCodeObject* co;
 	PyObject* globals;  /* NULL if not compile-time */
 };
+inline stack_frame_info_t* finfo_last(stack_frame_info_t* finfo) {
+	if (finfo->link_stack_depth < 0) finfo -= finfo->link_stack_depth;
+	return finfo;
+}
 
-EXTERNFN stack_frame_info_t* psyco_finfo(PsycoObject* callee);
+EXTERNFN stack_frame_info_t* psyco_finfo(PsycoObject* caller,
+					 PsycoObject* callee);
 
 /* extra run-time data attached to the Python frame objects which are
    used as starting point for Psyco frames */

@@ -33,7 +33,7 @@ inline vinfo_t* PsycoBool_FROM_LONG(vinfo_t* vlong)
 	result->array = array_new(BOOL_TOTAL);
 	result->array->items[iOB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyBool_Type)));
-	result->array->items[iBOOL_OB_IVAL] = vlong;
+	result->array->items[iBOOL_OB_IVAL] = vlong;  assert_nonneg(vlong);
 	return result;
 }
 inline vinfo_t* PsycoBool_FromLong(vinfo_t* vlong)

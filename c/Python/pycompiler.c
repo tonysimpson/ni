@@ -3,6 +3,7 @@
 #include "../dispatcher.h"
 #include "../mergepoints.h"
 #include "../codemanager.h"
+#include "../psyfunc.h"
 
 #include "../Objects/pabstract.h"
 #include "../Objects/pintobject.h"
@@ -164,8 +165,14 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 		break;
 
 	case CfPyErrIfNeg:   /* a return < 0 means an error */
-		cc = integer_cmp_i(po, vi, 0, Py_LT);
-		break;
+		cc = integer_cmp_i(po, vi, 0, Py_GE);
+		if (cc == CC_ERROR)
+			goto Error;
+		if (runtime_condition_t(po, cc)) {
+			assert_nonneg(vi);
+			return vi;   /* result is >= 0, ok */
+		}
+		goto Error;
 
 	case CfPyErrIfMinus1:     /* only -1 means an error */
 		cc = integer_cmp_i(po, vi, -1, Py_EQ);
@@ -188,8 +195,10 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 		cc = integer_cmp_i(po, vi, 0, Py_GE);
 		if (cc == CC_ERROR)
 			goto Error;
-		if (runtime_condition_t(po, cc))
+		if (runtime_condition_t(po, cc)) {
+			assert_nonneg(vi);
 			return vi;   /* result is >= 0, ok */
+		}
 		cc = integer_NON_NULL(po, psyco_PyErr_Occurred(po));
 		break;
 
@@ -226,8 +235,7 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 #endif
 
 	case CfPyErrAlways:   /* always set an exception */
-		cc = CC_ALWAYS_TRUE;
-		break;
+		goto Error;
 
 	default:
 		return vi;
@@ -329,9 +337,10 @@ void pyc_data_build(PsycoObject* po, PyObject* merge_points)
 static void block_setup(PsycoObject* po, int type, int handler, int level)
 {
   PyTryBlock *b;
+  extra_assert(!po->pr.is_inlining);
   if (po->pr.iblock >= CO_MAXBLOCKS)
     Py_FatalError("block stack overflow");
-  b = &po->pr.blockstack[po->pr.iblock++];
+  b = &po->pr.blockstack[(int)(po->pr.iblock++)];
   b->b_type = type;
   b->b_level = level;
   b->b_handler = handler;
@@ -339,9 +348,10 @@ static void block_setup(PsycoObject* po, int type, int handler, int level)
 
 static PyTryBlock* block_pop(PsycoObject* po)
 {
+  extra_assert(!po->pr.is_inlining);
   if (po->pr.iblock <= 0)
     Py_FatalError("block stack underflow");
-  return &po->pr.blockstack[--po->pr.iblock];
+  return &po->pr.blockstack[(int)(--po->pr.iblock)];
 }
 
 
@@ -353,6 +363,7 @@ DEFINEVAR source_virtual_t ERtPython;  /* Exception raised by Python */
 DEFINEVAR source_virtual_t EReturn;    /* 'return' statement */
 DEFINEVAR source_virtual_t EBreak;     /* 'break' statement */
 DEFINEVAR source_virtual_t EContinue;  /* 'continue' statement */
+DEFINEVAR source_virtual_t EInline;    /* request to inline a function */
 
 DEFINEFN
 void PycException_SetString(PsycoObject* po, PyObject* e, const char* text)
@@ -884,6 +895,7 @@ static PyObject* cimpl_vt_traceback(PyCodeObject* code, PyObject* globals,
 	return newtb;
 }
 
+/* record a traceback entry for the current virtual Python exception */
 inline void PsycoTraceBack_Here(PsycoObject* po, int lasti)
 {
 	int lineno = PyCode_Addr2Line(po->pr.co, lasti);
@@ -942,6 +954,7 @@ void psyco_pycompiler_init(void)
 	EReturn   = psyco_vsource_not_important;
 	EContinue = psyco_vsource_not_important;
 	EBreak    = psyco_vsource_not_important;
+	EInline   = psyco_vsource_not_important;
 }
 
 
@@ -1958,12 +1971,47 @@ static PyObject* cimpl_import_name(PyObject* globals, PyObject* name,
 /***                         Main loop                         ***/
  /***************************************************************/
 
+static bool compute_and_raise_exception(PsycoObject* po)
+{
+	/* &ERtPython is the case where the code that raised
+	   the Python exception is already written, e.g. when
+	   we called a function in the Python interpreter which
+	   raised an exception. */
+	if (!PycException_Is(po, &ERtPython)) {
+		/* In the other cases (virtual exception),
+		   compute and raise the exception now. */
+		char args[4];
+		args[3] = 0;
+		if (po->pr.tb == NULL)
+			args[2] = 'l';
+		else {
+			args[2] = 'v';
+			consume_reference(po, po->pr.tb);
+		}
+		if (po->pr.val == NULL)
+			args[1] = 'l';
+		else {
+			args[1] = 'v';
+			consume_reference(po, po->pr.val);
+		}
+		args[0] = 'v';
+		consume_reference(po, po->pr.exc);
+		return (psyco_generic_call(po, PyErr_Restore,
+					   CfNoReturnValue, args,
+					   po->pr.exc, po->pr.val,
+					   po->pr.tb) != NULL);
+	}
+	else
+		return true;
+}
+
 static code_t* exit_function(PsycoObject* po)
 {
 	vinfo_t** locals_plus;
         vinfo_t** pp;
 	Source retsource;
-	
+        extra_assert(!po->pr.is_inlining);
+        
 	/* clear the stack and the locals */
 	locals_plus = LOC_LOCALS_PLUS;
 	for (pp = po->vlocals.items + po->vlocals.count; --pp >= locals_plus; )
@@ -1986,35 +2034,8 @@ static code_t* exit_function(PsycoObject* po)
 		retsource = retval->source;
 	}
 	else {
-		/* &ERtPython is the case where the code that raised
-		   the Python exception is already written, e.g. when
-		   we called a function in the Python interpreter which
-		   raised an exception. */
-		if (!PycException_Is(po, &ERtPython)) {
-			/* In the other cases (virtual exception),
-			   compute and raise the exception now. */
-			char args[4];
-			args[3] = 0;
-			if (po->pr.tb == NULL)
-				args[2] = 'l';
-			else {
-				args[2] = 'v';
-				consume_reference(po, po->pr.tb);
-			}
-			if (po->pr.val == NULL)
-				args[1] = 'l';
-			else {
-				args[1] = 'v';
-				consume_reference(po, po->pr.val);
-			}
-			args[0] = 'v';
-			consume_reference(po, po->pr.exc);
-			if (psyco_generic_call(po, PyErr_Restore,
-					       CfNoReturnValue, args,
-					       po->pr.exc, po->pr.val,
-					       po->pr.tb) == NULL)
-				return NULL;
-		}
+		if (!compute_and_raise_exception(po))
+			return NULL;
 		clear_pseudo_exception(po);
 		retsource = CompileTime_NewSk(&psyco_skZero); /*to return NULL */
 	}
@@ -2026,6 +2047,9 @@ static code_t* exit_function(PsycoObject* po)
 /***************************************************************/
  /***   the main loop of the interpreter/compiler.            ***/
 
+/* psyco_pycompiler_mainloop() compiles the function using psyco_core_mainloop()
+   writing function entry and exit points if needed, and destroys 'po' when
+   it is done */
 DEFINEFN
 code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 {
@@ -2054,7 +2078,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
       PyCodeObject* co = po->pr.co;
       unsigned char* bytecode = (unsigned char*) PyString_AS_STRING(co->co_code);
       vinfo_t *u, *v,	/* temporary objects    */
-	      *w, *x;	/* popped off the stack */
+              *w, *x;	/* popped off the stack */
       condition_code_t cc;
       /* 'next_instr' is the position in the byte-code of the next instr */
       int next_instr = po->pr.next_instr;
@@ -2063,18 +2087,18 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
       /* trace each code block entry point */
       TRACE_EXECUTION_NOERR("ENTER_MAINLOOP");
-      
+  
       /* main loop */
       while (1) {
 
 	extra_assert(!PycException_Occurred(po));
-	psyco_assert_coherent(po);  /* this test is expensive */
+	psyco_assert_coherent(po);    /* this test is expensive */
 
-	/* save 'next_instr' */
-        SAVE_NEXT_INSTR(next_instr);  /* could be optimized, not needed in the
-                                         case of an opcode that cannot set
-                                         run-time conditions */
-        
+	/* save 'next_instr' and 'respawn_cnt' */
+	SAVE_NEXT_INSTR(next_instr);  /* could be optimized, not needed in the
+					 case of an opcode that cannot set
+					 run-time conditions */
+	
 	opcode = NEXTOP();
 	if (HAS_ARG(opcode))
 		oparg = NEXTARG();
@@ -3114,7 +3138,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		   goes through */
 		TRACE_EXECUTION_NOERR("SNAPSHOT");
 	}
-      }  /* end of the main loop, exit if exception */
+      }  /* end of the main loop, exit if pseudo-exception */
 
       psyco_assert_coherent(po);
 
@@ -3122,32 +3146,55 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	 This is the only case in which the instruction
 	 causing the exception is restarted. */
       if (is_virtualtime(po->pr.exc->source) &&
-	  psyco_vsource_is_promotion(po->pr.exc->source)) {
-	      c_promotion_t* promotion = (c_promotion_t*) \
-		      VirtualTime_Get(po->pr.exc->source);
-	      vinfo_t* promote_me = po->pr.val;
-	      /* NOTE: we assume that 'promote_me' is a member of the
-		 'po->vlocals' arrays, so that we can safely DECREF it
-		 now without actually releasing it. If this assumption
-		 is false, the psyco_finish_xxx() calls below will give
-		 unexpected results. */
-              assert_array_contains_nonct(&po->vlocals, promote_me);
-	      clear_pseudo_exception(po);
+	  psyco_vsource_is_promotion(po->pr.exc->source))
+        {
+          c_promotion_t* promotion = (c_promotion_t*)
+            VirtualTime_Get(po->pr.exc->source);
+          vinfo_t* promote_me = po->pr.val;
+          /* NOTE: we assume that 'promote_me' is a member of the
+             'po->vlocals' arrays, so that we can safely DECREF it
+             now without actually releasing it. If this assumption
+             is false, the psyco_finish_xxx() calls below will give
+             unexpected results. */
+          assert_array_contains_nonct(&po->vlocals, promote_me);
+          clear_pseudo_exception(po);
 #if USE_RUNTIME_SWITCHES
-	      if (promotion->fs == NULL)
+          if (promotion->fs == NULL)
 #endif
-		      code1 = psyco_finish_promotion(po,
-						     promote_me,
-						     promotion->kflags);
+            code1 = psyco_finish_promotion(po, promote_me,
+                                           promotion->kflags);
 #if USE_RUNTIME_SWITCHES
-	      else
-		      code1 = psyco_finish_fixed_switch(po,
-							promote_me,
-							promotion->kflags,
-							promotion->fs);
+          else
+            code1 = psyco_finish_fixed_switch(po, promote_me,
+                                              promotion->kflags,
+                                              promotion->fs);
 #endif
-	      goto finished;
-      }
+          goto finished;
+        }
+
+      /* check for the 'inline' pseudo-exception. */
+      if (PycException_Is(po, &EInline))
+        {
+          vinfo_t* v;
+          
+          /* po->pr.val->array contains the new sub-frame that we
+             should now start to compile, inlined into the parent frame */
+          extra_assert(!po->pr.is_inlining);
+          /* store po->vlocals away */
+          v = psyco_save_inline_po(po);
+          /* copy po->pr.val->array to po->vlocals */
+          po = psyco_restore_inline_po(po, &po->pr.val->array);
+          stack_a = po->vlocals.items + po->pr.stack_base;
+          /* save the copy of the previous po->vlocals to LOC_INLINING */
+	  extra_assert(LOC_INLINING == NULL);
+          LOC_INLINING = v;
+          po->pr.is_inlining = true;
+          /* mark this point as an inline frame entry */
+          psyco_inline_enter(po);
+          /* go on with compilation */
+          clear_pseudo_exception(po);
+          continue;
+        }
       
       /* At this point, we got a real pseudo-exception. */
 
@@ -3157,6 +3204,54 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
              unless re-raised by END_FINALLY */
           PsycoTraceBack_Here(po, po->pr.next_instr);
         }
+
+      /* All exceptions raised inside an inlined frame are passed to the
+         parent (neither exception handlers nor loops are allowed in
+         inlinable code objects). */
+      if (po->pr.is_inlining)
+        {
+          /* unwind the inlined frame by restoring the parent one */
+          vinfo_t* v = LOC_INLINING;
+          LOC_INLINING = NULL;
+          po = psyco_restore_inline_po(po, &v->array);
+          stack_a = po->vlocals.items + po->pr.stack_base;
+          vinfo_decref(v, po);
+          po->pr.is_inlining = false;
+          /* mark this point as an inline frame exit */
+          psyco_inline_exit(po);
+          
+          if (PycException_Is(po, &EReturn))
+            {
+              /* caught EReturn from the inlined frame */
+              
+              /* 'po' is now in the parent frame, pointing to the instruction
+                 (typically CALL_FUNCTION) which triggered the inline
+                 compilation in the first place.  We restart this instruction
+                 entierely.  With almost no code emitted we should reach the
+                 psyco_call_pyfunc() again, which will at that point return
+                 the expected result.  To this end we save the result in
+                 LOC_INLINING.  It might be exceptionally possible that the
+                 restarting CALL_FUNCTION does not reach psyco_call_pyfunc()
+                 again in some cases; this hopefully corresponds to cases
+                 that can never occur at run-time.  The waste of code is
+                 minimal. */
+              LOC_INLINING = po->pr.val;
+              po->pr.val = NULL;
+              clear_pseudo_exception(po);
+              continue;
+            }
+
+          /* stack unwind goes on in the parent frame */
+          if (PycException_IsPython(po) && compute_and_raise_exception(po))
+            {
+              /* force the exception to be recorded on inner frame
+                 before we can record its traceback on the parent frame */
+              clear_pseudo_exception(po);
+              PycException_Raise(po, vinfo_new(VirtualTime_New(&ERtPython)),
+                                 NULL);
+              PsycoTraceBack_Here(po, po->pr.next_instr);
+            }
+        }
       
       /* Unwind the Python stack until we find a handler for
 	 the (pseudo) exception. You will recognize here
@@ -3165,99 +3260,99 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
       while (po->pr.iblock > 0) {
 	PyTryBlock *b = block_pop(po);
 	      
-	if (b->b_type == SETUP_LOOP && PycException_Is(po, &EContinue)) {
-		/* For a continue inside a try block,
-		   don't pop the block for the loop. */
-		int next_instr;
-		block_setup(po, b->b_type, b->b_handler, b->b_level);
-		JUMPTO(CompileTime_Get(po->pr.val->source)->value);
-		clear_pseudo_exception(po);
-		SAVE_NEXT_INSTR(next_instr);
-		break;
-	}
+	if (b->b_type == SETUP_LOOP && PycException_Is(po, &EContinue))
+          {
+            /* For a continue inside a try block,
+               don't pop the block for the loop. */
+            int next_instr;
+            block_setup(po, b->b_type, b->b_handler, b->b_level);
+            JUMPTO(CompileTime_Get(po->pr.val->source)->value);
+            clear_pseudo_exception(po);
+            SAVE_NEXT_INSTR(next_instr);
+            break;
+          }
 	
 	/* clear the stack up to b->b_level */
-	while (STACK_LEVEL() > b->b_level) {
-		POP_DECREF();   /* no NULLs here */
-	}
-	
-	if (b->b_type == SETUP_LOOP && PycException_Is(po, &EBreak)) {
-		int next_instr;
-		clear_pseudo_exception(po);
-		JUMPTO(b->b_handler);
-		SAVE_NEXT_INSTR(next_instr);
-		break;
-	}
-	
-	if (b->b_type == SETUP_FINALLY) {
-		/* SETUP_FINALLY always pushes on the stack either a
-		   single compile-time None object or three objects
-		   (exc, value, traceback). Unlike Python, the latter
-		   might represent a pseudo-exception like EReturn. */
-		int next_instr;
-		vinfo_t** stack_a = po->vlocals.items + po->pr.stack_base;
-		vinfo_t* exc_info = PsycoTuple_New(3, NULL);
-		PycException_Fetch(po);
-		PsycoTuple_GET_ITEM(exc_info, 0) = po->pr.exc;
-		PsycoTuple_GET_ITEM(exc_info, 1) = po->pr.val;
-		PsycoTuple_GET_ITEM(exc_info, 2) = po->pr.tb;
-		po->pr.exc = NULL;
-		po->pr.val = NULL;
-		po->pr.tb  = NULL;
-		PUSH(exc_info);
-		JUMPTO(b->b_handler);
-		SAVE_NEXT_INSTR(next_instr);
-		break;
-	}
-	
-	if (b->b_type == SETUP_EXCEPT && PycException_IsPython(po)) {
-		/* SETUP_EXCEPT pushes three objects individually as in
-		   ceval.c, as needed for bytecode compatibility. See tricks
-		   in END_FINALLY to distinguish between the end of a FINALLY
-		   and the end of an EXCEPT block. */
-		int next_instr;
-		vinfo_t** stack_a = po->vlocals.items + po->pr.stack_base;
-		while (!PycException_FetchNormalize(po)) {
-			/* got an exception while initializing the EXCEPT
-			   block... Consider this new exception as overriding
-			   the previous one, so that we just re-enter the same
-			   EXCEPT block. */
-			/* XXX check that this empty loop cannot be endless */
-		}
-		extra_assert(po->pr.val != NULL);
-		extra_assert(po->pr.tb != NULL);
-		PUSH(po->pr.tb);     po->pr.tb  = NULL;
-		PUSH(po->pr.val);    po->pr.val = NULL;
-		PUSH(po->pr.exc);    po->pr.exc = NULL;
-		JUMPTO(b->b_handler);
-		SAVE_NEXT_INSTR(next_instr);
-		break;
-	}
+	while (STACK_LEVEL() > b->b_level)
+          {
+            POP_DECREF();   /* no NULLs here */
+          }
+	if (b->b_type == SETUP_LOOP && PycException_Is(po, &EBreak))
+          {
+            int next_instr;
+            clear_pseudo_exception(po);
+            JUMPTO(b->b_handler);
+            SAVE_NEXT_INSTR(next_instr);
+            break;
+          }
+	if (b->b_type == SETUP_FINALLY)
+          {
+            /* SETUP_FINALLY always pushes on the stack either a
+               single compile-time None object or three objects
+               (exc, value, traceback). Unlike Python, the latter
+               might represent a pseudo-exception like EReturn. */
+            int next_instr;
+            vinfo_t* exc_info = PsycoTuple_New(3, NULL);
+            PycException_Fetch(po);
+            PsycoTuple_GET_ITEM(exc_info, 0) = po->pr.exc;
+            PsycoTuple_GET_ITEM(exc_info, 1) = po->pr.val;
+            PsycoTuple_GET_ITEM(exc_info, 2) = po->pr.tb;
+            po->pr.exc = NULL;
+            po->pr.val = NULL;
+            po->pr.tb  = NULL;
+            PUSH(exc_info);
+            JUMPTO(b->b_handler);
+            SAVE_NEXT_INSTR(next_instr);
+            break;
+          }
+	if (b->b_type == SETUP_EXCEPT && PycException_IsPython(po))
+          {
+            /* SETUP_EXCEPT pushes three objects individually as in
+               ceval.c, as needed for bytecode compatibility. See tricks
+               in END_FINALLY to distinguish between the end of a FINALLY
+               and the end of an EXCEPT block. */
+            int next_instr;
+            while (!PycException_FetchNormalize(po)) {
+              /* got an exception while initializing the EXCEPT
+                 block... Consider this new exception as overriding
+                 the previous one, so that we just re-enter the same
+                 EXCEPT block. */
+              /* XXX check that this empty loop cannot be endless */
+            }
+            extra_assert(po->pr.val != NULL);
+            extra_assert(po->pr.tb != NULL);
+            PUSH(po->pr.tb);     po->pr.tb  = NULL;
+            PUSH(po->pr.val);    po->pr.val = NULL;
+            PUSH(po->pr.exc);    po->pr.exc = NULL;
+            JUMPTO(b->b_handler);
+            SAVE_NEXT_INSTR(next_instr);
+            break;
+          }
       } /* end of unwind stack */
       
       /* End the function if we still have a (pseudo) exception */
-      if (PycException_Occurred(po)) {
-	      /* at the end of the function we set next_instr to -1
-		 because the actual position has no longer any importance */
-	      po->pr.next_instr = -1;
-      }
+      if (PycException_Occurred(po))
+        {
+          /* at the end of the function we set next_instr to -1
+             because the actual position has no longer any importance */
+          po->pr.next_instr = -1;
+        }
     }
-
-  	
+  
   /* function return (either by RETURN or by exception). */
   while ((code1 = exit_function(po)) == NULL) {
-	  /* If LOC_EXCEPTION is still set after exit_function(), it
-	     means an exception was raised while handling the functn
-	     return... In this case, we do a function return again,
-	     this time with the newly raised exception. XXX make sure
-	     this loop cannot be endless */
+    /* If LOC_EXCEPTION is still set after exit_function(), it
+       means an exception was raised while handling the functn
+       return... In this case, we do a function return again,
+       this time with the newly raised exception. XXX make sure
+       this loop cannot be endless */
   }
-
+  
  finished:
 #if ALL_CHECKS
   if (PyErr_Occurred()) {
-	  fprintf(stderr, "psyco: unexpected Python exception during compilation:\n");
-	  PyErr_WriteUnraisable(Py_None);
+    fprintf(stderr, "psyco: unexpected Python exception during compilation:\n");
+    PyErr_WriteUnraisable(Py_None);
   }
 #endif
   PyErr_Restore(old_py_exc, old_py_val, old_py_tb);

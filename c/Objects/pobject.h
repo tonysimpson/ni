@@ -10,9 +10,11 @@
 
 
 /*#define OB_REFCOUNT         never directly manipulated*/
-#define OB_type    DEF_FIELD(PyObject, PyTypeObject*, ob_type, NO_PREV_FIELD)
-#define FIX_size   DEF_FIELD(PyVarObject,        int, ob_size, OB_type)
-#define VAR_size   FMUT(FIX_size)
+#define OB_type      DEF_FIELD(PyObject, PyTypeObject*, ob_type, NO_PREV_FIELD)
+#define FIX_size     NONNEG_FIELD(PyVarObject,     int, ob_size, OB_type)
+#define VAR_size     FMUT(FIX_size)
+#define FIX_signed_size DEF_FIELD(PyVarObject,     int, ob_size, OB_type)
+#define VAR_signed_size FMUT(FIX_signed_size)
 
 #define iOB_TYPE   FIELD_INDEX(OB_type)
 #define iFIX_SIZE  FIELD_INDEX(FIX_size)

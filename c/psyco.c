@@ -66,6 +66,46 @@ void psyco_debug_printf(char* msg, ...)
 #endif /* VERBOSE_LEVEL */
 
 
+/* Trace */
+#if defined(PSYCO_TRACE)
+static void* trace_buffer[4096];
+static int   trace_bufdata = 4096;
+static FILE* trace_f = NULL;
+DEFINEFN void psyco_trace_execution(char* msg, void* code_position)
+{
+  if (trace_bufdata == 4096)
+    {
+      if (trace_f == NULL)
+        trace_f = fopen(PSYCO_TRACE, "wb");
+      else
+        fwrite(trace_buffer, sizeof(void*), 4096, trace_f);
+      trace_bufdata = 0;
+    }
+  trace_buffer[trace_bufdata++] = code_position;
+}
+static void trace_flush(void)
+{
+  if (trace_f != NULL)
+    {
+      fwrite(trace_buffer, sizeof(void*), trace_bufdata, trace_f);
+      fclose(trace_f);
+      trace_f = NULL;
+      trace_bufdata = 4096;
+    }
+}
+#elif VERBOSE_LEVEL >= 4
+DEFINEFN void psyco_trace_execution(char* msg, void* code_position)
+{
+  debug_printf(4, ("trace %p for %s\n", code_position, msg));
+}
+DEFINEFN void psyco_trace_execution_noerr(char* msg, void* code_position)
+{
+  debug_printf(4, ("trace %p for %s\n", code_position, msg));
+  psyco_assert(!PyErr_Occurred());
+}
+#endif
+
+
 DEFINEFN
 void psyco_flog(char* msg, ...)
 {
@@ -168,6 +208,21 @@ DEFINEFN void po_dump(PsycoObject* po)
   vinfo_dump_a1(&po->vlocals);
   if (&po_dump) ;  /* force the compiler to consider it as used */
 }
+DEFINEFN void po_inlined_in(PsycoObject* po)
+{
+  if (po->pr.is_inlining)
+    {
+      fprintf(stderr, "inlined from position %d in\n",
+              (int) (CompileTime_Get(po->vlocals.items[0]->
+                                     array->items[1]->source)->value));
+      _PyObject_Dump((PyObject*)
+                     (CompileTime_Get(po->vlocals.items[0]->
+                                      array->items[0]->source)->value));
+    }
+  else
+    fprintf(stderr, "not inlined\n");
+  if (&po_inlined_in) ;  /* force the compiler to consider it as used */
+}
 #endif  /* !MS_WIN32 */
 #if !ALL_STATIC
  EXTERNFN int psyco_top_array_count(FrozenPsycoObject* fpo);  /*in dispatcher.c*/
@@ -187,6 +242,10 @@ void psyco_dump_code_buffers(void)
   alt = 3-alt;
 #else
   char* filename = CODE_DUMP_FILE;
+#endif
+
+#if defined(PSYCO_TRACE)
+  trace_flush();
 #endif
   
   if (is_dumping) return;
@@ -292,18 +351,6 @@ static PyObject* Psyco_dumpcodebuf(PyObject* self, PyObject* args)
   return Py_None;
 }
 #endif  /* CODE_DUMP */
-
-#if VERBOSE_LEVEL >= 4
-DEFINEFN void psyco_trace_execution(char* msg, void* code_position)
-{
-  debug_printf(4, ("psyco: trace %p for %s\n", code_position, msg));
-}
-DEFINEFN void psyco_trace_execution_noerr(char* msg, void* code_position)
-{
-  debug_printf(4, ("psyco: trace %p for %s\n", code_position, msg));
-  psyco_assert(!PyErr_Occurred());
-}
-#endif
 
 
 /***************************************************************/

@@ -54,6 +54,68 @@ def exc_test():
         print exc.__name__, str(value)
         print tb.tb_lineno - tb.tb_frame.f_code.co_firstlineno
 
+def g5(x):
+    return x+1
+
+def f5(n):
+    "Function inlining tests"
+    print g5(n)
+    print g5(n)
+    print g5(3)
+    print g5(x=n)
+
+def g6(x):
+    if x != 3:
+        return x+1
+    else:
+        return None
+
+def g6bis(n):
+    return range(2, 50)[n]
+
+def f6(n):
+    "Function inlining tests"
+    try:
+        print g6(n)
+        print g6(n)
+        print g6(3)
+        print g6(x=n)
+        print g6bis(n)
+    except:
+        print sys.exc_type
+
+def g7(x, *args):
+    if not g7len(args):
+        last = g5(0)
+    else:
+        last = args[-1]
+    return last * x
+
+def g7bis(tuple):
+    return 0.0
+
+def f7(n):
+    global g7len
+    g7len = len
+    "Function inlining tests"
+    print [g7(n), 5*g7(3,4,5), g7(*((11,)*5))]
+    g7len = g7bis
+    print [g7(n), 5*g7(3,4,5), g7(*((11,)*5))]
+
+def g8(x, *args):
+    return g7len(args) * x
+
+def f8(n):
+    global g7len
+    g7len = len
+    "Function inlining tests"
+    print [g8(n), 5*g8(3,4,5), g8(*((11,)*5))]
+    g7len = g7bis
+    print [g8(n), 5*g8(3,4,5), g8(*((11,)*5))]
+
+def f9(n):
+    return g5(3), g5(n)
+
 
 if __name__ == '__main__':
     import time

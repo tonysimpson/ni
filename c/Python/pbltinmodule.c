@@ -94,8 +94,11 @@ static vinfo_t* get_len_of_range(PsycoObject* po, vinfo_t* lo, vinfo_t* hi
 	condition_code_t cc = integer_cmp(po, lo, hi, Py_LT);
 	if (cc == CC_ERROR)
 		return NULL;
-	if (runtime_condition_t(po, cc))
-		return integer_sub(po, hi, lo, false);
+	if (runtime_condition_t(po, cc)) {
+		vinfo_t* vresult = integer_sub(po, hi, lo, false);
+		assert_nonneg(vresult);
+		return vresult;
+	}
 	else
 		return psyco_vi_Zero();
 }

@@ -1,6 +1,7 @@
 from __future__ import nested_scopes
 import os, sys, re, htmlentitydefs, struct, bisect
 from psyco import _psyco
+__metaclass__ = type
 
 tmpfile = '~tmpfile.tmp'
 
@@ -27,6 +28,16 @@ symbols = {}
 #rawtargets = {}
 codeboundary = []
 
+try:
+    from xamsupport import any_pointer
+except ImportError:
+    def any_pointer(addr0, data, start, end, unpack=struct.unpack):
+        for i in range(4, len(data)+1):
+            offset, = unpack('l', data[i-4:i])
+            if start <= addr0+i+offset < end or start <= offset < end:
+                return 1
+        return 0
+
 def load_symbol_file(filename, symb1, addr1):
     d = {}
     g = os.popen(symbollister % filename, "r")
@@ -47,7 +58,7 @@ def load_symbol_file(filename, symb1, addr1):
         symbols[value + delta] = key
 
 
-def symtext(sym, addr, inbuf=None):
+def symtext(sym, addr, inbuf=None, lineaddr=None):
     if isinstance(sym, CodeBuf):
         if sym is inbuf:
             name = 'top'
@@ -58,7 +69,6 @@ def symtext(sym, addr, inbuf=None):
         return name
     else:
         return sym
-
 
 revmap = {}
 for key, value in htmlentitydefs.entitydefs.items():
@@ -96,6 +106,10 @@ re_vtvinfo = re.compile(r"vt 0x([0-9a-fA-F]+)$")
 LOC_LOCALS_PLUS = 2
 
 class CodeBuf:
+    __slots__ = ['mode', 'co_filename', 'co_name', 'nextinstr', 'addr',
+                 'stackdepth', 'specdict', 'data', 'cache_text',
+                 'disass_text', 'reverse_lookup', 'vlocals',
+                 'complete_list', 'dumpfile', 'vlocalsofs', 'codemap']
     
     def __init__(self, mode, co_filename, co_name, nextinstr,
                  addr, stackdepth):
@@ -116,14 +130,22 @@ class CodeBuf:
         #    offset, = struct.unpack('l', data[i-4:i])
         #    rawtargets.setdefault(addr+i+offset, {})[self] = 1
 
+    def getboundary(self):
+        i = bisect.bisect(codeboundary, (self.addr-0.5, self))
+        prev = codeboundary[i-1][1]
+        next = codeboundary[i][1]
+        #while not isinstance(next, BigBuffer) and next.addr == self.addr:
+        #    i = i + 1
+        #    next = codeboundary[i][1]
+        while not isinstance(codeboundary[i][1], BigBuffer):
+            i = i + 1
+        bigbuf = codeboundary[i][1]
+        return prev, next, bigbuf
+
     def __getattr__(self, attr):
         if attr == 'data':
-            i = bisect.bisect(codeboundary, (self.addr-0.5, self))
-            assert codeboundary[i-1][1] is self
-            next = codeboundary[i][1]
-            while not isinstance(codeboundary[i][1], BigBuffer):
-                i = i + 1
-            bigbuf = codeboundary[i][1]
+            prev, next, bigbuf = self.getboundary()
+            assert prev is self
             self.data = data = bigbuf.load(self.addr, next.addr)
             return data
         if attr == 'cache_text':
@@ -167,23 +189,15 @@ class CodeBuf:
             return txt
         if attr == 'reverse_lookup':
             # 'reverse_lookup' is a list of (offset, codebuf pointing there)
-            maybe = {self: 1}
             self.reverse_lookup = []
             start = self.addr
             end = start + len(self.data)
             for codebuf in self.complete_list:
-                addr0 = codebuf.addr
-                data = codebuf.data
-                for i in range(4, len(data)+1):
-                    offset, = struct.unpack('l', data[i-4:i])
-                    if start <= addr0+i+offset < end or start <= offset < end:
-                        break
-                else:
-                    continue
-                for line in codebuf.disass_text:
-                    for addr in lineaddresses(line):
-                        if start <= addr < end:
-                            self.reverse_lookup.append((addr-start, codebuf))
+                if any_pointer(codebuf.addr, codebuf.data, start, end):
+                    for line in codebuf.disass_text:
+                        for addr in lineaddresses(line):
+                            if start <= addr < end:
+                                self.reverse_lookup.append((addr-start, codebuf))
             return self.reverse_lookup
         if attr == 'vlocals':
             self.dumpfile.seek(self.vlocalsofs)
@@ -256,36 +270,43 @@ class CodeBuf:
                 line = line[:-1]
             match = re_lineaddr.match(line)
             if match:
-                addr = long(match.group(1), 16)
-                if not seen.has_key(addr):
-                    if self.codemap.has_key(addr) and snapshot:
-                        for proxy in self.codemap[addr]:
+                lineaddr = long(match.group(1), 16)
+                if not seen.has_key(lineaddr):
+                    if self.codemap.has_key(lineaddr) and snapshot:
+                        for proxy in self.codemap[lineaddr]:
                             data.append(snapshot(proxy))
-                    seen[addr] = 1
-                ofs = addr - self.addr
+                    seen[lineaddr] = 1
+                ofs = lineaddr - self.addr
                 sources = [c for o, c in self.reverse_lookup if o == ofs]
                 if sources and linetext:
-                    line = linetext(line, self.addr + ofs)
+                    line = linetext(line, lineaddr)
                 if sources != [self]*len(sources):
                     data.append('\n')
+            else:
+                lineaddr = None
             for addr in lineaddresses(line):
                 sym = symbols.get(addr) or codeat(addr)
                 if sym:
-                    line = '%s\t(%s)' % (line, symtext(sym, addr, self))
+                    line = '%s\t(%s)' % (line, symtext(sym, addr, self,lineaddr))
                     break
             data.append(line + '\n')
         return ''.join(data)
 
 
 class BigBuffer:
+    __slots__ = ['file', 'offset', 'start', 'length', 'addr', 'priority']
     def __init__(self, file, start, length):
-        #print 'BigBuffer:', hex(start), hex(start+length), '(%d)' % length
+        #if sys.stderr.softspace:
+        #    print >> sys.stderr
+        #print >> sys.stderr, 'BigBuffer:', hex(start), hex(start+length),
+        #print >> sys.stderr, '(%d)' % length
         self.file = file
         self.offset = file.tell()
         self.start = start
         self.length = length
         self.addr = start + length   # end address
-        codeboundary.append((self.addr+0.5, self))
+        self.priority = -len(codeboundary)
+        codeboundary.append((self.addr-0.25, self))
         file.seek(self.length, 1)
     def load(self, begin, end):
         assert self.start <= begin <= self.addr, \
@@ -295,9 +316,10 @@ class BigBuffer:
 
 
 class VInfo:
-    pass
+    __slots__ = ['addr', 'array']
 
 class CompileTimeVInfo(VInfo):
+    __slots__ = ['flags', 'value']
     def __init__(self, flags, value):
         self.flags = flags
         self.value = value
@@ -316,6 +338,7 @@ class CompileTimeVInfo(VInfo):
         return text
 
 class RunTimeVInfo(VInfo):
+    __slots__ = ['source', 'stackdepth']
     REG_NAMES = ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"]
     def __init__(self, source, stackdepth=None):
         self.source = source
@@ -343,6 +366,7 @@ class RunTimeVInfo(VInfo):
         return "Run-time"
 
 class VirtualTimeVInfo(VInfo):
+    __slots__ = ['vs']
     def __init__(self, vs):
         self.vs = vs
     def gettext(self):
@@ -385,7 +409,7 @@ def readdump(filename = 'psyco.dump'):
         if match:
             percent = dumpfile.tell() / filesize
             if percent >= nextp:
-                sys.stderr.write('%d%%...' % int(100*percent))
+                print >> sys.stderr, '%d%%...' % int(100*percent),
                 nextp += 0.1
             #size = int(match.group(2))
             #data = dumpfile.read(size)
@@ -393,10 +417,9 @@ def readdump(filename = 'psyco.dump'):
             codebuf = CodeBuf(match.group(6), match.group(3), match.group(4),
                               int(match.group(5)), long(match.group(1), 16),
                               int(match.group(2)))
-            codebuf.complete_list = codebufs
             codebuf.dumpfile = dumpfile
             codebuf.vlocalsofs = buftable.pop()
-            codebufs.insert(0, codebuf)
+            codebufs.append(codebuf)
         else:
             match = re_specdict.match(line)
             if match:
@@ -424,14 +447,21 @@ def readdump(filename = 'psyco.dump'):
                               int(match.group(2)))
                 else:
                     raise "invalid line", line
+    print >> sys.stderr, 'sorting...',
     if len(codeboundary) != cbsortedsize:
         codeboundary.sort()
     codemap = {}
+    #cblist = []
+    codebufs.reverse()
     for codebuf in codebufs:
-        #codebuf.build_reverse_lookup()
+        codebuf.complete_list = codebufs
         codebuf.codemap = codemap
         codemap.setdefault(codebuf.addr, []).insert(0, codebuf)
-    sys.stderr.write('100%\n')
+        #prev, next, bigbuf = codebuf.getboundary()
+        #cblist.append((bigbuf.priority, codebuf.addr, codebuf))
+    #cblist.sort()
+    #codebufs[:] = [codebuf for priority, addr, codebuf in cblist]
+    print >> sys.stderr, '100%'
     return codebufs
 
 if __name__ == '__main__':

@@ -8,7 +8,7 @@ def getincl():
     base = os.path.dirname(sys.executable)
     if os.path.exists(os.path.join(base, 'Include')):
         return [os.path.join(base, 'Include'), base]
-    raise IOError, 'cannot find the include directories of Python'
+    raise IOError, 'cannot find the include directories for %s' % sys.executable
 
 INCLUDE_STR = ' '.join(['-I%s' % s for s in getincl()])
 

@@ -43,8 +43,10 @@ struct FrozenPsycoObject_s {
   pyc_data_t* fz_pyc_data;  /* only partially allocated */
 };
 
+
 /* construction */
 inline void fpo_mark_new(FrozenPsycoObject* fpo) {
+	fpo->fz_respawned_cnt = 0;
 	fpo->fz_respawned_from = NULL;
 }
 inline void fpo_mark_unused(FrozenPsycoObject* fpo) {
@@ -232,7 +234,7 @@ inline bool detect_respawn(PsycoObject* po) {
 		return false;
 }
 inline bool is_respawning(PsycoObject* po) { return po->respawn_cnt < 0; }
-	
+
 /* the following powerful function stands for 'if the processor flag (cond) is
    set at run-time, then...'. Of course we do not know yet if this will be
    the case or not, but the macro takes care of preparing the required

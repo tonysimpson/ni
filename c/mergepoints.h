@@ -62,6 +62,7 @@ inline mergepoint_t* psyco_exact_merge_point(PyObject* mergepoints,
 
 #define MP_FLAGS_HAS_EXCEPT      1   /* the code block has an 'except' clause */
 #define MP_FLAGS_HAS_FINALLY     2   /* the code block has a 'finally' clause */
+#define MP_FLAGS_INLINABLE       4   /* function could be inlined             */
 #define MP_FLAGS_EXTRA       (-256)
 
 inline int psyco_mp_flags(PyObject* mergepoints)

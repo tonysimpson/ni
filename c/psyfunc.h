@@ -15,6 +15,10 @@ EXTERNFN vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
                                     vinfo_t* vglobals, vinfo_t* vdefaults,
                                     vinfo_t* arg_tuple, int recursion);
 
+/* for pycompiler.c */
+EXTERNFN vinfo_t* psyco_save_inline_po(PsycoObject* po);
+EXTERNFN PsycoObject* psyco_restore_inline_po(PsycoObject* po,vinfo_array_t** a);
+
 
 /* Psyco proxies for Python functions. Calling a proxy has the same effect
    as calling the function it has been built from, except that the function

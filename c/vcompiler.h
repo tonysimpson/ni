@@ -81,6 +81,7 @@ inline bool is_runtime_with_reg(Source s) {
 }
 inline bool is_rtnonneg(RunTimeSource s) { CHKTIME(s, RunTime); return s & RunTime_NonNeg; }
 
+
 /* mutation */
 inline RunTimeSource remove_rtref(RunTimeSource s) { CHKTIME(s, RunTime); return s | RunTime_NoRef; }
 inline RunTimeSource add_rtref(RunTimeSource s)    { CHKTIME(s, RunTime); return s & ~RunTime_NoRef; }
@@ -100,6 +101,10 @@ inline RunTimeSource set_rtstack_to(RunTimeSource s, int stack) {
 inline RunTimeSource set_rtstack_to_none(RunTimeSource s) {
 	CHKTIME(s, RunTime);
 	return s & ~RunTime_StackMask;
+}
+inline RunTimeSource set_rtnonneg(RunTimeSource s) {
+	CHKTIME(s, RunTime);
+	return s | RunTime_NonNeg;
 }
 
 
@@ -176,13 +181,6 @@ inline CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
 						SkFlagMask));
 	}
 }
-inline bool is_nonneg(Source s) {
-	switch (gettime(s)) {
-	case RunTime:     return is_rtnonneg(s);
-	case CompileTime: return CompileTime_Get(s)->value >= 0;
-	default:          return false;
-	}
-}
 
 
 /************************ Virtual-time sources *******************************
@@ -206,7 +204,7 @@ inline bool is_nonneg(Source s) {
 #define NWI_NORMAL          0  /* use nested_weight[0] */
 #define NWI_FUNCALL         1  /* use nested_weight[1] */
 #define INIT_SVIRTUAL(sv, fn, w_normal, w_funcall)   do {	\
-	(sv).compute_fn = &fn;					\
+	(sv).compute_fn = fn;					\
 	(sv).nested_weight[NWI_NORMAL] = w_normal;		\
 	(sv).nested_weight[NWI_FUNCALL] = w_funcall;		\
 } while (0)
@@ -341,6 +339,21 @@ inline bool vinfo_known_equal(vinfo_t* v, vinfo_t* w) {
 		(v == w || !is_virtualtime(v->source)));
 }
 
+/* misc */
+inline bool is_nonneg(Source s) {
+	switch (gettime(s)) {
+	case RunTime:     return is_rtnonneg(s);
+	case CompileTime: return CompileTime_Get(s)->value >= 0;
+	default:          return false;
+	}
+}
+inline void assert_nonneg(vinfo_t* v) {
+	if (is_runtime(v->source))
+		v->source = set_rtnonneg(v->source);
+	else
+		extra_assert(is_virtualtime(v->source) || is_nonneg(v->source));
+}
+
 /* sub-array (see also psyco_get_field()&co.) */
 inline void vinfo_array_grow(vinfo_t* vi, int ncount) {
 	if (ncount > vi->array->count)
@@ -407,8 +420,9 @@ EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
 #define FIELD_MUTABLE     0x0100
 #define FIELD_ARRAY       0x0200
 #define FIELD_UNSIGNED    0x0400
-#define FIELD_PYOBJ_REF   0x0800
-#define FIELD_SIZE2_SHIFT 12
+#define FIELD_NONNEG      0x0800
+#define FIELD_PYOBJ_REF   0x1000
+#define FIELD_SIZE2_SHIFT 13
 #define FIELD_INTL_NOREF  0x8000
 #define FIELD_OFS_SHIFT   16
 #define NO_PREV_FIELD     ((defield_t) -1)
@@ -454,6 +468,10 @@ EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
    if 'ctype' is an unsigned numeric type. */
 #define UNSIGNED_FIELD(cstruct, ctype, cfield, prevf) \
 	STRUCT_FIELD_BUILD(cstruct, ctype, cfield, prevf, FIELD_UNSIGNED)
+
+/* signed fields that are known to be non-negative */
+#define NONNEG_FIELD(cstruct, ctype, cfield, prevf) \
+	STRUCT_FIELD_BUILD(cstruct, ctype, cfield, prevf, FIELD_NONNEG)
 
 /* the same, for pure arrays instead of structures */
 #define DEF_ARRAY(ctype, baseofs) \
@@ -694,6 +712,10 @@ inline PsycoObject* PsycoObject_Duplicate(PsycoObject* po) {
 	return psyco_duplicate(po);
 }
 EXTERNFN void PsycoObject_Delete(PsycoObject* po);
+inline PsycoObject* PsycoObject_Resize(PsycoObject* po, int nvlocalscnt) {
+	int psize = PSYCOOBJECT_SIZE(nvlocalscnt);
+	return (PsycoObject*) PyMem_REALLOC(po, psize);
+}
 
 
 #endif /* _VCOMPILER_H */

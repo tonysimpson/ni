@@ -57,6 +57,11 @@ CodeBufferObject* psyco_new_code_buffer(PsycoObject* po, global_entries_t* ge, c
 EXTERNFN
 CodeBufferObject* psyco_proxy_code_buffer(PsycoObject* po, global_entries_t* ge);
 
+#if 0  /* creates a minimal CodeBufferObject with only a code pointer */
+EXTERNFN
+CodeBufferObject* psyco_minimal_code_buffer(code_t* code);
+#endif
+
 /* shrink a buffer returned by new_code_buffer() */
 EXTERNFN
 void psyco_shrink_code_buffer(CodeBufferObject* obj, code_t* codeend);

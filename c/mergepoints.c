@@ -8,6 +8,9 @@
 #define FULL_CONTROL_FLOW    1
 #define DUMP_CONTROL_FLOW    0
 
+#define CONFLUENCE_TOTAL_DELAY   3   /* see comments in the code */
+#define INLINE_MAXIMUM_WEIGHT    6   /* see comments in the code */
+
 
  /***************************************************************/
 /***                Tables of code merge points                ***/
@@ -53,15 +56,11 @@
                               op == SETUP_EXCEPT ||   \
                               op == SETUP_FINALLY)
 
-/* instructions producing code dependent on the context: */
-#define IS_CTXDEP_INSTR(op)  (op == LOAD_GLOBAL)
+#define MAX_UNINTERRUPTED_RANGE   170  /* bytecode instructions */
 
-#define MAX_UNINTERRUPTED_RANGE   300  /* bytes of Python bytecode */
-
-/* opcodes that never produce any machine code or on which for some
-   other reason there is no point in setting a merge point -- the
-   merge point can simply be moved on to the next instruction */
-#define NO_MERGE_POINT(op)  (IS_JUMP_INSTR(op) ||       \
+/* opcodes that never or seldom produce machine code are listed as
+   lightweight instructions and don't account for the mesured code weight. */
+#define IS_LIGHT_INSTR(op)  (IS_JUMP_INSTR(op) ||       \
                              HAS_JREL_INSTR(op) ||      \
                              HAS_JABS_INSTR(op) ||      \
                              IS_SET_LINENO(op) ||       \
@@ -76,7 +75,11 @@
                              op == LOAD_CONST ||        \
                              op == LOAD_FAST ||         \
                              op == STORE_FAST ||        \
-                             op == DELETE_FAST)
+                             op == DELETE_FAST ||       \
+                             op == UNPACK_SEQUENCE ||   \
+                             op == BUILD_TUPLE ||       \
+                             op == BUILD_LIST ||        \
+                             op == BUILD_MAP)
 
 /* all other supported instructions must be listed here. */
 #define OTHER_OPCODE(op)  (op == UNARY_POSITIVE ||            \
@@ -128,15 +131,11 @@
                            op == PRINT_NEWLINE ||             \
                            op == PRINT_NEWLINE_TO ||          \
                            op == BUILD_CLASS ||               \
-                           op == UNPACK_SEQUENCE ||           \
                            op == STORE_ATTR ||                \
                            op == DELETE_ATTR ||               \
                            op == STORE_GLOBAL ||              \
                            op == DELETE_GLOBAL ||             \
                            op == LOAD_GLOBAL ||               \
-                           op == BUILD_TUPLE ||               \
-                           op == BUILD_LIST ||                \
-                           op == BUILD_MAP ||                 \
                            op == LOAD_ATTR ||                 \
                            /* COMPARE_OP special-cased */     \
                            op == IMPORT_NAME ||               \
@@ -205,15 +204,13 @@
 #define MP_HAS_JREL        0x04
 #define MP_HAS_JABS        0x08
 #define MP_HAS_J_MULTIPLE  0x10
-#define MP_IS_CTXDEP       0x20
-#define MP_NO_MERGEPT      0x40
+#define MP_LIGHT           0x20
 
 #define F(op)      ((IS_JUMP_INSTR(op)    ? MP_IS_JUMP        : 0) |    \
                     (HAS_JREL_INSTR(op)   ? MP_HAS_JREL       : 0) |    \
                     (HAS_JABS_INSTR(op)   ? MP_HAS_JABS       : 0) |    \
                     (HAS_J_MULTIPLE(op)   ? MP_HAS_J_MULTIPLE : 0) |    \
-                    (IS_CTXDEP_INSTR(op)  ? MP_IS_CTXDEP      : 0) |    \
-                    (NO_MERGE_POINT(op)   ? MP_NO_MERGEPT     : 0) |    \
+                    (IS_LIGHT_INSTR(op)   ? MP_LIGHT          : 0) |    \
                     (OTHER_OPCODE(op)     ? MP_OTHER          : 0))
 
 /* opcode table -- the preprocessor expands this into several hundreds KB
@@ -273,13 +270,17 @@ struct instrnode_s {
 #define MPSET_MAYBE  ((global_entries_t*) -1)
 #define MPSET_YES    ((global_entries_t*) -2)
 
+#if 0
+ --- disabled ---
 inline int set_merge_point(struct instrnode_s* node)
 {
   int runaway = 100;
   struct instrnode_s* bestchoice = node;
-  while (node->next1 != NULL && (node->mp == MPSET_NEVER) && --runaway)
+  while (node->mp == MPSET_NEVER && --runaway)
     {
       node = node->next1;
+      if (node == NULL)
+        return 0;    /* no need to set a merge point at the end of the code */
       if (node->inpaths >= 2)
         bestchoice = node;
     }
@@ -292,6 +293,7 @@ inline int set_merge_point(struct instrnode_s* node)
       return 1;
     }
 }
+#endif
 
 
 /***************************************************************/
@@ -501,8 +503,8 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
   int i, lasti, count;
   bool modif;
   PyTryBlock blockstack[CO_MAXBLOCKS];
-  int iblock;
-  int valid_controlflow = 1;
+  int iblock, bytecodeweight, iblockmax = 0;
+  bool valid_controlflow = true;
 
   if (length == 0)
     {
@@ -561,6 +563,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
           blockstack[iblock].b_type = op;
           blockstack[iblock].b_handler = i + oparg;
           iblock++;
+          if (iblock > iblockmax) iblockmax = iblock;
           break;
 
         case POP_BLOCK:
@@ -581,7 +584,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
           if (blockstack[btop].b_type != SETUP_LOOP)
             {  /* argh, this gets messy */
                /* because END_FINALLY will then jump to the loop bottom */
-              valid_controlflow = 0;
+              valid_controlflow = false;
             }
           break;
 
@@ -599,15 +602,16 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
           else
             {  /* argh, this gets messy */
               instrnodes[i0].next3 = instrnodes + blockstack[btop].b_handler;
-              valid_controlflow = 0;
+              valid_controlflow = false;
             }
           break;
         }
     }
   if (iblock != 0)
-    valid_controlflow = 0;  /* ?? */
+    valid_controlflow = false;  /* ?? */
 
   /* control flow analysis */
+  bytecodeweight = 0;
   instrnodes[0].pending = 1;
   do
     {
@@ -642,12 +646,15 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
             
             if (!(flags & MP_IS_JUMP))
               {
-                if (flags & MP_IS_CTXDEP || !++instrnodes[nextinstr].inpaths)
+                if (!++instrnodes[nextinstr].inpaths)
                   instrnodes[nextinstr].inpaths = 99;
                 instrnodes[i].next1 = instrnodes + nextinstr;
               }
-            if (!(flags & MP_NO_MERGEPT))
-              instrnodes[i].mp = MPSET_MAYBE;
+            if (!(flags & MP_LIGHT))
+              {
+                instrnodes[i].mp = MPSET_MAYBE;
+                bytecodeweight++;
+              }
             
             /* compact the next1-next2-next3 */
             if (instrnodes[i].next2 == NULL)
@@ -677,20 +684,136 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
     } while (modif);
 
   /* set and count merge points */
-  instrnodes[0].mp = MPSET_YES;    /* there is a merge point at the beginning */
-  count = 1;
-  lasti = 0;
+  /* a confluence point is an instruction with more than one incoming path */
+  /* a merge point is generally set for each confluence point, but it may be
+     set a bit later than the actual confluence point or completely
+     omitted if there is another confluence point just after */
+
+  /* ensure there are confluence points at regular intervals */
+  lasti = MAX_UNINTERRUPTED_RANGE;
   for (i=1; i<length; i++)
     if (instrnodes[i].inpaths > 0)
       {
-        /* set merge points when there are more than one incoming path */
-        /* ensure there are merge points at regular intervals */
-        if (instrnodes[i].inpaths >= 2 || i-lasti > MAX_UNINTERRUPTED_RANGE)
-          {
-            count += set_merge_point(instrnodes + i);
-            lasti = i;
-          }
+        if (instrnodes[i].inpaths >= 2)
+          lasti = MAX_UNINTERRUPTED_RANGE;  /* fine */
+        else
+          if (!--lasti)
+            {
+              /* it's been too long, force a confluence point */
+              instrnodes[i].inpaths = 99;
+            }
       }
+  
+  instrnodes[0].inpaths = 99;
+  instrnodes[0].mp = MPSET_YES;    /* there is a merge point at the beginning */
+  count = 1;
+  {
+    /* the "weight" of a confluence point is the number of important
+       intructions that have to be done to reach the next confluence point.
+       It may be zero.  The un-important instructions are listed in
+       IS_LIGHT_INSTR() and are marked MPSET_NEVER.
+       Some confluence points need not induce a merge point, but the total
+       weight of such omitted confluence points must not exceed
+       CONFLUENCE_TOTAL_DELAY. */
+
+    /* Confluence points of weight zero are stripped right away.
+       'cpnodes' is a list of the best non-null lightweight confluence points,
+       sorted by weight, ended by a sentinel with cpnodes==NULL and cpweight==
+       CONFLUENCE_TOTAL_DELAY+1 - (sum of the previous cpweights). */
+    struct instrnode_s* cpnodes[CONFLUENCE_TOTAL_DELAY+1];
+    int cpweight[CONFLUENCE_TOTAL_DELAY+1];
+    int weight, insertat, nextweight, insertweight;
+    struct instrnode_s* node;
+    struct instrnode_s* mpnode;
+    struct instrnode_s* nextnode;
+    cpnodes[0] = NULL;
+    cpweight[0] = CONFLUENCE_TOTAL_DELAY+1;
+    for (i=1; i<length; i++)
+      if (instrnodes[i].inpaths >= 2)  /* confluence point */
+        {
+          /* compute the weight */
+          weight = 0;
+          insertat = 0;
+          mpnode = node = instrnodes + i;
+          while (1)
+            {
+              if (node->next2 != NULL)
+                goto set_merge_point; /* give up in case of fork */
+              node = node->next1;
+              if (node == NULL || node->inpaths >= 2)
+                break;
+              if (node->mp == MPSET_MAYBE)
+                {
+                  /* skipping over an important instruction */
+                  weight++;
+                  while (weight >= cpweight[insertat])
+                    {
+                      if (cpnodes[insertat] == NULL)  /* sentinel */
+                        goto set_merge_point;  /* too heavy, give up */
+                      insertat++;
+                    }
+                }
+            }
+          /* reached the next confluence point or the end of the code */
+          if (weight > 0)
+            {
+              /* record the confluence point */
+              insertweight = weight;
+              do
+                {
+                  nextnode   = cpnodes [insertat];
+                  nextweight = cpweight[insertat];
+                  cpnodes [insertat] = mpnode;
+                  cpweight[insertat] = insertweight;
+                  mpnode       = nextnode;
+                  insertweight = nextweight;
+                  insertat++;
+                }
+              while (mpnode != NULL);  /* sentinel */
+              
+              if (insertweight > weight)
+                {
+                  /* no need to discard a confluence point, the
+                     total weight is still low enough */
+                  cpnodes [insertat] = NULL;
+                  cpweight[insertat] = insertweight - weight;
+                }
+              else
+                {
+                  /* total weight exceeded, force the latest (heaviest)
+                     confluence point into a merge point */
+                  insertat--;
+                  mpnode = cpnodes[insertat];
+                  cpnodes [insertat] = NULL;
+                  cpweight[insertat] += insertweight - weight;
+                  extra_assert(cpweight[insertat] >= 1);
+                  goto set_merge_point;
+                }
+            }
+          /* if we get here, the merge point is not needed */
+          continue;
+
+        set_merge_point:
+          mpnode->mp = MPSET_YES;
+          count++;
+        }
+    /* confluence points left in 'cpnodes' are discarded */
+  }
+
+/*   { */
+/*     static int stats = 0, statsc = 0; */
+/*     stats++; */
+/*     statsc += count; */
+/*     fprintf(stderr, "%d mergepoints in %d code obj\n", statsc, stats); */
+/*   } */
+
+  /* inlinable functions are those not too heavy, with no merge point
+     after the mandatory first one, and with no iblock stack use */
+  if (count == 1 && bytecodeweight <= INLINE_MAXIMUM_WEIGHT && iblockmax == 0)
+    {
+      mp_flags |= MP_FLAGS_INLINABLE;
+      debug_printf(2, ("inlining code object '%s'\n", PyCodeObject_NAME(co)));
+    }
   
   /* allocate the string buffer, one mergepoint_t per merge point plus
      the room for a final negative bitfield flags. */

@@ -257,6 +257,8 @@ vinfo_t* PsycoSequence_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i)
 				if (i == NULL)
 					return NULL;
 			}
+			else
+				assert_nonneg(i);
 		}
 		result = Psyco_META2(po, m->sq_item, CfReturnRef|CfPyErrIfNull,
 				     "vv", o, i);
@@ -296,6 +298,8 @@ bool PsycoSequence_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i,
 				if (i == NULL)
 					return false;
 			}
+			else
+				assert_nonneg(i);
 		}
 		vargs = (value!=NULL) ? "vvv" : "vvl";
 		result = Psyco_META3(po, m->sq_ass_item,
@@ -342,6 +346,9 @@ vinfo_t* PsycoSequence_GetSlice(PsycoObject* po, vinfo_t* o,
 				if (i1 == NULL)
 					goto fail;
 			}
+			else
+				assert_nonneg(i1);
+			
 			cc2 = integer_cmp_i(po, i2, 0, Py_LT);
 			if (cc2 == CC_ERROR)
 				goto fail;
@@ -358,6 +365,8 @@ vinfo_t* PsycoSequence_GetSlice(PsycoObject* po, vinfo_t* o,
 				if (i2 == NULL)
 					goto fail;
 			}
+			else
+				assert_nonneg(i2);
 		}
 		result = Psyco_META3(po, m->sq_slice, CfReturnRef|CfPyErrIfNull,
 				     "vvv", o, i1, i2);

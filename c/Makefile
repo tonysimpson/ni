@@ -29,6 +29,9 @@ C_FLAGS_P = -g
 OPTS_M    = -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=1 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=1 -DPSYCO_NO_LINKED_LISTS
 C_FLAGS_M = -g
 
+OPTS_T    = -DPSYCO_DEBUG=1 -DVERBOSE_LEVEL=1 -DHEAVY_MEM_CHECK=0 -DCODE_DUMP=1 '-DPSYCO_TRACE="psyco.trace"'
+C_FLAGS_T = -g
+
 
 PROCESSOR = i386
 # PROCESSOR = ivm
@@ -59,7 +62,7 @@ main: build_ext build_py
 dyn: ${OUTDIR}/dyn-tag build_py
 
 build_ext: build_py
-	-rm ${BUILDDIR}/current
+	rm -f ${BUILDDIR}/current
 	@echo -----------------------------------
 	@echo ${BUILD_VERSION}
 	@echo -----------------------------------

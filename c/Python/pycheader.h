@@ -37,10 +37,12 @@
 
 #define INDEX_LOC_CONTINUATION  0   /* return address in the stack */
 #define INDEX_LOC_GLOBALS       1   /* globals() dict object */
-#define INDEX_LOC_LOCALS_PLUS   2   /* start of local variables + stack */
+#define INDEX_LOC_INLINING      2   /* for function inlining */
+#define INDEX_LOC_LOCALS_PLUS   3   /* start of local variables + stack */
 
 #define LOC_CONTINUATION    (po->vlocals.items[INDEX_LOC_CONTINUATION])
 #define LOC_GLOBALS         (po->vlocals.items[INDEX_LOC_GLOBALS])
+#define LOC_INLINING        (po->vlocals.items[INDEX_LOC_INLINING])
 #define LOC_LOCALS_PLUS     (po->vlocals.items + INDEX_LOC_LOCALS_PLUS)
 
 
@@ -48,7 +50,8 @@ typedef struct {
   PyCodeObject* co;     /* code object we are compiling */
   int next_instr;       /* next instruction to compile */
   short auto_recursion; /* # levels to auto-compile calls to Python functions */
-  short iblock;		/* index in blockstack */
+  char is_inlining;     /* true when compiling a code inlined in a parent */
+  unsigned char iblock; /* index in blockstack */
   PyTryBlock blockstack[CO_MAXBLOCKS]; /* for try and loop blocks */
   
   /* fields after 'blockstack' are not saved in a FrozenPsycoObject */

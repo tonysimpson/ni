@@ -445,6 +445,9 @@ inline vinfo_t* field_read(PsycoObject* po, vinfo_t* vi, long offset,
 {
 	vinfo_t* result = psyco_memory_read(po, vi, offset, vindex,
 				FIELD_SIZE2(df), (long)df & FIELD_UNSIGNED);
+	if ((long)df & FIELD_NONNEG) {
+		assert_nonneg(result);
+	}
 	if (newref && FIELD_HAS_REF(df)) {
 		/* the container 'vi' could be freed while the
 		   field 'result' is still in use */

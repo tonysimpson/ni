@@ -153,12 +153,15 @@ EXTERNFN vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 				   Source argsources[], int argcount,
 				   struct stack_frame_info_s* finfo);
 
-
 inline int get_arguments_count(vinfo_array_t* vlocals) {
 	int retpos = getstack(vlocals->items[INDEX_LOC_CONTINUATION]->source);
 	extra_assert(retpos != RunTime_StackNone);
 	return (retpos - (INITIAL_STACK_DEPTH+4)) / 4;
 }
+
+/* Emit the code to mark the presence of an inlined frame */
+EXTERNFN void psyco_inline_enter(PsycoObject* po);
+EXTERNFN void psyco_inline_exit (PsycoObject* po);
 
 /* find the next stack frame
    ("next" = more recent in time = towards innermost frames) */
