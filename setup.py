@@ -75,7 +75,7 @@ else:
 
 
 setup (	name="psyco",
-      	version="0.3.5",
+      	version="0.4.0",
       	description="Psyco, the Python specializing compiler",
       	author="Armin Rigo",
         author_email="arigo@users.sourceforge.net",

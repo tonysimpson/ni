@@ -225,6 +225,17 @@ static PyObject* cimpl_call_pyfunc(PyCodeObject* co, PyObject* globals,
 #endif
 }
 
+#define COMPUTE_DEFCOUNT()    do {                              \
+  /* is vdefaults!=NULL at run-time ? */                        \
+  condition_code_t cc = object_non_null(po, vdefaults);         \
+  if (cc == CC_ERROR)  /* error or more likely promotion */     \
+    return NULL;                                                \
+  if (runtime_condition_t(po, cc))                              \
+    defcount = PsycoTuple_Load(vdefaults);                      \
+  else                                                          \
+    defcount = 0;  /* vdefaults==NULL at run-time */            \
+} while (0)
+
 DEFINEFN
 vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
                            vinfo_t* vglobals, vinfo_t* vdefaults,
@@ -234,8 +245,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   PsycoObject* mypo;
   Source* sources;
   vinfo_t* result;
-  int tuple_size, argcount, defcount;
-  condition_code_t cc;
+  int tuple_size, argcount, defcount=-2;
 
   if (is_proxycode(co))
     co = ((PsycoFunctionObject*) PyTuple_GET_ITEM(co->co_consts, 1))->psy_code;
@@ -245,34 +255,17 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
       goto fail_to_default;
   
   tuple_size = PsycoTuple_Load(arg_tuple);
-#if HAVE_PyEval_EvalCodeEx
-  /* The following two lines are moved a bit further for Python < 2.2 */
   if (tuple_size == -1)
     goto fail_to_default;
       /* XXX calling with an unknown-at-compile-time number of arguments
          is not implemented, revert to the default behaviour */
-#endif
 
-  /* is vdefaults!=NULL at run-time ? */
-  cc = object_non_null(po, vdefaults);
-  if (cc == CC_ERROR)  /* error or more likely promotion */
-    return NULL;
-  if (runtime_condition_t(po, cc))
-    {
-      defcount = PsycoTuple_Load(vdefaults);
-      if (defcount == -1)
-        goto fail_to_default;
-          /* calling with an unknown-at-compile-time number of default arguments
-             is not implemented (but this is probably not useful to implement);
-             revert to the default behaviour */
-    }
-  else
-    defcount = 0;
-
-#if !HAVE_PyEval_EvalCodeEx
-  if (tuple_size == -1)
+  COMPUTE_DEFCOUNT();
+  if (defcount == -1)
     goto fail_to_default;
-#endif
+  /* calling with an unknown-at-compile-time number of default arguments
+     is not implemented (but this is probably not useful to implement);
+     revert to the default behaviour */
 
   /* the processor condition codes will be messed up soon */
   BEGIN_CODE
@@ -310,6 +303,9 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   if (is_compiletime(vglobals->source))
     {
       int i;
+      if (defcount == -2)   /* not computed yet */
+        COMPUTE_DEFCOUNT();
+      
       for (i=0; i<defcount; i++)
         if (!is_compiletime(PsycoTuple_GET_ITEM(vdefaults, i)->source))
           defcount = -1;
@@ -979,6 +975,32 @@ static PyObject* Psyco_proxycode(PyObject* self, PyObject* args)
 	return psyco_proxycode(function, recursion);
 }
 
+static PyObject* Psyco_unproxycode(PyObject* self, PyObject* args)
+{
+	PyCodeObject* code;
+	PsycoFunctionObject* proxy;
+	PyObject* func;
+	
+	if (!PyArg_ParseTuple(args, "O!", &PyCode_Type, &code))
+		return NULL;
+
+	if (!is_proxycode(code)) {
+		PyErr_SetString(PyExc_PsycoError, "code object is not a proxy");
+		return NULL;
+	}
+	proxy = (PsycoFunctionObject*) PyTuple_GET_ITEM(code->co_consts, 1);
+	
+	func = PyFunction_New((PyObject*) proxy->psy_code, proxy->psy_globals);
+	if (func == NULL)
+		return NULL;
+	if (proxy->psy_defaults != NULL &&
+	    PyFunction_SetDefaults(func, proxy->psy_defaults)) {
+		Py_DECREF(func);
+		return NULL;
+	}
+	return func;
+}
+
 /* Initialize selective compilation */
 static PyObject* Psyco_selective(PyObject* self, PyObject* args)
 {
@@ -1012,8 +1034,15 @@ a proxy code object. The optional second argument specifies the number of\n\
 recursive compilation levels: all functions called by func are compiled\n\
 up to the given depth of indirection.";
 
+static char unproxycode_doc[] =
+"unproxycode(code) -> function object\n\
+\n\
+Return a new copy of the original function that was used to build the\n\
+given proxy code object. Raise psyco.error if code is not a proxy.";
+
 static PyMethodDef PsycoMethods[] = {
 	{"proxycode",	&Psyco_proxycode,	METH_VARARGS,	proxycode_doc},
+	{"unproxycode",	&Psyco_unproxycode,	METH_VARARGS,	unproxycode_doc},
 	{"selective",   &Psyco_selective,	METH_VARARGS},
 #if CODE_DUMP
 	{"dumpcodebuf",	&Psyco_dumpcodebuf,	METH_VARARGS},

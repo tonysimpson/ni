@@ -80,6 +80,34 @@ up to the given depth of indirection."""
     else:
         raise TypeError, 'function or method required'
 
+def unbind(func):
+    """Disable compilation of the given function, method or class.
+Any future call to 'func' will use the regular Python interpreter."""
+    if isinstance(func, FunctionType):
+        try:
+            f = _psyco.unproxycode(func.func_code)
+        except error:
+            pass
+        else:
+            func.func_code = f.func_code
+    elif isinstance(func, MethodType):
+        unbind(func.im_func)
+    elif hasattr(func, '__dict__'):  # for classes
+        for object in func.__dict__.values():
+            unbind(object)
+
+def unproxy(func):
+    """Return a new copy of the original function of a proxy.
+The result behaves like the original function in that calling it
+does not trigger compilation nor execution of any compiled code."""
+    if isinstance(func, FunctionType):
+        return _psyco.unproxycode(func.func_code)
+    if isinstance(func, MethodType):
+        f = unproxy(func.im_func)
+        return new.instancemethod(f, func.im_self, func.im_class)
+    else:
+        raise TypeError, 'function or method required'
+
 
 def dumpcodebuf():
     """Write in file psyco.dump a copy of the emitted machine code,

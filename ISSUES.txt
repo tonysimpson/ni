@@ -1,0 +1,232 @@
+======================================================================
+
+Rule number 1: Psyco will *explode* the memory if you use the just-in-time
+compiler feature with any large application. In this case you *must*
+manually select only a few (or a few dozens) functions and classes to
+compile, ideally the most algorithmically-intensive ones. Psyco will not
+give good results e.g. on loopless functions, neither will it let you speed
+up your application start-up time -- on the countrary, you should probably
+hide the start-up routines from Psyco (e.g. by calling psyco.jit() only
+after start-up).
+
+Rule number 2: almost *any* Python code should execute correctly.
+When features are "not supported" it means that Psyco falls back to Python to
+perform the corresponding operations. This is true for code using *any* C
+extension module. The emitted machine code will just contain calls to your C
+functions.
+
+======================================================================
+
+Compatibility issues (i.e. exceptions to rule number 2):
+
+* no frames and tracebacks. You will not see reasonable tracebacks when
+  uncaught exceptions are raised. The Python debugger will not work.
+  This also means that code relying on sys._getframe() will break. The
+  behavior of Warnings is affected by this. This is planned to be fixed.
+  Note that the exceptions themselves (try/expect/raise/re-raise) work as
+  expected, including the sys.exc_xxx variables and sys.exc_info() whose
+  support has been recently added.
+
+* built-ins are assumed never to change. Global variables can change;
+  we optimize by assuming they are constants until we detect a change.
+  Global variables can be added and deleted, but we assume that doing so
+  will not shadow or expose built-ins. A global variable may shadow a
+  built-in if it is created before Psyco sees the code that uses it,
+  e.g. at the top level of a module.
+
+* object types are assumed never to change. This can break Python's security
+  on the sort() method of lists, which changes the type to 'immutable list'
+  during the sort. This can have bad results if Psyco loads the type during
+  the sort and reuses it after.
+
+* Python >=2.2b1 introduces a new typing system. Object methods are looked-
+  up throught this system. Once an attribute of an object is found to be
+  a method, we assume it will not change (nor be shadowed in the instance
+  attributes). More serious, tricky code or an attacker can make Psyco crash
+  by subtly adding or removing methods from built-in types created with the
+  class keyword.
+
+* Not tested with varying __builtin__ (as in restricted execution). We also
+  assumed that __builtin__ is always valid. Well, Psyco will probably not be
+  considered soon as stable enough to trust it to run restricted code.
+
+* No handling of out-of-memory conditions during the compilation. This is
+  a Py_FatalError().
+
+* No polling at regular intervals: the compiled code does not call
+  Py_MakePendingCalls(), PyErr_CheckSignals() nor PyThreadState_Swap().
+  This could be added (and made an option). It does not mean that threads
+  do not work; they do work, but they are more 'sluggish' by not giving
+  the hand to other threads as often as in regular Python.
+
+* Python objects promoted to compile-time become immortal. This is related
+  to code management issues discussed below. This concerns all global
+  variables, tuples constructed from constants, etc. Note that apart from
+  these particular cases, Python objects are rarely promoted; more often,
+  only their type is.
+
+======================================================================
+
+Optimization issues:
+
+* as a general rule, the emitted code is not very seriously optimized.
+  This could be fixed by interfacing with a real compiler back-end for
+  the most algorithmically-intensive functions.
+
+* more extension modules should be optimized. Currently only 'math' and
+  'array' are -- and only arrays of bytes, ints, longs and doubles.
+
+* cannot Psyco-compile the top-level code of a module.
+
+* not all Python bytecodes are implemented. Functions using one of the
+  following constructions will not be compiled at all: the 'exec' statement,
+  free/cell variables (i.e. nested scopes), any variant of 'import',
+  extended function calls f(*x) or f(**x), extended slice objects.
+  Other unsupported bytecodes are believed to appear only in global module-
+  level code objects, which Psyco never compiles anyway.
+
+* floating-point optimization is not as complete as it could be.
+
+* with Python <2.2b1 we cannot detect type methods as easily, so method call
+  optimization is disabled altogether. This could be fixed.
+
+* some more basic objects should be virtualized, as integers and tuples
+  currently are (meaning that a real Python integer or tuple is not built
+  at all if we can avoid it). For mutable objects like lists and dicts,
+  virtualization is only useful until the first time the 'exterior' can see
+  the object, at which point we must assume it can be modified at any time
+  by someone else. This is still useful in the common case of building an
+  object using some complex algorithms before we store it elsewhere
+  (or returning it as the function result).
+
+* there is cross-optimization of input arguments for Python function, meaning
+  that calling a Python function from Psyco-compiled code can compile a
+  specialized version of the function. This is similar to inlining in C in the
+  sense that the called function is sometimes more efficiently compiled when we
+  know something about its arguments. This is *not* inlining because the
+  called function is not inlined in the machine code, but this would be only
+  a minor optimization as Psyco's produced functions have no prolog and a
+  single-instruction epilog.
+
+* there is no cross-optimization of Python function results. Even if we can
+  prove some restrictions about the return value of a function it will not
+  be used by the caller. Doing so would be difficult because the called
+  function is often not completely compiled at the time we code the call.
+  It would also extend the issues related to recompilation beyond the
+  boundaries of single functions. A typical example is when the called function
+  returns a global variable: it is originally a constant, but can be turned
+  into a run-time value if the global variable ever changes.
+
+* we should think about specializations that apply to all items of a container.
+  Such a specialization would be compared against newly added items'
+  specializations and generalized if needed. This could automatically capture
+  notions like "list of objects of type T" and even "list of 2-tuples whose
+  first element is of type T1".
+
+* there could be a way for the programmer to give hints to Python. Assert
+  statements could play this role: as Psyco compiles the "assert-
+  satisfied" branch it could typically have more information about the
+  objects it compiles. We could devise a "full-speed" mode in which Psyco
+  does not compile assert statements but still uses them for specialization,
+  with no run-time checking (in this mode, a would-have-been-false assert is
+  likely to result in a crash).
+
+======================================================================
+
+Performance and memory issues:
+
+* all extension modules optimized by Psyco are loaded when Psyco loads.
+  Could be fixed if the number of such modules increases.
+
+* no manangement of the produced machine code buffers. This is why memory
+  requirements are too large to compile all the functions in any but the
+  smallest examples. It also seems that Psyco often tends to compute several
+  versions of the same Python code. This could also possibly be detected and
+  fixed, even if only by releasing the most specialized versions written first
+  in favour of the most general ones written next (and not doing so if the
+  specialized version was substantially faster).
+
+* no statistics. It would be theoretically easy to add and remove code that
+  counts the number of executions of each block. The code manager could use
+  that info. A more long-term project would involve several levels of
+  optimization, the first one being very dumb (but very quickly emitted).
+  The most used parts can be recompiled at a better optimization level.
+
+======================================================================
+
+Meta issues:
+
+* Using C for such a project does not lead to the most elegant code.  C++
+  would have been (very lightly) better. Of course, Python itself would have
+  been best, but I do not trust Psyco enough myself to hope that the compiler
+  written in Python would be able to accelerate *itself* to C/C++ performance :-)
+  Or course, the incredible flexibility of a Python version of Psyco would be
+  very interesting by itself.
+
+* A number of common compiler optimizations emerge automagically; we do not have
+  to put them explicitely in the compiler. I believe that this is a major
+  benefit from virtual-time. Here are some examples. In each case the two
+  versions of the code are approximatively equivalent (some subtle differences
+  may come from the mutation of the involved structures). One version is quite
+  faster than the other one under the regular interpreter, but under Psyco they
+  just produce the same code. Once again, in all cases this is a byproduct of
+  the way Psyco works and not optimizations that can be triggered on and off.
+
+     a = 1+2+3
+     a += 4                            a = 15
+     a += 5
+
+     for x in sequence:                for i in range(len(sequence)):
+         ...                               x = sequence[i]
+                                           ...
+
+     l = []                            
+     for x in y:                       l = [x+1 for x in y]
+         l.append(x+1)
+
+     m = l.remove                      for x in y:
+     for x in y:                           l.remove(...)
+         m(...)
+
+     for x in (1,2,3):                 print 1
+         print x                       print 2
+                                       print 3
+
+     a, b = b, a                       tmp = a; a = b; b = tmp
+
+     # suppose ENABLE_FEATURE is
+     # a global constant set to 0
+     if ENABLE_FEATURE:                #nothing
+         xxx
+
+     # suppose it is 1
+     if ENABLE_FEATURE:                xxx
+         xxx
+
+  In the last two cases, the code produced by the left version will still
+  contain a run-time check to see whether the value of ENABLE_FEATURE
+  changed.
+
+* Psyco does not perform any global analysis on the Python code before it
+  compiles it (apart from a very crude one in mergepoints.c). This closes the
+  door to some optimizations. This is because Psyco is just the original
+  Python interpreter rewritten in a special way. See the next point.
+
+* Psyco was not designed with only Python in mind. A part of it can readily
+  be used for any other language. But actually it is not even specifically
+  targeted to language interpretation. The idea is that you could take any
+  source code that would benefit from dynamic compilation (and theoretically
+  almost all code would) and insert it into Psyco. Developing such a platform
+  is a long-term goal of mine, but it will probably no longer be Psyco at all.
+  One of the nicest result would be to write these source codes in Python
+  itself. We would then write the Python interpreter in Python -- ultimate
+  flexibility -- and let this "platform" automatically rewrite it in the same
+  special way as I have just written the Python interpreter in Psyco. Yes, this
+  is possible: I have done most of the Python-dependent part of Psyco by keeping
+  this automatization in mind. It is quite interesting to see how you could
+  write something in an interpreted language -- in this case an interpreter --
+  and get something much more powerful than exactly the same thing in C !
+
+======================================================================
+
+Armin Rigo.
