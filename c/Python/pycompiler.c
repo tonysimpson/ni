@@ -221,6 +221,10 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 		PycException_SetVInfo(po, PyExc_StopIteration, psyco_viNone);
 		return NULL;
 
+	case CfPyErrAlways:   /* always set an exception */
+		cc = CC_ALWAYS_TRUE;
+		break;
+
 	default:
 		return vi;
 	}
@@ -1173,6 +1177,114 @@ static int cimpl_unpack_list(PyObject* listobject, int argcnt, PyObject** sp)
 	return 0;
 }
 
+/* Logic for the raise statement.
+   XXX a meta-implementation would be nice (e.g. to know at compile-time
+   which exception class we got, so that we can know at compile-time which
+   except: statements match) */
+static void cimpl_do_raise(PyObject *type, PyObject *value, PyObject *tb)
+{
+	if (type == NULL) {
+		/* Reraise */
+		PyThreadState *tstate = PyThreadState_Get();
+		type = tstate->exc_type == NULL ? Py_None : tstate->exc_type;
+		value = tstate->exc_value;
+		tb = tstate->exc_traceback;
+	}
+
+	/* unlike the ceval.c version, this never consumes a reference
+	   to its arguments (psyco_generic_call cannot handle this). */
+	Py_XINCREF(type);
+	Py_XINCREF(value);
+	Py_XINCREF(tb);
+
+	/* We support the following forms of raise:
+	   raise <class>, <classinstance>
+	   raise <class>, <argument tuple>
+	   raise <class>, None
+	   raise <class>, <argument>
+	   raise <classinstance>, None
+	   raise <string>, <object>
+	   raise <string>, None
+
+	   An omitted second argument is the same as None.
+
+	   In addition, raise <tuple>, <anything> is the same as
+	   raising the tuple's first item (and it better have one!);
+	   this rule is applied recursively.
+
+	   Finally, an optional third argument can be supplied, which
+	   gives the traceback to be substituted (useful when
+	   re-raising an exception after examining it).  */
+
+	/* First, check the traceback argument, replacing None with
+	   NULL. */
+	if (tb == Py_None) {
+		Py_DECREF(tb);
+		tb = NULL;
+	}
+	else if (tb != NULL && !PyTraceBack_Check(tb)) {
+		PyErr_SetString(PyExc_TypeError,
+			   "raise: arg 3 must be a traceback or None");
+		goto raise_error;
+	}
+
+	/* Next, replace a missing value with None */
+	if (value == NULL) {
+		value = Py_None;
+		Py_INCREF(value);
+	}
+
+	/* Next, repeatedly, replace a tuple exception with its first item */
+	while (PyTuple_Check(type) && PyTuple_Size(type) > 0) {
+		PyObject *tmp = type;
+		type = PyTuple_GET_ITEM(type, 0);
+		Py_INCREF(type);
+		Py_DECREF(tmp);
+	}
+
+	if (PyString_Check(type))
+		;
+
+	else if (PyClass_Check(type))
+		PyErr_NormalizeException(&type, &value, &tb);
+
+	else if (PyInstance_Check(type)) {
+		/* Raising an instance.  The value should be a dummy. */
+		if (value != Py_None) {
+			PyErr_SetString(PyExc_TypeError,
+			  "instance exception may not have a separate value");
+			goto raise_error;
+		}
+		else {
+			/* Normalize to raise <class>, <instance> */
+			Py_DECREF(value);
+			value = type;
+			type = (PyObject*) ((PyInstanceObject*)type)->in_class;
+			Py_INCREF(type);
+		}
+	}
+	else {
+		/* Not something you can raise.  You get an exception
+		   anyway, just not what you specified :-) */
+		PyErr_Format(PyExc_TypeError,
+			     "exceptions must be strings, classes, or "
+			     "instances, not %s", type->ob_type->tp_name);
+		goto raise_error;
+	}
+	PyErr_Restore(type, value, tb);
+	/*if (tb == NULL)
+		return WHY_EXCEPTION;
+	else
+		return WHY_RERAISE;*/
+	return;
+	
+ raise_error:
+	Py_XDECREF(value);
+	Py_XDECREF(type);
+	Py_XDECREF(tb);
+	/*return WHY_EXCEPTION;*/
+}
+
 
  /***************************************************************/
 /***                         Main loop                         ***/
@@ -1586,8 +1698,27 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 				   vinfo_new(CompileTime_New(oparg)));
 		break;
 
-	/*MISSING_OPCODE(RAISE_VARARGS);
-	  MISSING_OPCODE(LOAD_LOCALS);*/
+	case RAISE_VARARGS:
+		u = v = w = psyco_viZero;
+		switch (oparg) {
+		case 3:
+			u = NTOP(oparg-2); /* traceback */
+			/* Fallthrough */
+		case 2:
+			v = NTOP(oparg-1); /* value */
+			/* Fallthrough */
+		case 1:
+			w = NTOP(oparg-0); /* exc */
+		case 0: /* Fallthrough */
+			psyco_generic_call(po, cimpl_do_raise, CfPyErrAlways,
+					   "vvv", w, v, u);
+		default:
+			PycException_SetString(po, PyExc_SystemError,
+					       "bad RAISE_VARARGS oparg");
+		}
+		break;
+
+        /*MISSING_OPCODE(LOAD_LOCALS);*/
 
 	case RETURN_VALUE:
 		POP(v);

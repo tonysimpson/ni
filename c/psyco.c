@@ -68,7 +68,10 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   int extras, i, minargcnt, inputargs, rtcount, ncells, nfrees;
 
   if (merge_points == Py_None)
-    return BF_UNSUPPORTED;
+    {
+      array_delete(arginfo, NULL);
+      return BF_UNSUPPORTED;
+    }
   
   globals = PyFunction_GET_GLOBALS(function);
   defaults = PyFunction_GET_DEFAULTS(function);
@@ -77,12 +80,12 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   if (co->co_flags & (CO_VARARGS | CO_VARKEYWORDS))
     {
       PyErr_SetString(PyExc_PsycoError, "* and ** arguments not supported yet");
-      return NULL;
+      goto error;
     }
   if (ncells != 0 || nfrees != 0)
     {
       PyErr_SetString(PyExc_PsycoError, "free and cell variables not supported yet");
-      return NULL;
+      goto error;
     }
   minargcnt = co->co_argcount - (defaults ? PyTuple_GET_SIZE(defaults) : 0);
   inputargs = arginfo->count;
@@ -100,7 +103,7 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
                        /*kwcount ? "non-keyword " :*/ "",
                        n == 1 ? "" : "s",
                        inputargs);
-          return NULL;
+          goto error;
         }
 
       /* fill missing arguments with default values */
@@ -147,6 +150,7 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   else
     source1 = NULL;
   fix_run_time_args(po, arraycopy, arginfo, source1);
+  array_delete(arginfo, NULL);
 
   /* initialize po->vlocals */
   LOC_GLOBALS = vinfo_new(CompileTime_NewSk(sk_new((long) globals,
@@ -175,6 +179,10 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   po->stack_depth += sizeof(long);  /* count the CALL return address */
   psyco_assert_coherent(po);
   return po;
+
+ error:
+  array_delete(arginfo, NULL);
+  return NULL;
 }
 
 DEFINEFN
@@ -203,7 +211,6 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,
       vinfo_incref(v);
     }
   mypo = psyco_build_frame(function, arginfo, recursion, &sources);
-  array_delete(arginfo, NULL);
   if (mypo == BF_UNSUPPORTED)
     goto fail_to_default;
   if (mypo == NULL)
@@ -225,7 +232,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,
  fail_to_default:
   return psyco_generic_call(po, PyFunction_Type.tp_call,
                             CfReturnRef|CfPyErrIfNull,
-                            "vvl", function, arg_tuple, NULL);
+                            "lvl", function, arg_tuple, NULL);
 }
 
 
@@ -292,7 +299,6 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	
 	/* make a "frame" */
 	po = psyco_build_frame(function, arginfo, self->psy_recursion, NULL);
-        array_delete(arginfo, NULL);
 	if (po == BF_UNSUPPORTED) {
 		return PyObject_Call((PyObject*) self->psy_func, arg, kw);
 	}

@@ -26,7 +26,7 @@
                               (op) == JUMP_FORWARD ||   \
                               (op) == JUMP_ABSOLUTE ||  \
                               (op) == CONTINUE_LOOP ||  \
-                           /* (op) == RAISE_VARARGS || */  \
+                              (op) == RAISE_VARARGS ||  \
                               0)
 
 /* instructions with a target: */
@@ -218,8 +218,8 @@ inline PyObject* build_merge_points(PyCodeObject* co)
 	  {
 	    /* unsupported instruction */
 #ifdef VERBOSE
-            printf("psyco: unsupported instruction: %d at position %d\n",
-                   (int) op, i0);
+            printf("psyco: unsupported instruction: bytecode %d at %s:%d\n",
+                   (int) op, PyString_AS_STRING(co->co_name), i0);
 #endif            
 	    PyCore_FREE(paths);
 	    Py_INCREF(Py_None);

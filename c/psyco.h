@@ -15,7 +15,7 @@
 # define ALL_CHECKS
 
  /* define for a few debugging outputs */
-# define VERBOSE_LEVEL   2   /* 0, 1 or 2 */
+# define VERBOSE_LEVEL   1   /* 0, 1 or 2 */
 
  /* define for *heavy* memory checking */
 # define HEAVY_MEM_CHECK
@@ -25,7 +25,7 @@
  /* define to write produced blocks of code into a file
     See 'xam.py' */
 # define CODE_DUMP_FILE    "psyco.dump"
-//# define CODE_DUMP_AT_END_ONLY
+# define CODE_DUMP_AT_END_ONLY
 # define SPEC_DICT_SIGNATURE   0x98247b9d   /* arbitrary */
 
 #endif  /* !DISABLE_DEBUG */

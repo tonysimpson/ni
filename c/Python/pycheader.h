@@ -89,6 +89,7 @@ typedef struct {
 #define CfPyErrCheckNeg     0x700   /* use PyErr_Occurred() if return is < 0 */
 #define CfPyErrNotImplemented 0x800 /* test for a Py_NotImplemented result */
 #define CfPyErrIterNext     0x900   /* specially for tp_iternext slots */
+#define CfPyErrAlways       0xA00   /* always set an exception */
 
 #define CfPyErrMask         0xF00
 
