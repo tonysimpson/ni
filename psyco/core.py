@@ -138,8 +138,8 @@ up to the given depth of indirection."""
         return
     if hasattr(x, '__dict__'):
         funcs = [o for o in x.__dict__.values()
-                 if isinstance(o, (types.MethodType,
-                                   types.FunctionType))]
+                 if isinstance(o, types.MethodType)
+                 or isinstance(o, types.FunctionType)]
         if not funcs:
             raise error, ("nothing bindable found in %s object" %
                           type(x).__name__)
@@ -163,8 +163,8 @@ def unbind(x):
         return
     if hasattr(x, '__dict__'):
         for o in x.__dict__.values():
-            if isinstance(o, (types.MethodType,
-                              types.FunctionType)):
+            if (isinstance(o, types.MethodType)
+             or isinstance(o, types.FunctionType)):
                 unbind(o)
         return
     raise TypeError, "cannot unbind %s objects" % type(x).__name__
