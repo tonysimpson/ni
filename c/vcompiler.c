@@ -327,7 +327,7 @@ DEFINEFN
 void duplicate_array(vinfo_array_t* target, vinfo_array_t* source)
 {
   /* make a depth copy of an array.
-     Same requirements as PsycoObject::duplicate(). */
+     Same requirements as psyco_duplicate(). */
   int i;
   for (i=0; i<source->count; i++)
     {

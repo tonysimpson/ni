@@ -687,6 +687,7 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
   return code;
 }
 
+DEFINEFN
 CodeBufferObject* psyco_unify_code(PsycoObject* po, CodeBufferObject* target)
 {
   /* simplified interface to psyco_unify() without using a previously
@@ -700,6 +701,68 @@ CodeBufferObject* psyco_unify_code(PsycoObject* po, CodeBufferObject* target)
   po->codelimit = NULL;
   psyco_unify(po, &target);
   return target;
+}
+
+#define KEEP_MARK   ((vinfo_t*) 1)
+
+static int mark_to_keep(vinfo_array_t* array, bool virtual_parent)
+{
+  int i, total=0;
+  for (i=array->count; i--; )
+    {
+      vinfo_t* vi = array->items[i];
+      if (vi != NULL)
+        {
+          if (is_runtime(vi->source) && vi->tmp == NULL)
+            {
+              if (!virtual_parent)
+                continue;
+              /* mark this item to be kept */
+              vi->tmp = KEEP_MARK;
+              total++;
+            }
+          if (vi->array != NullArray)
+            total += mark_to_keep(vi->array, is_virtualtime(vi->source));
+        }
+    }
+  return total;
+}
+
+static void remove_non_marked(vinfo_array_t* array)
+{
+  int i;
+  for (i=array->count; i--; )
+    {
+      vinfo_t* vi = array->items[i];
+      if (vi != NULL)
+        {
+          if (is_runtime(vi->source) && vi->tmp == NULL)
+            {
+              /* remove this item */
+              array->items[i] = NULL;
+              vinfo_decref(vi, NULL);
+            }
+          else if (vi->array != NullArray)
+            remove_non_marked(vi->array);
+        }
+    }
+}
+
+DEFINEFN
+int psyco_simplify_array(vinfo_array_t* array)
+{
+  /* We remove a run-time vinfo_t if it is not directly in 'array' and
+     if it is not in the sub-vinfo_array_t of any virtual-time source. */
+  
+  /* First mark with a non-NULL value all run-time sources that must
+     be kept. */
+  int total = mark_to_keep(array, true);
+
+  /* Remove all non-marked run-time sources */
+  remove_non_marked(array);
+
+  /* Done */
+  return total;
 }
 
 

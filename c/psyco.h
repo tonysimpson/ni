@@ -150,6 +150,7 @@ typedef struct {
 EXTERNFN PsycoObject* psyco_build_frame(PyFunctionObject* function,
                                         vinfo_array_t* arginfo, int recursion,
                                         long** sources);
+/* 'sources' is actually of type 'RunTimeSource**' */
 
 /* Encode a call to the given Python function, compiling it as needed. */
 EXTERNFN vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,

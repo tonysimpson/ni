@@ -19,48 +19,33 @@ EXTERNFN void psyco_dump_code_buffers(void);
 
 DEFINEVAR PyObject* PyExc_PsycoError;
 
-static int count_run_time_args(vinfo_array_t* source)
-{
-  /* returns an approxmation only (may return a bit too much because
-     of shared structures counted several times) */
-  int result = 0;
-  int i = source->count;
-  while (i--)
-    {
-      vinfo_t* a = source->items[i];
-      if (a != NULL)
-        {
-          if (is_runtime(a->source))
-            result++;
-          if (a->array != NullArray)
-            result += count_run_time_args(a->array);
-        }
-    }
-  return result;
-}
-
-static void fix_run_time_args(PsycoObject * po, vinfo_array_t* source,
-                              long* sources)
+static void fix_run_time_args(PsycoObject * po, vinfo_array_t* target,
+                              vinfo_array_t* source, RunTimeSource* sources)
 {
   int i = source->count;
+  extra_assert(i == target->count);
   while (i--)
     {
       vinfo_t* a = source->items[i];
       if (a != NULL && a->tmp != NULL)
         {
+          vinfo_t* b = a->tmp;
           if (is_runtime(a->source))
             {
+              if (target->items[i] == NULL)
+                continue;  /* item was removed by psyco_simplify_array() */
               if (sources != NULL)
                 sources[po->arguments_count] = a->source;
               po->arguments_count++;
               po->stack_depth += sizeof(long);
               /* arguments get borrowed references */
-              a->tmp->source = RunTime_NewStack(po->stack_depth, REG_NONE,
+              b->source = RunTime_NewStack(po->stack_depth, REG_NONE,
                                                 false);
             }
+          extra_assert(b == target->items[i]);
           a->tmp = NULL;
           if (a->array != NullArray)
-            fix_run_time_args(po, a->array, sources);
+            fix_run_time_args(po, b->array, a->array, sources);
         }
     }
 }
@@ -68,7 +53,7 @@ static void fix_run_time_args(PsycoObject * po, vinfo_array_t* source,
 DEFINEFN
 PsycoObject* psyco_build_frame(PyFunctionObject* function,
                                vinfo_array_t* arginfo, int recursion,
-                               long** sources)
+                               RunTimeSource** sources)
 {
   /* build a "frame" in a PsycoObject according to the given code object. */
 
@@ -76,8 +61,8 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   PyObject* globals = PyFunction_GET_GLOBALS(function);
   PyObject* defaults = PyFunction_GET_DEFAULTS(function);
   PsycoObject* po;
-  long* source1;
-  int extras, i, minargcnt, inputargs;
+  RunTimeSource* source1;
+  int extras, i, minargcnt, inputargs, rtcount;
   int ncells = PyTuple_GET_SIZE(co->co_cellvars);
   int nfrees = PyTuple_GET_SIZE(co->co_freevars);
   if (co->co_flags & (CO_VARARGS | CO_VARKEYWORDS))
@@ -133,7 +118,9 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
      part, they will also share it in the copy. */
   clear_tmp_marks(arginfo);
   duplicate_array(LOC_LOCALS_PLUS->array, arginfo);
-  LOC_LOCALS_PLUS->array->count = extras;/*was overwritten by duplicate_array()*/
+
+  /* simplify LOC_LOCALS_PLUS->array in the sense of psyco_simplify_array() */
+  rtcount = psyco_simplify_array(LOC_LOCALS_PLUS->array);
 
   /* all run-time arguments or argument parts must be corrected: in arginfo
      they have arbitrary sources, but in the new frame's sources they will
@@ -141,15 +128,18 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
      pushed them. */
   if (sources != NULL)
     {
-      source1 = PyCore_MALLOC(count_run_time_args(arginfo) * sizeof(long));
+      source1 = PyCore_MALLOC(rtcount * sizeof(RunTimeSource));
       if (source1 == NULL)
         OUT_OF_MEMORY();
       *sources = source1;
     }
   else
     source1 = NULL;
-  fix_run_time_args(po, arginfo, source1);
-  
+  fix_run_time_args(po, LOC_LOCALS_PLUS->array, arginfo, source1);
+
+  /* restore the count, which was overwritten by duplicate_array() */
+  LOC_LOCALS_PLUS->array->count = extras;
+
   /* the rest of locals is uninitialized */
   for (i=arginfo->count; i<co->co_nlocals; i++)
     {

@@ -132,6 +132,12 @@ EXTERNFN code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target);
 EXTERNFN CodeBufferObject* psyco_unify_code(PsycoObject* po,
                                             CodeBufferObject* target);
 
+/* To "simplify" recursively a vinfo_array_t. The simplification done
+   is to replace run-time values inside a sub-array of a non-virtual
+   value with NULL. We assume that these can still be reloaded later if
+   necessary. Returns the number of run-time values left.
+   This assumes that all 'tmp' marks are cleared in 'array'. */
+EXTERNFN int psyco_simplify_array(vinfo_array_t* array);
 
 /*****************************************************************/
  /***   Promotion                                               ***/
