@@ -39,6 +39,7 @@
 #define HAVE_struct_dictobject     (NEW_STYLE_TYPES)
 #define HAVE_PyEval_EvalCodeEx     (PYTHON_API_VERSION>=1011)
 #define HAVE_PyString_FromFormatV  (PYTHON_API_VERSION>=1011)
+#define HAVE_arrayobject_allocated (PY_VERSION_HEX>=0x02040000)   /* 2.4 */
 
 #ifndef Py_TPFLAGS_HAVE_GC
 # define PyObject_GC_New(t,tp)     PyObject_New(t,tp)

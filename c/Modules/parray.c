@@ -26,6 +26,9 @@ typedef struct arrayobject {
 	PyObject_HEAD
 	int ob_size;
 	char *ob_item;
+#if HAVE_arrayobject_allocated
+	int allocated;
+#endif
 	struct arraydescr *ob_descr;
 } arrayobject;
 
