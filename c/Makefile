@@ -16,15 +16,15 @@ LINK_FLAGS = -shared
 
 HEADERS1   = psyco.h      codemanager.h  dispatcher.h   processor.h    \
 	     vcompiler.h  mergepoints.h  encoding.h     pycencoding.h  \
-	     linuxmemchk.h
+	     linuxmemchk.h  selective.h
 
 SOURCES1   = psyco.c      codemanager.c  dispatcher.c   processor.c    \
 	     vcompiler.c  mergepoints.c  pycencoding.c                 \
-	     linuxmemchk.c
+	     linuxmemchk.c  selective.c
 
 OBJECTS1   = psyco.o      codemanager.o  dispatcher.o   processor.o    \
 	     vcompiler.o  mergepoints.o  pycencoding.o                 \
-	     linuxmemchk.o
+	     linuxmemchk.o  selective.o
 
 HEADERS2   = Python/pycompiler.h    Python/pycheader.h     \
 	     Python/pbltinmodule.h
