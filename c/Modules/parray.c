@@ -443,7 +443,7 @@ static vinfo_t* parray_new(PsycoObject* po, PyTypeObject* type,
 		}
 		
 	cannot_decode:
-		Psyco_AssertType(po, result, arraytype);
+		Psyco_AssertType(po, result, type);
 	}
 	return result;
 }

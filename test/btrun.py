@@ -638,6 +638,9 @@ xrange
 >>> print list(xrange(5, -2, -2))
 [5, 3, 1, -1]
 
+>>> test5.arraytest()
+S
+
 
                          ###########################
                          ####   COMPACTOBJECT   ####

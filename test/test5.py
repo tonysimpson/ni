@@ -270,12 +270,20 @@ def longrangetest():
     else:
         print [L, L+1]
 
+if sys.version_info < (2,3):
+    def arraytest():
+        print "S"
+else:
+    def arraytest():
+        import array
+        class S(array.array): pass
+        print type(S('i')).__name__
+
 if __name__ == '__main__':
     import time
     print "break!"
     time.sleep(0.5)
     #psyco.full()
     #longrangetest()
-    print             f3 (-1, 0)
-    print psyco.proxy(f3)(-1, 0)
+    psyco.proxy(arraytest)()
     psyco.dumpcodebuf()
