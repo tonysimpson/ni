@@ -1336,6 +1336,7 @@ static code_t* exit_function(PsycoObject* po)
 			array_delete(retval->array, po);
 			retval->array = NullArray;
 		}
+		retsource = retval->source;
 	}
 	else {
 		/* &ERtPython is the case where the code that raised
