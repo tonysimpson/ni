@@ -44,7 +44,7 @@ PyObject* psyco_thread_dict()
 
 DEFINEVAR PyObject* PyExc_PsycoError;
 DEFINEVAR long psyco_memory_usage = 0;
-static PyObject* CPsycoModule;
+DEFINEVAR PyObject* CPsycoModule;
 DEFINEVAR PyObject* psyco_logger = NULL;
 
 
@@ -604,11 +604,19 @@ Psyco_dir(PyObject *self, PyObject *args)
 		PyObject* locals = psyco_get_locals();
 		if (locals == NULL)
 			return NULL;
-		o = PyDict_Keys(locals);
+		o = PyMapping_Keys(locals);
 		Py_DECREF(locals);
-		if (o != NULL && PyList_Sort(o) != 0) {
+                if (o == NULL)
+			return NULL;
+		if (!PyList_Check(o)) {
 			Py_DECREF(o);
-			o = NULL;
+			PyErr_SetString(PyExc_TypeError,
+					"Expected keys() to be a list.");
+			return NULL;
+		}
+		if (PyList_Sort(o) != 0) {
+			Py_DECREF(o);
+			return NULL;
 		}
 		return o;
 	}

@@ -234,6 +234,7 @@ typedef struct stack_frame_info_s stack_frame_info_t; /* def in pycompiler.h */
 
 EXTERNVAR PyObject* PyExc_PsycoError;
 EXTERNVAR long psyco_memory_usage;   /* approximative */
+EXTERNVAR PyObject* CPsycoModule;
 
 
 /* moved here from vcompiler.h because needed by numerous header files.
