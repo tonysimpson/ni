@@ -6,6 +6,8 @@ import os
 from distutils.core import setup
 from distutils.extension import Extension
 
+PROCESSOR = 'i386'  # no other one available yet
+
 ####################################################################
 #
 #  Customizable debugging flags.
@@ -69,6 +71,8 @@ for name in ['PSYCO_DEBUG', 'VERBOSE_LEVEL',
     if globals().has_key(name):
         macros.append((name, str(globals()[name])))
 
+processor_dir = 'c/' + PROCESSOR
+
 if ALL_STATIC:
     sources = [SOURCEDIR + '/' + MAINFILE]
 else:
@@ -76,7 +80,7 @@ else:
 
 
 setup (	name="psyco",
-      	version="0.4.0",
+      	version="1.1",
       	description="Psyco, the Python specializing compiler",
       	author="Armin Rigo",
         author_email="arigo@users.sourceforge.net",
@@ -84,5 +88,6 @@ setup (	name="psyco",
         packages=['psyco'],
       	ext_modules=[Extension(name = 'psyco._psyco',
                                sources = sources,
-                               define_macros = macros)]
+                               define_macros = macros,
+                               include_dirs = [processor_dir])]
         )
