@@ -111,7 +111,9 @@ def test_with(python_version, psyco_mode, running_mode):
     #
     # Run it
     #
-    print '='*10, 'Mode %.14s: %s' % (psyco_mode, running_mode)
+    print '='*10, '%s: %s' % (
+        psyco_mode['PSYCO_DEBUG'] and "DEBUG" or "RELEASE", 
+        running_mode)
     run(python_version, *script.split())
     #
     # Passed
