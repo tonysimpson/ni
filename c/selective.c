@@ -1,13 +1,13 @@
 #include "selective.h"
 
 DEFINEVAR PyObject* funcs = NULL;
-DEFINEVAR long ticks;
+DEFINEVAR int ticks;
 
 
 DEFINEFN int do_selective(void *v, PyFrameObject *frame, int what, PyObject *arg)
 {
   PyObject *code, *name, *g, *tmp;
-  long value;
+  int value;
 
   /* Only handle function calls for now */
   if (what == PyTrace_CALL) {

@@ -8,7 +8,7 @@
 #define MAX_RECURSION 1
 
 EXTERNVAR PyObject* funcs;
-EXTERNVAR long ticks;
+EXTERNVAR int ticks;
 EXTERNFN int do_selective(void *, PyFrameObject *, int, PyObject *);
 
 #endif
