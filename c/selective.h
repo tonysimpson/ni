@@ -10,5 +10,6 @@
 EXTERNVAR PyObject* funcs;
 EXTERNVAR int ticks;
 EXTERNFN int do_selective(void *, PyFrameObject *, int, PyObject *);
+EXTERNFN int do_selective2(void *, PyFrameObject *, int, PyObject *);
 
 #endif

@@ -240,6 +240,8 @@ EXTERNFN PsycoFunctionObject* psyco_PsycoFunction_NewEx(PyCodeObject* code,
                                                 PyObject* globals,
                                                 PyObject* defaults, /* or NULL */
                                                 int rec);
+EXTERNFN PyObject* psyco_PsycoFunction_New2(PyFunctionObject* func, 
+					    int rec);
 
 
 #if CODE_DUMP

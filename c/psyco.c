@@ -344,9 +344,10 @@ PyObject* psyco_PsycoFunction_New2(PyFunctionObject* func, int rec)
   Py_INCREF(psyco_fun);
 
   code = (PyCodeObject *)func->func_code;
-  size = PyTuple_Size(code->co_consts) + 1;
   assert(code != NULL);
-  assert(size >= 0 && size <= 255);
+
+  size = PyTuple_Size(code->co_consts) + 1;
+  assert(size >= 1 && size <= 255);
 
   consts = PyTuple_New(size);
   assert(consts != NULL);
@@ -374,10 +375,10 @@ PyObject* psyco_PsycoFunction_New2(PyFunctionObject* func, int rec)
 		       code->co_lnotab);
   assert(newcode != NULL);
 
-  Py_DECREF(func->func_code);
+  Py_DECREF(code);
+  Py_INCREF(newcode);
   func->func_code = (PyObject *)newcode;
-  Py_INCREF(func->func_code);
-  
+
   Py_INCREF(Py_None);
   return Py_None;
 }
@@ -414,7 +415,7 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	PyObject* key;
         long* initial_stack;
 	int i;
-	
+
 	if (kw != NULL && PyDict_Check(kw) && PyDict_Size(kw) > 0) {
 		/* keyword arguments not supported yet */
 		goto unsupported;
@@ -862,12 +863,40 @@ static PyObject* Psyco_selective(PyObject* self, PyObject* args)
   return Py_None;
 }
 
+/* Initialize selective compilation */
+static PyObject* Psyco_selective2(PyObject* self, PyObject* args)
+{
+  if (!PyArg_ParseTuple(args, "i", &ticks)) {
+    return NULL;
+  }
+
+  /* Sanity check argument */
+  if (ticks < 0) {
+    PyErr_SetString(PyExc_ValueError, "negative ticks");
+    return NULL;
+  }
+
+  /* Allocate a dict to hold counters and statistics in */
+  if (funcs == NULL) {
+    funcs = PyDict_New();
+    if (funcs == NULL)
+      return NULL;
+  }
+
+  /* Set Python profile function to our selective compilation function */
+  PyEval_SetProfile((Py_tracefunc)do_selective2, NULL);
+  Py_INCREF(Py_None);
+
+  return Py_None;
+}
+
 /*****************************************************************/
 
 static PyMethodDef PsycoMethods[] = {
 	{"proxy",	&Psyco_proxy,		METH_VARARGS},
 	{"proxy2",	&Psyco_proxy2,          METH_VARARGS},
 	{"selective",   &Psyco_selective,	METH_VARARGS},
+	{"selective2",   &Psyco_selective2,	METH_VARARGS},
 #if CODE_DUMP
 	{"dumpcodebuf",	&Psyco_dumpcodebuf,	METH_VARARGS},
 #endif
