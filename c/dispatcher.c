@@ -310,11 +310,23 @@ static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
     }
   for (i=0; i<count; i++)
     {
+      vinfo_t* a = aa->items[i];
       vinfo_t* b = bb->items[i];
-      if (b != NULL)     /* if b == NULL, any value in 'a' is ok. */
+      if (b == NULL)
+        {
+          /* if b == NULL, any value in 'a' is ok --
+             with the exception of a fixed compile-time value, as
+             created by a promotion. Without the following test,
+             Psyco sometimes emits an infinite loop because the
+             PsycoObject after promotion is found to be compatible
+             with itself just before promotion. */
+          if (a != NULL && is_compiletime(a->source) &&
+              ((KNOWN_SOURCE(a)->refcount1_flags & SkFlagFixed) != 0))
+            goto incompatible;
+        }
+      else
 	{
           long diff;
-          vinfo_t* a = aa->items[i];
           /* we store in the 'tmp' fields of the 'bb' arrays pointers to the
              vinfo_t that matched in 'aa'. We assume that all 'tmp' fields
              are NULL initially. If, walking in the 'bb' arrays, we encounter

@@ -1338,7 +1338,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
   /* save and restore the current Python exception throughout compilation */
   PyObject *old_py_exc, *old_py_val, *old_py_tb;
   PyErr_Fetch(&old_py_exc, &old_py_val, &old_py_tb);
-
+  
   while (po->pr.next_instr != -1)
     {
       /* 'co' is the code object we are interpreting/compiling */

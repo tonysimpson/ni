@@ -218,7 +218,9 @@ inline bool runtime_condition_t(PsycoObject* po, condition_code_t cond) {
 
 /* the following functions let you test at compile-time the fact that a
    value is 0 or not. Returns 0 or 1, or -1 in case of error.
-   Uses integer_NON_NULL() and so accepts 'vi==NULL' and !!consumes a ref!! */
+   Uses integer_NON_NULL() and so accepts 'vi==NULL' and !!consumes a ref!!
+   *Do not use* for values that might hold a reference to a PyObject;
+   use integer_non_null() in this case. */
 EXTERNFN int runtime_NON_NULL_f(PsycoObject* po, vinfo_t* vi);
 EXTERNFN int runtime_NON_NULL_t(PsycoObject* po, vinfo_t* vi);
 

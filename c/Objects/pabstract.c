@@ -91,37 +91,73 @@ vinfo_t* PsycoObject_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key)
 				   CfReturnRef|CfPyErrIfNull, "vv", o, key);
 
 	if (tp->tp_as_sequence) {
-		PyTypeObject* ktp = Psyco_NeedType(po, key);
-		if (ktp == NULL)
-			return NULL;
-		if (PsycoInt_Check(ktp))
+		switch (Psyco_TypeSwitch(po, key, &psyfs_int_long)) {
+		case 0: /* PyInt_Type */
 			return PsycoSequence_GetItem(po, o,
 						     PsycoInt_AS_LONG(po, key));
-		else if (PsycoLong_Check(ktp)) {
+		case 1: /* PyLong_Type */
+		{
 			vinfo_t* key_value = PsycoLong_AsLong(po, key);
 			if (key_value == NULL)
 				return NULL;
 			return PsycoSequence_GetItem(po, o, key_value);
 		}
-		return type_error(po, "sequence index must be integer");
+		default: /* error or promotion or other type */
+			if (PycException_Occurred(po))
+				return NULL;
+		}
+		type_error(po, "sequence index must be integer");
+		return false;
 	}
 
-	return type_error(po, "unsubscriptable object");
+	type_error(po, "unsubscriptable object");
+	return false;
 }
 
 DEFINEFN
 bool PsycoObject_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key,
 			 vinfo_t* value)
 {
-	/* XXX implement me */
-	if (value != NULL)
-		return psyco_generic_call(po, PyObject_SetItem,
-                                          CfNoReturnValue|CfPyErrIfNonNull,
-                                          "vvv", o, key, value) != NULL;
-	else
-		return psyco_generic_call(po, PyObject_DelItem,
-                                          CfNoReturnValue|CfPyErrIfNonNull,
-                                          "vv", o, key) != NULL;
+	PyMappingMethods *m;
+	PyTypeObject* tp = Psyco_NeedType(po, o);
+	if (tp == NULL)
+		return false;
+
+	m = tp->tp_as_mapping;
+	if (m && m->mp_ass_subscript) {
+		char* vargs = (value!=NULL) ? "vvv" : "vvl";
+		return Psyco_META3(po, m->mp_ass_subscript,
+				   CfNoReturnValue|CfPyErrIfNonNull,
+				   vargs, o, key, value) != NULL;
+	}
+
+	if (tp->tp_as_sequence) {
+		switch (Psyco_TypeSwitch(po, key, &psyfs_int_long)) {
+		case 0: /* PyInt_Type */
+			return PsycoSequence_SetItem(po, o,
+						     PsycoInt_AS_LONG(po, key),
+						     value);
+		case 1: /* PyLong_Type */
+		{
+			vinfo_t* key_value = PsycoLong_AsLong(po, key);
+			if (key_value == NULL)
+				return false;
+			return PsycoSequence_SetItem(po, o, key_value, value);
+		}
+		default: /* error or promotion or other type */
+			if (PycException_Occurred(po))
+				return false;
+		}
+		if (tp->tp_as_sequence->sq_ass_item) {
+			type_error(po, "sequence index must be integer");
+			return false;
+		}
+	}
+
+	type_error(po, (value!=NULL) ?
+		   "object does not support item assignment" :
+		   "object does not support item deletion");
+	return false;
 }
 
 DEFINEFN
@@ -205,15 +241,44 @@ DEFINEFN
 bool PsycoSequence_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i,
 			   vinfo_t* value)
 {
-	/* XXX implement me */
-	if (value != NULL)
-		return psyco_generic_call(po, PySequence_SetItem,
-                                          CfNoReturnValue|CfPyErrIfNonNull,
-                                          "vvv", o, i, value) != NULL;
-	else
-		return psyco_generic_call(po, PySequence_DelItem,
-                                          CfNoReturnValue|CfPyErrIfNonNull,
-                                          "vv", o, i) != NULL;
+	PySequenceMethods *m;
+	PyTypeObject* tp = Psyco_NeedType(po, o);
+	if (tp == NULL)
+		return false;
+
+	m = tp->tp_as_sequence;
+	if (m && m->sq_ass_item) {
+		bool result;
+		char* vargs;
+		vinfo_t* i1 = NULL;
+		if (m->sq_length) {
+			condition_code_t cc = integer_cmp_i(po, i, 0, Py_LT);
+			if (cc == CC_ERROR)
+				return false;
+			if (runtime_condition_f(po, cc)) {
+				vinfo_t* l = Psyco_META1(po, m->sq_length,
+						CfReturnNormal|CfPyErrIfNeg,
+						"v", o);
+				if (l == NULL)
+					return false;
+				i = i1 = integer_add(po, i, l, false);
+				vinfo_decref(l, po);
+				if (i1 == NULL)
+					return false;
+			}
+		}
+		vargs = (value!=NULL) ? "vvv" : "vvl";
+		result = Psyco_META3(po, m->sq_ass_item,
+				     CfNoReturnValue|CfPyErrIfNonNull,
+				     vargs, o, i, value) != NULL;
+		vinfo_xdecref(i1, po);
+		return result;
+	}
+
+	type_error(po, (value!=NULL) ?
+		   "object doesn't support item assignment" :
+		   "object doesn't support item deletion");
+	return false;
 }
 
 DEFINEFN

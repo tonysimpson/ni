@@ -74,20 +74,29 @@ static vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,
 	vinfo_t* im_func;
 	vinfo_t* im_self;
 	vinfo_t* result;
+	condition_code_t cc;
 	
 	/* get the 'im_self' field from the Python object 'methobj' */
 	im_self = get_array_item(po, methobj, METHOD_IM_SELF);
 	if (im_self == NULL)
 		return NULL;
 
-	if (psyco_knowntobe(im_self, (long) NULL)) {
+	cc = integer_non_null(po, im_self);
+	if (cc == CC_ERROR)  /* error or more likely promotion */
+		return NULL;
+	
+	if (!runtime_condition_t(po, cc)) {
 		/* Unbound methods, XXX implement me */
 		goto fallback;
 	}
-	else {
-		int argcount = PsycoTuple_Load(arg);
-		int i;
+	else
+	{
+		int i, argcount;
 		vinfo_t* newarg;
+		if (PycException_Occurred(po))
+			return NULL;
+		
+		argcount = PsycoTuple_Load(arg);
 		if (argcount < 0)
 			goto fallback;
 		

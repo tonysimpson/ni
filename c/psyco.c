@@ -480,7 +480,7 @@ static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
             fprintf(f, "rt %ld\n", vi->source);
             break;
           case VirtualTime:
-            fprintf(f, "vt %p\n", VirtualTime_Get(vi->source));
+            fprintf(f, "vt 0x%lx\n", (long) VirtualTime_Get(vi->source));
             break;
           default:
             assert(0);
@@ -510,8 +510,9 @@ void psyco_dump_code_buffers(void)
 
       /* give the address of an arbitrary symbol from the Python interpreter
          and from the Psyco module */
-      fprintf(f, "PyInt_FromLong: %p\n", &PyInt_FromLong);
-      fprintf(f, "psyco_dump_code_buffers: %p\n", &psyco_dump_code_buffers);
+      fprintf(f, "PyInt_FromLong: 0x%lx\n", (long) &PyInt_FromLong);
+      fprintf(f, "psyco_dump_code_buffers: 0x%lx\n",
+              (long) &psyco_dump_code_buffers);
       
       for (obj=psyco_codebuf_chained_list; obj != NULL; obj=obj->chained_list)
         {
@@ -519,8 +520,8 @@ void psyco_dump_code_buffers(void)
           int nsize = obj->codeend - obj->codeptr;
           PyCodeObject* co = obj->snapshot.fz_pyc_data ?
 		  obj->snapshot.fz_pyc_data->co : NULL;
-          fprintf(f, "CodeBufferObject %p %d %d '%s' '%s' %d '%s'\n",
-                  obj->codeptr, nsize, get_stack_depth(&obj->snapshot),
+          fprintf(f, "CodeBufferObject 0x%lx %d %d '%s' '%s' %d '%s'\n",
+                  (long) obj->codeptr, nsize, get_stack_depth(&obj->snapshot),
                   co?PyString_AsString(co->co_filename):"",
                   co?PyCodeObject_NAME(co):"",
                   co?obj->snapshot.fz_pyc_data->next_instr:-1,
@@ -547,7 +548,7 @@ void psyco_dump_code_buffers(void)
           PyObject* spec_dict = (PyObject*)(chain[-1]);
           int i = 0;
           PyObject *key, *value;
-          fprintf(f, "spec_dict %p\n", chain);
+          fprintf(f, "spec_dict 0x%lx\n", (long) chain);
           while (PyDict_Next(spec_dict, &i, &key, &value))
             {
               PyObject* repr;
@@ -573,7 +574,7 @@ void psyco_dump_code_buffers(void)
               assert(!PyErr_Occurred());
               assert(PyString_Check(repr));
               assert(CodeBuffer_Check(value));
-              fprintf(f, "%p %s\n", ((CodeBufferObject*)value)->codeptr,
+              fprintf(f, "0x%lx %s\n", (long)((CodeBufferObject*)value)->codeptr,
                       PyString_AsString(repr));
               Py_DECREF(repr);
             }
@@ -589,7 +590,7 @@ void psyco_dump_code_buffers(void)
             Dl_info info;
             void* ptr = (void*) PyInt_AS_LONG(key);
             if (dladdr(ptr, &info) && ptr == info.dli_saddr)
-              fprintf(f, "%p %s\n", ptr, info.dli_sname);
+              fprintf(f, "0x%lx %s\n", (long) ptr, info.dli_sname);
           }
         Py_DECREF(global_addrs);
       }

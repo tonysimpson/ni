@@ -135,12 +135,12 @@ copy: copywindows copyfloppy
 
 copywindows: clean
 	mount /windows
-	tar zcf /windows/windows/Bureau/psyco3.tgz *
+	tar zcfh /windows/windows/Bureau/psyco3.tgz *
 	umount /windows
 
 copyfloppy: clean
 	mount /floppy
-	tar zcf /floppy/psyco3.tgz *
+	tar zcfh /floppy/psyco3.tgz *
 	umount /floppy
 
 dist_files: Makefile
