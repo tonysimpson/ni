@@ -344,7 +344,7 @@ static vinfo_t* pfloat_richcompare(PsycoObject* po, vinfo_t* v,
 	case Py_GE: fn = cimpl_fp_ge_int; break;
 	case Py_LT: fn = cimpl_fp_lt_int; break;
 	case Py_GT: fn = cimpl_fp_gt_int; break;
-        default: Py_FatalError("bad richcmp op");
+        default: Py_FatalError("bad richcmp op"); return NULL;
         }
         r = psyco_generic_call(po, fn, CfReturnNormal|CfPure,
                                "vvv", a1, a2, PsycoInt_AS_LONG(po, w));
@@ -371,7 +371,7 @@ static vinfo_t* pfloat_richcompare(PsycoObject* po, vinfo_t* v,
 	case Py_GE: fn = cimpl_fp_le_fp; SWAP_A_B; break;
 	case Py_LT: fn = cimpl_fp_lt_fp; break;
 	case Py_GT: fn = cimpl_fp_lt_fp; SWAP_A_B; break;
-        default: Py_FatalError("bad richcmp op");
+        default: Py_FatalError("bad richcmp op"); return NULL;
         }
 #undef SWAP_A_B
         r = psyco_generic_call(po, fn, CfReturnNormal|CfPure,
