@@ -31,6 +31,7 @@ src = [
     "c/vcompiler.c",
     "c/mergepoints.c",
     "c/pycencoding.c",
+    "c/selective.c",
     "c/psyco.c"
     ]
 
