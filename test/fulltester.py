@@ -3,6 +3,26 @@
 #
 import sys, os, time
 
+#
+# This script should do the following:
+#
+#  for interpreter-executable-path in file('fulltester.local'):
+#      for mode in (debug, optimized):
+#          compile Psyco for 'mode' and 'interpreter'
+#          for testset in testset_list:
+#              start 'interpreter' running 'testset'
+#
+# The testset_list is called RUNNING_MODES below, and has the 
+# following entries:
+
+# basetests.py        -- run elementary tests
+# regrtester2.py 0/5  -- 1st fifth of all regr tests with psyco.full()
+# regrtester2.py 1/5  -- 2nd fifth of all regr tests with psyco.full()
+# regrtester2.py 2/5  -- 3rd fifth of all regr tests with psyco.full()
+# regrtester2.py 3/5  -- 4th fifth of all regr tests with psyco.full()
+# regrtester2.py 4/5  -- 5th fifth of all regr tests with psyco.full()
+# (idem)              -- the same, with psyco.profile()
+#
 
 try:
     f = open('fulltester.local')
@@ -18,12 +38,16 @@ PSYCO_MODES = ['G', 'O']
 
 RUNNING_MODES = [
     ("basetests.py",  {}),
-    ("regrtester2.py 0/3 -nodump", {"regrtester.local": "psyco.full()"}),
-    ("regrtester2.py 1/3 -nodump", {"regrtester.local": "psyco.full()"}),
-    ("regrtester2.py 2/3 -nodump", {"regrtester.local": "psyco.full()"}),
-    ("regrtester2.py 0/3 -nodump", {"regrtester.local": "psyco.profile()"}),
-    ("regrtester2.py 1/3 -nodump", {"regrtester.local": "psyco.profile()"}),
-    ("regrtester2.py 2/3 -nodump", {"regrtester.local": "psyco.profile()"}),
+    ("regrtester2.py 0/5 -nodump", {"regrtester.local": "psyco.full()"}),
+    ("regrtester2.py 1/5 -nodump", {"regrtester.local": "psyco.full()"}),
+    ("regrtester2.py 2/5 -nodump", {"regrtester.local": "psyco.full()"}),
+    ("regrtester2.py 3/5 -nodump", {"regrtester.local": "psyco.full()"}),
+    ("regrtester2.py 4/5 -nodump", {"regrtester.local": "psyco.full()"}),
+    ("regrtester2.py 0/5 -nodump", {"regrtester.local": "psyco.profile()"}),
+    ("regrtester2.py 1/5 -nodump", {"regrtester.local": "psyco.profile()"}),
+    ("regrtester2.py 2/5 -nodump", {"regrtester.local": "psyco.profile()"}),
+    ("regrtester2.py 3/5 -nodump", {"regrtester.local": "psyco.profile()"}),
+    ("regrtester2.py 4/5 -nodump", {"regrtester.local": "psyco.profile()"}),
     ]
 
 compiled_version = None
