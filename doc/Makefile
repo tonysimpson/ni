@@ -32,6 +32,12 @@ all  : $(all)
 %.ps: %.dvi
 	$(DVIPS) -o $@ $<
 
+%.pdf: %.tex
+	rm -f $*.log $*.out $*.aux
+	pdflatex $<
+	pdflatex $<
+	rm -f $*.log $*.out $*.aux
+
 clean:
 	rm -fr $(all)
 	rm -f *.log *.aux *.ind *.idx *.l2h *.toc *.syn

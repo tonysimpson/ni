@@ -9,7 +9,7 @@
         Psyco Home page: \url{http://psyco.sourceforge.net/}
 }
 
-\date{Mar 4, 2004}
+\date{updated May 23, 2004}
 
 \release{1.2}                   % release version
 
@@ -341,12 +341,18 @@ at the top of the module(s) that define the classes, then not only will all your
 \strong{In Python 2.1} there are no user-defined built-in types.  The statement \samp{from psyco.classes import *} has no effect but does not hurt.
 
 
-\section{Known bugs}
+\section{Known bugs}\label{tutknownbugs}
 
 Almost any Python code should execute correctly when run under Psyco, including code that uses arbitrary C extension modules.  Some features of Python which are marked as ``not supported'' by Psyco will not cause Psyco to fail to produce the correct result; instead, it will revert to the regular Python interpreter and the code will run non-accelerated.
 
 All exceptions to this rule are bugs, but there are a couple of them because they would be either very hard to fix or fixing them would severely hurt performance.  They correspond to uncommon situations.  The current list is in appendix \ref{bugs}.
 
+There are also performance bugs: situations in which Psyco slows down the code instead of accelerating it.  It is difficult to make a complete list of the possible reasons, but here are a few common ones:
+
+\begin{itemize}
+\item The built-in \function{map} and \function{filter} functions must be avoided and replaced by list comprehension.  For example, \code{map(lambda x: x*x, lst)} should be replaced by the more readable but more recent syntax \code{[x*x for x in lst]}.
+\item The compilation of regular expressions doesn't seem to benefit from Psyco.  (The execution of regular expressions is unaffected, since it is C code.)  Don't enable Psyco on this module; if necessary, disable it explicitely, e.g.\ by calling \code{psyco.cannotcompile(re.compile)}.
+\end{itemize}
 
 
 
@@ -893,20 +899,32 @@ The following constructs are not supported by Psyco.  It does not mean that code
 Log files report unsupported constructs by giving the corresponding bytecode instruction number, which you can look up in the following table:
 
 \begin{tableiii}{cl|l}{code}{Bytecode}{Instruction name}{Appears in}
-  \lineiii{ 82}{\code{LOAD_LOCALS  }}{class definitions}
-  \lineiii{ 84}{\code{IMPORT_STAR  }}{\code{from xx import *}}
-  \lineiii{ 85}{\code{EXEC_STMT    }}{\code{exec xx}}
-  \lineiii{ 86}{\code{YIELD_VALUE  }}{generators}
-  \lineiii{ 90}{\code{STORE_NAME   }}{(1)}
-  \lineiii{ 91}{\code{DELETE_NAME  }}{(1)}
-  \lineiii{101}{\code{LOAD_NAME    }}{(1)}
-  \lineiii{134}{\code{MAKE_CLOSURE }}{nested scopes}
-  \lineiii{135}{\code{LOAD_CLOSURE }}{nested scopes}
-  \lineiii{136}{\code{LOAD_DEREF   }}{nested scopes}
-  \lineiii{137}{\code{STORE_DEREF  }}{nested scopes}
+  \lineiii{ 82}{\code{LOAD_LOCALS  }}{(1) class definitions}
+  \lineiii{ 84}{\code{IMPORT_STAR  }}{(2) \code{from xx import *}}
+  \lineiii{ 85}{\code{EXEC_STMT    }}{(2) \code{exec xx}}
+  \lineiii{ 86}{\code{YIELD_VALUE  }}{(3) generators}
+  \lineiii{ 90}{\code{STORE_NAME   }}{(1) outside functions}
+  \lineiii{ 91}{\code{DELETE_NAME  }}{(1) outside functions}
+  \lineiii{101}{\code{LOAD_NAME    }}{(1) outside functions}
+  \lineiii{134}{\code{MAKE_CLOSURE }}{(4) nested scopes}
+  \lineiii{135}{\code{LOAD_CLOSURE }}{(4) nested scopes}
+  \lineiii{136}{\code{LOAD_DEREF   }}{(4) nested scopes}
+  \lineiii{137}{\code{STORE_DEREF  }}{(4) nested scopes}
 \end{tableiii}
 
-(1): these appear outside functions, like at the module top-level or in the body defining a class.  They can sometimes appear in a function too, e.g.\ when the function uses \code{from xx import *} or \code{exec xx}.
+\noindent
+Notes:
+%
+\begin{description}
+\item[(1)]
+  Psyco can only accelerate functions.  It can not accelerate class definitions (i.e.\ the execution of the body of the class statement -- i.e.\ the creation of the class object itself -- this does not prevent it from accelerating methods in the class).  It cannot accelerate the module top-level code, so be sure to put your loops inside a function even in a simple script.  These instructions can also sometimes appear in a function, e.g.\ when the function uses \code{from xx import *} or \code{exec xx}.
+\item[(2)]
+  Functions using these constructs cannot be accelerated.
+\item[(3)]
+  Generators (i.e.\ any function using the \code{yield} keyword) cannot be accelerated currently.  If there is enough interest I can consider implementing them.
+\item[(4)]
+  Using nested scopes (i.e.\ variables shared by a function and an inner sub-function) will prevent both the outer and the inner function to be accelerated.  This too could be worked around if there is enough interest, at least for accelerating the unrelated parts of the functions -- the accesses to the shared variables themselves might be difficult to optimize.
+\end{description}
 
 
 \chapter{Performance expectations}
@@ -918,6 +936,8 @@ The other reason for the performance improvement is that the machine code does n
 The type-based look-ups and the successive construction and destruction of objects for all intermediate values is what Psyco can most successfully cancel, but it needs to be taught about a type and its operations before it can do so.
 
 We list below the specifically optimized types and operations.  Possible performance gains are just wild guesses; specialization is known to give often-good-but-hard-to-predict gains.  Remember, all operations not listed below work well --- they just cannot be much accelerated.
+
+A \strong{performance killer} is the usage of the built-in functions \function{map} and \function{filter}.  \strong{Never} use them with Psyco.  Replace them with list comprehensions (see \ref{tutknownbugs}).  The reason is that entering code compiled by Psyco from non-Psyco-accelerated (Python or C) code is quite slow, slower than a normal Python function call.  The \function{map} and \function{filter} functions will typically result in a very large number of calls from C code to a \code{lambda} expression foolishly compiled by Psyco.
 
 \strong{Virtual-time} objects are objects that, when used as intermediate values, are simply not be built at run-time at all.  The noted performance gains only apply if the object can actually remain virtualized.  Any unsupported operation will force the involved objects to be normally built.
 
@@ -962,6 +982,7 @@ We list below the specifically optimized types and operations.  Possible perform
   \lineii{\function{len}, \function{abs}, \function{divmod}}{}
   \lineii{\function{apply}}{(14)}
   \lineii{the whole \module{math} module}{(16)}
+  \lineii{\function{map}, \function{filter}}{\strong{not supported}(17)}
 \end{tableii}
 
 \noindent
@@ -1013,7 +1034,10 @@ Notes:
 
 \item[(16)]
   Missing: \function{frexp}, \function{ldexp}, \function{log}, \function{log10}, \function{modf}.  See note (5).
-  
+
+\item[(17)]
+  Systematically avoid \function{map} and \function{filter} and replace them with list comprehension (section \ref{tutknownbugs}).
+
 \end{description}
 
 
