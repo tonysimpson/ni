@@ -650,7 +650,7 @@ There are a few visible differences and limitations:
 \begin{classdesc*}{psyco.compacttype}
 The metaclass of \class{psyco.compact}.  It inherits from \class{type}.  It means that when you subclass \class{psyco.compact}, your classes are by default of type \class{psyco.compacttype} instead of \class{type}.  The sole purpose of this metaclass is to force \class{psyco.compact} to appear in the subclasses' bases, and to check for \code{__slots__}.
 
-Note that you should not mix \class{psyco.classtype} classes and normal classes in the same hierarchy.  Although this might work, the instances will still each have an unused allocated dictionary.
+Note that you should not mix \class{psyco.compacttype} classes and normal classes in the same hierarchy.  Although this might work, the instances will still each have an unused allocated dictionary.
 \end{classdesc*}
 
 \subsection{Examples}
