@@ -6,6 +6,7 @@
 
 
 static cfunc_descr_t cd_range = { "range", METH_VARARGS };
+static cfunc_descr_t cd_xrange= { "xrange",METH_VARARGS };
 static cfunc_descr_t cd_chr   = { "chr",   METH_VARARGS };
 static cfunc_descr_t cd_ord   = { "ord",   METH_O };
 static cfunc_descr_t cd_id    = { "id",    METH_O };
@@ -85,13 +86,12 @@ static vinfo_t* get_len_of_range(PsycoObject* po, vinfo_t* lo, vinfo_t* hi
 		return NULL;
 	if (runtime_condition_t(po, cc))
 		return integer_sub(po, hi, lo, false);
-	else {
-		vinfo_incref(psyco_viZero);
-		return psyco_viZero;
-	}
+	else
+		return psyco_vi_Zero();
 }
 
-static vinfo_t* pbuiltin_range(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
+static vinfo_t* pbuiltin_range_or_xrange(PsycoObject* po,
+					 vinfo_t* vargs, PyTypeObject* ntype)
 {
 	vinfo_t* result = NULL;
 	vinfo_t* ilen;
@@ -116,10 +116,13 @@ static vinfo_t* pbuiltin_range(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 		ihigh = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 1));
 		if (ihigh == NULL) goto End;
 		break;
-	default:
-		return psyco_generic_call(po, cd_range.cd_function,
+	default: {
+		void* fn = (ntype == &PyList_Type) ? cd_range.cd_function :
+			cd_xrange.cd_function;
+		return psyco_generic_call(po, fn,
 					  CfReturnRef|CfPyErrIfNull,
 					  "lv", NULL, vargs);
+	    }
 	}
 	ilen = get_len_of_range(po, ilow, ihigh);
 	if (ilen == NULL) goto End;
@@ -128,6 +131,8 @@ static vinfo_t* pbuiltin_range(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 	result->array = array_new(/*RANGE_STEP*/RANGE_START+1);
 	result->array->items[OB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyList_Type)));
+	/* XXX implement xrange() completely and replace '&PyList_Type'
+	   above by 'ntype' */
 	result->array->items[RANGE_LEN] = ilen;
 	result->array->items[RANGE_START] = ilow;
 	ilow = NULL;
@@ -139,6 +144,15 @@ static vinfo_t* pbuiltin_range(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 	return result;
 }
 
+static vinfo_t* pbuiltin_range(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
+{
+	return pbuiltin_range_or_xrange(po, vargs, &PyList_Type);
+}
+
+static vinfo_t* pbuiltin_xrange(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
+{
+	return pbuiltin_range_or_xrange(po, vargs, &PyRange_Type);
+}
 
 static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 {
@@ -165,6 +179,7 @@ static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 
 static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
+	vinfo_t* zero;
 	vinfo_t* vlen;
 	vinfo_t* result;
 	condition_code_t cc;
@@ -180,9 +195,11 @@ static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 			return NULL;
 		if (runtime_condition_f(po, cc))
 			goto use_proxy;
-		
+
+		zero = psyco_vi_Zero();
 		result = read_immut_array_item_var(po, vobj, STR_OB_SVAL,
-                                                   psyco_viZero, true);
+                                                   zero, true);
+		vinfo_decref(zero, po);
 		if (result == NULL)
 			return NULL;
 		return PsycoInt_FROM_LONG(result);
@@ -221,6 +238,7 @@ static vinfo_t* pbuiltin_len(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 
 static meta_impl_t meta_bltin[] = {
 	{&cd_range,	&pbuiltin_range},
+	{&cd_xrange,	&pbuiltin_xrange},
 	{&cd_chr,	&pbuiltin_chr},
 	{&cd_ord,	&pbuiltin_ord},
 	{&cd_id,	&pbuiltin_id},
