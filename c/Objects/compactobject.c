@@ -1030,6 +1030,7 @@ DEFINEVAR PyTypeObject PyCompact_Type = {
 	compact_del,                            /* tp_free */
 };
 
+INITIALIZATIONFN
 void psyco_compact_init(void)
 {
 	PyCompact_EmptyImpl = &k_empty_impl;

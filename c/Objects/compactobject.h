@@ -6,6 +6,7 @@
 #define _COMPACTOBJECT_H
 
 
+#include "../psyco.h"
 #include "../Python/pyver.h"
 #define HAVE_COMPACT_OBJECT   NEW_STYLE_TYPES
 
