@@ -49,6 +49,7 @@ from support import __version__, error, warning, _getrealframe, _getemulframe
 from support import version_info, __version__ as hexversion
 from core import full, profile, background, runonly, stop, cannotcompile
 from core import log, bind, unbind, proxy, unproxy, dumpcodebuf
+from _psyco import setfilter
 
 try:
     from _psyco import compact, compacttype    # Python 2.2 and above only

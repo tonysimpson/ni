@@ -644,6 +644,10 @@ S
 >>> test5.proxy_defargs()
 12
 
+>>> test5.setfilter()
+('f1', 1)
+('f2', 0)
+
 
                          ###########################
                          ####   COMPACTOBJECT   ####

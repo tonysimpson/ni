@@ -282,6 +282,22 @@ def g(a=12):
     d['g'] = psyco.proxy(d['g'])
     d['f']()
 
+def setfilter():
+    def f1():
+        return ('f1', int(__in_psyco__))
+    def f2():
+        "TAGGY"
+        return ('f2', int(__in_psyco__))
+    def myfilter(co):
+        return co.co_consts[0] != 'TAGGY'
+    psyco.setfilter(myfilter)
+    try:
+        print psyco.proxy(f1)()  # ('f1', 1)
+        print psyco.proxy(f2)()  # ('f2', 0)
+    finally:
+        prev = psyco.setfilter(None)
+        assert prev is myfilter
+
 if sys.version_info < (2,3):
     def arraytest():
         print "S"
@@ -298,5 +314,6 @@ if __name__ == '__main__':
     #psyco.full()
     #longrangetest()
     #psyco.proxy(arraytest)()
-    proxy_defargs()
+    #proxy_defargs()
+    setfilter()
     psyco.dumpcodebuf()

@@ -9,9 +9,9 @@
         Psyco Home page: \url{http://psyco.sourceforge.net/}
 }
 
-\date{updated Jan 14th, 2005}
+\date{updated Feb 28th, 2005}
 
-\release{1.4}                   % release version
+\release{1.5}                   % release version
 
 \makeindex
 
@@ -410,6 +410,14 @@ bind(f)
   \code{unproxy(proxy(f))} is a new function object equal to \var{f}.  Calling it does no longer invoke Psyco.
 \end{funcdesc}
 
+\begin{funcdesc}{cannotcompile}{object}
+  Prevents the given function to be ever compiled by Psyco.  \var{object} can also be a method object or directly a code object.  Raises \exception{psyco.error} if the object is already being compiled.  Note that this does not prevent functions called by \var{object} to be compiled, if they are bound or proxied or if the profiler chooses to compile them.
+\end{funcdesc}
+
+\begin{funcdesc}{setfilter}{func or None}
+  Sets a global filter function: ``func(co)`` will be called once per code object \var{co} considered by Psyco.  If it returns \var{False}, the code object will not be compiled.  Note that ``func(co)`` will not be called if Psyco already started to compile the code object before you called \function{setfilter}, nor if the code object contains constructs that prevents Psyco from compiling it anyway.  The return value of \function{setfilter} is the previous filter function or \var{None}.
+\end{funcdesc}
+
 The same function will never be compiled over and over again, so that you can freely mix calls to \function{bind}, \function{proxy}, \function{unbind} and \function{unproxy} and to the profile-based routines described in the next section.
 
 
@@ -457,10 +465,6 @@ This section lists the functions that use the Python profiler and line tracer to
   Stop the current profiler and purge the profiler queue (described below).
 
   Calling this function prevents Psyco from compiling any new function.  It will still execute the ones that have already been compiled.
-\end{funcdesc}
-
-\begin{funcdesc}{cannotcompile}{object}
-  Prevents the given function to be ever compiled by Psyco.  \var{object} can also be a method object or directly a code object.  Raises \exception{psyco.error} if the object is already being compiled.  Note that this does not prevent functions called by \var{object} to be compiled, if the profilers want them to.
 \end{funcdesc}
 
 \note{most comments on the performance are based on small tests and extrapolations.  Just don't trust what I guess and try yourself.  Any comment about which routine you found most useful or what value you often give to parameters are welcome!}

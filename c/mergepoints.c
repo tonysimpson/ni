@@ -669,6 +669,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
                   debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
                                ("unsupported opcode %d at %s:%d\n",
                                 (int) op, PyCodeObject_NAME(co), i));
+                negative_exit:
                   PyMem_FREE(instrnodes);
                   Py_INCREF(Py_None);
                   return Py_None;
@@ -733,6 +734,20 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
             modif = true;
           }
     } while (modif);
+
+  /* check with the user-defined filter function, if any */
+  if (psyco_codeobj_filter_fn != NULL)
+    {
+      int res;
+      PyObject* o = PyObject_CallFunction(psyco_codeobj_filter_fn, "O",
+                                          (PyObject*) co);
+      res = o == NULL ? -1 : PyObject_IsTrue(o);
+      Py_XDECREF(o);
+      if (res < 0)
+        PyErr_WriteUnraisable(psyco_codeobj_filter_fn);
+      if (res <= 0)
+        goto negative_exit;
+    }
 
   /* set and count merge points */
   /* a confluence point is an instruction with more than one incoming path */
@@ -935,3 +950,5 @@ PyObject* psyco_get_merge_points(PyCodeObject* co, int module)
 {
   return PyCodeStats_MergePoints(PyCodeStats_Get(co), module);
 }
+
+DEFINEVAR PyObject* psyco_codeobj_filter_fn = NULL;

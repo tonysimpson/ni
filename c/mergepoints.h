@@ -82,5 +82,8 @@ inline mergepoint_t* PsycoObject_Ready(PsycoObject* po) {
         return mp;
 }
 
+/* A user-defined filter function to prevent compilation of some code objs */
+EXTERNVAR PyObject* psyco_codeobj_filter_fn;
+
 
 #endif /* _MERGEPOINTS_H */
