@@ -69,7 +69,9 @@ cimpl_fp_pow(double iv, double iw, double* result) {
     PyFPE_START_PROTECT("pow", return NULL)
         *result = pow(iv, iw);
     PyFPE_END_PROTECT(*result)
+#ifdef Py_SET_ERANGE_IF_OVERFLOW
         Py_SET_ERANGE_IF_OVERFLOW(*result);
+#endif
     if (errno != 0) {
         /* XXX could it be another type of error? */
         PyErr_SetFromErrno(PyExc_OverflowError);

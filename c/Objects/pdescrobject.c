@@ -3,6 +3,7 @@
 #include "pmethodobject.h"
 
 
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 static vinfo_t* pmember_get(PsycoObject* po, PyMemberDescrObject* descr,
 			    vinfo_t* obj, PyTypeObject *type)
 {
@@ -22,11 +23,13 @@ static vinfo_t* pmethod_get(PsycoObject* po, PyMethodDescrObject* descr,
 	   Same remarks as for pmember_get(). */
 	return PsycoCFunction_New(po, descr->d_method, obj);
 }
+#endif
 
 
 INITIALIZATIONFN
 void psy_descrobject_init(void)
 {
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	PyObject* dummy;
 	PyTypeObject* PyMemberDescr_Type;
 	PyTypeObject* PyMethodDescr_Type;
@@ -54,4 +57,5 @@ void psy_descrobject_init(void)
 
 	Psyco_DefineMeta(PyMethodDescr_Type->tp_descr_get,
 			 pmethod_get);
+#endif
 }

@@ -73,8 +73,9 @@ vinfo_t* PsycoFunction_New(PsycoObject* po, vinfo_t* fcode,
  /***************************************************************/
   /*** function objects meta-implementation                    ***/
 
-static vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
-                              vinfo_t* arg, vinfo_t* kw)
+DEFINEFN
+vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
+                        vinfo_t* arg, vinfo_t* kw)
 {
 	/* calling a Python function: compile the called function if
 	   auto_recursion > 0. */
@@ -83,32 +84,75 @@ static vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 		vinfo_t* fcode;
 		vinfo_t* fglobals;
 		vinfo_t* fdefaults;
-		
-		fcode = get_array_item(po, func, FUNC_CODE);
-		if (fcode == NULL)
-			return false;
-		co = (PyCodeObject*) psyco_pyobj_atcompiletime(po, fcode);
-		if (co == NULL)
-			return false;
 
-		fglobals = get_array_item(po, func, FUNC_GLOBALS);
-		if (fglobals == NULL)
-			return false;
+		if (!is_virtualtime(func->source)) {
+			/* run-time or compile-time values: promote the
+			   function object as a whole into compile-time */
+			vinfo_t* result;
+			PyObject* f = psyco_pyobj_atcompiletime(po, func);
+			PyObject* glob;
+			PyObject* defl;
+			if (f == NULL)
+				return NULL;
 
-		fdefaults = get_array_item(po, func, FUNC_DEFAULTS);
-		if (fdefaults == NULL)
-			return false;
+			co = (PyCodeObject*) PyFunction_GET_CODE(f);
+			glob = PyFunction_GET_GLOBALS(f);
+			defl = PyFunction_GET_DEFAULTS(f);
+			Py_INCREF(glob);
+			fglobals = vinfo_new(CompileTime_NewSk(sk_new
+					     ((long)glob, SkFlagPyObj)));
+			if (defl == NULL)
+				fdefaults = psyco_vi_Zero();
+			else {
+				Py_INCREF(defl);
+				fdefaults = vinfo_new(CompileTime_NewSk(sk_new
+						     ((long)defl, SkFlagPyObj)));
+			}
+			
+			result = psyco_call_pyfunc(po, co, fglobals, fdefaults,
+						 arg, po->pr.auto_recursion - 1);
+			vinfo_decref(fdefaults, po);
+			vinfo_decref(fglobals, po);
+			return result;
+		}
+		else {
+			/* virtual-time function objects: read the
+			   individual components */
+			fcode = get_array_item(po, func, FUNC_CODE);
+			if (fcode == NULL)
+				return NULL;
+			co = (PyCodeObject*)psyco_pyobj_atcompiletime(po, fcode);
+			if (co == NULL)
+				return NULL;
+			
+			fglobals = get_array_item(po, func, FUNC_GLOBALS);
+			if (fglobals == NULL)
+				return NULL;
+			
+			fdefaults = get_array_item(po, func, FUNC_DEFAULTS);
+			if (fdefaults == NULL)
+				return NULL;
 
-		return psyco_call_pyfunc(po, co, fglobals, fdefaults,
-					 arg, po->pr.auto_recursion - 1);
+			return psyco_call_pyfunc(po, co, fglobals, fdefaults,
+						 arg, po->pr.auto_recursion - 1);
+		}
 	}
-	else
+	else {
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 		return psyco_generic_call(po, PyFunction_Type.tp_call,
 					  CfReturnRef|CfPyErrIfNull,
 					  "vvv", func, arg, kw);
+#else
+		/* PyFunction_Type.tp_call == NULL... */
+		return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
+					  CfReturnRef|CfPyErrIfNull,
+					  "vvv", func, arg, kw);
+#endif
+	}
 }
 
 
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 static vinfo_t* pfunc_descr_get(PsycoObject* po, PyObject* func,
 				vinfo_t* obj, PyObject* type)
 {
@@ -119,12 +163,15 @@ static vinfo_t* pfunc_descr_get(PsycoObject* po, PyObject* func,
 	   PsycoObject_GenericGetAttr(). */
 	return PsycoMethod_New(func, obj, type);
 }
+#endif /* NEW_STYLE_TYPES */
 
 
 INITIALIZATIONFN
 void psy_funcobject_init(void)
 {
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	Psyco_DefineMeta(PyFunction_Type.tp_call, pfunction_call);
 	Psyco_DefineMeta(PyFunction_Type.tp_descr_get, pfunc_descr_get);
+#endif
 	psyco_computed_function.compute_fn = &compute_function;
 }

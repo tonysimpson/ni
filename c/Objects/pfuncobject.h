@@ -10,6 +10,10 @@
 #include "pabstract.h"
 
 
+EXTERNFN vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
+                                 vinfo_t* arg, vinfo_t* kw);
+
+
 /***************************************************************/
 /* virtual functions.                                          */
 /* 'fdefaults' may be NULL.                                    */

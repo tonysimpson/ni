@@ -25,9 +25,13 @@ SKIP = {'test_gc': NO_SYS_GETFRAME,
         'test_inspect': 'gets confused with Psyco rebinding functions',
         'test_profilehooks': NO_SYS_GETFRAME,
         'test_profile': 'profiling does not see all functions run by Psyco',
-        'test_popen2': 'gets confused by Psyco debugging output to stderr',
+#        'test_popen2': 'gets confused by Psyco debugging output to stderr',
         'test_repr': 'self-nested tuples and lists not supported',
+        'test_builtin': 'vars() and locals() not supported'
         }
+if sys.version_info[:2] < (2,2):
+    SKIP['test_operator'] = NO_SYS_EXC
+    SKIP['test_strop'] = NO_SYS_EXC
 
 GROUP_TESTS = 4    # number of tests to run per Python process
 
@@ -37,8 +41,13 @@ GROUP_TESTS = 4    # number of tests to run per Python process
 # Some tests expect an OverflowError to be raised when
 # an overflow is detected. To work around this, we
 # globally force these to raise an error.
-import warnings
-warnings.filterwarnings("error", "", OverflowWarning, "")
+try:
+    OverflowWarning
+except NameError:
+    pass   # Python < 2.2
+else:
+    import warnings
+    warnings.filterwarnings("error", "", OverflowWarning, "")
 
 
 for dir in sys.path:
@@ -66,7 +75,7 @@ def alltests():
     except IOError:
         tests_passed = {}
     testlist = regrtest.findtests()
-    testlist = [test for test in testlist if test not in tests_passed]
+    testlist = [test for test in testlist if not tests_passed.has_key(test)]
     random.shuffle(testlist)
     testlist1 = tests_passed.keys()
     random.shuffle(testlist1)
@@ -100,15 +109,15 @@ def alltests():
         pass
     print "Psyco compilation flags:",
     d = psyco._psyco.__dict__
-    if 'ALL_CHECKS' not in d:
+    if not d.has_key('ALL_CHECKS'):
         print "Release mode",
-    for key in d:
-        if key == key.upper() and isinstance(d[key], int):
+    for key in d.keys():
+        if key == key.upper() and type(d[key]) == type(0):
             print "%s=%d" % (key, d[key]),
     print
 
 def python_check(test):
-    if test in SKIP:
+    if SKIP.has_key(test):
         print '%s skipped -- %s' % (test, SKIP[test])
         return 0
     for i in range(min(repeat_counter, 2)):
@@ -125,7 +134,7 @@ def main(testlist, verbose=0, use_resources=None):
     test_support.verbose = verbose      # Tell tests to be moderately quiet
     test_support.use_resources = use_resources
     
-    if isinstance(testlist, str):
+    if type(testlist) == type(""):
         testlist = [testlist]
     testlist = filter(python_check, testlist)
 
@@ -164,8 +173,6 @@ if __name__ == '__main__':
             err = not main(sys.argv[1:])
         finally:
             # Write psyco.dump
-            if hasattr(psyco._psyco, 'dumpcodebuf'):
-                print "Dumping code buffers..."
-                psyco._psyco.dumpcodebuf()
+            psyco.dumpcodebuf()
         if err:
             sys.exit(2)

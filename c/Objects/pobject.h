@@ -88,8 +88,10 @@ EXTERNFN vinfo_t* PsycoObject_GetAttr(PsycoObject* po, vinfo_t* o,
                                       vinfo_t* attr_name);
 EXTERNFN bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
                                   vinfo_t* attr_name, vinfo_t* v);
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 EXTERNFN vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
                                              vinfo_t* vname);
+#endif
 
 EXTERNFN vinfo_t* PsycoObject_RichCompare(PsycoObject* po, vinfo_t* v,
 					  vinfo_t* w, int op);

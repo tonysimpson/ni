@@ -1,3 +1,4 @@
+from __future__ import nested_scopes
 import os, sys, re, htmlentitydefs, struct
 from psyco import _psyco
 
@@ -36,7 +37,7 @@ def load_symbol_file(filename, symb1, addr1):
         if match:
             d[match.group(2)] = long(match.group(1), 16)
     g.close()
-    if symb1 in d:
+    if d.has_key(symb1):
         delta = addr1 - d[symb1]
     else:
         delta = 0
@@ -79,26 +80,30 @@ def lineaddresses(line):
     return result
 
 
+re_int = re.compile(r"(\-?\d+)$")
+re_ctvinfo = re.compile(r"ct (\d+) (\-?\d+)$")
+re_rtvinfo = re.compile(r"rt (\-?\d+)$")
+re_vtvinfo = re.compile(r"vt 0x([0-9a-fA-F]+)$")
+
 LOC_LOCALS_PLUS = 2
 
 class CodeBuf:
     
     def __init__(self, mode, co_filename, co_name, nextinstr,
-                 addr, data, vlocals):
+                 addr, data, stackdepth):
         self.mode = mode
         self.co_filename = co_filename
         self.co_name = co_name
         self.nextinstr = nextinstr
         self.addr = addr
         self.data = data
-        self.vlocals = vlocals
+        self.stackdepth = stackdepth
         #self.reverse_lookup = []  # list of (offset, codebuf pointing there)
         self.specdict = []
         for i in range(len(data)):
             symbols[self.addr+i] = self
-        sz = struct.calcsize('l')
-        for i in range(sz, len(data)+1):
-            offset, = struct.unpack('l', data[i-sz:i])
+        for i in range(4, len(data)+1):
+            offset, = struct.unpack('l', data[i-4:i])
             rawtargets.setdefault(addr+i+offset, {})[self] = 1
 
     def __getattr__(self, attr):
@@ -145,8 +150,8 @@ class CodeBuf:
             start = self.addr
             end = start + len(self.data)
             for addr in range(start, end):
-                if addr in rawtargets:
-                    for codebuf in rawtargets[addr]:
+                if rawtargets.has_key(addr):
+                    for codebuf in rawtargets[addr].keys():
                         maybe[codebuf] = 1
             for codebuf in maybe.keys():
                 for line in codebuf.disass_text:
@@ -154,7 +159,45 @@ class CodeBuf:
                         if start <= addr < end:
                             self.reverse_lookup.append((addr-start, codebuf))
             return self.reverse_lookup
+        if attr == 'vlocals':
+            self.dumpfile.seek(self.vlocalsofs)
+            self.vlocals = self.load_vi_array({0: None})
+            return self.vlocals
         raise AttributeError, attr
+
+    def load_vi_array(self, d):
+        dumpfile = self.dumpfile
+        match = re_int.match(dumpfile.readline())
+        assert match
+        count = int(match.group(1))
+        a = []
+        for i in range(count):
+            line = dumpfile.readline()
+            match = re_int.match(line)
+            assert match
+            addr = long(match.group(1))
+            if d.has_key(addr):
+                vi = d[addr]
+            else:
+                line = dumpfile.readline()
+                match = re_ctvinfo.match(line)
+                if match:
+                    vi = CompileTimeVInfo(int(match.group(1)),
+                                          long(match.group(2)))
+                else:
+                    match = re_rtvinfo.match(line)
+                    if match:
+                        vi = RunTimeVInfo(long(match.group(1)), self.stackdepth)
+                    else:
+                        match = re_vtvinfo.match(line)
+                        assert match
+                        vi = VirtualTimeVInfo(long(match.group(1), 16))
+                d[addr] = vi
+                vi.addr = addr
+                vi.array = self.load_vi_array(d)
+            a.append(vi)
+        a.reverse()
+        return a
 
     def get_next_instr(self):
         if self.nextinstr >= 0:
@@ -188,8 +231,8 @@ class CodeBuf:
             match = re_lineaddr.match(line)
             if match:
                 addr = long(match.group(1), 16)
-                if addr not in seen:
-                    if addr in self.codemap and snapshot:
+                if not seen.has_key(addr):
+                    if self.codemap.has_key(addr) and snapshot:
                         for proxy in self.codemap[addr]:
                             data.append(snapshot(proxy))
                     seen[addr] = 1
@@ -253,51 +296,19 @@ def readdump(filename = 'psyco.dump'):
     re_symb1 = re.compile(r"(\w+?)[:]\s0x([0-9a-fA-F]+)")
     re_codebuf = re.compile(r"CodeBufferObject 0x([0-9a-fA-F]+) (\d+) (\-?\d+) \'(.*?)\' \'(.*?)\' (\-?\d+) \'(.*?)\'$")
     re_specdict = re.compile(r"spec_dict 0x([0-9a-fA-F]+)")
+    re_vinfo_array = re.compile(r"vinfo_array")
     re_spec1 = re.compile(r"0x([0-9a-fA-F]+)\s(.*)$")
-    re_int = re.compile(r"(\-?\d+)$")
-    re_ctvinfo = re.compile(r"ct (\d+) (\-?\d+)$")
-    re_rtvinfo = re.compile(r"rt (\-?\d+)$")
-    re_vtvinfo = re.compile(r"vt 0x([0-9a-fA-F]+)$")
-
-    def load_vi_array(d):
-        match = re_int.match(dumpfile.readline())
-        assert match
-        count = int(match.group(1))
-        a = []
-        for i in range(count):
-            line = dumpfile.readline()
-            match = re_int.match(line)
-            assert match
-            addr = long(match.group(1))
-            if addr in d:
-                vi = d[addr]
-            else:
-                line = dumpfile.readline()
-                match = re_ctvinfo.match(line)
-                if match:
-                    vi = CompileTimeVInfo(int(match.group(1)),
-                                          long(match.group(2)))
-                else:
-                    match = re_rtvinfo.match(line)
-                    if match:
-                        vi = RunTimeVInfo(long(match.group(1)), stackdepth)
-                    else:
-                        match = re_vtvinfo.match(line)
-                        assert match
-                        vi = VirtualTimeVInfo(long(match.group(1), 16))
-                d[addr] = vi
-                vi.addr = addr
-                vi.array = load_vi_array(d)
-            a.append(vi)
-        a.reverse()
-        return a
     
     codebufs = []
     dumpfile = open(filename, 'rb')
-    dumpfile.seek(0,2)
-    filesize = float(dumpfile.tell())
+    bufcount, = struct.unpack("i", dumpfile.read(4))
+    buftable = struct.unpack("l"*bufcount, dumpfile.read(4*bufcount))
+    if buftable:
+        filesize = buftable[0]
+    else:
+        filesize = sys.maxint
+    filesize *= 1.0
     nextp = 0.1
-    dumpfile.seek(0,0)
     for filename in symbolfiles:
         line = dumpfile.readline()
         match = re_symb1.match(line)
@@ -306,6 +317,7 @@ def readdump(filename = 'psyco.dump'):
     while 1:
         line = dumpfile.readline()
         if not line:
+            print "Note: unexpected end of file"
             break
         #print line.strip()
         match = re_codebuf.match(line)
@@ -315,14 +327,15 @@ def readdump(filename = 'psyco.dump'):
                 sys.stderr.write('%d%%...' % int(100*percent))
                 nextp += 0.1
             size = int(match.group(2))
-            stackdepth = int(match.group(3))
-            vlocals = load_vi_array({0: None})
             data = dumpfile.read(size)
             assert len(data) == size
             codebuf = CodeBuf(match.group(7), match.group(4), match.group(5),
                               int(match.group(6)), long(match.group(1), 16),
-                              data, vlocals)
+                              data, int(match.group(3)))
             codebuf.complete_list = codebufs
+            codebuf.dumpfile = dumpfile
+            codebuf.vlocalsofs = buftable[0]
+            buftable = buftable[1:]
             codebufs.insert(0, codebuf)
         else:
             match = re_specdict.match(line)
@@ -340,9 +353,11 @@ def readdump(filename = 'psyco.dump'):
                     match = re_spec1.match(line)
                     assert match
                     codebuf.spec_dict(match.group(2), long(match.group(1), 16))
+            elif re_vinfo_array.match(line):
+                assert len(codebufs) == bufcount
+                break
             else:
                 raise "invalid line", line
-    dumpfile.close()
     codemap = {}
     for codebuf in codebufs:
         #codebuf.build_reverse_lookup()

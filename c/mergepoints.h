@@ -59,4 +59,14 @@ inline mergepoint_t* psyco_exact_merge_point(PyObject* mergepoints,
 }
 
 
+#define MP_FLAGS_HAS_EXCEPT      1   /* the code block has an 'except' clause */
+#define MP_FLAGS_EXTRA      (~0xFF)
+
+inline int psyco_mp_flags(PyObject* mergepoints)
+{
+  char* endptr = PyString_AS_STRING(mergepoints)+PyString_GET_SIZE(mergepoints);
+  return ((int*) endptr)[-1];
+}
+
+
 #endif /* _MERGEPOINTS_H */

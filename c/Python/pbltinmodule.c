@@ -16,6 +16,18 @@ static PyCFunction cimpl_apply;
 static PyCFunction cimpl_divmod;
 
 
+#if HAVE_METH_O
+# define METH_O_WRAPPER(name, self, arg)    do { } while (0)  /* nothing */
+#else
+# define METH_O_WRAPPER(name, self, arg)    do {                                \
+    if (PsycoTuple_Load(arg) != 1)                                              \
+      return psyco_generic_call(po, cimpl_ ## name, CfReturnRef|CfPyErrIfNull,  \
+                                "vv", self, arg);                               \
+    arg = PsycoTuple_GET_ITEM(arg, 0);                                          \
+} while (0)
+#endif
+
+
 /***************************************************************/
 /* range().
    This is not for xrange(), which is not optimized by Psyco here.
@@ -192,7 +204,8 @@ static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 	vinfo_t* vlen;
 	vinfo_t* result;
 	condition_code_t cc;
-
+	METH_O_WRAPPER(ord, vself, vobj);
+        
 	switch (Psyco_TypeSwitch(po, vobj, &psyfs_string_unicode)) {
 
 	case 0:   /* PyString_Type */
@@ -230,12 +243,16 @@ static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 
 static vinfo_t* pbuiltin_id(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
+	METH_O_WRAPPER(id, vself, vobj);
 	return PsycoInt_FromLong(vobj);
 }
 
 static vinfo_t* pbuiltin_len(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
-	vinfo_t* result = PsycoObject_Size(po, vobj);
+	vinfo_t* result;
+	METH_O_WRAPPER(len, vself, vobj);
+	
+	result = PsycoObject_Size(po, vobj);
 	if (result != NULL)
 		result = PsycoInt_FROM_LONG(result);
 	return result;
@@ -243,6 +260,7 @@ static vinfo_t* pbuiltin_len(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 
 static vinfo_t* pbuiltin_abs(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
+	METH_O_WRAPPER(abs, vself, vobj);
 	return PsycoNumber_Absolute(po, vobj);
 }
 
@@ -311,10 +329,10 @@ void psyco_bltinmodule_init(void)
 	DEFMETA( range,		METH_VARARGS );
 	DEFMETA( xrange,	METH_VARARGS );
 	DEFMETA( chr,		METH_VARARGS );
-	DEFMETA( ord,		METH_O       );
-	DEFMETA( id,		METH_O       );
-	DEFMETA( len,		METH_O       );
-	DEFMETA( abs,		METH_O       );
+	DEFMETA( ord,		HAVE_METH_O ? METH_O : METH_VARARGS );
+	DEFMETA( id,		HAVE_METH_O ? METH_O : METH_VARARGS );
+	DEFMETA( len,		HAVE_METH_O ? METH_O : METH_VARARGS );
+	DEFMETA( abs,		HAVE_METH_O ? METH_O : METH_VARARGS );
 	DEFMETA( apply,		METH_VARARGS );
 	DEFMETA( divmod,	METH_VARARGS );
 #undef META

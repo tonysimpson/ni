@@ -1,4 +1,5 @@
 #include "piterobject.h"
+#if HAVE_GENERATORS
 
 
 static vinfo_t* piter_getiter(PsycoObject* po, vinfo_t* v)
@@ -103,3 +104,13 @@ void psy_iterobject_init(void)
         Psyco_DefineMeta(PySeqIter_Type.tp_iter, &piter_getiter);
         Psyco_DefineMeta(PySeqIter_Type.tp_iternext, &piter_next);
 }
+
+
+#else /* !HAVE_GENERATORS */
+
+INITIALIZATIONFN
+void psy_iterobject_init(void)
+{
+}
+
+#endif /* HAVE_GENERATORS */

@@ -158,6 +158,17 @@ static void codebuf_dealloc(CodeBufferObject* self)
     debug_printf(("psyco: releasing code buffer %p at %p\n",
                   self->codeptr, self));
   fpo_release(&self->snapshot);
+  
+#if defined(ALL_CHECKS) && defined(STORE_CODE_END)
+  if (self->codeend != NULL)
+    {
+      /* do not actully release, to detect calls to released code */
+      /* 0xCC is the breakpoint instruction (INT 3) */
+      memset(self->codeptr, 0xCC, self->codeend - self->codeptr);
+      return;
+    }
+#endif
+    
   PyObject_Del(self);
 }
 

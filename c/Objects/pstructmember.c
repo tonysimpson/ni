@@ -3,6 +3,8 @@
 #include "pintobject.h"
 #include "pfloatobject.h"
 
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
+
 
 DEFINEFN
 vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
@@ -137,3 +139,5 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 	return psyco_generic_call(po, PyMember_GetOne,
 				  CfReturnRef|CfPyErrIfNull, "vl", addr, l);
 }
+
+#endif /* NEW_STYLE_TYPES */

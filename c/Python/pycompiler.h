@@ -12,19 +12,41 @@
 #include "../dispatcher.h"
 
 
+/*****************************************************************/
+ /***   Detects differences between Python versions             ***/
+
+/* Note: not all features can be automatically detected; in some cases
+   we just assume that the feature is present or not based on some
+   other feature that has been introduced roughly at the same time.
+   This may need fixes to compile with some intermediary Python
+   versions. */
+
 #ifdef PyString_CheckExact
 # define NEW_STYLE_TYPES       1    /* Python >=2.2b1 */
 #else
 # define NEW_STYLE_TYPES       0
-# define PyString_CheckExact   PyString_Check
+# define PyString_CheckExact       PyString_Check
+# define PyObject_TypeCheck(o,t)   ((o)->ob_type == (t))
+# define Py_USING_UNICODE          1   /* always true in Python 2.1 */
 #endif
 
-#if !NEW_STYLE_TYPES
-# error "Sorry, Psyco requires Python 2.2."
-/* Some parts could work without NEW_STYLE_TYPES but this is largely untested
-   and would require a number of fixes in the source. */
+#define HAVE_struct_dictobject     (NEW_STYLE_TYPES)
+#define HAVE_PyEval_EvalCodeEx     (PYTHON_API_VERSION>=1011)
+#define HAVE_PyString_FromFormatV  (PYTHON_API_VERSION>=1011)
+
+#ifndef Py_TPFLAGS_HAVE_GC
+# define PyObject_GC_New(t,tp)     PyObject_New(t,tp)
+# define PyObject_GC_Track(o)      do { } while (0)  /* nothing */
+# define PyObject_GC_UnTrack(o)    do { } while (0)  /* nothing */
+# define PyObject_GC_Del(o)        PyObject_Del(o)
 #endif
 
+#ifdef METH_O
+# define HAVE_METH_O           1
+#else
+# define HAVE_METH_O           0
+# define METH_O           0x0008
+#endif
 
 #define MAX3(a,b,c)  ((a)>(b)?((a)>(c)?(a):(c)):(b)>(c)?(b):(c))
 
@@ -319,14 +341,11 @@ EXTERNFN vinfo_t* Psyco_Meta4x(PsycoObject* po, void* c_function, int flags,
 
 /* construction for non-frozen snapshots */
 EXTERNFN void pyc_data_build(PsycoObject* po, PyObject* merge_points);
+EXTERNFN void pyc_data_release(pyc_data_t* pyc);
 inline void pyc_data_duplicate(pyc_data_t* target, pyc_data_t* source) {
 	memcpy(target, source, sizeof(pyc_data_t));
 	target->exc = NULL;
         target->val = NULL;
-}
-inline void pyc_data_release(pyc_data_t* pyc) {
-	vinfo_xdecref(pyc->val, NULL);
-	vinfo_xdecref(pyc->exc, NULL);
 }
 
 /* construction for frozen snapshots */

@@ -509,7 +509,7 @@ code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
   if (diff == NullArray)  /* exact match, jump there */
     {
       code_t* code2 = psyco_unify(po, &oldcodebuf);
-      Py_DECREF(oldcodebuf);
+      /* XXX store reference to oldcodebuf somewhere */
       return code2;
     }
   else
@@ -590,7 +590,7 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
       po2->code = code2;
       po2->codelimit = code2 + RANGE_OF_SHORT_CONDITIONAL_JUMP;
       codeend = psyco_unify(po2, &oldcodebuf);
-      Py_DECREF(oldcodebuf);
+      /* XXX store reference to oldcodebuf somewhere */
       BEGIN_CODE
       if (IS_A_SINGLE_JUMP(code2, codeend, target))
         FAR_COND_JUMP_TO(target, condition);

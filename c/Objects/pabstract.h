@@ -11,7 +11,6 @@
 #include "../Python/pycinternal.h"
 
 
-/* 'kw' may be NULL */
 EXTERNFN vinfo_t* PsycoObject_Call(PsycoObject* po, vinfo_t* callable_object,
                                    vinfo_t* args, vinfo_t* kw);
 /* 'args' and 'kw' may be NULL; this version performs type checks */
@@ -95,8 +94,10 @@ vinfo_t* PsycoNumber_InPlacePower(PsycoObject* po, vinfo_t* v1, vinfo_t* v2,
       the meta-level (because this is not time-consuming, the
       exceptions being virtualized and not really set at Python's
       eyes): */
+#if HAVE_GENERATORS
 EXTERNFN vinfo_t* PsycoIter_Next(PsycoObject* po, vinfo_t* iter);
 EXTERNFN vinfo_t* PsycoObject_GetIter(PsycoObject* po, vinfo_t* vi);
+#endif
 
 
 /* generic len() function that reads the object's ob_size field;

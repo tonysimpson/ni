@@ -35,8 +35,9 @@ DEFINEVAR source_virtual_t psyco_computed_cfunction;
  /***************************************************************/
   /*** C method objects meta-implementation                    ***/
 
-static vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
-				    vinfo_t* tuple, vinfo_t* kw)
+DEFINEFN
+vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
+                             vinfo_t* tuple, vinfo_t* kw)
 {
 	long mllong;
 	vinfo_t* vml = get_array_item(po, func, CFUNC_M_ML);
@@ -75,6 +76,7 @@ static vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 		case METH_VARARGS:
 			carg = tuple;
 			break;
+#if HAVE_METH_O
 		case METH_NOARGS:
 			tuplesize = PsycoTuple_Load(tuple);
 			if (tuplesize != 0)
@@ -90,6 +92,7 @@ static vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 				goto use_proxy;
 			carg = PsycoTuple_GET_ITEM(tuple, 0);
 			break;
+#endif
 		default:
 			goto use_proxy;
 		}
@@ -99,16 +102,24 @@ static vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 
 	/* default, slow version */
    use_proxy:
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	return psyco_generic_call(po, PyCFunction_Call,
 				  CfReturnRef|CfPyErrIfNull,
 				  "vvv", func, tuple, kw);
+#else
+        /* no PyCFunction_Call() */
+        return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
+                                  CfReturnRef|CfPyErrIfNull,
+                                  "vvv", func, tuple, kw);
+#endif
 }
 
 
 INITIALIZATIONFN
 void psy_methodobject_init(void)
 {
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	Psyco_DefineMeta(PyCFunction_Type.tp_call, PsycoCFunction_Call);
-
+#endif
 	psyco_computed_cfunction.compute_fn = &compute_cfunction;
 }

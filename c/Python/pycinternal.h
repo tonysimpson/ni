@@ -9,6 +9,13 @@
 #include <opcode.h>
 
 
+#ifdef FOR_ITER
+# define HAVE_GENERATORS        1
+#else
+# define HAVE_GENERATORS        0
+#endif
+
+
 /* Post-2.2 versions of Python introduced the following more explicit names.
    XXX We should map the new names to the old ones if the new names do not
    XXX exist but how can we detect if this is needed?

@@ -15,6 +15,10 @@
 #define CFUNC_SIZE          (CFUNC_M_SELF+1)
 
 
+EXTERNFN vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
+                                      vinfo_t* tuple, vinfo_t* kw);
+
+
  /***************************************************************/
   /***   Virtual-time object builder                           ***/
 

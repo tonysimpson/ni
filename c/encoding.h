@@ -441,6 +441,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   *(long*)(code+1) = (immed),                           \
   code += 5                                             \
 )
+#define SIZE_OF_LOAD_REG_FROM_IMMED    5
 
 /* loads 0 in a register. The macro name reminds you that this
    clobbers po->ccreg (use NEED_CC() to save it first). */

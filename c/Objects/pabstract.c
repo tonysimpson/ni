@@ -4,6 +4,9 @@
 #include "pstringobject.h"
 #include "piterobject.h"
 #include "ptupleobject.h"
+#include "pmethodobject.h"
+#include "pclassobject.h"
+#include "pfuncobject.h"
 
 
 /*** This file is translated from the original 'abstract.c', see comments
@@ -21,27 +24,38 @@ static vinfo_t* type_error(PsycoObject* po, const char *msg)
 DEFINEFN
 vinfo_t* PsycoObject_Call(PsycoObject* po, vinfo_t* callable_object,
                           vinfo_t* args, vinfo_t* kw)
-{	/* 'kw' may be NULL */
+{	/* 'kw' may not be NULL */
 	ternaryfunc call;
 	PyTypeObject* tp = Psyco_NeedType(po, callable_object);
 	if (tp == NULL)
 		return NULL;
 
 	if ((call = tp->tp_call) != NULL) {
-		vinfo_t* result;
-		if (kw == NULL)
-			kw = psyco_vi_Zero();
-		else
-			vinfo_incref(kw);
-		result = Psyco_META3(po, call, CfReturnRef|CfPyErrIfNull,
-				     "vvv", callable_object, args, kw);
-		vinfo_decref(kw, po);
-		return result;
+		return Psyco_META3(po, call, CfReturnRef|CfPyErrIfNull,
+				   "vvv", callable_object, args, kw);
 	}
+
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	PycException_SetFormat(po, PyExc_TypeError,
 			       "object of type '%.100s' is not callable",
 			       tp->tp_name);
 	return NULL;
+
+#else /* !NEW_STYLE_TYPES */
+	/* In older Python versions, the common types have to tp_call slot.
+	   Instead, we have check for common types as in ceval.c. */
+
+	if (tp == &PyMethod_Type)
+		return pinstancemethod_call(po, callable_object, args, kw);
+	if (tp == &PyFunction_Type)
+		return pfunction_call(po, callable_object, args, kw);
+	if (tp == &PyCFunction_Type)
+		return PsycoCFunction_Call(po, callable_object, args, kw);
+	
+	return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
+				  CfReturnRef|CfPyErrIfNull,
+				  "vvv", callable_object, args, kw);
+#endif /* NEW_STYLE_TYPES */
 }
 
 DEFINEFN
@@ -59,12 +73,18 @@ vinfo_t* PsycoEval_CallObjectWithKeywords(PsycoObject* po,
 	else
 		vinfo_incref(args);
 
-	if (kw != NULL && Psyco_TypeSwitch(po, kw, &psyfs_dict) != 0) {
-		vinfo_decref(args, po);
-		goto use_proxy;
+	if (kw == NULL)
+		kw = psyco_vi_Zero();
+	else {
+		if (kw != NULL && Psyco_TypeSwitch(po, kw, &psyfs_dict) != 0) {
+			vinfo_decref(args, po);
+			goto use_proxy;
+		}
+		vinfo_incref(kw);
 	}
 
 	result = PsycoObject_Call(po, callable_object, args, kw);
+	vinfo_decref(kw, po);
 	vinfo_decref(args, po);
 	return result;
 
@@ -322,9 +342,15 @@ vinfo_t* PsycoSequence_Contains(PsycoObject* po, vinfo_t* seq, vinfo_t* ob)
 	}
 
 	/* XXX implement me */
+#if HAVE_GENERATORS
 	return psyco_generic_call(po, _PySequence_IterSearch,
 				  CfReturnNormal|CfPyErrIfNeg,
 				  "vvl", seq, ob, PY_ITERSEARCH_CONTAINS);
+#else
+	return psyco_generic_call(po, PySequence_Contains,
+				  CfReturnNormal|CfPyErrIfNeg,
+				  "vv", seq, ob);
+#endif
 }
 
 
@@ -464,6 +490,7 @@ static vinfo_t* binary_op1(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 			slotw = NULL;
 	}
 	if (slotv) {
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 		if (slotw && PyType_IsSubtype(wtp, vtp)) {
 			x = Psyco_META2(po, slotw,
 					CfReturnRef|CfPyErrNotImplemented,
@@ -473,6 +500,7 @@ static vinfo_t* binary_op1(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 			vinfo_decref(x, po); /* can't do it */
 			slotw = NULL;
 		}
+#endif
 		x = Psyco_META2(po, slotv,
 				CfReturnRef|CfPyErrNotImplemented, "vv", v, w);
 		if (IS_IMPLEMENTED(x))
@@ -722,6 +750,7 @@ vinfo_t* PsycoNumber_InPlacePower(PsycoObject* po, vinfo_t* v1, vinfo_t* v2,
 }
 
 
+#if HAVE_GENERATORS
 DEFINEFN
 vinfo_t* PsycoObject_GetIter(PsycoObject* po, vinfo_t* vi)
 {
@@ -761,3 +790,4 @@ vinfo_t* PsycoIter_Next(PsycoObject* po, vinfo_t* iter)
 	return Psyco_META1(po, tp->tp_iternext, CfReturnRef|CfPyErrIterNext,
 			   "v", iter);
 }
+#endif /* HAVE_GENERATORS */

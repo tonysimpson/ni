@@ -21,7 +21,7 @@ def show_vinfos(array, d, co=None, path=[]):
             text += "[NULL]"
         else:
             text += "[%x] %s" % (vi.addr, vi.gettext())
-            if vi.addr in d:
+            if d.has_key(vi.addr):
                 text += " (already seen above)"
             else:
                 d[vi.addr] = 1
@@ -79,7 +79,7 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
         if rev:
             data = '<p>Other code buffers pointing to this one:</p><ul>\n'
             for c in codebufs:  # display them in original load order
-                if c in rev:
+                if rev.has_key(c):
                     if rev[c] == 1:
                         extra = ''
                     else:

@@ -30,16 +30,21 @@
                               0)
 
 /* instructions with a target: */
-#define HAS_JREL_INSTR(op)   ((op) == JUMP_FORWARD ||   \
+#define HAS_JREL_INSTR_1(op) ((op) == JUMP_FORWARD ||   \
                               (op) == JUMP_IF_FALSE ||  \
                               (op) == JUMP_IF_TRUE ||   \
-                           /* (op) == FOR_LOOP ||   */  \
-                              (op) == FOR_ITER ||       \
+                              (op) == FOR_LOOP ||       \
                               (op) == SETUP_LOOP ||     \
                               (op) == SETUP_EXCEPT ||   \
                               (op) == SETUP_FINALLY ||  \
                               0)
-     
+#ifdef FOR_ITER
+# define HAS_JREL_INSTR(op)  ((op) == FOR_ITER ||       \
+                              HAS_JREL_INSTR_1(op))
+#else
+# define HAS_JREL_INSTR(op)  (HAS_JREL_INSTR_1(op))
+#endif
+
 #define HAS_JABS_INSTR(op)   ((op) == JUMP_ABSOLUTE ||  \
                               (op) == CONTINUE_LOOP ||  \
                               0)
@@ -135,7 +140,9 @@ static const unsigned char other_opcodes[] = {
   BUILD_MAP,
   LOAD_ATTR,
   /* COMPARE_OP see below */
+#ifdef GET_ITER
   GET_ITER,
+#endif
   SET_LINENO,
   CALL_FUNCTION,
   MAKE_FUNCTION,
@@ -195,6 +202,7 @@ inline PyObject* build_merge_points(PyCodeObject* co)
 {
   PyObject* s;
   mergepoint_t* mp;
+  int mp_flags = MP_FLAGS_EXTRA;
   int length = PyString_GET_SIZE(co->co_code);
   unsigned char* source = (unsigned char*) PyString_AS_STRING(co->co_code);
   char* paths = (char*) PyCore_MALLOC(length);
@@ -222,6 +230,8 @@ inline PyObject* build_merge_points(PyCodeObject* co)
 	      i += 2;
 	      oparg = oparg<<16 | ((source[i-1]<<8) + source[i-2]);
 	    }
+          if (op == SETUP_EXCEPT)
+            mp_flags |= MP_FLAGS_HAS_EXCEPT;
 	}
       flags = instr_control_flow[(int) op];
       if (flags == 0)
@@ -272,7 +282,7 @@ inline PyObject* build_merge_points(PyCodeObject* co)
     }
 
   /* allocate the string buffer, one mergepoint_t per merge point plus
-     the room for a final '-1'. */
+     the room for a final negative bitfield flags. */
   count = count * sizeof(mergepoint_t) + sizeof(int);
   s = PyString_FromStringAndSize(NULL, count);
   if (s == NULL)
@@ -286,7 +296,7 @@ inline PyObject* build_merge_points(PyCodeObject* co)
 	psyco_ge_init(&mp->entries);
 	mp++;
       }
-  mp->bytecode_position = -1;
+  mp->bytecode_position = mp_flags;
   PyCore_FREE(paths);
   return s;
 }
@@ -298,12 +308,16 @@ PyObject* psyco_get_merge_points(PyCodeObject* co)
   PyObject* s;
   init_merge_points();
 
-  /* cache results */
-  s = PyDict_GetItem(CodeMergePoints, co->co_code);
+  /* cache results -- warning, don't cache on 'co->co_code' because
+     although the position of the merge points really depend on the
+     bytecode only, we use the 'entries' field to store pointer to
+     already-compiled code, which depends on the other things in
+     'co'. */
+  s = PyDict_GetItem(CodeMergePoints, (PyObject*) co);
   if (s == NULL)
     {
       s = build_merge_points(co);
-      if (PyDict_SetItem(CodeMergePoints, co->co_code, s))
+      if (PyDict_SetItem(CodeMergePoints, (PyObject*) co, s))
         OUT_OF_MEMORY();
       Py_DECREF(s);  /* one ref left in the dict */
     }

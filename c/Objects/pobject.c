@@ -117,6 +117,8 @@ bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
    the variable offset is a number of longs (i.e. the quarter
    of a byte offset) */
 
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
+
 static long getdictoffset(PsycoObject* po, vinfo_t* obj, vinfo_t** varindex)
 {
 	long dictoffset;
@@ -331,6 +333,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 	Py_DECREF(name);
 	return res;
 }
+#endif /* NEW_STYLE_TYPES */
 
 
 /* Macro to get the tp_richcompare field of a type if defined */
@@ -353,9 +356,14 @@ static vinfo_t* try_rich_compare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int op
 	richcmpfunc fw = RICHCOMPARE(wtp);
 	vinfo_t* res;
 
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	swap = (vtp != wtp &&
 		PyType_IsSubtype(wtp, vtp) &&
 		fw != NULL);
+#else
+        swap = 0;
+#endif
+        
 	if (swap) {
 		res = Psyco_META3(po, fw, CfReturnRef|CfPyErrNotImplemented,
 				  "vvl", w, v, swapped_op[op]);
@@ -512,5 +520,7 @@ void psy_object_init(void)
 
         /* associate the Python implementation of some functions with
            the one from Psyco */
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
         Psyco_DefineMeta(PyObject_GenericGetAttr, PsycoObject_GenericGetAttr);
+#endif
 }

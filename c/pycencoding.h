@@ -11,32 +11,38 @@
 #include "dispatcher.h"
 
 #include "Objects/pobject.h"
+#include "Objects/pdictobject.h"
 
+
+#if HAVE_struct_dictobject
+# define ma_SIZE                 ma_mask
+# define MA_SIZE_TO_LAST_USED    0
+#else
+# define ma_SIZE                 ma_size
+# define MA_SIZE_TO_LAST_USED    (-1)
+#endif
 
 /* Note: the following macro must output a fixed number of bytes of
-   code, so that it can be called again with different arguments later
+   code, so that DICT_ITEM_UPDCHANGED() can be called later
    to update an existing code buffer */
-#define DICT_ITEM_IFCHANGED(code, mp, index, key, value, jmptarget)  do {       \
-  char _mprg;                                                                   \
-  NEED_FREE_REG(_mprg);                                                         \
-  LOAD_REG_FROM_IMMED(_mprg, (long)(mp));                                       \
-  extra_assert(0 < offsetof(PyDictObject, ma_mask) &&                           \
-                   offsetof(PyDictObject, ma_mask) < 128);                      \
+#define DICT_ITEM_IFCHANGED(code, index, key, value, jmptarget, mprg)  do {     \
+  extra_assert(0 < offsetof(PyDictObject, ma_SIZE) &&                           \
+                   offsetof(PyDictObject, ma_SIZE) < 128);                      \
   extra_assert(0 < offsetof(PyDictObject, ma_table) &&                          \
                    offsetof(PyDictObject, ma_table) < 128);                     \
   code[0] = 0x81;           /* CMP [...], imm32 */                              \
-  code[1] = 0x40 | (7<<3) | _mprg;   /* CMP [mpreg->ma_mask], ... */            \
-  code[2] = offsetof(PyDictObject, ma_mask);                                    \
-  *(long*)(code+3) = (index);                                                   \
+  code[1] = 0x40 | (7<<3) | mprg;   /* CMP [mpreg->ma_mask], ... */             \
+  code[2] = offsetof(PyDictObject, ma_SIZE);                                    \
+  *(long*)(code+3) = (index) - MA_SIZE_TO_LAST_USED;                            \
   /* perform the load before checking the CMP outcome */                        \
   code[7] = 0x8B;                                                               \
-  code[8] = 0x40 | (_mprg<<3) | _mprg;   /* MOV mpreg, [mpreg->ma_table] */     \
+  code[8] = 0x40 | (mprg<<3) | mprg;   /* MOV mpreg, [mpreg->ma_table] */       \
   CODE_FOUR_BYTES(code+9,                                                       \
             offsetof(PyDictObject, ma_table),                                   \
             0x70 | CC_L,                 /* JL +22 (to 'JNE target') */         \
             34 - 12,                                                            \
             0x81);       /* CMP [mpreg+dictentry*index+me_key], key */          \
-  code[13] = 0x80 | (7<<3) | _mprg;                                             \
+  code[13] = 0x80 | (7<<3) | mprg;                                              \
   *(long*)(code+14) = (index)*sizeof(PyDictEntry) +                             \
                                   offsetof(PyDictEntry, me_key);                \
   *(long*)(code+18) = (long)(key);                                              \
@@ -44,7 +50,7 @@
             0x70 | CC_NE,              /* JNE +10 (to 'JNE target') */          \
             34 - 24,                                                            \
             0x81,        /* CMP [mpreg+dictentry*index+me_value], value */      \
-            0x80 | (7<<3) | _mprg);                                             \
+            0x80 | (7<<3) | mprg);                                              \
   *(long*)(code+26) = (index)*sizeof(PyDictEntry) +                             \
                                   offsetof(PyDictEntry, me_value);              \
   *(long*)(code+30) = (long)(value);                                            \
@@ -52,6 +58,15 @@
   code[35] = 0x80 | CC_NE;                                                      \
   code += 40;                                                                   \
   *(long*)(code-4) = ((code_t*)(jmptarget)) - code;                             \
+} while (0)
+
+#define DICT_ITEM_UPDCHANGED(code, index)        do {                   \
+  *(long*)(code+3) = (index) - MA_SIZE_TO_LAST_USED;                    \
+  *(long*)(code+14) = (index)*sizeof(PyDictEntry) +                     \
+                                  offsetof(PyDictEntry, me_key);        \
+  *(long*)(code+26) = (index)*sizeof(PyDictEntry) +                     \
+                                  offsetof(PyDictEntry, me_value);      \
+  code += 40;                                                           \
 } while (0)
 
 

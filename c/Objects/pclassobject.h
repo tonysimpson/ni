@@ -17,6 +17,10 @@
 #define METHOD_SIZE            (METHOD_IM_CLASS+1)
 
 
+EXTERNFN vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,
+                                       vinfo_t* arg, vinfo_t* kw);
+
+
  /***************************************************************/
   /***   Virtual-time object builder                           ***/
 
