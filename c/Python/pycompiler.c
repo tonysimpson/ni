@@ -1854,11 +1854,31 @@ static void cimpl_do_raise(PyObject *type, PyObject *value, PyObject *tb)
 	/*return WHY_EXCEPTION;*/
 }
 
+static PyObject*
+PyClass_NewInGlobals(PyObject* g,  /* globals */
+		     PyObject *bases, PyObject *dict, PyObject *name)
+{
+	/* workaround for the use of PyEval_GetGlobals() in
+	   PyClass_New() */
+	if (PyDict_GetItemString(dict, "__module__") == NULL) {
+		PyObject *modname = PyDict_GetItemString(g, "__name__");
+		if (modname != NULL) {
+			if (PyDict_SetItemString(dict, "__module__", modname)<0)
+				return NULL;
+		}
+	}
+	return PyClass_New(bases, dict, name);
+}
+
 /* copied from ceval.c where it is private */
+/* added a workaround for PyClass_New(), which normally uses
+   PyEval_GetGlobals() to get the globals. */
 static PyObject*
 cimpl_build_class(PyObject* g,  /* globals */
 		  PyObject *methods, PyObject *bases, PyObject *name)
 {
+#if NEW_STYLE_TYPES
+	/* Python 2.2 version */
 	PyObject *metaclass = NULL, *result, *base;
 
 	if (PyDict_Check(methods))
@@ -1881,9 +1901,61 @@ cimpl_build_class(PyObject* g,  /* globals */
 			metaclass = (PyObject *) &PyClass_Type;
 		Py_INCREF(metaclass);
 	}
-	result = PyObject_CallFunction(metaclass, "OOO", name, bases, methods);
+	if (metaclass == (PyObject *) &PyClass_Type) {
+		/* special case, workaround for PyClass_New() */
+		result = PyClass_NewInGlobals(g, bases, methods, name);
+	}
+	else
+		result = PyObject_CallFunction(metaclass, "OOO",
+					       name, bases, methods);
 	Py_DECREF(metaclass);
 	return result;
+	
+#else
+	/* Python 2.1 version */
+	int i, n;
+	n = PyTuple_Size(bases);
+	for (i = 0; i < n; i++) {
+		PyObject *base = PyTuple_GET_ITEM(bases, i);
+		if (!PyClass_Check(base)) {
+			/* Call the base's *type*, if it is callable.
+			   This code is a hook for Donald Beaudry's
+			   and Jim Fulton's type extensions.  In
+			   unextended Python it will never be triggered
+			   since its types are not callable.
+			   Ditto: call the bases's *class*, if it has
+			   one.  This makes the same thing possible
+			   without writing C code.  A true meta-object
+			   protocol! */
+			PyObject *basetype = (PyObject *)base->ob_type;
+			PyObject *callable = NULL;
+			if (PyCallable_Check(basetype))
+				callable = basetype;
+			else
+				callable = PyObject_GetAttrString(
+					base, "__class__");
+			if (callable) {
+				PyObject *args;
+				PyObject *newclass = NULL;
+				args = Py_BuildValue(
+					"(OOO)", name, bases, methods);
+				if (args != NULL) {
+					newclass = PyEval_CallObject(
+						callable, args);
+					Py_DECREF(args);
+				}
+				if (callable != basetype) {
+					Py_DECREF(callable);
+				}
+				return newclass;
+			}
+			PyErr_SetString(PyExc_TypeError,
+				"base is not a class object");
+			return NULL;
+		}
+	}
+	return PyClass_NewInGlobals(g, bases, methods, name);
+#endif
 }
 
 static PyObject* cimpl_import_name(PyObject* globals, PyObject* name,
