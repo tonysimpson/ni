@@ -29,7 +29,7 @@ typedef struct arrayobject {
 } arrayobject;
 
 
-#define ARRAY_ob_item     DEF_FIELD(arrayobject, char*, ob_item, VAR_size)
+#define ARRAY_ob_item     FMUT(DEF_FIELD(arrayobject, char*, ob_item, VAR_size))
 #define ARRAY_ob_descr    DEF_FIELD(arrayobject, struct arraydescr*, \
 				    ob_descr, ARRAY_ob_item)
 #define iARRAY_OB_ITEM    FIELD_INDEX(ARRAY_ob_item)
@@ -263,11 +263,14 @@ static bool p_d_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi, vinfo_t* v) {
 	
 	ob_item = psyco_get_field(po, ap, ARRAY_ob_item);
 	if (ob_item == NULL)
-		return false;
-
-	result = psyco_put_field_array(po, ob_item, rdf, vi, w1) &&
-		 psyco_put_field_array(po, ob_item, FIELD_PART2(rdf), vi, w2);
-	vinfo_decref(ob_item, po);
+		result = false;
+	else {
+		result = psyco_put_field_array(po, ob_item, rdf, vi, w1) &&
+		    psyco_put_field_array(po, ob_item, FIELD_PART2(rdf), vi, w2);
+		vinfo_decref(ob_item, po);
+	}
+        vinfo_decref(w2, po);
+        vinfo_decref(w1, po);
 	return result;
 }
 
