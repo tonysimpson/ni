@@ -52,7 +52,7 @@ def exc_test():
     except:
         exc, value, tb = sys.exc_info()
         print exc.__name__, str(value)
-        print tb.tb_lineno - tb.tb_frame.f_code.co_firstlineno, tb.tb_lasti
+        print tb.tb_lineno - tb.tb_frame.f_code.co_firstlineno
 
 
 if __name__ == '__main__':
