@@ -91,7 +91,7 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
       if (inputargs < minargcnt || inputargs > co->co_argcount)
         {
           int n = co->co_argcount < minargcnt ? minargcnt : co->co_argcount;
-          PyErr_Format(PyExc_PsycoError,
+          PyErr_Format(PyExc_TypeError,
                        "%.200s() takes %s %d %sargument%s (%d given)",
                        PyString_AsString(co->co_name),
                        minargcnt == co->co_argcount ? "exactly" :
@@ -282,9 +282,8 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	int i;
 	
 	if (kw != NULL && PyDict_Check(kw) && PyDict_Size(kw) > 0) {
-		PyErr_SetString(PyExc_PsycoError,
-				"keyword arguments not supported yet");
-		return NULL;
+		/* keyword arguments not supported yet */
+		goto unsupported;
 	}
 
 	/* make an array of run-time values */
@@ -297,9 +296,8 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	
 	/* make a "frame" */
 	po = psyco_build_frame(function, arginfo, self->psy_recursion, NULL);
-	if (po == BF_UNSUPPORTED) {
-		return PyObject_Call((PyObject*) self->psy_func, arg, kw);
-	}
+	if (po == BF_UNSUPPORTED)
+		goto unsupported;
 	if (po == NULL)
 		return NULL;
 	
@@ -326,6 +324,9 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	else
 		extra_assert(!PyErr_Occurred());
 	return result;
+
+   unsupported:
+	return PyObject_Call((PyObject*) self->psy_func, arg, kw);
 }
 
 static int psycofunction_traverse(PsycoFunctionObject *f,
