@@ -140,7 +140,7 @@ static code_t* do_respawn(respawn_t* rs)
      instruction where it left. It will probably re-emit a few machine
      instructions -- not needed, they will be trashed, but this has
      rebuilt the correct PsycoObject state. This occurs when eventually
-     a positive DETECT_RESPAWN() is iussed. */
+     a positive DETECT_RESPAWN() is issued. */
   po->respawn_cnt = - respawn_cnt;
   po->respawn_proxy = codebuf;
 

@@ -3,6 +3,7 @@
 #include "plongobject.h"
 #include "pstringobject.h"
 #include "piterobject.h"
+#include "ptupleobject.h"
 
 
 /*** This file is translated from the original 'abstract.c', see comments

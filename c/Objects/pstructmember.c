@@ -1,6 +1,7 @@
 #include "pstructmember.h"
 #include "pstringobject.h"
 #include "pintobject.h"
+#include "pfloatobject.h"
 
 
 DEFINEFN
@@ -99,6 +100,7 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 			v = psyco_vi_None();
 		}
 		break;
+#ifdef T_OBJECT_EX
 	case T_OBJECT_EX:  /* same as T_OBJECT, exception if NULL */
 		zero = psyco_vi_Zero();
 		v = psyco_read_array_item_var(po, addr, zero,
@@ -124,6 +126,7 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 			return NULL;
 		}
 		break;
+#endif
 	default:
 		goto fallback;
 	}

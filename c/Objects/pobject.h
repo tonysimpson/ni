@@ -124,6 +124,7 @@ EXTERNVAR fixed_switch_t psyfs_string_unicode;
 EXTERNVAR fixed_switch_t psyfs_tuple;
 EXTERNVAR fixed_switch_t psyfs_dict;
 EXTERNVAR fixed_switch_t psyfs_none;
+/* NOTE: don't forget to update pobject.c when adding new variables here */
 
 
 /* To check whether an object is Py_None. Return 0 if it is,

@@ -532,17 +532,17 @@ code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
         }
 
       /* Enough space left, continue in the same buffer. */
-      if (mp != NULL)
-        {
-          CodeBufferObject* codebuf = psyco_proxy_code_buffer(po, &mp->entries);
-          if (codebuf == NULL)
-            OUT_OF_MEMORY();
+      {
+        CodeBufferObject* codebuf = psyco_proxy_code_buffer(po,
+                                          mp != NULL ? &mp->entries : NULL);
+        if (codebuf == NULL)
+          OUT_OF_MEMORY();
 #ifdef CODE_DUMP_FILE
-          codebuf->chained_list = psyco_codebuf_chained_list;
-          psyco_codebuf_chained_list = codebuf;
+        codebuf->chained_list = psyco_codebuf_chained_list;
+        psyco_codebuf_chained_list = codebuf;
 #endif
-          Py_DECREF(codebuf);
-        }
+        /*Py_DECREF(codebuf); XXX cannot loose reference if mp == NULL*/
+      }
       
       if (diff != NULL)   /* partial match */
         {

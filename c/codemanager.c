@@ -29,6 +29,7 @@
     fpo_mark_unused(&b->snapshot);                              \
   else                                                          \
     {                                                           \
+      assert(!is_respawning(po));                               \
       fpo_build(&b->snapshot, po);                              \
       if (ge != NULL)                                           \
         register_codebuf(ge, b);                                \
