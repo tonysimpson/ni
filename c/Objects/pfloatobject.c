@@ -250,11 +250,9 @@ static vinfo_t* pfloat_neg(PsycoObject* po, vinfo_t* v)
     x = psyco_generic_call(po, cimpl_fp_neg, CfPure|CfNoReturnValue,
                            "vva", a1, a2, result);
     RELEASE_DOUBLE(a1, a2);
-    if (x == NULL) {
-           array_delete(result, po);
-           return NULL;
+    if (x != NULL) {
+	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     }
-    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     array_release(result);
     return x;
 }
@@ -268,11 +266,9 @@ static vinfo_t* pfloat_abs(PsycoObject* po, vinfo_t* v)
     x = psyco_generic_call(po, cimpl_fp_abs, CfPure|CfNoReturnValue,
                            "vva", a1, a2, result);
     RELEASE_DOUBLE(a1, a2);
-    if (x == NULL) {
-           array_delete(result, po);
-           return NULL;
+    if (x != NULL) {
+	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     }
-    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     array_release(result);
     return x;
 }
@@ -288,11 +284,9 @@ static vinfo_t* pfloat_add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
                            "vvvva", a1, a2, b1, b2, result);
     RELEASE_DOUBLE(b1, b2);
     RELEASE_DOUBLE(a1, a2);
-    if (x == NULL) {
-           array_delete(result, po);
-           return NULL;
+    if (x != NULL) {
+	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     }
-    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     array_release(result);
     return x;
 }
@@ -308,11 +302,9 @@ static vinfo_t* pfloat_sub(PsycoObject* po, vinfo_t* v, vinfo_t* w)
                            "vvvva", a1, a2, b1, b2, result);
     RELEASE_DOUBLE(b1, b2);
     RELEASE_DOUBLE(a1, a2);
-    if (x == NULL) {
-           array_delete(result, po);
-           return NULL;
+    if (x != NULL) {
+	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     }
-    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     array_release(result);
     return x;
 }
@@ -328,11 +320,9 @@ static vinfo_t* pfloat_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
                            "vvvva", a1, a2, b1, b2, result);
     RELEASE_DOUBLE(b1, b2);
     RELEASE_DOUBLE(a1, a2);
-    if (x == NULL) {
-           array_delete(result, po);
-           return NULL;
+    if (x != NULL) {
+	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     }
-    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     array_release(result);
     return x;
 }
@@ -348,11 +338,9 @@ static vinfo_t* pfloat_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
                            "vvvva", a1, a2, b1, b2, result);
     RELEASE_DOUBLE(b1, b2);
     RELEASE_DOUBLE(a1, a2);
-    if (x == NULL) {
-           array_delete(result, po);
-           return NULL;
+    if (x != NULL) {
+	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     }
-    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
     array_release(result);
     return x;
 }

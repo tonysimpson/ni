@@ -26,7 +26,7 @@ bool PsycoLong_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd1, vinfo_t** vd
 	if (psyco_generic_call(po, cimpl_lng_as_double,
 				  CfPyErrCheckMinus1,
 				  "va", v, result) == NULL) {
-		array_delete(result, po);
+		array_release(result);
 		return false;
 	}
         *vd1 = result->items[0];

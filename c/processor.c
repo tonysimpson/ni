@@ -1165,17 +1165,36 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		
 		vresult = new_rtvinfo(po, REG_FUNCTIONS_RETURN, false);
 		vresult = generic_call_check(po, flags, vresult);
-		vinfo_xdecref(vresult, po);
-#if ALL_CHECKS
-		if (vresult != NULL)
-			vresult = (vinfo_t*) 1;  /* anything non-NULL */
-#endif
-		return vresult;
+		if (vresult == NULL)
+			goto error_detected;
+		vinfo_decref(vresult, po);
+		return (vinfo_t*) 1;   /* anything non-NULL */
 	}
 	
-	if (flags & CfPyErrMask)
+        if (flags & CfPyErrMask) {
 		vresult = generic_call_check(po, flags, vresult);
+		if (vresult == NULL)
+			goto error_detected;
+	}
 	return vresult;
+
+   error_detected:
+	/* if the called function returns an error, we then assume that
+	   it did not actually fill the arrays */
+	if (has_refs) {
+		for (i = 0; i < count; i++)
+			if (argtags[i] == 'a' || argtags[i] == 'A') {
+				vinfo_array_t* array = (vinfo_array_t*)args[i];
+				int j = array->count;
+				while (j--) {
+					vinfo_t* v = array->items[j];
+					array->items[j] = NULL;
+					v->source = remove_rtref(v->source);
+					vinfo_decref(v, po);
+				}
+                        }
+	}
+	return NULL;
 }
 
 

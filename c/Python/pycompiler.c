@@ -508,7 +508,7 @@ inline bool PycException_FetchNormalize(PsycoObject* po)
 					    po->pr.exc, po->pr.val, array);
 	}
 	if (result == NULL) {
-		array_delete(array, po);
+		array_release(array);
 		return false;
 	}
 	clear_pseudo_exception(po);
@@ -1906,7 +1906,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			if (!psyco_generic_call(po, cimpl_unpack,
 					      CfNoReturnValue|CfPyErrIfNonNull,
 						"vlA", v, oparg, array)) {
-				array_delete(array, po);
+				array_release(array);
 				break;
 			}
 			POP_DECREF();
