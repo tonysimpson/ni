@@ -312,18 +312,18 @@ vinfo_t* Psyco_Meta4x(PsycoObject* po, void* c_function, int flags,
 
 
 DEFINEFN
-void pyc_data_build(PsycoObject* po)
+void pyc_data_build(PsycoObject* po, PyObject* merge_points)
 {
 	/* rebuild the data in the pyc_data_t */
 	int i;
-	KNOWN_VAR(PyCodeObject*, co, LOC_CODE);
-	int stack_base = LOC_LOCALS_PLUS->array->count - co->co_stacksize;
-	for (i=stack_base; i<LOC_LOCALS_PLUS->array->count; i++)
-		if (LOC_LOCALS_PLUS->array->items[i] == NULL)
+        PyCodeObject* co = po->pr.co;
+	int stack_base = po->vlocals.count - co->co_stacksize;
+	for (i=stack_base; i<po->vlocals.count; i++)
+		if (po->vlocals.items[i] == NULL)
 			break;
 	po->pr.stack_base = stack_base;
 	po->pr.stack_level = i - stack_base;
-	po->pr.merge_points = psyco_get_merge_points(co);
+	po->pr.merge_points = merge_points;
 }
 
 static void block_setup(PsycoObject* po, int type, int handler, int level)
@@ -595,7 +595,7 @@ void psyco_pycompiler_init()
 
 #define CHKSTACK(n)     extra_assert(0 <= po->pr.stack_level+(n) &&             \
                                      po->pr.stack_base+po->pr.stack_level+(n) < \
-                                     LOC_LOCALS_PLUS->array->count)
+                                     po->vlocals.count)
 
 #define NEXTOP()	(bytecode[next_instr++])
 #define NEXTARG()	(next_instr += 2,                                       \
@@ -613,7 +613,7 @@ void psyco_pycompiler_init()
 #define GETCONST(i)     (PyTuple_GET_ITEM(co->co_consts, i))
 #define GETNAMEV(i)     (PyTuple_GET_ITEM(co->co_names, i))
 
-#define GETLOCAL(i)	(LOC_LOCALS_PLUS->array->items[i])
+#define GETLOCAL(i)	(LOC_LOCALS_PLUS[i])
 #define SETLOCAL(i, v)	do { vinfo_decref(GETLOCAL(i), po); \
                              GETLOCAL(i) = v; } while (0)
 
@@ -623,14 +623,13 @@ void psyco_pycompiler_init()
 #define JUMPBY(offset)  (next_instr += (offset))
 #define JUMPTO(target)  (next_instr = (target))
 
-#define SAVE_NEXT_INSTR(next_instr)   \
-    (LOC_NEXT_INSTR->source = set_ct_value(LOC_NEXT_INSTR->source, next_instr))
+#define SAVE_NEXT_INSTR(nextinstr1)   (po->pr.next_instr = (nextinstr1))
 
-#define MISSING_OPCODE(opcode)							\
-	case opcode:								\
-		PycException_SetString(po, PyExc_PsycoError,		        \
-				  "opcode '" #opcode "' not implemented");	\
-		break
+/* #define MISSING_OPCODE(opcode)					 */
+/* 	case opcode:						 */
+/* 		PycException_SetString(po, PyExc_PsycoError, */
+/* 				  "opcode '" #opcode "' not implemented"); */
+/* 		break */
 
 
 /***************************************************************/
@@ -679,7 +678,8 @@ static code_t* do_changed_global(changed_global_t* cg)
 	PyObject* key = cg->varname;
 	code_t* code = cg->originalmacrocode;
 	vinfo_t* v;
-	vinfo_t** stack_a = LOC_LOCALS_PLUS->array->items + po->pr.stack_base;
+	vinfo_t** stack_a = po->vlocals.items + po->pr.stack_base;
+        mergepoint_t* mp;
 	KNOWN_VAR(PyDictObject*, globals, LOC_GLOBALS);
 	PyDictEntry* ep;
 	void* dict_subscript;
@@ -716,7 +716,8 @@ static code_t* do_changed_global(changed_global_t* cg)
 	v = new_rtvinfo(po, REG_FUNCTIONS_RETURN, true);
 	PUSH(v);
 	/* 'v' is now run-time, recompile */
-	target = psyco_compile_code(po)->codeptr;
+        mp = psyco_exact_merge_point(po->pr.merge_points, po->pr.next_instr);
+	target = psyco_compile_code(po, mp)->codeptr;
 	/* XXX don't know what to do with the reference returned by
 	   XXX psyco_compile_code() */
 
@@ -1171,16 +1172,16 @@ static int cimpl_unpack_list(PyObject* listobject, int argcnt, PyObject** sp)
 
 static code_t* exit_function(PsycoObject* po)
 {
-	int i;
 	vinfo_t** locals_plus;
+        vinfo_t** pp;
 	NonVirtualSource retsource;
 	
 	/* clear the stack and the locals */
-	locals_plus = LOC_LOCALS_PLUS->array->items;
-	for (i=LOC_LOCALS_PLUS->array->count; i--; )
-		if (locals_plus[i] != NULL) {
-			vinfo_decref(locals_plus[i], po);
-			locals_plus[i] = NULL;
+	locals_plus = LOC_LOCALS_PLUS;
+	for (pp = po->vlocals.items + po->vlocals.count; --pp >= locals_plus; )
+		if (*pp != NULL) {
+			vinfo_decref(*pp, po);
+			*pp = NULL;
 		}
 	
 	if (PycException_Is(po, &EReturn)) {
@@ -1221,17 +1222,17 @@ DEFINEFN
 code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 {
   /* 'stack_a' is the Python stack base pointer */
-  vinfo_t** stack_a = LOC_LOCALS_PLUS->array->items + po->pr.stack_base;
+  vinfo_t** stack_a = po->vlocals.items + po->pr.stack_base;
   code_t* code1;
   
   /* save and restore the current Python exception throughout compilation */
   PyObject *old_py_exc, *old_py_val, *old_py_tb;
   PyErr_Fetch(&old_py_exc, &old_py_val, &old_py_tb);
 
-  while (LOC_NEXT_INSTR != NULL)
+  while (po->pr.next_instr != -1)
     {
       /* 'co' is the code object we are interpreting/compiling */
-      KNOWN_VAR(PyCodeObject*, co, LOC_CODE);
+      PyCodeObject* co = po->pr.co;
       unsigned char* bytecode = (unsigned char*) PyString_AS_STRING(co->co_code);
       int opcode=0;	/* Current opcode */
       int oparg=0;	/* Current opcode argument, if any */
@@ -1239,7 +1240,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	      *w, *x;	/* popped off the stack */
       condition_code_t cc;
       /* 'next_instr' is the position in the byte-code of the next instr */
-      KNOWN_VAR(int, next_instr, LOC_NEXT_INSTR);
+      int next_instr = po->pr.next_instr;
+      mergepoint_t* mp = psyco_next_merge_point(po->pr.merge_points,
+                                                next_instr+1);
 
       /* main loop */
       while (1) {
@@ -1268,6 +1271,10 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	   the beginning. In particular, use POP() with care. Better use
 	   TOP() to get the arguments off the stack and call POP() at the
 	   end when you are sure everything when fine. */
+
+	/* All opcodes found here must also be listed in mergepoints.c.
+	   Python code objects using a bytecode instruction not listed
+	   in mergepoints.c are never Psyco-ified. */
 
 	switch (opcode) {
 
@@ -1385,12 +1392,12 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	BINARY_OPCODE(BINARY_MULTIPLY, PsycoNumber_Multiply);
 	BINARY_OPCODE(BINARY_DIVIDE, PsycoNumber_Divide);
 
-#ifdef BINARY_FLOOR_DIVIDE
-	MISSING_OPCODE(BINARY_FLOOR_DIVIDE);    /* XXX */
-	MISSING_OPCODE(BINARY_TRUE_DIVIDE);
-	MISSING_OPCODE(INPLACE_FLOOR_DIVIDE);
-	MISSING_OPCODE(INPLACE_TRUE_DIVIDE);
-#endif
+	/*#ifdef BINARY_FLOOR_DIVIDE
+	 MISSING_OPCODE(BINARY_FLOOR_DIVIDE);
+	 MISSING_OPCODE(BINARY_TRUE_DIVIDE);
+	 MISSING_OPCODE(INPLACE_FLOOR_DIVIDE);
+	 MISSING_OPCODE(INPLACE_TRUE_DIVIDE);
+	#endif*/
 
 	BINARY_OPCODE(BINARY_MODULO, PsycoNumber_Remainder);
 	BINARY_OPCODE(BINARY_ADD, PsycoNumber_Add);
@@ -1528,7 +1535,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		POP_DECREF();
 		goto fine;
 	
-	MISSING_OPCODE(PRINT_EXPR);
+		/*MISSING_OPCODE(PRINT_EXPR);*/
 
 	case PRINT_ITEM:
 		if (psyco_flag_call(po, cimpl_print_item_to,
@@ -1571,18 +1578,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 				   vinfo_new(CompileTime_New(oparg)));
 		break;
 
-	MISSING_OPCODE(RAISE_VARARGS);
-	MISSING_OPCODE(LOAD_LOCALS);
+	/*MISSING_OPCODE(RAISE_VARARGS);
+	  MISSING_OPCODE(LOAD_LOCALS);*/
 
 	case RETURN_VALUE:
 		POP(v);
 		PycException_Raise(po, vinfo_new(VirtualTime_New(&EReturn)), v);
 		break;
 
-#ifdef YIELD_VALUE
-	MISSING_OPCODE(YIELD_VALUE);
-#endif
-	MISSING_OPCODE(EXEC_STMT);
+	/*MISSING_OPCODE(EXEC_STMT);*/
 
 	case POP_BLOCK:
 	{
@@ -1635,9 +1639,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			break;
 		}
 
-	MISSING_OPCODE(BUILD_CLASS);
-	MISSING_OPCODE(STORE_NAME);
-	MISSING_OPCODE(DELETE_NAME);
+	/*MISSING_OPCODE(BUILD_CLASS);
+	  MISSING_OPCODE(STORE_NAME);
+	  MISSING_OPCODE(DELETE_NAME);*/
 
 	case UNPACK_SEQUENCE:
 	{
@@ -1779,7 +1783,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		PUSH(v);
 		goto fine;
 
-	MISSING_OPCODE(LOAD_NAME);
+	/*MISSING_OPCODE(LOAD_NAME);*/
 
 	case LOAD_GLOBAL:
 	{
@@ -1833,9 +1837,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		vinfo_incref(psyco_viZero);
 		goto fine;
 
-	MISSING_OPCODE(LOAD_CLOSURE);
-	MISSING_OPCODE(LOAD_DEREF);
-	MISSING_OPCODE(STORE_DEREF);
+	/*MISSING_OPCODE(LOAD_CLOSURE);
+	  MISSING_OPCODE(LOAD_DEREF);
+	  MISSING_OPCODE(STORE_DEREF);*/
 
         case BUILD_TUPLE:
 		v = PsycoTuple_New(oparg, STACK_POINTER() - oparg);
@@ -1908,8 +1912,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			cc = integer_cmp(po, v, w, Py_NE);
 			break;
 
-		MISSING_OPCODE(IN);
-		MISSING_OPCODE(NOT_IN);
+		/*MISSING_OPCODE(IN);
+		  MISSING_OPCODE(NOT_IN);*/
 
 		case EXC_MATCH:
 			cc = psyco_flag_call(po, PyErr_GivenExceptionMatches,
@@ -1936,12 +1940,13 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 	}
 
-	MISSING_OPCODE(IMPORT_NAME);
-	MISSING_OPCODE(IMPORT_STAR);
-	MISSING_OPCODE(IMPORT_FROM);
+	/*MISSING_OPCODE(IMPORT_NAME);
+	  MISSING_OPCODE(IMPORT_STAR);
+	  MISSING_OPCODE(IMPORT_FROM);*/
 
 	case JUMP_FORWARD:
 		JUMPBY(oparg);
+		mp = psyco_next_merge_point(po->pr.merge_points, next_instr);
 		goto fine;
 
 	case JUMP_IF_TRUE:
@@ -1961,17 +1966,24 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			int current_instr = next_instr;
 			JUMPBY(oparg);
 			SAVE_NEXT_INSTR(next_instr);
-			psyco_compile_cond(po, cc);
+			psyco_compile_cond(po,
+				psyco_exact_merge_point(po->pr.merge_points,
+							next_instr),
+                                           cc);
 			next_instr = current_instr;
 		}
-		else if (cc == CC_ALWAYS_TRUE)
+		else if (cc == CC_ALWAYS_TRUE) {
 			JUMPBY(oparg);   /* always jump */
+			mp = psyco_next_merge_point(po->pr.merge_points,
+						    next_instr);
+                }
 		else
 			;                  /* never jump */
 		goto fine;
 
 	case JUMP_ABSOLUTE:
 		JUMPTO(oparg);
+		mp = psyco_next_merge_point(po->pr.merge_points, next_instr);		
 		goto fine;
 
 	case GET_ITER:
@@ -1998,13 +2010,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 				PycException_Clear(po);
 				POP_DECREF();
 				JUMPBY(oparg);
+				mp = psyco_next_merge_point(po->pr.merge_points,
+							    next_instr);
 			}
 			else
 				break;   /* any other exception */
 		}
 		goto fine;
 
-	MISSING_OPCODE(FOR_LOOP);
+	/*MISSING_OPCODE(FOR_LOOP);*/
 
 	case SETUP_LOOP:
 	case SETUP_EXCEPT:
@@ -2062,12 +2076,12 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 	}
 	
-	MISSING_OPCODE(CALL_FUNCTION_VAR);
-	MISSING_OPCODE(CALL_FUNCTION_KW);
-	MISSING_OPCODE(CALL_FUNCTION_VAR_KW);
-	MISSING_OPCODE(MAKE_FUNCTION);
-	MISSING_OPCODE(MAKE_CLOSURE);
-	MISSING_OPCODE(BUILD_SLICE);
+	/*MISSING_OPCODE(CALL_FUNCTION_VAR);
+	  MISSING_OPCODE(CALL_FUNCTION_KW);
+	  MISSING_OPCODE(CALL_FUNCTION_VAR_KW);
+	  MISSING_OPCODE(MAKE_FUNCTION);
+	  MISSING_OPCODE(MAKE_CLOSURE);
+	  MISSING_OPCODE(BUILD_SLICE);*/
 
 	case EXTENDED_ARG:
 		opcode = NEXTOP();
@@ -2088,22 +2102,27 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
   fine:
 	extra_assert(!PycException_Occurred(po));
+	extra_assert(mp == psyco_next_merge_point(po->pr.merge_points,
+                                                  next_instr));
 	
 	/* are we running out of space in the current code buffer? */
 	if ((po->codelimit - po->code) < BUFFER_MARGIN) {
 		extra_assert(!is_respawning(po));
 		SAVE_NEXT_INSTR(next_instr);
-		code1 = psyco_compile(po, false);
+		if (mp->bytecode_position != next_instr)
+			mp = NULL;
+		code1 = psyco_compile(po, mp, false);
 		goto finished;
 	}
 	
 	/* mark merge points via a call to psyco_compile() */
-	if (CHECK_ARRAY_BIT(po->pr.merge_points, next_instr)) {
+	if (mp->bytecode_position == next_instr) {
 		extra_assert(!is_respawning(po));
 		SAVE_NEXT_INSTR(next_instr);
-		code1 = psyco_compile(po, true);
+		code1 = psyco_compile(po, mp, true);
 		if (code1 != NULL)
 			goto finished;
+                mp++;
 	}
       }  /* end of the main loop, exit if exception */
 
@@ -2174,8 +2193,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		   This object is a 3-tuple (exc, value, traceback) which
 		   might represent a pseudo-exception like EReturn. */
 		int next_instr;
-		vinfo_t** stack_a = LOC_LOCALS_PLUS->array->items +
-					po->pr.stack_base;
+		vinfo_t** stack_a = po->vlocals.items + po->pr.stack_base;
 		vinfo_t* exc_info = PsycoTuple_New(3, NULL);
 		PycException_Fetch(po);
 		exc_info->array->items[TUPLE_OB_ITEM + 0] = po->pr.exc;
@@ -2194,8 +2212,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		   in END_FINALLY to distinguish between the end of a FINALLY
 		   and the end of an EXCEPT block. */
 		int next_instr;
-		vinfo_t** stack_a = LOC_LOCALS_PLUS->array->items +
-					po->pr.stack_base;
+		vinfo_t** stack_a = po->vlocals.items + po->pr.stack_base;
 		while (!PycException_FetchNormalize(po)) {
 			/* got an exception while initializing the EXCEPT
 			   block... Consider this new exception as overriding
@@ -2214,10 +2231,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
       
       /* End the function if we still have a (pseudo) exception */
       if (PycException_Occurred(po)) {
-	      /* at the end of the function we set LOC_NEXT_INSTR to NULL
+	      /* at the end of the function we set next_instr to -1
 		 because the actual position has no longer any importance */
-	      vinfo_decref(LOC_NEXT_INSTR, po);
-	      LOC_NEXT_INSTR = NULL;
+	      po->pr.next_instr = -1;
       }
     }
 

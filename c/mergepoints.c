@@ -26,14 +26,15 @@
                               (op) == JUMP_FORWARD ||   \
                               (op) == JUMP_ABSOLUTE ||  \
                               (op) == CONTINUE_LOOP ||  \
-                              (op) == RAISE_VARARGS ||  \
+                           /* (op) == RAISE_VARARGS || */  \
                               0)
 
 /* instructions with a target: */
 #define HAS_JREL_INSTR(op)   ((op) == JUMP_FORWARD ||   \
                               (op) == JUMP_IF_FALSE ||  \
                               (op) == JUMP_IF_TRUE ||   \
-                              (op) == FOR_LOOP ||       \
+                           /* (op) == FOR_LOOP ||   */  \
+                              (op) == FOR_ITER ||       \
                               (op) == SETUP_LOOP ||     \
                               (op) == SETUP_EXCEPT ||   \
                               (op) == SETUP_FINALLY ||  \
@@ -55,87 +56,272 @@
 
 #define MAX_UNINTERRUPTED_RANGE   300  /* bytes of Python bytecode */
 
-DEFINEFN
-char* psyco_get_merge_points(PyCodeObject* co)
+/* all other supported instructions must be listed here. */
+static const unsigned char other_opcodes[] = {
+  POP_TOP,
+  ROT_TWO,
+  ROT_THREE,
+  ROT_FOUR,
+  DUP_TOP,
+  DUP_TOPX,
+  UNARY_POSITIVE,
+  UNARY_NEGATIVE,
+  UNARY_NOT,
+  UNARY_CONVERT,
+  UNARY_INVERT,
+  BINARY_POWER,
+  BINARY_MULTIPLY,
+  BINARY_DIVIDE,
+  BINARY_MODULO,
+  BINARY_ADD,
+  BINARY_SUBTRACT,
+  BINARY_SUBSCR,
+  BINARY_LSHIFT,
+  BINARY_RSHIFT,
+  BINARY_AND,
+  BINARY_XOR,
+  BINARY_OR,
+  INPLACE_POWER,
+  INPLACE_MULTIPLY,
+  INPLACE_DIVIDE,
+  INPLACE_MODULO,
+  INPLACE_ADD,
+  INPLACE_SUBTRACT,
+  INPLACE_LSHIFT,
+  INPLACE_RSHIFT,
+  INPLACE_AND,
+  INPLACE_XOR,
+  INPLACE_OR,
+  SLICE+0,
+  SLICE+1,
+  SLICE+2,
+  SLICE+3,
+  STORE_SLICE+0,
+  STORE_SLICE+1,
+  STORE_SLICE+2,
+  STORE_SLICE+3,
+  DELETE_SLICE+0,
+  DELETE_SLICE+1,
+  DELETE_SLICE+2,
+  DELETE_SLICE+3,
+  STORE_SUBSCR,
+  DELETE_SUBSCR,
+  PRINT_ITEM,
+  PRINT_ITEM_TO,
+  PRINT_NEWLINE,
+  PRINT_NEWLINE_TO,
+  POP_BLOCK,
+  END_FINALLY,
+  UNPACK_SEQUENCE,
+  STORE_ATTR,
+  DELETE_ATTR,
+  STORE_GLOBAL,
+  DELETE_GLOBAL,
+  LOAD_CONST,
+  LOAD_GLOBAL,
+  LOAD_FAST,
+  STORE_FAST,
+  DELETE_FAST,
+  BUILD_TUPLE,
+  BUILD_LIST,
+  BUILD_MAP,
+  LOAD_ATTR,
+  /* COMPARE_OP see below */
+  GET_ITER,
+  SET_LINENO,
+  CALL_FUNCTION,
+  0 };
+
+#define SUPPORTED_COMPARE_ARG(oparg)  ( \
+                              (oparg) == Py_LT ||  \
+                              (oparg) == Py_LE ||  \
+                              (oparg) == Py_EQ ||  \
+                              (oparg) == Py_NE ||  \
+                              (oparg) == Py_GT ||  \
+                              (oparg) == Py_GE ||  \
+                              (oparg) == IS        ||  \
+                              (oparg) == IS_NOT    ||  \
+                              (oparg) == EXC_MATCH ||  \
+                              0)
+
+static PyObject* CodeMergePoints = NULL;
+static char instr_control_flow[256];
+
+
+#define MP_SUPPORTED       0x01
+#define MP_IS_JUMP         0x02
+#define MP_HAS_JREL        0x04
+#define MP_HAS_JABS        0x08
+#define MP_HAS_J_MULTIPLE  0x10
+#define MP_IS_CTXDEP       0x20
+
+
+inline void init_merge_points(void)
 {
-  static PyObject* CodeMergePoints = NULL;
-  PyObject* s;
   if (CodeMergePoints == NULL)
     {
+      int i;
+      const unsigned char* p;
+      for (i=0; i<256; i++) {
+	char b = 0;
+	if (IS_JUMP_INSTR(i))    b |= MP_IS_JUMP;
+	if (HAS_JREL_INSTR(i))   b |= MP_HAS_JREL;
+	if (HAS_JABS_INSTR(i))   b |= MP_HAS_JABS;
+	if (HAS_J_MULTIPLE(i))   b |= MP_HAS_J_MULTIPLE;
+	if (IS_CTXDEP_INSTR(i))  b |= MP_IS_CTXDEP;
+	instr_control_flow[i] = b;
+      }
+      for (p=other_opcodes; *p; p++)
+	instr_control_flow[(int)(*p)] |= MP_SUPPORTED;
+      
       CodeMergePoints = PyDict_New();
       if (CodeMergePoints == NULL)
         OUT_OF_MEMORY();
     }
+}
+
+inline PyObject* build_merge_points(PyCodeObject* co)
+{
+  PyObject* s;
+  mergepoint_t* mp;
+  int length = PyString_GET_SIZE(co->co_code);
+  unsigned char* source = (unsigned char*) PyString_AS_STRING(co->co_code);
+  char* paths = (char*) PyCore_MALLOC(length);
+  int i, lasti, count, oparg = 0;
+  if (paths == NULL)
+    OUT_OF_MEMORY();
+  memset(paths, 0, length);
+  paths[0] = 2;  /* always a merge point at the beginning of the bytecode */
+  
+  for (i=0; i<length; )
+    {
+#ifdef VERBOSE
+      int i0 = i;
+#endif
+      char flags;
+      unsigned char op = source[i++];
+      if (HAS_ARG(op))
+	{
+	  i += 2;
+	  oparg = (source[i-1]<<8) + source[i-2];
+	  if (op == EXTENDED_ARG)
+	    {
+	      op = source[i++];
+	      assert(HAS_ARG(op) && op != EXTENDED_ARG);
+	      i += 2;
+	      oparg = oparg<<16 | ((source[i-1]<<8) + source[i-2]);
+	    }
+	}
+      flags = instr_control_flow[(int) op];
+      if (flags == 0)
+	if (op != COMPARE_OP || !SUPPORTED_COMPARE_ARG(oparg))
+	  {
+	    /* unsupported instruction */
+#ifdef VERBOSE
+            printf("psyco: unsupported instruction: %d at position %d\n",
+                   (int) op, i0);
+#endif            
+	    PyCore_FREE(paths);
+	    Py_INCREF(Py_None);
+	    return Py_None;
+	  }
+      if (HAS_JREL_INSTR(op) && paths[i+oparg] < 2)
+	{
+	  if (HAS_J_MULTIPLE(op))
+	    paths[i+oparg] = 2;
+	  else
+	    paths[i+oparg]++;
+	}
+      if (HAS_JABS_INSTR(op) && paths[oparg] < 2)
+	{
+	  if (HAS_J_MULTIPLE(op))
+	    paths[oparg] = 2;
+	  else
+	    paths[oparg]++;
+	}
+      if (IS_CTXDEP_INSTR(op))
+	paths[i] = 2;
+      else if (!IS_JUMP_INSTR(op))
+	paths[i]++;
+    }
+
+  /* count the merge points */
+  count = 0;
+  lasti = 0;
+  for (i=0; i<length; i++)
+    {
+      if (i-lasti > MAX_UNINTERRUPTED_RANGE && paths[i] > 0)
+	paths[i] = 2;  /* ensure there are merge points at regular intervals */
+      if (paths[i] > 1)
+	{
+	  lasti = i;
+	  count++;
+	}
+    }
+
+  /* allocate the string buffer, one mergepoint_t per merge point plus
+     the room for a final '-1'. */
+  count = count * sizeof(mergepoint_t) + sizeof(int);
+  s = PyString_FromStringAndSize(NULL, count);
+  if (s == NULL)
+    OUT_OF_MEMORY();
+  mp = (mergepoint_t*) PyString_AS_STRING(s);
+
+  for (i=0; i<length; i++)
+    if (paths[i] > 1)
+      {
+	mp->bytecode_position = i;
+	psyco_ge_init(&mp->entries);
+	mp++;
+      }
+  mp->bytecode_position = -1;
+  PyCore_FREE(paths);
+  return s;
+}
+
+
+DEFINEFN
+PyObject* psyco_get_merge_points(PyCodeObject* co)
+{
+  PyObject* s;
+  init_merge_points();
 
   /* cache results */
   s = PyDict_GetItem(CodeMergePoints, co->co_code);
   if (s == NULL)
     {
-      int length = PyString_GET_SIZE(co->co_code);
-      int bytelength = (length+7)/8;
-      unsigned char* source = (unsigned char*) PyString_AS_STRING(co->co_code);
-      char* target;
-      char* paths = (char*) PyCore_MALLOC(length);
-      int i, lasti, oparg = 0;
-      if (paths == NULL)
-        OUT_OF_MEMORY();
-      memset(paths, 0, length);
-      
-      for (i=0; i<length; )
-        {
-          unsigned char op = source[i++];
-          if (HAS_ARG(op))
-            {
-              i += 2;
-              oparg = (source[i-1]<<8) + source[i-2];
-              if (op == EXTENDED_ARG)
-                {
-                  op = source[i++];
-                  assert(HAS_ARG(op) && op != EXTENDED_ARG);
-                  i += 2;
-                  oparg = oparg<<16 | ((source[i-1]<<8) + source[i-2]);
-                }
-              if (HAS_JREL_INSTR(op) && paths[i+oparg] < 2)
-                {
-                  if (HAS_J_MULTIPLE(op))
-                    paths[i+oparg] = 2;
-                  else
-                    paths[i+oparg]++;
-                }
-              if (HAS_JABS_INSTR(op) && paths[oparg] < 2)
-                {
-                  if (HAS_J_MULTIPLE(op))
-                    paths[oparg] = 2;
-                  else
-                    paths[oparg]++;
-                }
-              if (IS_CTXDEP_INSTR(op))
-                paths[i] = 2;
-            }
-          if (!IS_JUMP_INSTR(op))
-            paths[i]++;
-        }
-
-      s = PyString_FromStringAndSize(NULL, bytelength);
-      if (s == NULL)
-        OUT_OF_MEMORY();
-      target = PyString_AS_STRING(s);
-      memset(target, 0, bytelength);
-
-/*       printf("mergepoints.c: "); */
-      lasti = 0;
-      for (i=0; i<length; i++)
-        if (paths[i] > 1 || (i-lasti > MAX_UNINTERRUPTED_RANGE && paths[i] > 0))
-          {
-            lasti = i;
-            SET_ARRAY_BIT(target, i);
-/*             printf("[%d]", i); */
-          }
-/*       printf("\n"); */
-      
-      PyCore_FREE(paths);
+      s = build_merge_points(co);
       if (PyDict_SetItem(CodeMergePoints, co->co_code, s))
         OUT_OF_MEMORY();
+      Py_DECREF(s);  /* one ref left in the dict */
     }
-  return PyString_AS_STRING(s);
+  return s;
+}
+
+DEFINEFN
+mergepoint_t* psyco_next_merge_point(PyObject* mergepoints,
+                                     int position)
+{
+  mergepoint_t* array;
+  int bufsize;
+  extra_assert(PyString_Check(mergepoints));
+  array = (mergepoint_t*) PyString_AS_STRING(mergepoints);
+  bufsize = PyString_GET_SIZE(mergepoints);
+  extra_assert((bufsize % sizeof(mergepoint_t)) == sizeof(int));
+  bufsize /= sizeof(mergepoint_t);
+  extra_assert(bufsize > 0);
+  do {
+    int test = bufsize/2;
+    if (position > array[test].bytecode_position)
+      {
+        ++test;
+        array += test;
+        bufsize -= test;
+      }
+    else
+      {
+        bufsize = test;
+      }
+  } while (bufsize > 0);
+  return array;
 }

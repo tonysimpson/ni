@@ -222,7 +222,7 @@ EXTERNVAR const long psyco_zero;
 
 struct vinfo_array_s {
 	int count;
-	vinfo_t* items[NB_LOCALS]; /* variable-sized when not in a PsycoObject */
+	vinfo_t* items[7];  /* always variable-sized */
 };
 
 /* construction */
@@ -350,22 +350,31 @@ inline void array_delete(vinfo_array_t* array, PsycoObject* po) {
 struct PsycoObject_s {
   /* used to be a Python object, hence the name */
 
-  /* first, the description of variable stages. This is the data against
-     which state matches and synchronizations are performed. */
+  /* assembly code */
+  code_t* code;                /* where the emitted code goes                */
+  code_t* codelimit;           /* do not write code past this limit          */
+
+  /* processor state */
   int stack_depth;         /* the size of data currently pushed in the stack */
-  vinfo_array_t vlocals;           /* all the 'vinfo_t' variables            */
   vinfo_t* reg_array[REG_TOTAL];   /* the 'vinfo_t' currently stored in regs */
   vinfo_t* ccreg;                  /* processor condition codes (aka flags)  */
 
-  /* next, compiler private variables for producing and optimizing code. */
-  reg_t last_used_reg;          /* the most recently used register            */
-  int arguments_count;          /* # run-time arguments given to the function */
+  /* compiler private variables for producing and optimizing code */
+  reg_t last_used_reg;         /* the most recently used register            */
+  int arguments_count;         /* # run-time arguments given to the function */
   int respawn_cnt;                  /* see psyco_prepare_respawn()           */
   CodeBufferObject* respawn_proxy;  /* see psyco_prepare_respawn()           */
-  code_t* code;                /* where the emitted code goes                */
-  code_t* codelimit;           /* do not write code past this limit          */
   pyc_data_t pr;               /* private language-dependent data            */
+
+  /* least, the description of variable stages. This is the data against
+     which state matches and synchronizations are performed. */
+  vinfo_array_t vlocals;          /* all the 'vinfo_t' variables             */
+  /* variable-sized array! */
 };
+
+#define PSYCOOBJECT_SIZE(arraycnt)                                      \
+	(sizeof(PsycoObject)-sizeof(vinfo_array_t) + sizeof(int) +      \
+         (arraycnt)*sizeof(vinfo_t*))
 
 /* run-time vinfo_t creation */
 inline vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref) {
@@ -394,9 +403,10 @@ inline void vinfo_move(PsycoObject* po, vinfo_t* vtarget, vinfo_t* vsource)
 
 /* Main compiling function. Emit machine code corresponding to the state
    'po'. The compiler produces its code into 'code' and the return value is
-   the end of the written code. 'po' is freed.
+   the end of the written code. 'po' is freed. 'mp' is the current mergepoint
+   position or NULL if there is no mergepoint here.
 
-   Be sure to call po->vlocals.clear_tmp_marks() before this function.
+   Be sure to call clear_tmp_marks(&po->vlocals) before this function.
 
    'continue_compilation' is normally false. When compile() is called
    during the compilation of 'po', 'continue_compilation' is true and
@@ -404,23 +414,26 @@ inline void vinfo_move(PsycoObject* po, vinfo_t* vtarget, vinfo_t* vsource)
    compilation of 'po' itself. The sole purpose of this is to reduce the
    depth of recursion of the C stack.
 */
-EXTERNFN code_t* psyco_compile(PsycoObject* po, bool continue_compilation);
+EXTERNFN code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
+                               bool continue_compilation);
 
 /* Conditional compilation: the state 'po' is compiled to be executed only if
    'condition' holds. In general this creates a coding pause for it to be
    compiled later. It always makes a copy of 'po' so that the original can be
    used to compile the other case ('not condition'). 'condition' must not be
-   CC_ALWAYS_xxx here.
+   CC_ALWAYS_xxx here. 'mp' is the current mergepoint position or NULL if there
+   is no mergepoint here.
 */
-EXTERNFN void psyco_compile_cond(PsycoObject* po, condition_code_t condition);
+EXTERNFN void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
+                                 condition_code_t condition);
 
 /* Simplified interface to compile() without using a previously
    existing code buffer. Return a new code buffer. */
-EXTERNFN CodeBufferObject* psyco_compile_code(PsycoObject* po);
+EXTERNFN CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp);
 
 /* Prepare a 'coding pause', i.e. a short amount of code (proxy) that will be
    called only if the execution actually reaches it to go on with compilation.
-   'this' is the PsycoObject corresponding to the proxy.
+   'po' is the PsycoObject corresponding to the proxy.
    'condition' may not be CC_ALWAYS_FALSE.
    The (possibly conditional) jump to the proxy is encoded in 'calling_code'.
    When the execution reaches the proxy, 'resume_fn' is called and the proxy
@@ -439,11 +452,12 @@ inline void psyco_assert_coherent(PsycoObject* po) { }   /* nothing */
 #endif
 
 /* construction */
-inline PsycoObject* PsycoObject_New(void) {
-	PsycoObject* po = (PsycoObject*) PyCore_MALLOC(sizeof(PsycoObject));
-        if (po == NULL)
+inline PsycoObject* PsycoObject_New(int vlocalscnt) {
+	int psize = PSYCOOBJECT_SIZE(vlocalscnt);
+	PsycoObject* po = (PsycoObject*) PyCore_MALLOC(psize);
+	if (po == NULL)
 		OUT_OF_MEMORY();
-	memset(po, 0, sizeof(PsycoObject));
+	memset(po, 0, psize);
 	return po;
 }
 EXTERNFN PsycoObject* psyco_duplicate(PsycoObject* po);  /* internal */

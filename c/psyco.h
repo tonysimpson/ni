@@ -123,6 +123,7 @@ typedef struct PsycoObject_s PsycoObject;   /* defined in compiler.h */
 typedef struct FrozenPsycoObject_s FrozenPsycoObject; /* def in dispatcher.h */
 typedef struct CodeBufferObject_s CodeBufferObject;  /* def in codemanager.h */
 typedef struct global_entries_s global_entries_t;  /* def in dispatcher.h */
+typedef struct mergepoint_s mergepoint_t;   /* defined in mergepoint.h */
 
 EXTERNVAR PyObject* PyExc_PsycoError;
 
@@ -142,6 +143,7 @@ typedef struct {
 
 /* Build a PsycoObject "frame" corresponding to the call of a Python
    function. Raise a Python exception and return NULL in case of failure.
+   Return BF_UNSUPPORTED if the bytecode contains unsupported instructions.
    The 'arginfo' array gives the number of arguments as well as
    additional information about them. It will be expanded with the
    default values of missing arguments, if any, and finally released.
@@ -151,6 +153,7 @@ EXTERNFN PsycoObject* psyco_build_frame(PyFunctionObject* function,
                                         vinfo_array_t* arginfo, int recursion,
                                         long** sources);
 /* 'sources' is actually of type 'RunTimeSource**' */
+#define BF_UNSUPPORTED  ((PsycoObject*) -1)
 
 /* Encode a call to the given Python function, compiling it as needed. */
 EXTERNFN vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,

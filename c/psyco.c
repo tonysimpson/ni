@@ -3,6 +3,7 @@
 #include "vcompiler.h"
 #include "dispatcher.h"
 #include "processor.h"
+#include "mergepoints.h"
 #include "Python/pycompiler.h"
 #include "Objects/ptupleobject.h"
 
@@ -58,13 +59,21 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   /* build a "frame" in a PsycoObject according to the given code object. */
 
   PyCodeObject* co = (PyCodeObject*) PyFunction_GET_CODE(function);
-  PyObject* globals = PyFunction_GET_GLOBALS(function);
-  PyObject* defaults = PyFunction_GET_DEFAULTS(function);
+  PyObject* merge_points = psyco_get_merge_points(co);
+  PyObject* globals;
+  PyObject* defaults;
   PsycoObject* po;
   RunTimeSource* source1;
-  int extras, i, minargcnt, inputargs, rtcount;
-  int ncells = PyTuple_GET_SIZE(co->co_cellvars);
-  int nfrees = PyTuple_GET_SIZE(co->co_freevars);
+  vinfo_array_t* arraycopy;
+  int extras, i, minargcnt, inputargs, rtcount, ncells, nfrees;
+
+  if (merge_points == Py_None)
+    return BF_UNSUPPORTED;
+  
+  globals = PyFunction_GET_GLOBALS(function);
+  defaults = PyFunction_GET_DEFAULTS(function);
+  ncells = PyTuple_GET_SIZE(co->co_cellvars);
+  nfrees = PyTuple_GET_SIZE(co->co_freevars);
   if (co->co_flags & (CO_VARARGS | CO_VARKEYWORDS))
     {
       PyErr_SetString(PyExc_PsycoError, "* and ** arguments not supported yet");
@@ -104,23 +113,25 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
   
   extras = co->co_stacksize + co->co_nlocals + ncells + nfrees;
 
-  po = PsycoObject_New();
+  po = PsycoObject_New(INDEX_LOC_LOCALS_PLUS + extras);
   po->stack_depth = INITIAL_STACK_DEPTH;
-  po->vlocals.count = NB_LOCALS;
+  po->vlocals.count = INDEX_LOC_LOCALS_PLUS + extras;
   po->last_used_reg = REG_LOOP_START;
   po->pr.auto_recursion = recursion;
 
-  /* make an array of size 'extra' for the locals and the stack */
-  LOC_LOCALS_PLUS = vinfo_new(SOURCE_NOT_IMPORTANT);
-  LOC_LOCALS_PLUS->array = array_new(extras);
-
   /* duplicate the array of arguments. If two arguments share some common
      part, they will also share it in the copy. */
-  clear_tmp_marks(arginfo);
-  duplicate_array(LOC_LOCALS_PLUS->array, arginfo);
+  if (arginfo->count == 0)
+    arraycopy = NullArray;
+  else
+    {
+      clear_tmp_marks(arginfo);
+      arraycopy = array_new(arginfo->count);
+      duplicate_array(arraycopy, arginfo);
+    }
 
-  /* simplify LOC_LOCALS_PLUS->array in the sense of psyco_simplify_array() */
-  rtcount = psyco_simplify_array(LOC_LOCALS_PLUS->array);
+  /* simplify arraycopy in the sense of psyco_simplify_array() */
+  rtcount = psyco_simplify_array(arraycopy);
 
   /* all run-time arguments or argument parts must be corrected: in arginfo
      they have arbitrary sources, but in the new frame's sources they will
@@ -135,33 +146,31 @@ PsycoObject* psyco_build_frame(PyFunctionObject* function,
     }
   else
     source1 = NULL;
-  fix_run_time_args(po, LOC_LOCALS_PLUS->array, arginfo, source1);
+  fix_run_time_args(po, arraycopy, arginfo, source1);
 
-  /* restore the count, which was overwritten by duplicate_array() */
-  LOC_LOCALS_PLUS->array->count = extras;
-
-  /* the rest of locals is uninitialized */
-  for (i=arginfo->count; i<co->co_nlocals; i++)
-    {
-      vinfo_incref(psyco_viZero);
-      LOC_LOCALS_PLUS->array->items[i] = psyco_viZero;
-    }
-  /* the rest of the array is the currently empty stack,
-     set to NULL by array_new(). */
-
-  array_delete(arginfo, NULL);
-  
-  /* store the code and globals objects */
-  LOC_CODE = vinfo_new(CompileTime_NewSk(sk_new((long) co,
-                                                SkFlagFixed | SkFlagPyObj)));
-  Py_INCREF(co);  /* reference in LOC_CODE */
+  /* initialize po->vlocals */
   LOC_GLOBALS = vinfo_new(CompileTime_NewSk(sk_new((long) globals,
                                                 SkFlagFixed | SkFlagPyObj)));
   Py_INCREF(globals); /* reference in LOC_GLOBALS */
 
-  /* initialize the remaining variables */
-  LOC_NEXT_INSTR = vinfo_new(CompileTime_NewSk(sk_new(0, SkFlagFixed)));
-  pyc_data_build(po);
+  /* copy the arguments */
+  for (i=0; i<arraycopy->count; i++)
+    LOC_LOCALS_PLUS[i] = arraycopy->items[i];
+  array_release(arraycopy);
+
+  /* the rest of locals is uninitialized */
+  for (; i<co->co_nlocals; i++)
+    {
+      vinfo_incref(psyco_viZero);
+      LOC_LOCALS_PLUS[i] = psyco_viZero;
+    }
+  /* the rest of the array is the currently empty stack,
+     set to NULL by array_new(). */
+  
+  /* store the code object */
+  po->pr.co = co;
+  Py_INCREF(co);  /* XXX never freed */
+  pyc_data_build(po, merge_points);
   
   po->stack_depth += sizeof(long);  /* count the CALL return address */
   psyco_assert_coherent(po);
@@ -181,13 +190,9 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,
 
   int tuple_size = PsycoTuple_Load(arg_tuple);
   if (tuple_size == -1)
-    {
+    goto fail_to_default;
       /* XXX calling with an unknown-at-compile-time number of arguments
          is not implemented, revert to the default behaviour */
-      return psyco_generic_call(po, PyFunction_Type.tp_call,
-                                CfReturnRef|CfPyErrIfNull,
-                                "vvl", function, arg_tuple, NULL);
-    }
 
   /* prepare a frame */
   arginfo = array_new(tuple_size);
@@ -198,6 +203,9 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,
       vinfo_incref(v);
     }
   mypo = psyco_build_frame(function, arginfo, recursion, &sources);
+  array_delete(arginfo, NULL);
+  if (mypo == BF_UNSUPPORTED)
+    goto fail_to_default;
   if (mypo == NULL)
     {
       psyco_virtualize_exception(po);
@@ -205,13 +213,19 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,
     }
 
   /* compile the function (this frees mypo) */
-  codebuf = psyco_compile_code(mypo);
+  codebuf = psyco_compile_code(mypo,
+                               psyco_first_merge_point(mypo->pr.merge_points));
 
   /* get the run-time argument sources and push them on the stack
      and write the actual CALL */
   result = psyco_call_psyco(po, codebuf, sources);
   PyCore_FREE(sources);
   return result;
+
+ fail_to_default:
+  return psyco_generic_call(po, PyFunction_Type.tp_call,
+                            CfReturnRef|CfPyErrIfNull,
+                            "vvl", function, arg_tuple, NULL);
 }
 
 
@@ -278,11 +292,16 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	
 	/* make a "frame" */
 	po = psyco_build_frame(function, arginfo, self->psy_recursion, NULL);
+        array_delete(arginfo, NULL);
+	if (po == BF_UNSUPPORTED) {
+		return PyObject_Call((PyObject*) self->psy_func, arg, kw);
+	}
 	if (po == NULL)
 		return NULL;
 	
 	/* compile the function */
-	codebuf = psyco_compile_code(po);
+	codebuf = psyco_compile_code(po,
+                           psyco_first_merge_point(po->pr.merge_points));
 	
 	/* get the actual arguments */
 	assert(codebuf->snapshot.fz_arguments_count == PyTuple_GET_SIZE(arg));
@@ -429,12 +448,8 @@ void psyco_dump_code_buffers(void)
         {
           PyObject* d;
           int nsize = obj->codeend - obj->codeptr;
-          PyCodeObject* co;
-          if (obj->snapshot.fz_vlocals.count > INDEX_LOC_CODE)
-            co = (PyCodeObject*)(CompileTime_Get(
-                 obj->snapshot.fz_vlocals.items[INDEX_LOC_CODE]->source)->value);
-          else
-            co = NULL;
+          PyCodeObject* co = obj->snapshot.fz_pyc_data ?
+		  obj->snapshot.fz_pyc_data->co : NULL;
           fprintf(f, "CodeBufferObject %p %d %d '%s' '%s' '%s'\n",
                   obj->codeptr, nsize, get_stack_depth(&obj->snapshot),
                   co?PyString_AsString(co->co_filename):"",
@@ -442,7 +457,7 @@ void psyco_dump_code_buffers(void)
                   obj->codemode);
           d = PyDict_New();
           assert(d);
-          vinfo_array_dump(&obj->snapshot.fz_vlocals, f, d);
+          vinfo_array_dump(obj->snapshot.fz_vlocals, f, d);
           Py_DECREF(d);
           fwrite(obj->codeptr, 1, nsize, f);
           if (nsize > sizeof(struct sd_s) &&

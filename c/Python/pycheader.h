@@ -36,19 +36,16 @@
    could be done).
 */
 
-#define INDEX_LOC_CODE          0   /* running code object */
-#define INDEX_LOC_GLOBALS       1   /* globals() dict object */
-#define INDEX_LOC_LOCALS_PLUS   2   /* local variables + stack */
-#define INDEX_LOC_NEXT_INSTR    3   /* next instruction index */
-#define NB_LOCALS               4
+#define INDEX_LOC_GLOBALS       0   /* globals() dict object */
+#define INDEX_LOC_LOCALS_PLUS   1   /* start of local variables + stack */
 
-#define LOC_CODE            po->vlocals.items[INDEX_LOC_CODE]
-#define LOC_GLOBALS         po->vlocals.items[INDEX_LOC_GLOBALS]
-#define LOC_LOCALS_PLUS     po->vlocals.items[INDEX_LOC_LOCALS_PLUS]
-#define LOC_NEXT_INSTR      po->vlocals.items[INDEX_LOC_NEXT_INSTR]
+#define LOC_GLOBALS         (po->vlocals.items[INDEX_LOC_GLOBALS])
+#define LOC_LOCALS_PLUS     (po->vlocals.items + INDEX_LOC_LOCALS_PLUS)
 
 
 typedef struct {
+  PyCodeObject* co;     /* code object we are compiling */
+  int next_instr;       /* next instruction to compile */
   int auto_recursion;   /* # levels to auto-compile calls to Python functions */
   int iblock;		/* index in blockstack */
   PyTryBlock blockstack[CO_MAXBLOCKS]; /* for try and loop blocks */
@@ -56,7 +53,7 @@ typedef struct {
   /* fields after 'blockstack' are not saved in a FrozenPsycoObject */
   int stack_base;       /* number of items before the stack in LOC_LOCALS_PLUS */
   int stack_level;      /* see note below */
-  char* merge_points;   /* see mergepoints.h */
+  PyObject* merge_points;   /* see mergepoints.h */
   vinfo_t* exc;         /* current compile-time (pseudo) exception, see below */
   vinfo_t* val;         /* exception value */
   PyObject* f_builtins;

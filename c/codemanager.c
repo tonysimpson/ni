@@ -29,7 +29,8 @@
   else                                                          \
     {                                                           \
       fpo_build(&b->snapshot, po);                              \
-      register_codebuf(ge, b);                                  \
+      if (ge != NULL)                                           \
+        register_codebuf(ge, b);                                \
       if (setcodelimit)                                         \
         po->codelimit = b->codeptr + BIG_BUFFER_SIZE -          \
                                      GUARANTEED_MINIMUM;        \

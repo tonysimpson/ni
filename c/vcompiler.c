@@ -1,6 +1,7 @@
 #include "vcompiler.h"
 #include "dispatcher.h"
 #include "codemanager.h"
+#include "mergepoints.h"
 #include "Python/pycompiler.h"
 #include "pycencoding.h"
 
@@ -327,7 +328,8 @@ DEFINEFN
 void duplicate_array(vinfo_array_t* target, vinfo_array_t* source)
 {
   /* make a depth copy of an array.
-     Same requirements as psyco_duplicate(). */
+     Same requirements as psyco_duplicate().
+     Do not use for arrays of length 0. */
   int i;
   for (i=0; i<source->count; i++)
     {
@@ -367,7 +369,7 @@ PsycoObject* psyco_duplicate(PsycoObject* po)
      In the new copy all 'tmp' marks will be cleared. */
   
   int i;
-  PsycoObject* result = PsycoObject_New();
+  PsycoObject* result = PsycoObject_New(po->vlocals.count);
   psyco_assert_coherent(po);
   assert_cleared_tmp_marks(&po->vlocals);
   duplicate_array(&result->vlocals, &po->vlocals);
@@ -489,21 +491,24 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
  */
 static code_t* psyco_resume_compile(PsycoObject* po, void* extra)
 {
-  return psyco_compile_code(po)->codeptr;
+  mergepoint_t* mp = psyco_exact_merge_point(po->pr.merge_points,
+                                             po->pr.next_instr);
+  return psyco_compile_code(po, mp)->codeptr;
   /* XXX don't know what to do with the reference returned by
      XXX po->compile_code() */
 }
 
 
-/* Main compiling function. Emit code corresponding to 'this' state.
-   The compiler produces its code into 'this->code' and the return value is
-   the end of the written code. */
+/* Main compiling function. Emit machine code corresponding to the state
+   'po'. The compiler produces its code into 'code' and the return value is
+   the end of the written code. 'po' is freed. */
 DEFINEFN
-code_t* psyco_compile(PsycoObject* po, bool continue_compilation)
+code_t* psyco_compile(PsycoObject* po, mergepoint_t* mp,
+                      bool continue_compilation)
 {
-  CodeBufferObject* codebuf;
   CodeBufferObject* oldcodebuf;
-  vinfo_t* diff = psyco_compatible(po, &global_entries, &oldcodebuf);
+  vinfo_t* diff = mp==NULL ? INCOMPATIBLE :
+                     psyco_compatible(po, &mp->entries, &oldcodebuf);
 
   /*psyco_assert_cleared_tmp_marks(&po->vlocals);  -- not needed -- */
   
@@ -532,21 +537,24 @@ code_t* psyco_compile(PsycoObject* po, bool continue_compilation)
         }
 
       /* Enough space left, continue in the same buffer. */
-      codebuf = psyco_proxy_code_buffer(po, &global_entries);
-      if (codebuf == NULL)
-        OUT_OF_MEMORY();
+      if (mp != NULL)
+        {
+          CodeBufferObject* codebuf = psyco_proxy_code_buffer(po, &mp->entries);
+          if (codebuf == NULL)
+            OUT_OF_MEMORY();
 #ifdef CODE_DUMP_FILE
-      codebuf->chained_list = psyco_codebuf_chained_list;
-      psyco_codebuf_chained_list = codebuf;
+          codebuf->chained_list = psyco_codebuf_chained_list;
+          psyco_codebuf_chained_list = codebuf;
 #endif
-      Py_DECREF(codebuf);
+          Py_DECREF(codebuf);
+        }
       
       if (diff != INCOMPATIBLE)
         {
           /* diff points to a vinfo_t: make it run-time */
           psyco_unfix(po, diff);
           /* start over (maybe we have already seen this new state) */
-          return psyco_compile(po, continue_compilation);
+          return psyco_compile(po, mp, continue_compilation);
         }
 
       if (continue_compilation)
@@ -558,10 +566,12 @@ code_t* psyco_compile(PsycoObject* po, bool continue_compilation)
 }
 
 DEFINEFN
-void psyco_compile_cond(PsycoObject* po, condition_code_t condition)
+void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
+                        condition_code_t condition)
 {
   CodeBufferObject* oldcodebuf;
-  vinfo_t* diff = psyco_compatible(po, &global_entries, &oldcodebuf);
+  vinfo_t* diff = mp==NULL ? INCOMPATIBLE :
+                     psyco_compatible(po, &mp->entries, &oldcodebuf);
   PsycoObject* po2 = PsycoObject_Duplicate(po);
 
   extra_assert(condition < CC_TOTAL);
@@ -608,19 +618,21 @@ void psyco_compile_cond(PsycoObject* po, condition_code_t condition)
 /* Simplified interface to compile() without using a previously
    existing code buffer. Return a new code buffer. */
 DEFINEFN
-CodeBufferObject* psyco_compile_code(PsycoObject* po)
+CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
 {
   code_t* code1;
   CodeBufferObject* codebuf;
   CodeBufferObject* oldcodebuf;
-  vinfo_t* diff = psyco_compatible(po, &global_entries, &oldcodebuf);
+  vinfo_t* diff = mp==NULL ? INCOMPATIBLE :
+                     psyco_compatible(po, &mp->entries, &oldcodebuf);
 
   /*psyco_assert_cleared_tmp_marks(&po->vlocals);  -- not needed -- */
 
   if (diff == COMPATIBLE)
     return psyco_unify_code(po, oldcodebuf);
 
-  codebuf = psyco_new_code_buffer(po, &global_entries);  /* start a new buffer */
+  /* start a new buffer */
+  codebuf = psyco_new_code_buffer(po, mp==NULL ? NULL : &mp->entries);
   if (codebuf == NULL)
     OUT_OF_MEMORY();
   po->code = codebuf->codeptr;
@@ -629,7 +641,7 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po)
     {
       psyco_unfix(po, diff);
       /* start over (maybe we have already seen this new state) */
-      code1 = psyco_compile(po, false);
+      code1 = psyco_compile(po, mp, false);
     }
   else
     {

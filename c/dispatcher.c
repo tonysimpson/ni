@@ -1,5 +1,6 @@
 #include "dispatcher.h"
 #include "codemanager.h"
+#include "mergepoints.h"
 #include "Python/pycompiler.h"   /* for pyc_data_xxx() */
 #include "pycencoding.h"  /* for INC_OB_REFCNT() */
 
@@ -13,7 +14,8 @@ DEFINEFN
 void fpo_build(FrozenPsycoObject* fpo, PsycoObject* po)
 {
   clear_tmp_marks(&po->vlocals);
-  duplicate_array(&fpo->fz_vlocals, &po->vlocals);
+  fpo->fz_vlocals = array_new(po->vlocals.count);
+  duplicate_array(fpo->fz_vlocals, &po->vlocals);
   fpo->fz_stuff.as_int =
     (po->stack_depth<<8) | ((int) po->last_used_reg);
   fpo->fz_arguments_count = po->arguments_count;
@@ -25,7 +27,7 @@ void fpo_release(FrozenPsycoObject* fpo)
 {
   if (fpo->fz_pyc_data != NULL)
     pyc_data_delete(fpo->fz_pyc_data);
-  deallocate_array(&fpo->fz_vlocals, NULL);
+  array_delete(fpo->fz_vlocals, NULL);
 }
 
 static void find_regs_array(vinfo_array_t* source, PsycoObject* po)
@@ -51,16 +53,16 @@ DEFINEFN
 PsycoObject* fpo_unfreeze(FrozenPsycoObject* fpo)
 {
   /* rebuild a PsycoObject from 'this' */
-  PsycoObject* po = PsycoObject_New();
+  PsycoObject* po = PsycoObject_New(fpo->fz_vlocals->count);
   po->stack_depth = get_stack_depth(fpo);
   po->last_used_reg = (reg_t)(fpo->fz_stuff.as_int & 0xFF);
   po->arguments_count = fpo->fz_arguments_count;
-  assert_cleared_tmp_marks(&fpo->fz_vlocals);
-  duplicate_array(&po->vlocals, &fpo->fz_vlocals);
-  clear_tmp_marks(&fpo->fz_vlocals);
+  assert_cleared_tmp_marks(fpo->fz_vlocals);
+  duplicate_array(&po->vlocals, fpo->fz_vlocals);
+  clear_tmp_marks(fpo->fz_vlocals);
   find_regs_array(&po->vlocals, po);
-  pyc_data_build(po);
   frozen_copy(&po->pr, fpo->fz_pyc_data);
+  pyc_data_build(po, psyco_get_merge_points(po->pr.co));
   return po;
 }
 
@@ -181,7 +183,7 @@ void psyco_respawn_detected(PsycoObject* po)
   if (current == rs->respawn_from)
     {
       /* respawn finished */
-      extra_assert(codebuf->snapshot.fz_vlocals.count == 0);
+      extra_assert(codebuf->snapshot.fz_vlocals == NullArray);
       fpo_build(&codebuf->snapshot, po);
     }
   else
@@ -386,8 +388,8 @@ vinfo_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns,
       extra_assert(CodeBuffer_Check(codebuf));
       /* invariant: all snapshot.fz_vlocals in the fatlist have
          all their 'tmp' fields set to NULL. */
-      assert_cleared_tmp_marks(&codebuf->snapshot.fz_vlocals);
-      diff = compatible_array(&po->vlocals, &codebuf->snapshot.fz_vlocals);
+      assert_cleared_tmp_marks(codebuf->snapshot.fz_vlocals);
+      diff = compatible_array(&po->vlocals, codebuf->snapshot.fz_vlocals);
       if (diff != INCOMPATIBLE)
 	{
           /* compatible_array() leaves data in the 'tmp' fields.
@@ -402,7 +404,7 @@ vinfo_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns,
           else
             {
               /* Partial match, clear 'tmp' fields */
-              clear_tmp_marks(&codebuf->snapshot.fz_vlocals);
+              clear_tmp_marks(codebuf->snapshot.fz_vlocals);
               if (result == INCOMPATIBLE)
                 {
                   /* Record the first partial match we find */
@@ -412,7 +414,7 @@ vinfo_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns,
             }
 	}
       else   /* compatible_array() should have reset all 'tmp' fields */
-	assert_cleared_tmp_marks(&codebuf->snapshot.fz_vlocals);
+	assert_cleared_tmp_marks(codebuf->snapshot.fz_vlocals);
     }
   return result;
 }
@@ -420,14 +422,7 @@ vinfo_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns,
 DEFINEFN
 void psyco_stabilize(CodeBufferObject* lastmatch)
 {
-  clear_tmp_marks(&lastmatch->snapshot.fz_vlocals);
-}
-
-
-DEFINEFN
-void psyco_dispatcher_init()
-{
-  global_entries.fatlist = PyList_New(0);
+  clear_tmp_marks(lastmatch->snapshot.fz_vlocals);
 }
 
 
@@ -583,7 +578,7 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
     OUT_OF_MEMORY();
   memset(dm.usages, 0, dm.usages_size);   /* set to all NULL */
   memset(dm.copy_regs, 0, sizeof(dm.copy_regs));
-  data_original_table(&dm, &target_codebuf->snapshot.fz_vlocals);
+  data_original_table(&dm, target_codebuf->snapshot.fz_vlocals);
 
   dm.po = po;
   dm.code_origin = code;
@@ -591,7 +586,7 @@ code_t* psyco_unify(PsycoObject* po, CodeBufferObject** target)
   dm.private_codebuf = NULL;
 
   /* update the stack */
-  code = data_update_stack(code, &dm, &target_codebuf->snapshot.fz_vlocals);
+  code = data_update_stack(code, &dm, target_codebuf->snapshot.fz_vlocals);
 
   /* update the registers (1): reg-to-reg moves and exchanges */
   memset(pops, -1, sizeof(pops));
@@ -814,7 +809,8 @@ static CodeBufferObject* do_promotion_internal(rt_promotion_t* fs, long value,
 
   /* compile from this new state, in which 'v' has been promoted to
      compile-time. */
-  codebuf = psyco_compile_code(po);
+  codebuf = psyco_compile_code(po, psyco_exact_merge_point(po->pr.merge_points,
+                                                           po->pr.next_instr));
 
   /* store the new code buffer into the local cache */
   if (PyDict_SetItem(fs->spec_dict, key, (PyObject*) codebuf))
@@ -948,7 +944,8 @@ static code_t* do_fixed_switch(rt_fixed_switch_t* rtfxs, long value)
     }
 
   /* compile from this new state */
-  codebuf = psyco_compile_code(po);
+  codebuf = psyco_compile_code(po,  psyco_exact_merge_point(po->pr.merge_points,
+                                                            po->pr.next_instr));
 
   /* store the pointer to the new code directly into
      the original code that jumped to do_fixed_switch() */

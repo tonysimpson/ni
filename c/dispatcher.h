@@ -11,7 +11,7 @@
 #include "processor.h"
 
 
-EXTERNFN void psyco_dispatcher_init(void);
+inline void psyco_dispatcher_init(void) { }
 
 
 /* a frozen PsycoObject is a snapshot of an actual PsycoObject,
@@ -30,7 +30,7 @@ struct FrozenPsycoObject_s {
     int as_int;   /* last_used_reg in bits 0-7 and stack_depth in the rest */
     struct respawn_s* respawning;
   } fz_stuff;
-  vinfo_array_t fz_vlocals;
+  vinfo_array_t* fz_vlocals;
   short fz_arguments_count;
   short fz_respawned_cnt;
   CodeBufferObject* fz_respawned_from;
@@ -42,7 +42,7 @@ inline void fpo_mark_new(FrozenPsycoObject* fpo) {
 	fpo->fz_respawned_from = NULL;
 }
 inline void fpo_mark_unused(FrozenPsycoObject* fpo) {
-	fpo->fz_vlocals.count = 0;
+	fpo->fz_vlocals = NullArray;
 	fpo->fz_pyc_data = NULL;
 }
 EXTERNFN void fpo_build(FrozenPsycoObject* fpo, PsycoObject* po);
@@ -92,13 +92,19 @@ EXTERNFN void psyco_stabilize(CodeBufferObject* lastmatch);
    
    The details of this structure are private.
    XXX implemented as a list object holding CodeBufferObjects in no
-   XXX particular order. MUST be optimized for reasonably fast searches.
+   XXX particular order. Must be optimized for reasonably fast searches
+   XXX if the lists become large (more than just a few items).
 */
 struct global_entries_s {
 	PyObject* fatlist;      /* list of CodeBufferObjects */
 };
 
-EXTERNVAR global_entries_t global_entries;   /* the single global entry point */
+/* initialize a global_entries_t structure */
+inline void psyco_ge_init(global_entries_t* ge) {
+	ge->fatlist = PyList_New(0);
+	if (ge->fatlist == NULL)
+		OUT_OF_MEMORY();
+}
 
 /* register the code buffer; it will be found by future calls to
    psyco_compatible(). */

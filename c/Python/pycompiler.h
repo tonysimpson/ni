@@ -292,10 +292,11 @@ EXTERNFN vinfo_t* Psyco_Meta4x(PsycoObject* po, void* c_function, int flags,
  /*** pyc_data_t implementation and snapshots for the dispatcher ***/
 
 /* construction for non-frozen snapshots */
-EXTERNFN void pyc_data_build(PsycoObject* po);
+EXTERNFN void pyc_data_build(PsycoObject* po, PyObject* merge_points);
 inline void pyc_data_duplicate(pyc_data_t* target, pyc_data_t* source) {
 	memcpy(target, source, sizeof(pyc_data_t));
 	target->exc = NULL;
+        target->val = NULL;
 }
 inline void pyc_data_release(pyc_data_t* pyc) {
 	vinfo_xdecref(pyc->val, NULL);
