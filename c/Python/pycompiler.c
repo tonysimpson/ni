@@ -833,6 +833,14 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		Py_INCREF(result);
 		return result;
 	}
+	else if (strcmp(PyString_AS_STRING(key), "__in_psyco__") == 0) {
+		/* special-case __in_psyco__ to always return 1, although
+		   its value in the builtins is always 0. This variable
+		   can be used by a function to know that it is compiled
+		   by Psyco. */
+		result = Py_True;
+		Py_INCREF(result);
+	}
 	else {
 		/* no such global variable, get the builtins */
 		if (po->pr.f_builtins == NULL) {

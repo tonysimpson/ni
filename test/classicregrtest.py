@@ -3,25 +3,33 @@ import sys, os, StringIO
 
 NO_SYS_GETFRAME = """using sys._getframe() fails with Psyco"""
 
-NO_THREAD = """XXX not reliable, check if Psyco is generally
-        unreliable with threads or if there is another problem"""
+#NO_THREAD = """XXX not reliable, check if Psyco is generally
+#        unreliable with threads or if there is another problem"""
 
 NO_PICKLE = """pickles function objects that Psyco rebinds"""
 
+NO_SYS_EXC = """XXX Psyco does not set sys.exc_xxx upon exception"""
+
 
 SKIP = {'test_gc': NO_SYS_GETFRAME,
-        'test_thread': NO_THREAD,
-        'test_asynchat': NO_THREAD,
+#        'test_thread': NO_THREAD,
+#        'test_asynchat': NO_THREAD,
         'test_extcall': 'prints to stdout a function object that Psyco rebinds',
         'test_descr': NO_PICKLE,
         'test_pickle': NO_PICKLE,
         'test_cpickle': NO_PICKLE,
         'test_re': NO_PICKLE,
-        'test_sre': 'Psyco does not set sys.exc_xxx upon exception',
+        'test_sre': NO_SYS_EXC,
+        'test_string': NO_SYS_EXC,
+        'test_unicode': NO_SYS_EXC,
         'test_inspect': 'gets confused with Psyco rebinding functions',
         'test_profilehooks': NO_SYS_GETFRAME,
         'test_profile': 'profiling does not see all functions run by Psyco',
+        'test_popen2': 'gets confused by Psyco debugging output to stderr',
+        'test_repr': 'self-nested tuples and lists not supported',
         }
+
+GROUP_TESTS = 4    # number of tests to run per Python process
 
 
 # Per-module user-filtered warnings don't work correctly
@@ -66,13 +74,17 @@ def alltests():
     if testlist1:
         print '%d more tests were already passed and are scheduled to run thereafter.' % len(testlist1)
     testlist += testlist1
-    for test in testlist:
+    while testlist:
         print '='*40
-        err = os.system('"%s" "%s" "%s"' % (sys.executable, sys.argv[0], test))
+        tests1 = testlist[:GROUP_TESTS]
+        del testlist[:GROUP_TESTS]
+        err = os.system('"%s" "%s" %s' % (sys.executable, sys.argv[0],
+                                          ' '.join(tests1)))
         if err:
             print '*** exited with error code', err
             return err
-        tests_passed[test] = 1
+        for test in tests1:
+            tests_passed[test] = 1
         f = open(filename, 'w')
         f.write(repr(tests_passed))
         f.close()
@@ -149,5 +161,13 @@ if __name__ == '__main__':
     if len(sys.argv) <= 1:
         sys.exit(alltests() or 0)
     else:
-        if not main(sys.argv[1:]):
+        try:
+            err = not main(sys.argv[1:])
+        finally:
+            # Write psyco.dump
+            import _psyco
+            if hasattr(_psyco, 'dumpcodebuf'):
+                print "Dumping code buffers..."
+                _psyco.dumpcodebuf()
+        if err:
             sys.exit(2)
