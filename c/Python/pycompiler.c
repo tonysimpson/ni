@@ -1319,6 +1319,7 @@ static vinfo_t* psyco_apply_slice(PsycoObject* po, vinfo_t* u,
 					    CfReturnRef|CfPyErrIfNull,
 					    modes, v, w, NULL);
 		if (vslice != NULL) {
+			Psyco_AssertType(po, vslice, &PySlice_Type);
 			u = PsycoObject_GetItem(po, u, vslice);
 			vinfo_decref(vslice, po);
 			return u;
@@ -1383,6 +1384,7 @@ static bool psyco_assign_slice(PsycoObject* po, vinfo_t* u,
 					    CfReturnRef|CfPyErrIfNull,
 					    modes, v, w, NULL);
 		if (vslice != NULL) {
+			Psyco_AssertType(po, vslice, &PySlice_Type);
 			ok = PsycoObject_SetItem(po, u, vslice, x);
 			vinfo_decref(vslice, po);
 			return ok;
@@ -3195,6 +3197,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			vinfo_decref(w, po);
 		if (x == NULL)
 			break;
+		Psyco_AssertType(po, x, &PySlice_Type);
 		if (oparg == 3)
 			POP_DECREF();	/* w */
 		POP_DECREF();		/* v */
