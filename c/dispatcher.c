@@ -255,6 +255,20 @@ void psyco_prepare_respawn(PsycoObject* po, condition_code_t jmpcondition)
                                                the next instructions */
 }
 
+DEFINEFN
+int runtime_NON_NULL_f(PsycoObject* po, vinfo_t* vi)
+{
+  condition_code_t cc = integer_NON_NULL(po, vi);
+  return cc == CC_ERROR ? -1 : runtime_condition_f(po, cc);
+}
+
+DEFINEFN
+int runtime_NON_NULL_t(PsycoObject* po, vinfo_t* vi)
+{
+  condition_code_t cc = integer_NON_NULL(po, vi);
+  return cc == CC_ERROR ? -1 : runtime_condition_t(po, cc);
+}
+
 
 /*****************************************************************/
 
@@ -796,7 +810,7 @@ typedef struct { /* produced at compile time and read by the dispatcher */
   vinfo_t* fix;           /* variable to promote */
   PyObject* spec_dict;    /* local cache (promotions to already-seen values) */
 #ifdef CODE_DUMP_FILE
-  long signature;         /* must be last, with spec_dict and kflags before */
+  void** chained_list;    /* must be last, with spec_dict just before */
 #endif
 } rt_promotion_t;
 
@@ -910,7 +924,8 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
   fs->fix = fix;
   fs->spec_dict = d;
 #ifdef CODE_DUMP_FILE
-  fs->signature = SPEC_DICT_SIGNATURE;
+  fs->chained_list = psyco_codebuf_spec_dict_list;
+  psyco_codebuf_spec_dict_list = (void**)&fs->chained_list;
 #endif
   return (code_t*)(fs+1);  /* end of code == end of 'fs' structure */
 }

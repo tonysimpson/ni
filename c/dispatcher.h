@@ -200,6 +200,7 @@ inline bool is_respawning(PsycoObject* po) { return po->respawn_cnt < 0; }
    runtime_condition_f() assumes the outcome is generally false,
    runtime_condition_t() assumes the outcome is generally true. */
 inline bool runtime_condition_f(PsycoObject* po, condition_code_t cond) {
+	extra_assert(cond != CC_ERROR);
 	if (cond == CC_ALWAYS_FALSE) return false;
 	if (cond == CC_ALWAYS_TRUE) return true;
 	if (detect_respawn(po)) return true;
@@ -207,12 +208,19 @@ inline bool runtime_condition_f(PsycoObject* po, condition_code_t cond) {
 	return false;
 }
 inline bool runtime_condition_t(PsycoObject* po, condition_code_t cond) {
+	extra_assert(cond != CC_ERROR);
 	if (cond == CC_ALWAYS_TRUE) return true;
 	if (cond == CC_ALWAYS_FALSE) return false;
 	if (detect_respawn(po)) return false;
 	psyco_prepare_respawn(po, INVERT_CC(cond));
 	return true;
 }
+
+/* the following functions let you test at compile-time the fact that a
+   value is 0 or not. Returns 0 or 1, or -1 in case of error.
+   Uses integer_NON_NULL() and so accepts 'vi==NULL' and !!consumes a ref!! */
+EXTERNFN int runtime_NON_NULL_f(PsycoObject* po, vinfo_t* vi);
+EXTERNFN int runtime_NON_NULL_t(PsycoObject* po, vinfo_t* vi);
 
 
 #endif /* _DISPATCHER_H */
