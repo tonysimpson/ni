@@ -249,14 +249,14 @@ PsycoFunctionObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec)
 		Py_INCREF(func);
 		result->psy_func = func;
 		result->psy_recursion = rec;
-		_PyObject_GC_TRACK(result);
+		PyObject_GC_Track(result);
 	}
 	return result;
 }
 
 static void psycofunction_dealloc(PsycoFunctionObject* self)
 {
-	_PyObject_GC_UNTRACK(self);
+	PyObject_GC_UnTrack(self);
 	Py_DECREF(self->psy_func);
 	PyObject_GC_Del(self);
 }

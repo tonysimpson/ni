@@ -17,10 +17,14 @@
  /* define for a few debugging outputs */
 # define VERBOSE_LEVEL   1   /* 0, 1 or 2 */
 
+#ifndef MS_WIN32
+
  /* define for *heavy* memory checking */
 # define HEAVY_MEM_CHECK
  /* define for **really** **heavy** memory checking */
 /*#undef HEAVY_HEAVY_MEM_CHECK*/
+
+#endif
 
  /* define to write produced blocks of code into a file
     See 'xam.py' */
@@ -105,7 +109,11 @@
 #endif
 
 #ifdef INLINE_COMMON_FUNCTIONS
-# define inline      __inline__ static   /* is this GCC-specific? */
+# ifdef MS_WIN32
+#  define inline	__inline static
+# else
+#  define inline      __inline__ static   /* is this GCC-specific? */
+# endif
 #else
 # define inline      static
 #endif
