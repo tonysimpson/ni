@@ -87,5 +87,9 @@ PyString_FromFormatV(const char *format, va_list vargs);
 # define PyString_CHECK_INTERNED(op) (((PyStringObject*)(op))->ob_sinterned)
 #endif
 
+#ifndef PyMODINIT_FUNC
+# define PyMODINIT_FUNC void
+#endif
+
 
 #endif /* _PYVER_H */
