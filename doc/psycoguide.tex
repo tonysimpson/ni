@@ -61,7 +61,7 @@ Psyco is not dependent on a particular OS.  Precompiled binaries are provided fo
 
 \section{Installing}\label{binaries}
 
-\warning{The Linux binaries of Psyco 1.1 have been compiled for the recent \file{glibc-2.3}, which means that they will not work on what is currently still most systems! In the future I may switch back to \file{glibc-2.2}, or I may stop releasing Linux binaries altogether because it is incredibly easy to compile from the source (see section \ref{sources} --- you don't need to be root to do that).} Also note that at least some versions of Psyco have been successfully used on other PC Unixes like FreeBSD.
+\warning{The Linux binaries are compiled for the relatively recent \file{glibc-2.3}, which means that they will not work on older systems!  Note that it is not more difficult to install from the source than from binaries -- basically, just do \code{python setup.py install} in both cases.} Also note that at least some versions of Psyco have been successfully used on other PC Unixes like FreeBSD.
 
 To install from the binaries, be sure to download the version of Psyco that corresponds to your Python version.  Binary released are at \url{http://sourceforge.net/project/showfiles.php?group_id=41036}.  Four pre-compiled versions are currently distributed:
 
@@ -69,7 +69,7 @@ To install from the binaries, be sure to download the version of Psyco that corr
   \lineiii{ psyco-x.y-OS-2.1     }{2.1 or any 2.1.x}       {2.1.3}
   \lineiii{ psyco-x.y-OS-2.2.0-1 }{2.2 older than 2.2.2}   {2.2.1}
   \lineiii{ psyco-x.y-OS-2.2.2   }{2.2.2 and up}           {2.2.2 and 2.2.3}
-  \lineiii{ psyco-x.y-OS-2.3     }{2.3 and up}             {2.3}
+  \lineiii{ psyco-x.y-OS-2.3     }{2.3 and up}             {2.3 and 2.3.3}
 \end{tableiii}
 
 \file{x.y} is the Psyco version number, and \file{OS} is the operating system this version has been compiled for.
