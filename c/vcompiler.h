@@ -297,7 +297,7 @@ inline void vinfo_xdecref(vinfo_t* vi, PsycoObject* po) {
 /* promoting out of virtual-time */
 inline NonVirtualSource vinfo_compute(vinfo_t* vi, PsycoObject* po) {
 	if (is_virtualtime(vi->source)) {
-		if (!VirtualTime_Get(vi->source)->compute_fn(po, vi, false))
+		if (!VirtualTime_Get(vi->source)->compute_fn(po, vi, true))
 			return SOURCE_ERROR;
 		extra_assert(!is_virtualtime(vi->source));
 	}

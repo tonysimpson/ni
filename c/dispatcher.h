@@ -173,7 +173,7 @@ EXTERNFN int psyco_simplify_array(vinfo_array_t* array,
 
 /* Emit the code to prepare for Psyco code calling Psyco code in
    a compiled function call */
-EXTERNFN bool psyco_forking(PsycoObject* po, vinfo_array_t* array);
+EXTERNFN bool psyco_forking(PsycoObject* po, vinfo_array_t* array, bool force);
 
 /*****************************************************************/
  /***   Promotion                                               ***/

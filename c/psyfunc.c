@@ -262,16 +262,12 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
      is not implemented (but this is probably not useful to implement);
      revert to the default behaviour */
 
-  /* Force mutable arguments out of virtual-time */
+  /* Force mutable arguments out of virtual-time,
+     including the processor condition codes */
   /* This is expected to have already been done on default arguments;
      see PsycoFunction_New() */
-  if (!psyco_forking(po, arg_tuple->array))
+  if (!psyco_forking(po, arg_tuple->array, false))
     return NULL;
-
-  /* the processor condition codes will be messed up soon */
-  BEGIN_CODE
-  NEED_CC();
-  END_CODE
   
   /* prepare a frame */
   mypo = psyco_build_frame(co, vglobals,

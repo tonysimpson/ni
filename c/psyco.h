@@ -230,7 +230,7 @@ EXTERNVAR long psyco_memory_usage;   /* approximative */
 
 
 /* moved here from vcompiler.h because needed by numerous header files */
-typedef bool (*compute_fn_t)(PsycoObject* po, vinfo_t* vi, bool forking);
+typedef bool (*compute_fn_t)(PsycoObject* po, vinfo_t* vi, bool force);
 typedef struct {
   compute_fn_t compute_fn;
 } source_virtual_t;

@@ -26,13 +26,13 @@ vinfo_t* PsycoMethod_New(PyObject* func, vinfo_t* self, PyObject* cls)
 }
 
 
-static bool compute_method(PsycoObject* po, vinfo_t* methobj, bool forking)
+static bool compute_method(PsycoObject* po, vinfo_t* methobj, bool force)
 {
 	vinfo_t* newobj;
 	vinfo_t* im_func;
 	vinfo_t* im_self;
 	vinfo_t* im_class;
-        if (forking) return psyco_forking(po, methobj->array);
+        if (!force) return true;
 	
 	/* get the fields from the Python object 'methobj' */
 	im_func = vinfo_getitem(methobj, iMETHOD_IM_FUNC);

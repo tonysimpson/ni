@@ -38,6 +38,6 @@ if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
 # the tests that don't work with Psyco
 test.regrtest.NOTTESTS += SKIP.keys()
 try:
-    test.regrtest.main()
+    test.regrtest.main(randomize=1)
 finally:
     psyco.dumpcodebuf()

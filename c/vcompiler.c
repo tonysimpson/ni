@@ -892,9 +892,9 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
 
 /*****************************************************************/
 
-static bool computed_do_not_use(PsycoObject* po, vinfo_t* vi, bool forking)
+static bool computed_do_not_use(PsycoObject* po, vinfo_t* vi, bool force)
 {
-  if (forking) return true;
+  if (!force) return true;
   fprintf(stderr, "psyco: internal error (computed_do_not_use)\n");
   extra_assert(0);     /* stop if debugging */
   vi->source = SOURCE_DUMMY;

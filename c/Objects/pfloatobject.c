@@ -162,12 +162,12 @@ bool PsycoFloat_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** result_1, vinfo_
     return true;
 }
 
-static bool compute_float(PsycoObject* po, vinfo_t* floatobj, bool forking)
+static bool compute_float(PsycoObject* po, vinfo_t* floatobj, bool force)
 {
     vinfo_t* newobj;
     vinfo_t* first_half;
     vinfo_t* second_half;
-    if (forking) return true;
+    if (!force) return true;
     
     /* get the field 'ob_fval' from the Python object 'floatobj' */
     first_half = vinfo_getitem(floatobj, iFLOAT_OB_FVAL+0);

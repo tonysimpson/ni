@@ -37,11 +37,11 @@ vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v)
 	return result;
 }
 
-static bool compute_int(PsycoObject* po, vinfo_t* intobj, bool forking)
+static bool compute_int(PsycoObject* po, vinfo_t* intobj, bool force)
 {
 	vinfo_t* newobj;
 	vinfo_t* x;
-	if (forking) return true;
+	if (!force) return true;
 	
 	/* get the field 'ob_ival' from the Python object 'intobj' */
 	x = vinfo_getitem(intobj, iINT_OB_IVAL);

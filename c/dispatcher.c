@@ -1852,7 +1852,7 @@ int psyco_simplify_array(vinfo_array_t* array, PsycoObject* po)
 }
 
 DEFINEFN
-bool psyco_forking(PsycoObject* po, vinfo_array_t* array)
+bool psyco_forking(PsycoObject* po, vinfo_array_t* array, bool force)
 {
   /* Some virtual-time objects cannot remain virtualized across calls,
      because if the called function pulls them out of virtual-time,
@@ -1867,12 +1867,12 @@ bool psyco_forking(PsycoObject* po, vinfo_array_t* array)
         {
           if (is_virtualtime(vi->source))
             {
-              if (!VirtualTime_Get(vi->source)->compute_fn(po, vi, true))
+              if (!VirtualTime_Get(vi->source)->compute_fn(po, vi, force))
                 return false;
               /* vi->array may be modified by compute_fn() */
             }
           if (vi->array != NullArray)
-            if (!psyco_forking(po, vi->array))
+            if (!psyco_forking(po, vi->array, force))
               return false;
         }
     }

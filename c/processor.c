@@ -717,13 +717,15 @@ code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
         return code;
 }
 
-static bool generic_computed_cc(PsycoObject* po, vinfo_t* v, bool forking)
+static bool generic_computed_cc(PsycoObject* po, vinfo_t* v, bool force)
 {
-	if (forking) return true;
+	/* also upon forking, because the condition codes cannot be
+	   sent as arguments (function calls typically require adds
+	   and subs to adjust the stack). */
 	extra_assert(po->ccreg == v);
-        BEGIN_CODE
+	BEGIN_CODE
 	code = psyco_compute_cc(po, code, REG_NONE);
-        END_CODE
+	END_CODE
 	return true;
 }
 
@@ -792,7 +794,7 @@ condition_code_t psyco_vsource_cc(Source source)
 #endif
 
 
-static bool computed_promotion(PsycoObject* po, vinfo_t* v, bool forking);
+static bool computed_promotion(PsycoObject* po, vinfo_t* v, bool force);
 /* forward */
 
 INITIALIZATIONFN
@@ -828,11 +830,11 @@ void psyco_processor_init(void)
 /*****************************************************************/
  /***   run-time switches                                       ***/
 
-static bool computed_promotion(PsycoObject* po, vinfo_t* v, bool forking)
+static bool computed_promotion(PsycoObject* po, vinfo_t* v, bool force)
 {
   /* uncomputable, but still use the address of computed_promotion() as a
      tag to figure out if a virtual source is a c_promotion_s structure. */
-  return psyco_vsource_not_important.compute_fn(po, v, forking);
+  return psyco_vsource_not_important.compute_fn(po, v, force);
 }
 
 DEFINEVAR struct c_promotion_s psyco_nonfixed_promotion;

@@ -70,9 +70,9 @@ static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
 }
 
 
-static bool compute_seqiter(PsycoObject* po, vinfo_t* v, bool forking)
+static bool compute_seqiter(PsycoObject* po, vinfo_t* v, bool force)
 {
-  	/* also compute with forking because iterators are mutable */
+  	/* also compute with forking (!force) because iterators are mutable */
 	vinfo_t* seq;
 	vinfo_t* index;
 	vinfo_t* newobj;

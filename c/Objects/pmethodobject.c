@@ -2,12 +2,12 @@
 #include "ptupleobject.h"
 
 
-static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj, bool forking)
+static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj, bool force)
 {
 	vinfo_t* newobj;
 	vinfo_t* m_self;
 	vinfo_t* m_ml;
-	if (forking) return true;
+	if (!force) return true;
 	
 	/* get the fields from the Python object 'methobj' */
 	m_self = vinfo_getitem(methobj, iCFUNC_M_SELF);

@@ -22,9 +22,9 @@ inline int vlist_length(vinfo_t* v)
 	return len;
 }
 
-static bool compute_vlist(PsycoObject* po, vinfo_t* v, bool forking)
+static bool compute_vlist(PsycoObject* po, vinfo_t* v, bool force)
 {
-	/* also compute with forking because lists are mutable */
+	/* also compute with forking (!force) because lists are mutable */
 	int length = vlist_length(v);
 	vinfo_t* newobj;
         vinfo_t* ob_item;

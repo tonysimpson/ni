@@ -58,9 +58,9 @@ static PyObject* cimpl_range1(long start, long len)
   return lst;
 }
 
-static bool compute_range(PsycoObject* po, vinfo_t* rangelst, bool forking)
+static bool compute_range(PsycoObject* po, vinfo_t* rangelst, bool force)
 {
-	/* also compute with forking because ranges are lists,
+	/* also compute with forking (!force) because ranges are lists,
            which are mutable */
 	vinfo_t* newobj;
 	vinfo_t* vstart;

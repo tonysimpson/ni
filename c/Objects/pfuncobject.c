@@ -8,9 +8,10 @@
 
 static source_virtual_t psyco_computed_function;
 
-static bool compute_function(PsycoObject* po, vinfo_t* v, bool forking)
+static bool compute_function(PsycoObject* po, vinfo_t* v, bool force)
 {
-	/* also compute with forking because function objects are mutable */
+	/* also compute with forking (!force) because function objects
+           are mutable */
 	vinfo_t* newobj;
 	vinfo_t* fcode;
 	vinfo_t* fglobals;
@@ -55,7 +56,7 @@ vinfo_t* PsycoFunction_New(PsycoObject* po, vinfo_t* fcode,
 	
 	/* fdefaults contains potential arguments; mutable objects there
 	   must be forced out of virtual-time right now */
-	if (fdefaults != NULL && !psyco_forking(po, fdefaults->array))
+	if (fdefaults != NULL && !psyco_forking(po, fdefaults->array, false))
 		return NULL;
 
 	/* Build a virtual function object */

@@ -15,11 +15,11 @@ static PyObject* cimpl_character(char c)
 	return PyString_FromStringAndSize(&c, 1);
 }
 
-static bool compute_char(PsycoObject* po, vinfo_t* v, bool forking)
+static bool compute_char(PsycoObject* po, vinfo_t* v, bool force)
 {
 	vinfo_t* chrval;
 	vinfo_t* newobj;
-	if (forking) return true;
+	if (!force) return true;
 
 	chrval = vinfo_getitem(v, iCHARACTER_CHAR);
 	if (chrval == NULL)
@@ -64,7 +64,7 @@ static source_virtual_t psyco_computed_strslice;
 /* a virtual string obtained as a slice of a source string STRSLICE_SOURCE.
    The slice range is defined as [STRSLICE_START:STRSLICE_START+FIX_SIZE] */
 
-static bool compute_strslice(PsycoObject* po, vinfo_t* v, bool forking)
+static bool compute_strslice(PsycoObject* po, vinfo_t* v, bool force)
 {
 	vinfo_t* newobj;
 	vinfo_t* ptr;
@@ -72,7 +72,7 @@ static bool compute_strslice(PsycoObject* po, vinfo_t* v, bool forking)
 	vinfo_t* source;
 	vinfo_t* start;
 	vinfo_t* length;
-	if (forking) return true;
+	if (!force) return true;
 	
 	source = vinfo_getitem(v, STRSLICE_SOURCE);
 	start = vinfo_getitem(v, STRSLICE_START);
@@ -155,11 +155,9 @@ static PyObject* cimpl_concatenate(int totallen, PyObject* lst)
 	return result;
 }
 
-static bool compute_catstr(PsycoObject* po, vinfo_t* v, bool forking)
+static bool compute_catstr(PsycoObject* po, vinfo_t* v, bool force)
 {
-	/* don't compute upon forking even if it means we might repeat
-	   the same memcpy several times.  The wins are big in the case
-	   of numerous calls to functions that append stuff to a string. */
+	/* compute upon forking (!force) too, to avoid code explosion. */
 	int count;
 	vinfo_t* s;
 	vinfo_t* t;
@@ -169,7 +167,6 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v, bool forking)
 	vinfo_t* release_me = NULL;
 	vinfo_t* list;
 	vinfo_t* slen;
-	if (forking) return true;
 	
 	list = vinfo_getitem(v, CATSTR_LIST);
 	slen = vinfo_getitem(v, iFIX_SIZE);

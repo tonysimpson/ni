@@ -6,10 +6,10 @@
 
 static source_virtual_t psyco_computed_tuple;
 
-static bool compute_tuple(PsycoObject* po, vinfo_t* v, bool forking)
+static bool compute_tuple(PsycoObject* po, vinfo_t* v, bool force)
 {
 	int i, tuple_end;
-	if (forking) return true;
+	if (!force) return true;
 	tuple_end = v->array->count;
 	extra_assert(tuple_end == iTUPLE_OB_ITEM +
 		CompileTime_Get(v->array->items[iFIX_SIZE]->source)->value);
