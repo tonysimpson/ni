@@ -98,7 +98,7 @@
 # define DEFINEVAR   statichere
 # define DEFINEFN    static
 #else
-# define EXTERNVAR   extern
+# define EXTERNVAR
 # define EXTERNFN
 # define DEFINEVAR
 # define DEFINEFN
