@@ -45,27 +45,51 @@ bool PsycoLong_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd1, vinfo_t** vd
 				        (CfReturnRef|CfPyErrNotImplemented),	\
 				   &PyLong_Type)
 
-RETLONG(2,	plong_add,		nb_add)
-RETLONG(2,	plong_sub,		nb_subtract)
-RETLONG(2,	plong_mul,		nb_multiply)
-RETLONG(2,	plong_classic_div,	nb_divide)
-RETLONG(2,	plong_mod,		nb_remainder)
-RETLONG(3,	plong_pow,		nb_power)
+/* this only assumes that the result is a long if the other argument
+   is also a long or an int (for example, str*long or long+float do
+   not return longs) */
+#define RETLONG_NUM(cname, slotname)					    \
+static vinfo_t* cname(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)  {	    \
+	vinfo_t* result = psyco_generic_call(po,			    \
+				PyLong_Type.tp_as_number->slotname,	    \
+				CfReturnRef|CfPyErrNotImplemented,	    \
+				"vv", v1, v2);				    \
+	if (result != NULL && !IS_NOTIMPLEMENTED(result)) {		    \
+		PyTypeObject* vtp;					    \
+		vtp = Psyco_KnownType(v1);				    \
+		if (vtp == &PyLong_Type || vtp == &PyInt_Type) {	    \
+			vtp = Psyco_KnownType(v2);			    \
+			if (vtp == &PyLong_Type || vtp == &PyInt_Type) {    \
+				Psyco_AssertType(po, result, &PyLong_Type); \
+			}						    \
+		}							    \
+	}								    \
+	return result;							    \
+}
+
+
+RETLONG_NUM(	plong_add,		nb_add)
+RETLONG_NUM(	plong_sub,		nb_subtract)
+RETLONG_NUM(	plong_mul,		nb_multiply)
+RETLONG_NUM(	plong_classic_div,	nb_divide)
+RETLONG_NUM(	plong_mod,		nb_remainder)
+/*RETLONG(3,	plong_pow,		nb_power)*/
 RETLONG(1,	plong_neg,		nb_negative)
 RETLONG(1,	plong_pos,		nb_positive)
 RETLONG(1,	plong_abs,		nb_absolute)
 RETLONG(1,	plong_invert,		nb_invert)
-RETLONG(2,	plong_lshift,		nb_lshift)
-RETLONG(2,	plong_rshift,		nb_rshift)
-RETLONG(2,	plong_and,		nb_and)
-RETLONG(2,	plong_xor,		nb_xor)
-RETLONG(2,	plong_or,		nb_or)
+RETLONG_NUM(	plong_lshift,		nb_lshift)
+RETLONG_NUM(	plong_rshift,		nb_rshift)
+RETLONG_NUM(	plong_and,		nb_and)
+RETLONG_NUM(	plong_xor,		nb_xor)
+RETLONG_NUM(	plong_or,		nb_or)
 #ifdef BINARY_FLOOR_DIVIDE
-RETLONG(2,	plong_div,		nb_floor_divide)
+RETLONG_NUM(	plong_div,		nb_floor_divide)
      /*RETFLOAT(2,	plong_true_divide,	nb_true_divide)  XXX-implement*/
 #endif
 
 #undef RETLONG
+#undef RETLONG_NUM
 
 
 INITIALIZATIONFN
@@ -78,7 +102,7 @@ void psy_longobject_init(void)
 	Psyco_DefineMeta(m->nb_multiply,	plong_mul);
 	Psyco_DefineMeta(m->nb_divide,		plong_classic_div);
 	Psyco_DefineMeta(m->nb_remainder,	plong_mod);
-	Psyco_DefineMeta(m->nb_power,		plong_pow);
+	/*Psyco_DefineMeta(m->nb_power,		plong_pow);*/
 	Psyco_DefineMeta(m->nb_negative,	plong_neg);
 	Psyco_DefineMeta(m->nb_positive,	plong_pos);
 	Psyco_DefineMeta(m->nb_absolute,	plong_abs);
