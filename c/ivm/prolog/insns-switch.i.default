@@ -18,35 +18,29 @@ accum = local2;
 }
 continue;
 
-case 3:  /* [abso] */
+case 3:  /* [abs_o] */
 {
 word_t local1;
 word_t local2;
 word_t local3;
-word_t local4;
-local1 = abso(accum);
-local2 = ovf_check(abso, macro_args(accum));
-local3 = local2;
-local4 = local1;
-stack_nth(-1) = local4;
+local1 = abs_o(accum);
+local2 = ovf_check(abs_o, macro_args(accum));
+local3 = local1;
 accum = local3;
-stack_shift(-1);
+flag = local2;
 }
 continue;
 
-case 4:  /* [nego] */
+case 4:  /* [neg_o] */
 {
 word_t local1;
 word_t local2;
 word_t local3;
-word_t local4;
 local1 = -accum;
-local2 = ovf_check(nego, macro_args(accum));
-local3 = local2;
-local4 = local1;
-stack_nth(-1) = local4;
+local2 = ovf_check(neg_o, macro_args(accum));
+local3 = local1;
 accum = local3;
-stack_shift(-1);
+flag = local2;
 }
 continue;
 
@@ -133,52 +127,60 @@ stack_shift_pos(1);
 }
 continue;
 
-case 13:  /* [addo] */
+case 13:  /* [add] */
 {
 word_t local1;
 word_t local2;
-word_t local3;
-word_t local4;
 local1 = stack_nth(0)+accum;
-local2 = ovf_check(addo, macro_args(stack_nth(0), accum));
-local3 = local2;
-local4 = local1;
-stack_nth(0) = local4;
-accum = local3;
+local2 = local1;
+accum = local2;
+stack_shift_pos(1);
 }
 continue;
 
-case 14:  /* [subo] */
+case 14:  /* [add_o] */
 {
 word_t local1;
 word_t local2;
 word_t local3;
-word_t local4;
+local1 = stack_nth(0)+accum;
+local2 = ovf_check(add_o, macro_args(stack_nth(0), accum));
+local3 = local1;
+accum = local3;
+stack_shift_pos(1);
+flag = local2;
+}
+continue;
+
+case 15:  /* [sub_o] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
 local1 = stack_nth(0)-accum;
-local2 = ovf_check(subo, macro_args(stack_nth(0), accum));
-local3 = local2;
-local4 = local1;
-stack_nth(0) = local4;
+local2 = ovf_check(sub_o, macro_args(stack_nth(0), accum));
+local3 = local1;
 accum = local3;
+stack_shift_pos(1);
+flag = local2;
 }
 continue;
 
-case 15:  /* [mulo] */
+case 16:  /* [mul_o] */
 {
 word_t local1;
 word_t local2;
 word_t local3;
-word_t local4;
 local1 = stack_nth(0)*accum;
-local2 = ovf_check(mulo, macro_args(stack_nth(0), accum));
-local3 = local2;
-local4 = local1;
-stack_nth(0) = local4;
+local2 = ovf_check(mul_o, macro_args(stack_nth(0), accum));
+local3 = local1;
 accum = local3;
+stack_shift_pos(1);
+flag = local2;
 }
 continue;
 
-case 16:  /* [lshift] */
+case 17:  /* [lshift] */
 {
 word_t local1;
 word_t local2;
@@ -189,7 +191,7 @@ stack_shift_pos(1);
 }
 continue;
 
-case 17:  /* [rshift] */
+case 18:  /* [rshift] */
 {
 word_t local1;
 word_t local2;
@@ -200,7 +202,7 @@ stack_shift_pos(1);
 }
 continue;
 
-case 18:  /* [urshift] */
+case 19:  /* [urshift] */
 {
 word_t local1;
 word_t local2;
@@ -211,45 +213,39 @@ stack_shift_pos(1);
 }
 continue;
 
-case 19:  /* [cmpeq] */
+case 20:  /* [cmpeq] */
 {
 word_t local1;
 word_t local2;
 local1 = stack_nth(0) == accum;
-local2 = local1;
+local2 = stack_nth(1);
 accum = local2;
-stack_shift_pos(1);
+stack_shift_pos(2);
+flag = local1;
 }
 continue;
 
-case 20:  /* [cmplt] */
+case 21:  /* [cmplt] */
 {
 word_t local1;
 word_t local2;
 local1 = stack_nth(0) < accum;
-local2 = local1;
+local2 = stack_nth(1);
 accum = local2;
-stack_shift_pos(1);
+stack_shift_pos(2);
+flag = local1;
 }
 continue;
 
-case 21:  /* [cmpltu] */
+case 22:  /* [cmpltu] */
 {
 word_t local1;
 word_t local2;
 local1 = ((unsigned)stack_nth(0)) < ((unsigned)accum);
-local2 = local1;
+local2 = stack_nth(1);
 accum = local2;
-stack_shift_pos(1);
-}
-continue;
-
-case 22:  /* [pop] */
-{
-word_t local1;
-local1 = stack_nth(0);
-accum = local1;
-stack_shift_pos(1);
+stack_shift_pos(2);
+flag = local1;
 }
 continue;
 
@@ -504,31 +500,57 @@ local1 = bytecode_next(word_t);
 }
 continue;
 
-case 43:  /* [jcondnear(indirect(code_t))] */
+case 43:  /* [dynamicfreq(indirect(word_t))] */
 {
 word_t local1;
-word_t local2;
-local1 = bytecode_next(code_t);
-impl_jcond(accum, nextip+local1);
-local2 = stack_nth(0);
-accum = local2;
-stack_shift_pos(1);
-}
-continue;
-
-case 44:  /* [jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
 local1 = bytecode_next(word_t);
-impl_jcond(accum, local1);
-local2 = stack_nth(0);
-accum = local2;
-stack_shift_pos(1);
+impl_dynamicfreq;
 }
 continue;
 
-case 45:  /* [jumpfar(indirect(word_t))] */
+case 44:  /* [flag_push] */
+{
+word_t local1;
+word_t local2;
+word_t local3;
+local1 = flag;
+local2 = local1;
+local3 = accum;
+stack_nth(-1) = local3;
+accum = local2;
+stack_shift(-1);
+}
+continue;
+
+case 45:  /* [flag_pop] */
+{
+word_t local1;
+word_t local2;
+local1 = accum;
+local2 = stack_nth(0);
+accum = local2;
+stack_shift_pos(1);
+flag = local1;
+}
+continue;
+
+case 46:  /* [jcondnear(indirect(code_t))] */
+{
+word_t local1;
+local1 = bytecode_next(code_t);
+impl_jcond(flag, nextip+local1);
+}
+continue;
+
+case 47:  /* [jcondfar(indirect(word_t))] */
+{
+word_t local1;
+local1 = bytecode_next(word_t);
+impl_jcond(flag, local1);
+}
+continue;
+
+case 48:  /* [jumpfar(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
@@ -536,7 +558,7 @@ impl_jump(local1);
 }
 continue;
 
-case 46:  /* [cbuild1(indirect(word_t))] */
+case 49:  /* [cbuild1(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
@@ -544,7 +566,7 @@ impl_cbuild1(local1);
 }
 continue;
 
-case 47:  /* [cbuild2(indirect(word_t))] */
+case 50:  /* [cbuild2(indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -556,7 +578,7 @@ stack_shift_pos(1);
 }
 continue;
 
-case 48:  /* [store1] */
+case 51:  /* [store1] */
 {
 word_t local1;
 *(char*)stack_nth(0) = (char)accum;
@@ -566,7 +588,7 @@ stack_shift_pos(2);
 }
 continue;
 
-case 49:  /* [store2] */
+case 52:  /* [store2] */
 {
 word_t local1;
 *(short*)stack_nth(0) = (short)accum;
@@ -576,7 +598,7 @@ stack_shift_pos(2);
 }
 continue;
 
-case 50:  /* [store4] */
+case 53:  /* [store4] */
 {
 word_t local1;
 *(long*)stack_nth(0) = accum;
@@ -586,7 +608,7 @@ stack_shift_pos(2);
 }
 continue;
 
-case 51:  /* [incref] */
+case 54:  /* [incref] */
 {
 word_t local1;
 impl_incref(accum);
@@ -596,7 +618,7 @@ stack_shift_pos(1);
 }
 continue;
 
-case 52:  /* [decref] */
+case 55:  /* [decref] */
 {
 word_t local1;
 impl_decref(accum);
@@ -606,7 +628,7 @@ stack_shift_pos(1);
 }
 continue;
 
-case 53:  /* [decrefnz(indirect(word_t))] */
+case 56:  /* [decrefnz(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
@@ -614,7 +636,7 @@ impl_decrefnz(local1);
 }
 continue;
 
-case 54:  /* [exitframe] */
+case 57:  /* [exitframe] */
 {
 word_t local1;
 impl_exitframe(stack_nth(1), stack_nth(0), accum);
@@ -624,13 +646,13 @@ stack_shift_pos(3);
 }
 continue;
 
-case 55:  /* [ret(0)] */
+case 58:  /* [ret(0)] */
 {
 impl_ret(accum);
 }
 continue;
 
-case 56:  /* [ret(1:255)] */
+case 59:  /* [ret(1:255)] */
 {
 word_t local1;
 word_t local2;
@@ -643,7 +665,7 @@ stack_shift_pos(1);
 }
 continue;
 
-case 57:  /* [ret(1:maxint)] */
+case 60:  /* [ret(1:maxint)] */
 {
 word_t local1;
 word_t local2;
@@ -656,7 +678,7 @@ stack_shift_pos(1);
 }
 continue;
 
-case 58:  /* [retval] */
+case 61:  /* [retval] */
 {
 word_t local1;
 retval = accum;
@@ -666,7 +688,7 @@ stack_shift_pos(1);
 }
 continue;
 
-case 59:  /* [pushretval] */
+case 62:  /* [pushretval] */
 {
 word_t local1;
 word_t local2;
@@ -680,7 +702,7 @@ stack_shift(-1);
 }
 continue;
 
-case 60:  /* [pyenter(indirect(word_t))] */
+case 63:  /* [pyenter(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
@@ -688,13 +710,13 @@ impl_pyenter(local1);
 }
 continue;
 
-case 61:  /* [pyleave] */
+case 64:  /* [pyleave] */
 {
 impl_pyleave;
 }
 continue;
 
-case 62:  /* [vmcall(indirect(word_t))] */
+case 65:  /* [vmcall(indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -711,7 +733,7 @@ stack_shift(-1);
 }
 continue;
 
-case 63:  /* [ccall0(indirect(word_t))] */
+case 66:  /* [ccall0(indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -727,7 +749,7 @@ stack_shift(-1);
 }
 continue;
 
-case 64:  /* [ccall1(indirect(word_t))] */
+case 67:  /* [ccall1(indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -739,7 +761,7 @@ accum = local3;
 }
 continue;
 
-case 65:  /* [ccall2(indirect(word_t))] */
+case 68:  /* [ccall2(indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -752,7 +774,7 @@ stack_shift_pos(1);
 }
 continue;
 
-case 66:  /* [ccall3(indirect(word_t))] */
+case 69:  /* [ccall3(indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -765,7 +787,7 @@ stack_shift_pos(2);
 }
 continue;
 
-case 67:  /* [ccall4(indirect(word_t))] */
+case 70:  /* [ccall4(indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -778,7 +800,7 @@ stack_shift_pos(3);
 }
 continue;
 
-case 68:  /* [ccall5(indirect(word_t))] */
+case 71:  /* [ccall5(indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -791,7 +813,7 @@ stack_shift_pos(4);
 }
 continue;
 
-case 69:  /* [ccall6(indirect(word_t))] */
+case 72:  /* [ccall6(indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -804,7 +826,7 @@ stack_shift_pos(5);
 }
 continue;
 
-case 70:  /* [ccall7(indirect(word_t))] */
+case 73:  /* [ccall7(indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -817,7 +839,7 @@ stack_shift_pos(6);
 }
 continue;
 
-case 71:  /* [checkdict(indirect(word_t), indirect(word_t), indirect(word_t), indirect(word_t), indirect(word_t))] */
+case 74:  /* [checkdict(indirect(word_t), indirect(word_t), indirect(word_t), indirect(word_t))] */
 {
 word_t local1;
 word_t local2;
@@ -828,3500 +850,8 @@ local1 = bytecode_next(word_t);
 local2 = bytecode_next(word_t);
 local3 = bytecode_next(word_t);
 local4 = bytecode_next(word_t);
-local5 = bytecode_next(word_t);
-impl_checkdict(local1, local2, local3, local4, local5);
-}
-continue;
-
-case 72:  /* [s_push(0), jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-local1 = bytecode_next(word_t);
-local2 = accum;
-impl_jcond(local2, local1);
-}
-continue;
-
-case 73:  /* [immed(char), addo] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(char);
-local2 = accum+local1;
-local3 = ovf_check(addo, macro_args(accum, local1));
-local4 = local3;
-local5 = local2;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 74:  /* [immed(char), addo, pop] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(char);
-local2 = accum+local1;
-local3 = ovf_check(addo, macro_args(accum, local1));
-local4 = local2;
-accum = local4;
-}
-continue;
-
-case 75:  /* [pop, load4] */
-{
-word_t local1;
-word_t local2;
-local1 = *(long*)stack_nth(0);
-local2 = local1;
-accum = local2;
-stack_shift_pos(1);
-}
-continue;
-
-case 76:  /* [cmpeq, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = stack_nth(0) == accum;
-local2 = local1;
-local3 = local1;
-stack_nth(0) = local3;
-accum = local2;
-}
-continue;
-
-case 77:  /* [s_push(1:255), decref] */
-{
-word_t local1;
-word_t local2;
-local1 = bytecode_next(code_t);
-local2 = stack_nth(local1-1);
-impl_decref(local2);
-}
-continue;
-
-case 78:  /* [s_push(0), immed(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = accum;
-local2 = 0;
-local3 = local2;
-local4 = local1;
-local5 = accum;
-stack_nth(-1) = local5;
-stack_nth(-2) = local4;
-accum = local3;
-stack_shift(-2);
-}
-continue;
-
-case 79:  /* [s_push(0), not] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = accum;
-local2 = !local1;
-local3 = local2;
-local4 = accum;
-stack_nth(-1) = local4;
-accum = local3;
-stack_shift(-1);
-}
-continue;
-
-case 80:  /* [s_push(0), not, jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(word_t);
-local2 = accum;
-local3 = !local2;
-impl_jcond(local3, local1);
-}
-continue;
-
-case 81:  /* [immed(char), addo, pop, load4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(char);
-local2 = accum+local1;
-local3 = ovf_check(addo, macro_args(accum, local1));
-local4 = *(long*)local2;
-local5 = local4;
-accum = local5;
-}
-continue;
-
-case 82:  /* [s_push(0), immed(0), cmpeq] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = accum;
-local2 = 0;
-local3 = local1 == local2;
-local4 = local3;
-local5 = accum;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 83:  /* [decref, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(code_t);
-impl_decref(accum);
-local2 = stack_nth(local1);
-local3 = local2;
-accum = local3;
-}
-continue;
-
-case 84:  /* [s_push(1:255), immed(char)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = stack_nth(local1-1);
-local4 = local2;
-local5 = local3;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 85:  /* [ccall2(indirect(word_t)), s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = impl_ccall(2, local1, macro_args(accum, stack_nth(0)));
-local3 = local2;
-local4 = local2;
-stack_nth(0) = local4;
-accum = local3;
-}
-continue;
-
-case 86:  /* [s_push(0), immed(0), cmpeq, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = accum;
-local2 = 0;
-local3 = local1 == local2;
-local4 = local3;
-local5 = local3;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 87:  /* [s_push(1:255), immed(char), addo] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = stack_nth(local1-1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = local5;
-local7 = local4;
-local8 = accum;
-stack_nth(-1) = local8;
-stack_nth(-2) = local7;
-accum = local6;
-stack_shift(-2);
-}
-continue;
-
-case 88:  /* [s_push(1:255), immed(char), addo, pop] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = stack_nth(local1-1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = local4;
-local7 = accum;
-stack_nth(-1) = local7;
-accum = local6;
-stack_shift(-1);
-}
-continue;
-
-case 89:  /* [incref, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(code_t);
-impl_incref(accum);
-local2 = stack_nth(local1);
-local3 = local2;
-accum = local3;
-}
-continue;
-
-case 90:  /* [immed(char), addo, pop, load4, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(char);
-local2 = accum+local1;
-local3 = ovf_check(addo, macro_args(accum, local1));
-local4 = *(long*)local2;
-local5 = local4;
-local6 = local4;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 91:  /* [s_push(0), incref] */
-{
-word_t local1;
-local1 = accum;
-impl_incref(local1);
-}
-continue;
-
-case 92:  /* [s_push(0), immed(0), cmpeq, s_push(0), jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(word_t);
-local2 = accum;
-local3 = 0;
-local4 = local2 == local3;
-impl_jcond(local4, local1);
-local5 = local4;
-local6 = accum;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 93:  /* [s_push(1:255), immed(char), addo, pop, load4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = stack_nth(local1-1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = *(long*)local4;
-local7 = local6;
-local8 = accum;
-stack_nth(-1) = local8;
-accum = local7;
-stack_shift(-1);
-}
-continue;
-
-case 94:  /* [s_push(1:255), ccall2(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(local1-1);
-local4 = impl_ccall(2, local2, macro_args(local3, accum));
-local5 = local4;
-accum = local5;
-}
-continue;
-
-case 95:  /* [s_push(1:255), decref, s_push(1:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = stack_nth(local1-1);
-impl_decref(local3);
-local4 = stack_nth(local2-1);
-local5 = local4;
-local6 = accum;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 96:  /* [immed(int), incref] */
-{
-word_t local1;
-local1 = bytecode_next(word_t);
-impl_incref(local1);
-}
-continue;
-
-case 97:  /* [s_push(1:255), immed(char), addo, pop, load4, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = stack_nth(local1-1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = *(long*)local4;
-local7 = local6;
-local8 = local6;
-local9 = accum;
-stack_nth(-1) = local9;
-stack_nth(-2) = local8;
-accum = local7;
-stack_shift(-2);
-}
-continue;
-
-case 98:  /* [s_push(1:255), ccall2(indirect(word_t)), s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(local1-1);
-local4 = impl_ccall(2, local2, macro_args(local3, accum));
-local5 = local4;
-local6 = local4;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 99:  /* [s_push(1:255), decref, s_push(1:255), decref] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = stack_nth(local1-1);
-impl_decref(local3);
-local4 = stack_nth(local2-1);
-impl_decref(local4);
-}
-continue;
-
-case 100:  /* [immed(int), s_push(1)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = accum;
-local3 = local2;
-local4 = local1;
-local5 = accum;
-stack_nth(-1) = local5;
-stack_nth(-2) = local4;
-accum = local3;
-stack_shift(-2);
-}
-continue;
-
-case 101:  /* [immed(int), immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = local2;
-local4 = local1;
-local5 = accum;
-stack_nth(-1) = local5;
-stack_nth(-2) = local4;
-accum = local3;
-stack_shift(-2);
-}
-continue;
-
-case 102:  /* [incref, s_push(0:255), immed(char)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-impl_incref(accum);
-local3 = stack_nth(local1);
-local4 = local2;
-local5 = local3;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 103:  /* [incref, s_push(0:255), immed(char), addo] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-impl_incref(accum);
-local3 = stack_nth(local1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = local5;
-local7 = local4;
-stack_nth(-1) = local7;
-accum = local6;
-stack_shift(-1);
-}
-continue;
-
-case 104:  /* [incref, s_push(0:255), immed(char), addo, pop] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-impl_incref(accum);
-local3 = stack_nth(local1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = local4;
-accum = local6;
-}
-continue;
-
-case 105:  /* [immed(int), s_push(1), ccall2(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = accum;
-local4 = impl_ccall(2, local2, macro_args(local3, local1));
-local5 = local4;
-local6 = accum;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 106:  /* [ccall2(indirect(word_t)), s_push(0), immed(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(word_t);
-local2 = impl_ccall(2, local1, macro_args(accum, stack_nth(0)));
-local3 = 0;
-local4 = local3;
-local5 = local2;
-local6 = local2;
-stack_nth(0) = local6;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 107:  /* [ccall2(indirect(word_t)), s_push(0), immed(0), cmpeq] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(word_t);
-local2 = impl_ccall(2, local1, macro_args(accum, stack_nth(0)));
-local3 = 0;
-local4 = local2 == local3;
-local5 = local4;
-local6 = local2;
-stack_nth(0) = local6;
-accum = local5;
-}
-continue;
-
-case 108:  /* [ccall1(indirect(word_t)), s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = impl_ccall(1, local1, macro_args(accum));
-local3 = local2;
-local4 = local2;
-stack_nth(-1) = local4;
-accum = local3;
-stack_shift(-1);
-}
-continue;
-
-case 109:  /* [immed(int), s_push(1), ccall2(indirect(word_t)), s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = accum;
-local4 = impl_ccall(2, local2, macro_args(local3, local1));
-local5 = local4;
-local6 = local4;
-local7 = accum;
-stack_nth(-1) = local7;
-stack_nth(-2) = local6;
-accum = local5;
-stack_shift(-2);
-}
-continue;
-
-case 110:  /* [immed(char), addo, pop, load4, s_push(0), not] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(char);
-local2 = accum+local1;
-local3 = ovf_check(addo, macro_args(accum, local1));
-local4 = *(long*)local2;
-local5 = !local4;
-local6 = local5;
-local7 = local4;
-stack_nth(-1) = local7;
-accum = local6;
-stack_shift(-1);
-}
-continue;
-
-case 111:  /* [immed(char), addo, pop, load4, s_push(0), not, jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = accum+local1;
-local4 = ovf_check(addo, macro_args(accum, local1));
-local5 = *(long*)local3;
-local6 = !local5;
-impl_jcond(local6, local2);
-local7 = local5;
-accum = local7;
-}
-continue;
-
-case 112:  /* [ccall1(indirect(word_t)), s_push(0), immed(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(word_t);
-local2 = impl_ccall(1, local1, macro_args(accum));
-local3 = 0;
-local4 = local3;
-local5 = local2;
-local6 = local2;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 113:  /* [ccall1(indirect(word_t)), s_push(0), immed(0), cmpeq] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(word_t);
-local2 = impl_ccall(1, local1, macro_args(accum));
-local3 = 0;
-local4 = local2 == local3;
-local5 = local4;
-local6 = local2;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 114:  /* [s_push(1:255), immed(char), addo, pop, load4, s_push(0), cbuild2(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = bytecode_next(word_t);
-local4 = stack_nth(local1-1);
-local5 = local4+local2;
-local6 = ovf_check(addo, macro_args(local4, local2));
-local7 = *(long*)local5;
-impl_cbuild2(local3, local7);
-local8 = local7;
-local9 = accum;
-stack_nth(-1) = local9;
-accum = local8;
-stack_shift(-1);
-}
-continue;
-
-case 115:  /* [immed(0), cmplt] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = 0;
-local2 = accum < local1;
-local3 = local2;
-accum = local3;
-}
-continue;
-
-case 116:  /* [s_push(0), immed(char)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(char);
-local2 = accum;
-local3 = local1;
-local4 = local2;
-local5 = accum;
-stack_nth(-1) = local5;
-stack_nth(-2) = local4;
-accum = local3;
-stack_shift(-2);
-}
-continue;
-
-case 117:  /* [ccall2(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = impl_ccall(2, local1, macro_args(accum, stack_nth(0)));
-local3 = 0;
-local4 = local2 == local3;
-local5 = local4;
-local6 = local4;
-local7 = local2;
-stack_nth(0) = local7;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 118:  /* [ccall2(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0), jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(2, local1, macro_args(accum, stack_nth(0)));
-local4 = 0;
-local5 = local3 == local4;
-impl_jcond(local5, local2);
-local6 = local5;
-local7 = local3;
-stack_nth(0) = local7;
-accum = local6;
-}
-continue;
-
-case 119:  /* [ccall1(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = impl_ccall(1, local1, macro_args(accum));
-local3 = 0;
-local4 = local2 == local3;
-local5 = local4;
-local6 = local4;
-local7 = local2;
-stack_nth(-1) = local7;
-stack_nth(-2) = local6;
-accum = local5;
-stack_shift(-2);
-}
-continue;
-
-case 120:  /* [s_push(1:255), immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(local1-1);
-local4 = local2;
-local5 = local3;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 121:  /* [pyleave, s_push(1:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(code_t);
-impl_pyleave;
-local2 = stack_nth(local1-1);
-local3 = local2;
-local4 = accum;
-stack_nth(-1) = local4;
-accum = local3;
-stack_shift(-1);
-}
-continue;
-
-case 122:  /* [s_push(1:255), s_pop(2:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = stack_nth(local1-1);
-stack_nth(local2-1-1) = local3;
-}
-continue;
-
-case 123:  /* [immed(int), s_push(2:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(code_t);
-local3 = stack_nth(local2-1-1);
-local4 = local3;
-local5 = local1;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 124:  /* [incref, immed(0)] */
-{
-word_t local1;
-word_t local2;
-impl_incref(accum);
-local1 = 0;
-local2 = local1;
-accum = local2;
-}
-continue;
-
-case 125:  /* [s_push(1:255), decref, s_push(1:255), decref, s_push(1:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(code_t);
-local4 = stack_nth(local1-1);
-impl_decref(local4);
-local5 = stack_nth(local2-1);
-impl_decref(local5);
-local6 = stack_nth(local3-1);
-local7 = local6;
-local8 = accum;
-stack_nth(-1) = local8;
-accum = local7;
-stack_shift(-1);
-}
-continue;
-
-case 126:  /* [immed(char), addo, pop, s_push(1:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(char);
-local2 = bytecode_next(code_t);
-local3 = accum+local1;
-local4 = ovf_check(addo, macro_args(accum, local1));
-local5 = stack_nth(local2-1);
-local6 = local5;
-local7 = local3;
-stack_nth(-1) = local7;
-accum = local6;
-stack_shift(-1);
-}
-continue;
-
-case 127:  /* [s_push(1:255), s_push(2:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = stack_nth(local1-1);
-local4 = stack_nth(local2-1-1);
-local5 = local4;
-local6 = local3;
-local7 = accum;
-stack_nth(-1) = local7;
-stack_nth(-2) = local6;
-accum = local5;
-stack_shift(-2);
-}
-continue;
-
-case 128:  /* [immed(int), ccall4(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(4, local2, macro_args(local1, accum, stack_nth(0), stack_nth(1)));
-local4 = local3;
-accum = local4;
-stack_shift_pos(2);
-}
-continue;
-
-case 129:  /* [immed(int), cmpeq] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(word_t);
-local2 = accum == local1;
-local3 = local2;
-accum = local3;
-}
-continue;
-
-case 130:  /* [ccall1(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0), jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(1, local1, macro_args(accum));
-local4 = 0;
-local5 = local3 == local4;
-impl_jcond(local5, local2);
-local6 = local5;
-local7 = local3;
-stack_nth(-1) = local7;
-accum = local6;
-stack_shift(-1);
-}
-continue;
-
-case 131:  /* [s_push(1:255), immed(char), addo, pop, load4, s_push(0), not] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-word_t local10;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = stack_nth(local1-1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = *(long*)local4;
-local7 = !local6;
-local8 = local7;
-local9 = local6;
-local10 = accum;
-stack_nth(-1) = local10;
-stack_nth(-2) = local9;
-accum = local8;
-stack_shift(-2);
-}
-continue;
-
-case 132:  /* [s_push(0), immed(char), addo] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(char);
-local2 = accum;
-local3 = local2+local1;
-local4 = ovf_check(addo, macro_args(local2, local1));
-local5 = local4;
-local6 = local3;
-local7 = accum;
-stack_nth(-1) = local7;
-stack_nth(-2) = local6;
-accum = local5;
-stack_shift(-2);
-}
-continue;
-
-case 133:  /* [s_push(0), immed(char), addo, pop] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(char);
-local2 = accum;
-local3 = local2+local1;
-local4 = ovf_check(addo, macro_args(local2, local1));
-local5 = local3;
-local6 = accum;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 134:  /* [immed(0), retval] */
-{
-word_t local1;
-local1 = 0;
-retval = local1;
-}
-continue;
-
-case 135:  /* [decref, s_push(0:255), immed(char)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-impl_decref(accum);
-local3 = stack_nth(local1);
-local4 = local2;
-local5 = local3;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 136:  /* [pyleave, s_push(1:255), decref] */
-{
-word_t local1;
-word_t local2;
-local1 = bytecode_next(code_t);
-impl_pyleave;
-local2 = stack_nth(local1-1);
-impl_decref(local2);
-}
-continue;
-
-case 137:  /* [decref, s_push(0:255), immed(char), addo] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-impl_decref(accum);
-local3 = stack_nth(local1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = local5;
-local7 = local4;
-stack_nth(-1) = local7;
-accum = local6;
-stack_shift(-1);
-}
-continue;
-
-case 138:  /* [decref, s_push(0:255), immed(char), addo, pop] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-impl_decref(accum);
-local3 = stack_nth(local1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = local4;
-accum = local6;
-}
-continue;
-
-case 139:  /* [immed(int), s_push(1), ccall2(indirect(word_t)), s_push(0), jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = bytecode_next(word_t);
-local4 = accum;
-local5 = impl_ccall(2, local2, macro_args(local4, local1));
-impl_jcond(local5, local3);
-local6 = local5;
-local7 = accum;
-stack_nth(-1) = local7;
-accum = local6;
-stack_shift(-1);
-}
-continue;
-
-case 140:  /* [immed(int), ccall3(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(3, local2, macro_args(local1, accum, stack_nth(0)));
-local4 = local3;
-accum = local4;
-stack_shift_pos(1);
-}
-continue;
-
-case 141:  /* [immed(char), addo, pop, s_push(1:255), store4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(char);
-local2 = bytecode_next(code_t);
-local3 = accum+local1;
-local4 = ovf_check(addo, macro_args(accum, local1));
-local5 = stack_nth(local2-1);
-*(long*)local3 = local5;
-local6 = stack_nth(0);
-accum = local6;
-stack_shift_pos(1);
-}
-continue;
-
-case 142:  /* [immed(char), addo, pop, s_push(1:255), store4, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(char);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(code_t);
-local4 = accum+local1;
-local5 = ovf_check(addo, macro_args(accum, local1));
-local6 = stack_nth(local2-1);
-*(long*)local4 = local6;
-local7 = stack_nth(local3);
-local8 = local7;
-accum = local8;
-}
-continue;
-
-case 143:  /* [cmpltu, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = ((unsigned)stack_nth(0)) < ((unsigned)accum);
-local2 = local1;
-local3 = local1;
-stack_nth(0) = local3;
-accum = local2;
-}
-continue;
-
-case 144:  /* [immed(char), addo, pop, immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = accum+local1;
-local4 = ovf_check(addo, macro_args(accum, local1));
-local5 = local2;
-local6 = local3;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 145:  /* [s_push(1:255), immed(char), addo, pop, s_push(2:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-word_t local10;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = bytecode_next(code_t);
-local4 = stack_nth(local1-1);
-local5 = local4+local2;
-local6 = ovf_check(addo, macro_args(local4, local2));
-local7 = stack_nth(local3-1-1);
-local8 = local7;
-local9 = local5;
-local10 = accum;
-stack_nth(-1) = local10;
-stack_nth(-2) = local9;
-accum = local8;
-stack_shift(-2);
-}
-continue;
-
-case 146:  /* [s_push(1:255), immed(char), addo, pop, s_push(2:255), store4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = bytecode_next(code_t);
-local4 = stack_nth(local1-1);
-local5 = local4+local2;
-local6 = ovf_check(addo, macro_args(local4, local2));
-local7 = stack_nth(local3-1-1);
-*(long*)local5 = local7;
-}
-continue;
-
-case 147:  /* [immed(char), addo, pop, immed(int), store4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = accum+local1;
-local4 = ovf_check(addo, macro_args(accum, local1));
-*(long*)local3 = local2;
-local5 = stack_nth(0);
-accum = local5;
-stack_shift_pos(1);
-}
-continue;
-
-case 148:  /* [immed(char), addo, pop, immed(int), store4, immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = bytecode_next(word_t);
-local4 = accum+local1;
-local5 = ovf_check(addo, macro_args(accum, local1));
-*(long*)local4 = local2;
-local6 = local3;
-accum = local6;
-}
-continue;
-
-case 149:  /* [immed(int), ccall3(indirect(word_t)), s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(3, local2, macro_args(local1, accum, stack_nth(0)));
-local4 = local3;
-local5 = local3;
-stack_nth(0) = local5;
-accum = local4;
-}
-continue;
-
-case 150:  /* [immed(int), incref, immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-impl_incref(local1);
-local3 = local2;
-local4 = accum;
-stack_nth(-1) = local4;
-accum = local3;
-stack_shift(-1);
-}
-continue;
-
-case 151:  /* [immed(int), incref, immed(int), retval] */
-{
-word_t local1;
-word_t local2;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-impl_incref(local1);
-retval = local2;
-}
-continue;
-
-case 152:  /* [s_push(0), incref, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = accum;
-impl_incref(local1);
-local2 = accum;
-local3 = local2;
-local4 = accum;
-stack_nth(-1) = local4;
-accum = local3;
-stack_shift(-1);
-}
-continue;
-
-case 153:  /* [s_push(1:255), decref, s_push(1:255), decref, s_push(1:255), decref] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(code_t);
-local4 = stack_nth(local1-1);
-impl_decref(local4);
-local5 = stack_nth(local2-1);
-impl_decref(local5);
-local6 = stack_nth(local3-1);
-impl_decref(local6);
-}
-continue;
-
-case 154:  /* [s_pop(1:255), s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-stack_nth(local1-1) = accum;
-local3 = stack_nth(local2);
-local4 = local3;
-accum = local4;
-}
-continue;
-
-case 155:  /* [immed(0), immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = 0;
-local3 = local1;
-local4 = local2;
-local5 = accum;
-stack_nth(-1) = local5;
-stack_nth(-2) = local4;
-accum = local3;
-stack_shift(-2);
-}
-continue;
-
-case 156:  /* [decref, s_push(0:255), immed(char), addo, pop, load4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-impl_decref(accum);
-local3 = stack_nth(local1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = *(long*)local4;
-local7 = local6;
-accum = local7;
-}
-continue;
-
-case 157:  /* [decref, immed(0)] */
-{
-word_t local1;
-word_t local2;
-impl_decref(accum);
-local1 = 0;
-local2 = local1;
-accum = local2;
-}
-continue;
-
-case 158:  /* [incref, s_push(0:255), immed(char), addo, pop, load4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-impl_incref(accum);
-local3 = stack_nth(local1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = *(long*)local4;
-local7 = local6;
-accum = local7;
-}
-continue;
-
-case 159:  /* [immed(char), ccall1(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(1, local2, macro_args(local1));
-local4 = local3;
-local5 = accum;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 160:  /* [s_push(1:255), immed(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = stack_nth(local1-1);
-local3 = 0;
-local4 = local3;
-local5 = local2;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 161:  /* [immed(0), s_push(2:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = 0;
-local3 = stack_nth(local1-1-1);
-local4 = local3;
-local5 = local2;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 162:  /* [pushretval, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = retval;
-local2 = local1;
-local3 = local1;
-local4 = accum;
-stack_nth(-1) = local4;
-stack_nth(-2) = local3;
-accum = local2;
-stack_shift(-2);
-}
-continue;
-
-case 163:  /* [pyleave, pushretval] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-impl_pyleave;
-local1 = retval;
-local2 = local1;
-local3 = accum;
-stack_nth(-1) = local3;
-accum = local2;
-stack_shift(-1);
-}
-continue;
-
-case 164:  /* [immed(int), ccall3(indirect(word_t)), s_push(0), immed(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(3, local2, macro_args(local1, accum, stack_nth(0)));
-local4 = 0;
-local5 = local4;
-local6 = local3;
-local7 = local3;
-stack_nth(0) = local7;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 165:  /* [immed(int), ccall3(indirect(word_t)), s_push(0), immed(0), cmpeq] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(3, local2, macro_args(local1, accum, stack_nth(0)));
-local4 = 0;
-local5 = local3 == local4;
-local6 = local5;
-local7 = local3;
-stack_nth(0) = local7;
-accum = local6;
-}
-continue;
-
-case 166:  /* [s_push(1:255), ccall3(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(local1-1);
-local4 = impl_ccall(3, local2, macro_args(local3, accum, stack_nth(0)));
-local5 = local4;
-accum = local5;
-stack_shift_pos(1);
-}
-continue;
-
-case 167:  /* [immed(char), addo, pop, s_push(1:255), store4, s_push(0:255), incref] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(char);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(code_t);
-local4 = accum+local1;
-local5 = ovf_check(addo, macro_args(accum, local1));
-local6 = stack_nth(local2-1);
-*(long*)local4 = local6;
-local7 = stack_nth(local3);
-impl_incref(local7);
-local8 = stack_nth(0);
-accum = local8;
-stack_shift_pos(1);
-}
-continue;
-
-case 168:  /* [pyenter(indirect(word_t)), s_push(1:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(code_t);
-impl_pyenter(local1);
-local3 = stack_nth(local2-1);
-local4 = local3;
-local5 = accum;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 169:  /* [immed(0), cmplt, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = 0;
-local2 = accum < local1;
-local3 = local2;
-local4 = local2;
-stack_nth(-1) = local4;
-accum = local3;
-stack_shift(-1);
-}
-continue;
-
-case 170:  /* [immed(0), cmplt, s_push(0), jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = 0;
-local3 = accum < local2;
-impl_jcond(local3, local1);
-local4 = local3;
-accum = local4;
-}
-continue;
-
-case 171:  /* [s_push(1:255), ccall2(indirect(word_t)), s_push(0), immed(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(local1-1);
-local4 = impl_ccall(2, local2, macro_args(local3, accum));
-local5 = 0;
-local6 = local5;
-local7 = local4;
-local8 = local4;
-stack_nth(-1) = local8;
-stack_nth(-2) = local7;
-accum = local6;
-stack_shift(-2);
-}
-continue;
-
-case 172:  /* [immed(0), ccall2(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = 0;
-local3 = impl_ccall(2, local1, macro_args(local2, accum));
-local4 = local3;
-accum = local4;
-}
-continue;
-
-case 173:  /* [s_push(1:255), decref, s_push(1:255), immed(char)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(char);
-local4 = stack_nth(local1-1);
-impl_decref(local4);
-local5 = stack_nth(local2-1);
-local6 = local3;
-local7 = local5;
-local8 = accum;
-stack_nth(-1) = local8;
-stack_nth(-2) = local7;
-accum = local6;
-stack_shift(-2);
-}
-continue;
-
-case 174:  /* [immed(int), immed(int), ccall2(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = bytecode_next(word_t);
-local4 = impl_ccall(2, local3, macro_args(local2, local1));
-local5 = local4;
-local6 = accum;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 175:  /* [pop, load4, immed(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = *(long*)stack_nth(0);
-local2 = 0;
-local3 = local2;
-local4 = local1;
-stack_nth(0) = local4;
-accum = local3;
-}
-continue;
-
-case 176:  /* [immed(char), ccall1(indirect(word_t)), s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(1, local2, macro_args(local1));
-local4 = local3;
-local5 = local3;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 177:  /* [s_push(1:255), ccall2(indirect(word_t)), s_push(0), immed(0), cmpeq] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(local1-1);
-local4 = impl_ccall(2, local2, macro_args(local3, accum));
-local5 = 0;
-local6 = local4 == local5;
-local7 = local6;
-local8 = local4;
-stack_nth(-1) = local8;
-accum = local7;
-stack_shift(-1);
-}
-continue;
-
-case 178:  /* [s_push(0), incref, s_push(1:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(code_t);
-local2 = accum;
-impl_incref(local2);
-local3 = stack_nth(local1-1);
-local4 = local3;
-local5 = accum;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 179:  /* [s_push(0), immed(0), cmplt] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = accum;
-local2 = 0;
-local3 = local1 < local2;
-local4 = local3;
-local5 = accum;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 180:  /* [immed(char), addo, pop, immed(int), store4, immed(int), incref] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = bytecode_next(word_t);
-local4 = accum+local1;
-local5 = ovf_check(addo, macro_args(accum, local1));
-*(long*)local4 = local2;
-impl_incref(local3);
-local6 = stack_nth(0);
-accum = local6;
-stack_shift_pos(1);
-}
-continue;
-
-case 181:  /* [s_push(1:255), immed(char), addo, pop, s_push(2:255), store4, s_push(1:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-word_t local10;
-word_t local11;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = bytecode_next(code_t);
-local4 = bytecode_next(code_t);
-local5 = stack_nth(local1-1);
-local6 = local5+local2;
-local7 = ovf_check(addo, macro_args(local5, local2));
-local8 = stack_nth(local3-1-1);
-*(long*)local6 = local8;
-local9 = stack_nth(local4-1);
-local10 = local9;
-local11 = accum;
-stack_nth(-1) = local11;
-accum = local10;
-stack_shift(-1);
-}
-continue;
-
-case 182:  /* [s_push(0), immed(char), addo, pop, load4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(char);
-local2 = accum;
-local3 = local2+local1;
-local4 = ovf_check(addo, macro_args(local2, local1));
-local5 = *(long*)local3;
-local6 = local5;
-local7 = accum;
-stack_nth(-1) = local7;
-accum = local6;
-stack_shift(-1);
-}
-continue;
-
-case 183:  /* [addo, pop] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = stack_nth(0)+accum;
-local2 = ovf_check(addo, macro_args(stack_nth(0), accum));
-local3 = local1;
-accum = local3;
-stack_shift_pos(1);
-}
-continue;
-
-case 184:  /* [immed(0), cmpeq] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = 0;
-local2 = accum == local1;
-local3 = local2;
-accum = local3;
-}
-continue;
-
-case 185:  /* [immed(0), cmpeq, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = 0;
-local2 = accum == local1;
-local3 = local2;
-local4 = local2;
-stack_nth(-1) = local4;
-accum = local3;
-stack_shift(-1);
-}
-continue;
-
-case 186:  /* [immed(0), cmpeq, s_push(0), not] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = 0;
-local2 = accum == local1;
-local3 = !local2;
-local4 = local3;
-local5 = local2;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 187:  /* [decref, s_push(0:255), immed(char), addo, pop, load4, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-impl_decref(accum);
-local3 = stack_nth(local1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = *(long*)local4;
-local7 = local6;
-local8 = local6;
-stack_nth(-1) = local8;
-accum = local7;
-stack_shift(-1);
-}
-continue;
-
-case 188:  /* [load4, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = *(long*)accum;
-local2 = local1;
-local3 = local1;
-stack_nth(-1) = local3;
-accum = local2;
-stack_shift(-1);
-}
-continue;
-
-case 189:  /* [immed(0), cmpeq, s_push(0), not, jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = 0;
-local3 = accum == local2;
-local4 = !local3;
-impl_jcond(local4, local1);
-local5 = local3;
-accum = local5;
-}
-continue;
-
-case 190:  /* [cmpeq, s_push(0), jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(word_t);
-local2 = stack_nth(0) == accum;
-impl_jcond(local2, local1);
-local3 = local2;
-accum = local3;
-stack_shift_pos(1);
-}
-continue;
-
-case 191:  /* [incref, s_push(0:255), immed(char), addo, pop, load4, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-impl_incref(accum);
-local3 = stack_nth(local1);
-local4 = local3+local2;
-local5 = ovf_check(addo, macro_args(local3, local2));
-local6 = *(long*)local4;
-local7 = local6;
-local8 = local6;
-stack_nth(-1) = local8;
-accum = local7;
-stack_shift(-1);
-}
-continue;
-
-case 192:  /* [immed(int), immed(int), ccall4(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = bytecode_next(word_t);
-local4 = impl_ccall(4, local3, macro_args(local2, local1, accum, stack_nth(0)));
-local5 = local4;
-accum = local5;
-stack_shift_pos(1);
-}
-continue;
-
-case 193:  /* [s_push(1:255), cmpltu] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(code_t);
-local2 = stack_nth(local1-1);
-local3 = ((unsigned)accum) < ((unsigned)local2);
-local4 = local3;
-accum = local4;
-}
-continue;
-
-case 194:  /* [s_push(1:255), decref, s_push(1:255), immed(char), addo] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-word_t local10;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(char);
-local4 = stack_nth(local1-1);
-impl_decref(local4);
-local5 = stack_nth(local2-1);
-local6 = local5+local3;
-local7 = ovf_check(addo, macro_args(local5, local3));
-local8 = local7;
-local9 = local6;
-local10 = accum;
-stack_nth(-1) = local10;
-stack_nth(-2) = local9;
-accum = local8;
-stack_shift(-2);
-}
-continue;
-
-case 195:  /* [s_push(1:255), decref, s_push(1:255), immed(char), addo, pop] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(char);
-local4 = stack_nth(local1-1);
-impl_decref(local4);
-local5 = stack_nth(local2-1);
-local6 = local5+local3;
-local7 = ovf_check(addo, macro_args(local5, local3));
-local8 = local6;
-local9 = accum;
-stack_nth(-1) = local9;
-accum = local8;
-stack_shift(-1);
-}
-continue;
-
-case 196:  /* [s_push(1:255), ccall3(indirect(word_t)), s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(local1-1);
-local4 = impl_ccall(3, local2, macro_args(local3, accum, stack_nth(0)));
-local5 = local4;
-local6 = local4;
-stack_nth(0) = local6;
-accum = local5;
-}
-continue;
-
-case 197:  /* [s_push(1:255), decref, immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(local1-1);
-impl_decref(local3);
-local4 = local2;
-local5 = accum;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 198:  /* [immed(int), cmpeq, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = accum == local1;
-local3 = local2;
-local4 = local2;
-stack_nth(-1) = local4;
-accum = local3;
-stack_shift(-1);
-}
-continue;
-
-case 199:  /* [cmpltu, s_push(0), not] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = ((unsigned)stack_nth(0)) < ((unsigned)accum);
-local2 = !local1;
-local3 = local2;
-local4 = local1;
-stack_nth(0) = local4;
-accum = local3;
-}
-continue;
-
-case 200:  /* [pushretval, s_push(0), immed(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = retval;
-local2 = 0;
-local3 = local2;
-local4 = local1;
-local5 = local1;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-stack_nth(-3) = local4;
-accum = local3;
-stack_shift(-3);
-}
-continue;
-
-case 201:  /* [pushretval, s_push(0), immed(0), cmpeq] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = retval;
-local2 = 0;
-local3 = local1 == local2;
-local4 = local3;
-local5 = local1;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 202:  /* [pyleave, pushretval, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-impl_pyleave;
-local1 = retval;
-local2 = local1;
-local3 = local1;
-local4 = accum;
-stack_nth(-1) = local4;
-stack_nth(-2) = local3;
-accum = local2;
-stack_shift(-2);
-}
-continue;
-
-case 203:  /* [s_push(1:255), ccall2(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(local1-1);
-local4 = impl_ccall(2, local2, macro_args(local3, accum));
-local5 = 0;
-local6 = local4 == local5;
-local7 = local6;
-local8 = local6;
-local9 = local4;
-stack_nth(-1) = local9;
-stack_nth(-2) = local8;
-accum = local7;
-stack_shift(-2);
-}
-continue;
-
-case 204:  /* [immed(int), immed(int), ccall2(indirect(word_t)), s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = bytecode_next(word_t);
-local4 = impl_ccall(2, local3, macro_args(local2, local1));
-local5 = local4;
-local6 = local4;
-local7 = accum;
-stack_nth(-1) = local7;
-stack_nth(-2) = local6;
-accum = local5;
-stack_shift(-2);
-}
-continue;
-
-case 205:  /* [addo, pop, s_push(1:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = stack_nth(0)+accum;
-local3 = ovf_check(addo, macro_args(stack_nth(0), accum));
-local4 = stack_nth(local1+1-1);
-local5 = local4;
-local6 = local2;
-stack_nth(0) = local6;
-accum = local5;
-}
-continue;
-
-case 206:  /* [addo, pop, s_push(1:255), store4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(code_t);
-local2 = stack_nth(0)+accum;
-local3 = ovf_check(addo, macro_args(stack_nth(0), accum));
-local4 = stack_nth(local1+1-1);
-*(long*)local2 = local4;
-local5 = stack_nth(1);
-accum = local5;
-stack_shift_pos(2);
-}
-continue;
-
-case 207:  /* [addo, pop, s_push(1:255), store4, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = stack_nth(0)+accum;
-local4 = ovf_check(addo, macro_args(stack_nth(0), accum));
-local5 = stack_nth(local1+1-1);
-*(long*)local3 = local5;
-local6 = stack_nth(local2+1);
-local7 = local6;
-accum = local7;
-stack_shift_pos(1);
-}
-continue;
-
-case 208:  /* [addo, pop, s_push(1:255), store4, s_push(0:255), incref] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = stack_nth(0)+accum;
-local4 = ovf_check(addo, macro_args(stack_nth(0), accum));
-local5 = stack_nth(local1+1-1);
-*(long*)local3 = local5;
-local6 = stack_nth(local2+1);
-impl_incref(local6);
-local7 = stack_nth(1);
-accum = local7;
-stack_shift_pos(2);
-}
-continue;
-
-case 209:  /* [addo, pop, s_push(1:255), store4, s_push(0:255), incref, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(code_t);
-local4 = stack_nth(0)+accum;
-local5 = ovf_check(addo, macro_args(stack_nth(0), accum));
-local6 = stack_nth(local1+1-1);
-*(long*)local4 = local6;
-local7 = stack_nth(local2+1);
-impl_incref(local7);
-local8 = stack_nth(local3+1);
-local9 = local8;
-accum = local9;
-stack_shift_pos(1);
-}
-continue;
-
-case 210:  /* [immed(char), ccall1(indirect(word_t)), s_push(0), immed(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(1, local2, macro_args(local1));
-local4 = 0;
-local5 = local4;
-local6 = local3;
-local7 = local3;
-local8 = accum;
-stack_nth(-1) = local8;
-stack_nth(-2) = local7;
-stack_nth(-3) = local6;
-accum = local5;
-stack_shift(-3);
-}
-continue;
-
-case 211:  /* [immed(char), ccall1(indirect(word_t)), s_push(0), immed(0), cmpeq] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(1, local2, macro_args(local1));
-local4 = 0;
-local5 = local3 == local4;
-local6 = local5;
-local7 = local3;
-local8 = accum;
-stack_nth(-1) = local8;
-stack_nth(-2) = local7;
-accum = local6;
-stack_shift(-2);
-}
-continue;
-
-case 212:  /* [addo, pop, immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = stack_nth(0)+accum;
-local3 = ovf_check(addo, macro_args(stack_nth(0), accum));
-local4 = local1;
-local5 = local2;
-stack_nth(0) = local5;
-accum = local4;
-}
-continue;
-
-case 213:  /* [addo, pop, immed(int), store4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = stack_nth(0)+accum;
-local3 = ovf_check(addo, macro_args(stack_nth(0), accum));
-*(long*)local2 = local1;
-local4 = stack_nth(1);
-accum = local4;
-stack_shift_pos(2);
-}
-continue;
-
-case 214:  /* [addo, pop, immed(int), store4, immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(0)+accum;
-local4 = ovf_check(addo, macro_args(stack_nth(0), accum));
-*(long*)local3 = local1;
-local5 = local2;
-accum = local5;
-stack_shift_pos(1);
-}
-continue;
-
-case 215:  /* [addo, pop, immed(int), store4, immed(int), incref] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = stack_nth(0)+accum;
-local4 = ovf_check(addo, macro_args(stack_nth(0), accum));
-*(long*)local3 = local1;
-impl_incref(local2);
-local5 = stack_nth(1);
-accum = local5;
-stack_shift_pos(2);
-}
-continue;
-
-case 216:  /* [addo, pop, immed(int), store4, immed(int), incref, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = bytecode_next(code_t);
-local4 = stack_nth(0)+accum;
-local5 = ovf_check(addo, macro_args(stack_nth(0), accum));
-*(long*)local4 = local1;
-impl_incref(local2);
-local6 = stack_nth(local3+1);
-local7 = local6;
-accum = local7;
-stack_shift_pos(1);
-}
-continue;
-
-case 217:  /* [immed(int), s_push(1), ccall2(indirect(word_t)), s_push(0), not] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = accum;
-local4 = impl_ccall(2, local2, macro_args(local3, local1));
-local5 = !local4;
-local6 = local5;
-local7 = local4;
-local8 = accum;
-stack_nth(-1) = local8;
-stack_nth(-2) = local7;
-accum = local6;
-stack_shift(-2);
-}
-continue;
-
-case 218:  /* [incref, s_push(0:255), immed(char), addo, pop, immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = bytecode_next(word_t);
-impl_incref(accum);
-local4 = stack_nth(local1);
-local5 = local4+local2;
-local6 = ovf_check(addo, macro_args(local4, local2));
-local7 = local3;
-local8 = local5;
-stack_nth(-1) = local8;
-accum = local7;
-stack_shift(-1);
-}
-continue;
-
-case 219:  /* [immed(int), ccall4(indirect(word_t)), s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(4, local2, macro_args(local1, accum, stack_nth(0), stack_nth(1)));
-local4 = local3;
-local5 = local3;
-stack_nth(1) = local5;
-accum = local4;
-stack_shift_pos(1);
-}
-continue;
-
-case 220:  /* [immed(int), ccall4(indirect(word_t)), s_push(0), immed(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(4, local2, macro_args(local1, accum, stack_nth(0), stack_nth(1)));
-local4 = 0;
-local5 = local4;
-local6 = local3;
-local7 = local3;
-stack_nth(1) = local7;
-stack_nth(0) = local6;
-accum = local5;
-}
-continue;
-
-case 221:  /* [s_push(0), immed(char), addo, pop, load4, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(char);
-local2 = accum;
-local3 = local2+local1;
-local4 = ovf_check(addo, macro_args(local2, local1));
-local5 = *(long*)local3;
-local6 = local5;
-local7 = local5;
-local8 = accum;
-stack_nth(-1) = local8;
-stack_nth(-2) = local7;
-accum = local6;
-stack_shift(-2);
-}
-continue;
-
-case 222:  /* [s_push(0), incref, s_push(0), immed(char)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(char);
-local2 = accum;
-impl_incref(local2);
-local3 = accum;
-local4 = local1;
-local5 = local3;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 223:  /* [s_push(1:255), decref, s_push(1:255), immed(char), addo, pop, load4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-word_t local10;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(char);
-local4 = stack_nth(local1-1);
-impl_decref(local4);
-local5 = stack_nth(local2-1);
-local6 = local5+local3;
-local7 = ovf_check(addo, macro_args(local5, local3));
-local8 = *(long*)local6;
-local9 = local8;
-local10 = accum;
-stack_nth(-1) = local10;
-accum = local9;
-stack_shift(-1);
-}
-continue;
-
-case 224:  /* [immed(int), retval] */
-{
-word_t local1;
-local1 = bytecode_next(word_t);
-retval = local1;
-}
-continue;
-
-case 225:  /* [immed(int), retval, settos(1:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(code_t);
-retval = local1;
-stack_shift(local2-1);
-local3 = stack_nth(0);
-accum = local3;
-stack_shift_pos(1);
-}
-continue;
-
-case 226:  /* [pop, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(code_t);
-local2 = stack_nth(local1);
-local3 = local2;
-accum = local3;
-}
-continue;
-
-case 227:  /* [immed(char), addo, pop, load4, s_push(0), cbuild2(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = accum+local1;
-local4 = ovf_check(addo, macro_args(accum, local1));
-local5 = *(long*)local3;
-impl_cbuild2(local2, local5);
-local6 = local5;
-accum = local6;
-}
-continue;
-
-case 228:  /* [immed(int), ccall3(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(3, local2, macro_args(local1, accum, stack_nth(0)));
-local4 = 0;
-local5 = local3 == local4;
-local6 = local5;
-local7 = local5;
-local8 = local3;
-stack_nth(0) = local8;
-stack_nth(-1) = local7;
-accum = local6;
-stack_shift(-1);
-}
-continue;
-
-case 229:  /* [decref, immed(char)] */
-{
-word_t local1;
-word_t local2;
-local1 = bytecode_next(char);
-impl_decref(accum);
-local2 = local1;
-accum = local2;
-}
-continue;
-
-case 230:  /* [decref, s_push(0:255), decref] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(code_t);
-impl_decref(accum);
-local2 = stack_nth(local1);
-impl_decref(local2);
-local3 = stack_nth(0);
-accum = local3;
-stack_shift_pos(1);
-}
-continue;
-
-case 231:  /* [decref, s_push(0:255), decref, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-impl_decref(accum);
-local3 = stack_nth(local1);
-impl_decref(local3);
-local4 = stack_nth(local2);
-local5 = local4;
-accum = local5;
-}
-continue;
-
-case 232:  /* [decref, s_push(0:255), decref, s_push(0:255), decref] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-impl_decref(accum);
-local3 = stack_nth(local1);
-impl_decref(local3);
-local4 = stack_nth(local2);
-impl_decref(local4);
-local5 = stack_nth(0);
-accum = local5;
-stack_shift_pos(1);
-}
-continue;
-
-case 233:  /* [decref, s_push(0:255), decref, s_push(0:255), decref, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(code_t);
-impl_decref(accum);
-local4 = stack_nth(local1);
-impl_decref(local4);
-local5 = stack_nth(local2);
-impl_decref(local5);
-local6 = stack_nth(local3);
-local7 = local6;
-accum = local7;
-}
-continue;
-
-case 234:  /* [decref, immed(int)] */
-{
-word_t local1;
-word_t local2;
-local1 = bytecode_next(word_t);
-impl_decref(accum);
-local2 = local1;
-accum = local2;
-}
-continue;
-
-case 235:  /* [decref, immed(int), incref] */
-{
-word_t local1;
-word_t local2;
-local1 = bytecode_next(word_t);
-impl_decref(accum);
-impl_incref(local1);
-local2 = stack_nth(0);
-accum = local2;
-stack_shift_pos(1);
-}
-continue;
-
-case 236:  /* [decref, immed(int), incref, immed(int)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-impl_decref(accum);
-impl_incref(local1);
-local3 = local2;
-accum = local3;
-}
-continue;
-
-case 237:  /* [s_push(0), immed(0), cmplt, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = accum;
-local2 = 0;
-local3 = local1 < local2;
-local4 = local3;
-local5 = local3;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 238:  /* [s_push(1:255), s_push(1)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(code_t);
-local2 = stack_nth(local1-1);
-local3 = accum;
-local4 = local3;
-local5 = local2;
-local6 = accum;
-stack_nth(-1) = local6;
-stack_nth(-2) = local5;
-accum = local4;
-stack_shift(-2);
-}
-continue;
-
-case 239:  /* [immed(int), ccall3(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0), jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = bytecode_next(word_t);
-local4 = impl_ccall(3, local2, macro_args(local1, accum, stack_nth(0)));
-local5 = 0;
-local6 = local4 == local5;
-impl_jcond(local6, local3);
-local7 = local6;
-local8 = local4;
-stack_nth(0) = local8;
-accum = local7;
-}
-continue;
-
-case 240:  /* [immed(int), ccall2(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(2, local2, macro_args(local1, accum));
-local4 = local3;
-accum = local4;
-}
-continue;
-
-case 241:  /* [immed(int), ccall2(indirect(word_t)), s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(2, local2, macro_args(local1, accum));
-local4 = local3;
-local5 = local3;
-stack_nth(-1) = local5;
-accum = local4;
-stack_shift(-1);
-}
-continue;
-
-case 242:  /* [immed(int), ccall2(indirect(word_t)), s_push(0), not] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(2, local2, macro_args(local1, accum));
-local4 = !local3;
-local5 = local4;
-local6 = local3;
-stack_nth(-1) = local6;
-accum = local5;
-stack_shift(-1);
-}
-continue;
-
-case 243:  /* [immed(int), ccall2(indirect(word_t)), s_push(0), not, jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = bytecode_next(word_t);
-local4 = impl_ccall(2, local2, macro_args(local1, accum));
-local5 = !local4;
-impl_jcond(local5, local3);
-local6 = local4;
-accum = local6;
-}
-continue;
-
-case 244:  /* [incref, s_push(0:255), immed(char), addo, pop, immed(int), store4] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(char);
-local3 = bytecode_next(word_t);
-impl_incref(accum);
-local4 = stack_nth(local1);
-local5 = local4+local2;
-local6 = ovf_check(addo, macro_args(local4, local2));
-*(long*)local5 = local3;
-local7 = stack_nth(0);
-accum = local7;
-stack_shift_pos(1);
-}
-continue;
-
-case 245:  /* [immed(char), ccall1(indirect(word_t)), s_push(0), immed(0), cmpeq, s_push(0)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-word_t local9;
-local1 = bytecode_next(char);
-local2 = bytecode_next(word_t);
-local3 = impl_ccall(1, local2, macro_args(local1));
-local4 = 0;
-local5 = local3 == local4;
-local6 = local5;
-local7 = local5;
-local8 = local3;
-local9 = accum;
-stack_nth(-1) = local9;
-stack_nth(-2) = local8;
-stack_nth(-3) = local7;
-accum = local6;
-stack_shift(-3);
-}
-continue;
-
-case 246:  /* [store4, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(code_t);
-*(long*)stack_nth(0) = accum;
-local2 = stack_nth(local1+1);
-local3 = local2;
-accum = local3;
-stack_shift_pos(1);
-}
-continue;
-
-case 247:  /* [store4, s_push(0:255), incref] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(code_t);
-*(long*)stack_nth(0) = accum;
-local2 = stack_nth(local1+1);
-impl_incref(local2);
-local3 = stack_nth(1);
-accum = local3;
-stack_shift_pos(2);
-}
-continue;
-
-case 248:  /* [store4, s_push(0:255), incref, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-*(long*)stack_nth(0) = accum;
-local3 = stack_nth(local1+1);
-impl_incref(local3);
-local4 = stack_nth(local2+1);
-local5 = local4;
-accum = local5;
-stack_shift_pos(1);
-}
-continue;
-
-case 249:  /* [store4, s_push(0:255), incref, s_push(0:255), immed(char)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = bytecode_next(code_t);
-local2 = bytecode_next(code_t);
-local3 = bytecode_next(char);
-*(long*)stack_nth(0) = accum;
-local4 = stack_nth(local1+1);
-impl_incref(local4);
-local5 = stack_nth(local2+1);
-local6 = local3;
-local7 = local5;
-stack_nth(0) = local7;
-accum = local6;
-}
-continue;
-
-case 250:  /* [immed(int), s_push(1), ccall2(indirect(word_t)), s_push(0), not, jcondfar(indirect(word_t))] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-word_t local8;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(word_t);
-local3 = bytecode_next(word_t);
-local4 = accum;
-local5 = impl_ccall(2, local2, macro_args(local4, local1));
-local6 = !local5;
-impl_jcond(local6, local3);
-local7 = local5;
-local8 = accum;
-stack_nth(-1) = local8;
-accum = local7;
-stack_shift(-1);
-}
-continue;
-
-case 251:  /* [s_push(0), immed(0), cmpeq, s_push(0), not] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-word_t local5;
-word_t local6;
-word_t local7;
-local1 = accum;
-local2 = 0;
-local3 = local1 == local2;
-local4 = !local3;
-local5 = local4;
-local6 = local3;
-local7 = accum;
-stack_nth(-1) = local7;
-stack_nth(-2) = local6;
-accum = local5;
-stack_shift(-2);
-}
-continue;
-
-case 252:  /* [cmpeq, s_push(0), not] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = stack_nth(0) == accum;
-local2 = !local1;
-local3 = local2;
-local4 = local1;
-stack_nth(0) = local4;
-accum = local3;
-}
-continue;
-
-case 253:  /* [store4, immed(int)] */
-{
-word_t local1;
-word_t local2;
-local1 = bytecode_next(word_t);
-*(long*)stack_nth(0) = accum;
-local2 = local1;
-accum = local2;
-stack_shift_pos(1);
-}
-continue;
-
-case 254:  /* [store4, immed(int), incref] */
-{
-word_t local1;
-word_t local2;
-local1 = bytecode_next(word_t);
-*(long*)stack_nth(0) = accum;
-impl_incref(local1);
-local2 = stack_nth(1);
-accum = local2;
-stack_shift_pos(2);
-}
-continue;
-
-case 255:  /* [store4, immed(int), incref, s_push(0:255)] */
-{
-word_t local1;
-word_t local2;
-word_t local3;
-word_t local4;
-local1 = bytecode_next(word_t);
-local2 = bytecode_next(code_t);
-*(long*)stack_nth(0) = accum;
-impl_incref(local1);
-local3 = stack_nth(local2+1);
-local4 = local3;
-accum = local4;
-stack_shift_pos(1);
+local5 = impl_checkdict(local1, local2, local3, local4);
+flag = local5;
 }
 continue;
 
