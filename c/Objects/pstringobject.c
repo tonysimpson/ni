@@ -1,7 +1,10 @@
 #include "pstringobject.h"
-#include "plistobject.h"
 #include "pstructmember.h"
 #include <ipyencoding.h>
+
+#ifdef USE_CATSTR
+#include "plistobject.h"
+#endif
 
 
 static PyObject* pempty_string;
@@ -175,6 +178,7 @@ static vinfo_t* strslice_real_source(PsycoObject* po, vinfo_t* s)
 }
 
 
+#ifdef USE_CATSTR
 /***************************************************************/
 /* string concatenations.                                      */
 static source_virtual_t psyco_computed_catstr;
@@ -390,6 +394,7 @@ inline vinfo_t* pstring_as_catlist(vinfo_t* vs)
 	}
 	return list;
 }
+#endif  /* USE_CATSTR */
 
 
  /***************************************************************/
@@ -533,6 +538,7 @@ static vinfo_t* pstring_slice(PsycoObject* po, vinfo_t* a,
 	return result;
 }
 
+#ifdef USE_CATSTR
 static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 {
 	PyTypeObject* btp = Psyco_NeedType(po, b);
@@ -621,8 +627,7 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 		}
 		else {
 			/* general case */
-			/* shortcut: direct call to psyco_plist_concat() */
-			listc = psyco_plist_concat(po, lista, listb);
+			listc = psyco_plist_extend_or_concat(po, lista, listb);
 		}
 		if (listc == NULL)
 			goto fail;
@@ -643,6 +648,8 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 				  CfReturnRef|CfPyErrIfNull,
 				  "vv", a, b);
 }
+#endif
+
 
 /* higher-level meta-version of memcmp(): compares the data in string 'v' of length
    'vlen' with the data in string 'w' of length 'wlen'.
@@ -837,6 +844,285 @@ static vinfo_t* pstring_richcompare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int
 }
 
 
+#ifdef USE_BUFSTR
+/***************************************************************/
+/* buffer-based over-allocated concatenations.                 */
+static source_virtual_t psyco_computed_bufstr;
+
+inline vinfo_t* PsycoBufStr_NEW(vinfo_t* vcb, vinfo_t* vlen)
+{
+	/* consumes a ref to its args */
+	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_bufstr));
+	result->array = array_new(BUFSTR_TOTAL);
+	result->array->items[iOB_TYPE] =
+		vinfo_new(CompileTime_New((long)(&PyString_Type)));
+	result->array->items[iFIX_SIZE] = vlen; assert_nonneg(vlen);
+	result->array->items[BUFSTR_BUFOBJ] = vcb;
+	return result;
+}
+
+
+typedef PyStringObject stringlike_t;
+/* we abuse the PyStringObject structure for our purposes,
+   so that a buffer can be very quickly turned into a real Python string.
+
+      ob_size   -  # bytes allocated
+      ob_shash  -  # bytes currently used in the buffer
+
+   the number of used bytes must be between the string length (stored in
+   the virtual bufstr's FIX_SIZE field) and ob_size. If it is larger than
+   FIX_SIZE it means that the string was enlarged due to some other
+   concatenation.
+*/
+
+#define BUFSTR_OVERALLOCATION_MASK   7
+#define BUFSTR_ACCEPT_OVERALLOCATED 15
+
+static void
+bufstr_dealloc(PyObject *op)
+{
+	PyObject_DEL(op);
+}
+
+/* this special type is only ever used by Psyco to access tp_dealloc */
+static PyTypeObject PsycoBufStr_Type = {
+	PyObject_HEAD_INIT(NULL)
+	0,					/*ob_size*/
+	"psyco_bufstr",				/*tp_name*/
+	sizeof(stringlike_t),			/*tp_basicsize*/
+	sizeof(char),				/*tp_itemsize*/
+	/* methods */
+	(destructor)bufstr_dealloc,		/*tp_dealloc*/
+};
+
+
+#if PSYCO_DEBUG
+static void assert_bufstr_invariants(stringlike_t* a, int a_size)
+{
+	if (PyString_Check(a)) {
+		extra_assert(a_size <= a->ob_size);
+	}
+	else {
+		extra_assert(a->ob_type == &PsycoBufStr_Type);
+		extra_assert(a_size <= a->ob_shash);
+		extra_assert(a->ob_shash <= a->ob_size);
+	}
+}
+#else
+#define assert_bufstr_invariants(a, a_size)  do { } while (0)  /* nothing */
+#endif
+
+
+static stringlike_t* cimpl_cb_new(stringlike_t* a, stringlike_t* b,
+				  int a_size, int b_size, int size)
+{
+	stringlike_t *op;
+	assert_bufstr_invariants(a, a_size);
+	
+	/* Inline PyObject_NewVar */
+	op = (stringlike_t *)
+		PyObject_MALLOC(sizeof(stringlike_t) + size * sizeof(char));
+	if (op == NULL)
+		return (stringlike_t*) PyErr_NoMemory();
+	PyObject_INIT_VAR(op, &PsycoBufStr_Type, size);
+	op->ob_shash = a_size + b_size;
+	memcpy(op->ob_sval, a->ob_sval, a_size);
+	memcpy(op->ob_sval + a_size, b->ob_sval, b_size);
+	return op;
+}
+
+static stringlike_t* cimpl_cb_grow(stringlike_t* a, stringlike_t* b,
+				   int a_size, int b_size, int size)
+{
+	assert_bufstr_invariants(a, a_size);
+	
+	/* check if the result would fit in the existing buffer
+	   and if we can write there without overwriting anything. */
+	if (size <= a->ob_size && a_size == a->ob_shash &&
+	    a->ob_type == &PsycoBufStr_Type) {
+		/* yes -> fast case */
+		a->ob_shash += b_size;
+		memcpy(a->ob_sval + a_size, b->ob_sval, b_size);
+		Py_INCREF(a);
+		return a;
+	}
+	else {
+		/* no -> make a new buffer, overallocating by some
+		   hopefully typical value derived from b_size.
+		   XXX catch integer overflows here */
+		size = (size + (size+b_size)/2) | BUFSTR_OVERALLOCATION_MASK;
+		return cimpl_cb_new(a, b, a_size, b_size, size);
+	}
+}
+
+static PyStringObject* cimpl_cb_normalize(stringlike_t* a, int a_size)
+{
+	assert_bufstr_invariants(a, a_size);
+
+	if (a->ob_type == &PsycoBufStr_Type) {
+
+		/* this checks that no one else uses this buffer past a_size */
+		if (a->ob_shash == a_size) {
+		
+			if (a_size < a->ob_size-BUFSTR_ACCEPT_OVERALLOCATED &&
+			    a->ob_refcnt == 1) {
+				/* this is the case where 'a' is too
+				   overallocated but can be reduced in-place */
+				a = (PyStringObject*) PyObject_REALLOC(
+					(void*) a,
+					sizeof(PyStringObject) +
+					                a_size * sizeof(char));
+				extra_assert(a != NULL);  /* shrinking */
+			}
+
+			a->ob_type = &PyString_Type;
+			a->ob_size = a_size;
+			a->ob_shash = -1;
+#ifdef SSTATE_NOT_INTERNED   /* Python >= 2.3 */
+			a->ob_sstate = SSTATE_NOT_INTERNED;
+#else
+#ifdef INTERN_STRINGS
+			a->ob_sinterned = NULL;
+#endif
+#endif
+			a->ob_sval[a_size] = '\0';
+			Py_INCREF(a);
+			return a;
+		}
+		
+	}
+	else if (a->ob_size == a_size) {
+		/* 'a' is already a string, and it has the expected size */
+		Py_INCREF(a);
+		return a;
+	}
+	/* in other cases we must build a new string from scratch */
+	return (PyStringObject*)
+		PyString_FromStringAndSize(a->ob_sval, a_size);
+}
+
+static bool compute_bufstr(PsycoObject* po, vinfo_t* v)
+{
+	/* computing a bufstr into a PyStringObject is fast, we just have
+	   to patch ob_type, initialize ob_shash, and add a '\0' at the
+	   end of the string. */
+
+	vinfo_t* vcb;
+	vinfo_t* vlen;
+
+	vlen = psyco_get_const(po, v, FIX_size);
+	if (vlen == NULL)
+		return false;
+
+	vcb = vinfo_getitem(v, BUFSTR_BUFOBJ);
+	if (vcb == NULL)
+		return false;
+
+	vcb = psyco_generic_call(po, &cimpl_cb_normalize, CfReturnRef,
+				 "vv", vcb, vlen);
+	if (vcb == NULL)
+		return false;
+
+	/* forget fields that were only relevant in virtual-time */
+        vinfo_setitem(po, v, BUFSTR_BUFOBJ, NULL);
+
+	/* move the resulting non-virtual Python object back into 'v' */
+	vinfo_move(po, v, vcb);
+	return true;
+}
+
+
+static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
+{
+	PyTypeObject* btp = Psyco_NeedType(po, b);
+	if (btp == NULL)
+		return NULL;
+
+	if (PyType_TypeCheck(btp, &PyString_Type)) {
+		vinfo_t* lena;
+		vinfo_t* lenb;
+		vinfo_t* lenc;
+		vinfo_t* v;
+		vinfo_t* breal;
+
+		/* if both strings are constants, concatenate them now */
+		if (is_compiletime(a->source) && is_compiletime(b->source)) {
+			PyObject* s1 = (PyObject*)
+				CompileTime_Get(a->source)->value;
+			PyObject* s2 = (PyObject*)
+				CompileTime_Get(b->source)->value;
+			Py_INCREF(s1);
+			PyString_Concat(&s1, s2);
+			if (s1 == NULL) {
+				psyco_virtualize_exception(po);
+				return NULL;
+			}
+			return vinfo_new(CompileTime_NewSk(
+				sk_new((long) s1, SkFlagPyObj)));
+		}
+
+		lenb = psyco_get_const(po, b, FIX_size);
+		if (lenb == NULL)
+			return NULL;
+		if (psyco_knowntobe(lenb, 0) &&
+		    Psyco_KnownType(a) == &PyString_Type) {
+			/* (a + '') is a */
+			vinfo_incref(a);
+			return a;
+		}
+
+		lena = psyco_get_const(po, a, FIX_size);
+		if (lena == NULL)
+			return NULL;
+		if (psyco_knowntobe(lena, 0) && btp == &PyString_Type) {
+			/* ('' + b) is b */
+			vinfo_incref(b);
+			return b;
+		}
+
+		lenc = integer_add(po, lena, lenb, false);
+		if (lenc == NULL)
+			return NULL;
+
+		breal = strslice_real_source(po, b);
+
+		/* if 'a' is already a bufstring, let it grow */
+		if (a->source == VirtualTime_New(&psyco_computed_bufstr)) {
+			vinfo_t* vcb = vinfo_getitem(a, BUFSTR_BUFOBJ);
+			if (vcb != NULL) {
+				v = psyco_generic_call(po, &cimpl_cb_grow,
+					       CfReturnRef|CfPyErrIfNull,
+					       "vvvvv", vcb, breal,
+						        lena, lenb, lenc);
+				goto done;
+			}
+		}
+		
+		/* make a new bufstring */
+		v = psyco_generic_call(po, &cimpl_cb_new,
+				       CfReturnRef|CfPyErrIfNull,
+				       "vvvvv", a, breal, lena, lenb, lenc);
+		
+	done:
+		vinfo_decref(breal, po);
+		if (v == NULL) {
+			vinfo_decref(lenc, po);
+			return NULL;
+		}
+		else
+			return PsycoBufStr_NEW(v, lenc);
+	}
+
+	/* fallback */
+	return psyco_generic_call(po, PyString_Type.tp_as_sequence->sq_concat,
+				  CfReturnRef|CfPyErrIfNull,
+				  "vv", a, b);
+}
+#endif  /* USE_BUFSTR */
+
+
+/***************************************************************/
+
 INITIALIZATIONFN
 void psy_stringobject_init(void)
 {
@@ -845,7 +1131,9 @@ void psy_stringobject_init(void)
 	Psyco_DefineMeta(m->sq_length, psyco_generic_immut_ob_size);
 	Psyco_DefineMeta(m->sq_item, pstring_item);
 	Psyco_DefineMeta(m->sq_slice, pstring_slice);
+#if defined(USE_CATSTR) || defined(USE_BUFSTR)
 	Psyco_DefineMeta(m->sq_concat, pstring_concat);
+#endif
         Psyco_DefineMeta(PyString_Type.tp_richcompare, pstring_richcompare);
 
 	mm = PyString_Type.tp_as_mapping;
@@ -856,8 +1144,14 @@ void psy_stringobject_init(void)
         INIT_SVIRTUAL(psyco_computed_char, compute_char, 0, 0);
         INIT_SVIRTUAL(psyco_computed_strslice, compute_strslice,
                       NW_STRSLICES_NORMAL, NW_STRSLICES_FUNCALL);
+#ifdef USE_CATSTR
         INIT_SVIRTUAL(psyco_computed_catstr, compute_catstr,
                       NW_CATSTRS_NORMAL, NW_CATSTRS_FUNCALL);
+#endif
+#ifdef USE_BUFSTR
+	INIT_SVIRTUAL(psyco_computed_bufstr, compute_bufstr,
+		      NW_BUFSTRS_NORMAL, NW_BUFSTRS_NORMAL);
+#endif
 
 	pempty_string = PyString_FromString("");
 }

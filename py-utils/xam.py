@@ -103,7 +103,7 @@ re_ctvinfo = re.compile(r"ct (\d+) (\-?\d+)$")
 re_rtvinfo = re.compile(r"rt (\-?\d+)$")
 re_vtvinfo = re.compile(r"vt 0x([0-9a-fA-F]+)$")
 
-LOC_LOCALS_PLUS = 2
+LOC_LOCALS_PLUS = 3
 
 class CodeBuf:
     __slots__ = ['mode', 'co_filename', 'co_name', 'nextinstr', 'addr',

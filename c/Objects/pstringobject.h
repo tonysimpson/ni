@@ -9,6 +9,9 @@
 #include "pobject.h"
 #include "pabstract.h"
 
+/*#undef USE_CATSTR -- trying to use only bufstring virtual strings instead*/
+#define USE_BUFSTR
+
 
 /* various ways to access the actual character data */
 #define STR_sval      UNSIGNED_ARRAY(char, offsetof(PyStringObject, ob_sval))
@@ -28,9 +31,17 @@
 #define STRSLICE_START    (STRSLICE_SOURCE+1)
 #define STRSLICE_TOTAL    (STRSLICE_START+1)
 
+#ifdef USE_CATSTR
 /* virtual string concatenations */
 #define CATSTR_LIST       VIRTUALSTR_FIRST
 #define CATSTR_TOTAL      (CATSTR_LIST+1)
+#endif
+
+#ifdef USE_BUFSTR
+/* virtual overallocated-buffer concatenations */
+#define BUFSTR_BUFOBJ     VIRTUALSTR_FIRST
+#define BUFSTR_TOTAL      (BUFSTR_BUFOBJ+1)
+#endif
 
 
 #define PsycoString_Check(tp) PyType_TypeCheck(tp, &PyString_Type)

@@ -220,6 +220,7 @@ inline CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
 #define NW_STRSLICES_FUNCALL    9
 #define NW_CATSTRS_NORMAL       4  /* catstrs also have a vlist internally */
 #define NW_CATSTRS_FUNCALL      7
+#define NW_BUFSTRS_NORMAL       5
 #define NW_FORCE                NESTED_WEIGHT_END  /* always force */
 
 /* construction */

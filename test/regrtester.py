@@ -36,6 +36,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_tarfile': 'we get permission denied with Python',
         'test_optparse': 'uses "%(xyz)s" % locals()',
         'test_scope': 'refcounting: relies on the __del__ of instances',
+        'test_sax': 'fails without Psyco due to my Expat installation',
         }
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'

@@ -9,9 +9,9 @@
         Psyco Home page: \url{http://psyco.sourceforge.net/}
 }
 
-\date{May 2, 2003}
+\date{June 5, 2003}
 
-\release{1.0}                   % release version
+\release{1.1}                   % release version
 
 \makeindex
 
@@ -867,11 +867,9 @@ The following constructs are not supported by Psyco.  It does not mean that code
 
 \item the \code{exec} statement --- in some cases you can use \function{eval} and/or \function{compile} instead, under the restrictions described in section \ref{patchedfunctions}
 
-\item class definitions (all the code immediately within a \code{class} statement)
+\item top-level module code and the code defining a class\footnote{The methods themselves are fine; this only concerns the code that runs in order to define the class (generally only a bunch of \code{def} statements)} --- this is because Python's compiler can emit fast-variable-access bytecode only for function definitions
 
 \item functions with free or cell vars, which occur with Python's new nested scopes (as enabled by \samp{from __future__ import nested_scopes}); this concerns both the function whose local variable is made visible to a subfunction, and the subfunction using such a local variable
-
-\item miscellaneous places where Python's bytecode compiler cannot optimize the local variables, most notably at the top-level of the modules (i.e.\ outsite any function)
 
 \item generators
 
@@ -883,15 +881,17 @@ Log files report unsupported constructs by giving the corresponding bytecode ins
   \lineiii{ 82}{\code{LOAD_LOCALS  }}{class definitions}
   \lineiii{ 84}{\code{IMPORT_STAR  }}{\code{from xx import *}}
   \lineiii{ 85}{\code{EXEC_STMT    }}{\code{exec xx}}
-  \lineiii{ 86}{\code{YIELD_VALUE  }}{generators' \code{yield xx}}
-  \lineiii{ 90}{\code{STORE_NAME   }}{non-optimizable scopes (e.g.\ at module top-level)}
-  \lineiii{ 91}{\code{DELETE_NAME  }}{non-optimizable scopes (e.g.\ at module top-level)}
-  \lineiii{101}{\code{LOAD_NAME    }}{non-optimizable scopes (e.g.\ at module top-level)}
+  \lineiii{ 86}{\code{YIELD_VALUE  }}{generators}
+  \lineiii{ 90}{\code{STORE_NAME   }}{(1)}
+  \lineiii{ 91}{\code{DELETE_NAME  }}{(1)}
+  \lineiii{101}{\code{LOAD_NAME    }}{(1)}
   \lineiii{134}{\code{MAKE_CLOSURE }}{nested scopes}
   \lineiii{135}{\code{LOAD_CLOSURE }}{nested scopes}
   \lineiii{136}{\code{LOAD_DEREF   }}{nested scopes}
   \lineiii{137}{\code{STORE_DEREF  }}{nested scopes}
 \end{tableiii}
+
+(1): these appear outside functions, like at the module top-level or in the body defining a class.  They can sometimes appear in a function too, e.g.\ when the function uses \code{from xx import *} or \code{exec xx}.
 
 
 \chapter{Performance expectations}
