@@ -123,10 +123,15 @@ inline ceval_events_t* get_cevents(PyThreadState* tstate)
 }
 
 
+static PyObject* deleted_ceval_hook(PyFrameObject* frame, PyObject* arg)
+{
+	return NULL;
+}
+
 static void set_ceval_hook(ceval_events_t* cev, int when,
 			   ceval_event_fn fn, PyObject* arg)
 {
-	int n;
+	int n, i, allow;
 	struct cevents_s* events;
 	extra_assert(0 <= when && when < PyTrace_TOTAL);
 	events = cev->events + when;
@@ -136,13 +141,20 @@ static void set_ceval_hook(ceval_events_t* cev, int when,
 		OUT_OF_MEMORY();
 	events->items[n].fn = fn;
 	events->items[n].arg = arg;
-	Py_XINCREF(arg);
 	cev->events_total++;
-}
-
-static PyObject* deleted_ceval_hook(PyFrameObject* frame, PyObject* arg)
-{
-	return NULL;
+	if (arg != NULL) {
+		/* bound the total number of hooks by checking if there are
+		   too many other hooks with the same 'fn' */
+		allow = 8;
+		for (i=n; --i >= 0; ) {
+			if (events->items[i].fn == fn && !--allow) {
+				/* too many! remove an arbitrary one */
+				events->items[i].fn = &deleted_ceval_hook;
+				cev->events_total--;
+				break;
+			}
+		}
+	}
 }
 
 static void unset_ceval_hook(ceval_events_t* cev, int when,
@@ -183,7 +195,6 @@ inline bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
 #if HAVE_DYN_COMPILE
 	PyObject* codebuf;
 #endif
-	PyObject* harg;
 	PyObject* obj;
 	extra_assert(what >= 0);
 	if (what >= PyTrace_TOTAL)
@@ -199,12 +210,9 @@ inline bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
 			return true;  /* done */
 		n--;
 		extra_assert(n < events->count);
-		harg = events->items[n].arg;
-		codebuf = events->items[n].fn(f, harg);
+		codebuf = events->items[n].fn(f, events->items[n].arg);
 		if (events->items[n].fn == &deleted_ceval_hook) {
-			extra_assert(harg == events->items[n].arg);
 			events->items[n] = events->items[--events->count];
-			Py_XDECREF(harg);
 		}
 	} while (codebuf == NULL);
 #endif
@@ -213,13 +221,10 @@ inline bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
 	while (n != 0) {
 		n--;
 		extra_assert(n < events->count);
-		harg = events->items[n].arg;
-		obj = events->items[n].fn(f, harg);
+		obj = events->items[n].fn(f, events->items[n].arg);
 		Py_XDECREF(obj);
 		if (events->items[n].fn == &deleted_ceval_hook) {
-			extra_assert(harg == events->items[n].arg);
 			events->items[n] = events->items[--events->count];
-			Py_XDECREF(harg);
 		}
 	}
 #if HAVE_DYN_COMPILE
