@@ -3,6 +3,11 @@
 #include "stats.h"
 #include "Python/pycinternal.h"
 
+/* set to 1 to compute the detailed control flow
+   which allows for early variable deletion */
+#define FULL_CONTROL_FLOW    1
+#define DUMP_CONTROL_FLOW    0
+
 
  /***************************************************************/
 /***                Tables of code merge points                ***/
@@ -288,17 +293,9 @@ inline int set_merge_point(struct instrnode_s* node)
     }
 }
 
-#if 0
-static void set_exc_handler(struct instrnode_s* nodes,
-                            struct instrnode_s* target)
-{
-  while (nodes < target)
-    {
-      nodes->next3 = target;
-      nodes++;
-    }
-}
-#endif
+
+/***************************************************************/
+#if FULL_CONTROL_FLOW
 
 /* how many variables fit in the 'int' bitfield of instrnode_s */
 #define VARS_PER_PASS   (sizeof(int)*8-1)
@@ -340,19 +337,6 @@ inline bool back_propagate_mask(struct instrnode_s* instrnodes,
     }
   return modif;
 }
-
-#if 0
-inline void clear_var_uses(struct instrnode_s* instrnodes,
-                           struct instrnode_s* node)
-{
-  while (node > instrnodes)
-    {
-      node--;
-      node -= node->back;  /* skip back argument */
-      node->storemask = 0;
-    }
-}
-#endif
 
 inline void mark_var_uses(struct instrnode_s* instrnodes,
                           struct instrnode_s* node,
@@ -420,25 +404,6 @@ static void forward_propagate(struct instrnode_s* node, int newmask, int var0)
     }
 }
 
-#if 0
-inline void propagate_stores(struct instrnode_s* instrnodes,
-                             struct instrnode_s* node)
-{
-  while (node > instrnodes)
-    {
-      node--;
-      node -= node->back;  /* skip back argument */
-      if (node->opcode == STORE_FAST)
-        if (node->next1)
-          {
-            forward_propagate(node->next1, node->storemask);
-            if (node->next2)
-              forward_propagate(node->next2, node->storemask);
-          }
-    }
-}
-#endif
-
 inline void find_unused_vars(struct instrnode_s* instrnodes,
                              struct instrnode_s* node,
                              int var0)
@@ -482,7 +447,7 @@ static void analyse_variables(struct instrnode_s* instrnodes,
       find_unused_vars(instrnodes, end, var0);
     }
 
-#if 0
+#if DUMP_CONTROL_FLOW
   /* debugging dump */
   {
     int i;
@@ -508,6 +473,10 @@ static void analyse_variables(struct instrnode_s* instrnodes,
   }
 #endif
 }
+
+#endif  /* FULL_CONTROL_FLOW */
+/***************************************************************/
+
 
 DEFINEFN
 PyObject* psyco_build_merge_points(PyCodeObject* co)
@@ -562,10 +531,8 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
         }
       for (btop = iblock; btop--; )
         {
-          if (i0 >= blockstack[btop].b_handler)
-            iblock = btop;  /* pop block */
-          else if (blockstack[btop].b_type == SETUP_EXCEPT ||
-                   blockstack[btop].b_type == SETUP_FINALLY) {
+          if (blockstack[btop].b_type == SETUP_EXCEPT ||
+              blockstack[btop].b_type == SETUP_FINALLY) {
             /* control flow may jump to the b_handler at any time */
             instrnodes[i0].next3 = instrnodes + blockstack[btop].b_handler;
             break;
@@ -580,11 +547,15 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
           case SETUP_EXCEPT:  mp_flags |= MP_FLAGS_HAS_EXCEPT;  break;
           case SETUP_FINALLY: mp_flags |= MP_FLAGS_HAS_FINALLY; break;
           }
-          psyco_assert(iblock == 0 || oparg <= blockstack[iblock-1].b_handler);
           psyco_assert(iblock < CO_MAXBLOCKS);
           blockstack[iblock].b_type = op;
           blockstack[iblock].b_handler = i + oparg;
           iblock++;
+          break;
+
+        case POP_BLOCK:
+          psyco_assert(iblock > 0);
+          iblock--;
           break;
 
         case BREAK_LOOP:
@@ -595,12 +566,11 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
             btop--;
           } while (blockstack[btop].b_type != SETUP_LOOP &&
                    blockstack[btop].b_type != SETUP_FINALLY);
-          if (blockstack[btop].b_type == SETUP_LOOP)
-            {  /* jump to the loop bottom */
-              instrnodes[i0].next3 = instrnodes + blockstack[btop].b_handler;
-            }
-          else
+          /* jump to the loop bottom or finally handler */
+          instrnodes[i0].next3 = instrnodes + blockstack[btop].b_handler;
+          if (blockstack[btop].b_type != SETUP_LOOP)
             {  /* argh, this gets messy */
+               /* because END_FINALLY will then jump to the loop bottom */
               valid_controlflow = 0;
             }
           break;
@@ -618,11 +588,14 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
             }
           else
             {  /* argh, this gets messy */
+              instrnodes[i0].next3 = instrnodes + blockstack[btop].b_handler;
               valid_controlflow = 0;
             }
           break;
         }
     }
+  if (iblock != 0)
+    valid_controlflow = 0;  /* ?? */
 
   /* control flow analysis */
   instrnodes[0].pending = 1;
@@ -723,8 +696,10 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
     }
   extra_assert(mp - (mergepoint_t*) PyString_AS_STRING(s) == count);
   mp->bytecode_position = mp_flags;
+#if FULL_CONTROL_FLOW
   if (valid_controlflow)
     analyse_variables(instrnodes, instrnodes+length, co);
+#endif
   PyMem_FREE(instrnodes);
   return s;
 }

@@ -541,7 +541,7 @@ static code_t* do_respawn(respawn_t* rs)
   
   SHRINK_CODE_BUFFER(codebuf, code, "respawned");
   /* make sure DETECT_RESPAWN() succeeded */
-  extra_assert(codebuf->snapshot.fz_respawned_from == rs->respawn_from);
+  psyco_assert(codebuf->snapshot.fz_respawned_from == rs->respawn_from);
 
   /* fix the jump to point to 'codebuf->codestart' */
   code = rs->write_jmp;
@@ -1404,6 +1404,7 @@ void psyco_stabilize(vcompatible_t* lastmatch)
 
 struct dmove_s {
   PsycoObject* po;
+  int original_stack_depth;
   char* usages;   /* buffer: array of vinfo_t*, see ORIGINAL_VINFO() below */
   int usages_size;
   vinfo_t* copy_regs[REG_TOTAL];
@@ -1428,6 +1429,7 @@ static code_t* data_new_buffer(code_t* code, struct dmove_s* dm)
     {
       /* overwriting the small buffer, start a new (regular) one */
       codebuf = psyco_new_code_buffer(NULL, NULL, &dm->code_limit);
+      codebuf->snapshot.fz_stuff.fz_stack_depth = dm->original_stack_depth;
       /* the new buffer should be at least as large as the old one */
       codesize = code - dm->code_origin;
       if ((code_t*) codebuf->codestart + codesize > dm->code_limit)
@@ -1626,6 +1628,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
                    &dm, false);
 
   dm.po = po;
+  dm.original_stack_depth = po->stack_depth;
   dm.code_origin = code;
   dm.code_limit = po->codelimit == NULL ? code : po->codelimit;
   dm.private_codebuf = NULL;
@@ -1680,11 +1683,11 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
               extra_assert(from_tos >= 0);
               if (from_tos < REG_TOTAL*sizeof(void*))
                 {
-                  char* target = pops + (from_tos / sizeof(void*));
-                  if (*target == -1)
-                    *target = i;
+                  char* ptarget = pops + (from_tos / sizeof(void*));
+                  if (*ptarget == -1)
+                    *ptarget = i;
                   else
-                    *target = -2;
+                    *ptarget = -2;
                 }
             }
         }

@@ -811,7 +811,7 @@ static vinfo_t* pstring_richcompare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int
 		return psyco_vi_NotImplemented();
 	}
 
- 	if (v->source == w->source) {
+	if (vinfo_known_equal(v, w)) {
 		/* identical strings */
 		result = (op == Py_EQ || op == Py_LE || op == Py_GE);
 	}

@@ -2111,13 +2111,13 @@ condition_code_t integer_cmp(PsycoObject* po, vinfo_t* v1,
 {
   condition_code_t result;
 
-  if (v1->source == v2->source)
+  if (vinfo_known_equal(v1, v2))
     goto same_source;
 
   if (!compute_vinfo(v1, po) || !compute_vinfo(v2, po))
     return CC_ERROR;
 
-  if (v1->source == v2->source)
+  if (vinfo_known_equal(v1, v2))
     {
     same_source:
       /* comparing equal sources */

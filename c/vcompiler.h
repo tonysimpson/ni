@@ -303,6 +303,11 @@ inline bool compute_vinfo(vinfo_t* vi, PsycoObject* po) {
 	return true;
 }
 
+inline bool vinfo_known_equal(vinfo_t* v, vinfo_t* w) {
+	return (v->source == w->source &&
+		(v == w || !is_virtualtime(v->source)));
+}
+
 /* sub-array (see also psyco_get_field()&co.) */
 inline void vinfo_array_grow(vinfo_t* vi, int ncount) {
 	if (ncount > vi->array->count)
