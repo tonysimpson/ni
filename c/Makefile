@@ -1,7 +1,7 @@
 
 # G = debug, O = optimized, V = verbose, X = all tests,
 # H = heavy mem check
-mode = OO
+mode = O
 
 processor = i386
 # processor = ivm

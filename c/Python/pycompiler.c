@@ -2237,7 +2237,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine
 		
 	BINARY_OPCODE(BINARY_MULTIPLY, PsycoNumber_Multiply);
-	BINARY_OPCODE(BINARY_DIVIDE, PsycoNumber_Divide);
 	BINARY_OPCODE(BINARY_MODULO, PsycoNumber_Remainder);
 	BINARY_OPCODE(BINARY_ADD, PsycoNumber_Add);
 	BINARY_OPCODE(BINARY_SUBTRACT, PsycoNumber_Subtract);
@@ -2248,11 +2247,37 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	BINARY_OPCODE(BINARY_XOR, PsycoNumber_Xor);
 	BINARY_OPCODE(BINARY_OR, PsycoNumber_Or);
 
-#ifdef BINARY_FLOOR_DIVIDE
-        BINARY_OPCODE(BINARY_FLOOR_DIVIDE, PsycoNumber_FloorDivide);
+#ifndef BINARY_FLOOR_DIVIDE
+	BINARY_OPCODE(BINARY_DIVIDE, PsycoNumber_Divide);
+	BINARY_OPCODE(INPLACE_DIVIDE, PsycoNumber_InPlaceDivide);
+#else
+	case BINARY_DIVIDE:
+		if (!_Py_QnewFlag) {
+			x = PsycoNumber_Divide(po, NTOP(2), NTOP(1));
+			if (x == NULL)
+				break;
+			POP_DECREF();
+			POP_DECREF();
+			PUSH(x);
+			goto fine;
+		}
+	/* fall through to BINARY_TRUE_DIVIDE */
         BINARY_OPCODE(BINARY_TRUE_DIVIDE, PsycoNumber_TrueDivide);
-        BINARY_OPCODE(INPLACE_FLOOR_DIVIDE, PsycoNumber_InPlaceFloorDivide);
+        BINARY_OPCODE(BINARY_FLOOR_DIVIDE, PsycoNumber_FloorDivide);
+
+	case INPLACE_DIVIDE:
+		if (!_Py_QnewFlag) {
+			x = PsycoNumber_InPlaceDivide(po, NTOP(2), NTOP(1));
+			if (x == NULL)
+				break;
+			POP_DECREF();
+			POP_DECREF();
+			PUSH(x);
+			goto fine;
+		}
+	/* fall through to INPLACE_TRUE_DIVIDE */
         BINARY_OPCODE(INPLACE_TRUE_DIVIDE, PsycoNumber_InPlaceTrueDivide);
+        BINARY_OPCODE(INPLACE_FLOOR_DIVIDE, PsycoNumber_InPlaceFloorDivide);
 #endif
 
 	case INPLACE_POWER:
@@ -2267,7 +2292,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 	
 	BINARY_OPCODE(INPLACE_MULTIPLY, PsycoNumber_InPlaceMultiply);
-	BINARY_OPCODE(INPLACE_DIVIDE, PsycoNumber_InPlaceDivide);
 	BINARY_OPCODE(INPLACE_MODULO, PsycoNumber_InPlaceRemainder);
 	BINARY_OPCODE(INPLACE_ADD, PsycoNumber_InPlaceAdd);
 	BINARY_OPCODE(INPLACE_SUBTRACT, PsycoNumber_InPlaceSubtract);

@@ -14,7 +14,8 @@ warn = 0
 def register(op):
     global warn
     print "%29s" % op,
-    lst.append(op)
+    if op not in lst:
+        lst.append(op)
     if op not in dis.opname:
         print "%29s" % "<--- unknown opcode",
         #warn += 1
