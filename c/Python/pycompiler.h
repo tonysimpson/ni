@@ -223,14 +223,16 @@ inline vinfo_t* psyco_PyErr_Occurred(PsycoObject* po) {
 		     return psyco_generic_call(po, PyErr_Occurred,
 		     CfReturnNormal, "");
 		   but we inline the check done in PyErr_Occurred(). */
-		vinfo_t* vaddr = vinfo_new(CompileTime_New(
+		vinfo_t* vaddr;
+		vinfo_t* vtstate;
+		vinfo_t* vcurexc;
+		vaddr = vinfo_new(CompileTime_New(
 					(long)(&_PyThreadState_Current)));
-		vinfo_t* vtstate = psyco_memory_read(po, vaddr, 0,
-						     NULL, 2, false);
+		vtstate = psyco_memory_read(po, vaddr, 0, NULL, 2, false);
 		vinfo_decref(vaddr, po);
-		vinfo_t* vcurexc = psyco_memory_read(po, vtstate,
-					offsetof(PyThreadState, curexc_type),
-						     NULL, 2, false);
+		vcurexc = psyco_memory_read(po, vtstate,
+					    offsetof(PyThreadState, curexc_type),
+					    NULL, 2, false);
 		vinfo_decref(vtstate, po);
 		return vcurexc;
 	}
