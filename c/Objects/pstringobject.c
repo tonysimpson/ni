@@ -250,12 +250,12 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v, bool forking)
 				bool ok;
 				defield_t rdf, wdf;
 				switch (l) {
-				case SIZEOF_CHAR:
+				case 1: /*SIZEOF_CHAR:*/
 					/* also takes care of virtual chars */
 					rdf = CHARACTER_char;
 					wdf = FMUT(DEF_ARRAY(char, 0));
 					break;
-				case SIZEOF_SHORT:
+				case 2: /*SIZEOF_SHORT:*/
 					rdf = CHARACTER_short;
 					wdf = FMUT(DEF_ARRAY(short, 0));
 					break;
