@@ -51,7 +51,7 @@ def profile(watermark   = default_watermark,
             memory=None, time=None, memorymax=None, timemax=None):
     """Turn on profiling.
 
-The 'gamma' parameter controls how easily running functions will
+The 'watermark' parameter controls how easily running functions will
 be compiled. The smaller the value, the more functions are compiled."""
     import profiler
     p = profiler.ActivePassiveProfiler(watermark, halflife,
@@ -67,7 +67,7 @@ def background(watermark   = default_watermark,
     """Turn on passive profiling.
 
 This is a very lightweight mode in which only intensively computing
-functions can be detected. The smaller the 'gamma', the more functions
+functions can be detected. The smaller the 'watermark', the more functions
 are compiled."""
     import profiler
     p = profiler.PassiveProfiler(watermark, halflife, pollfreq, parentframe)
