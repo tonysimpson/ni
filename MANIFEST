@@ -141,8 +141,7 @@ py-utils/ivmextract.py
 py-utils/manifest.py
 py-utils/symbols.py
 py-utils/vinfo_dump.py
-py-utils/win32/cygwin1.dll
-py-utils/win32/objdump.exe
+py-utils/win32/README.TXT
 py-utils/xam.py
 setup.py
 test/basetests.py
