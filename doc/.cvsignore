@@ -1,0 +1,12 @@
+psycoguide
+Makefile.local
+*.log
+*.aux
+*.ind
+*.idx
+*.l2h
+*.toc
+*.syn
+*.dvi
+*.ps
+*.ps.gz
