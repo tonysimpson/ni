@@ -86,7 +86,7 @@
       code++;                                           \
       extra_assert(offsetof(PyObject, ob_refcnt) < 128);\
       code[0] = 0x40 | (rg);                            \
-      code[1] = (char) offsetof(PyObject, ob_refcnt);   \
+      code[1] = (code_t) offsetof(PyObject, ob_refcnt); \
     }                                                   \
   code += 2;                                            \
 } while (0)
@@ -124,7 +124,7 @@
       code++;                                           \
       extra_assert(offsetof(PyObject, ob_refcnt) < 128);\
       code[0] = 0x48 | (rg);                            \
-      code[1] = (char) offsetof(PyObject, ob_refcnt);   \
+      code[1] = (code_t) offsetof(PyObject, ob_refcnt); \
     }                                                   \
   code += 2;                                            \
 } while (0)

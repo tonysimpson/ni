@@ -248,8 +248,8 @@ void* psyco_jump_proxy(PsycoObject* po, void* fn, int restore, int nb_args)
     /* make 'fs' point just after the end of the code, aligned */
   result = (void*)(((long)code + 3) & ~ 3);
 #if CODE_DUMP
-  while (code != (char*) result)
-    *code++ = 0xCC;   /* fill with INT 3 (debugger trap) instructions */
+  while (code != (code_t*) result)
+    *code++ = (code_t) 0xCC;   /* fill with INT 3 (debugger trap) instructions */
 #endif
   *(void**)fixvalue = result;    /* set value at code+1 above */
   return result;
@@ -346,7 +346,7 @@ vinfo_t* psyco_get_array_item(PsycoObject* po, vinfo_t* vi, int index)
     code[0] = 0x8B;   /* MOV */                                 \
   code[1] = _modrm | ((rg)<<3);                                 \
   if (COMPACT_ENCODING && (_modrm & 0x40) != 0) {               \
-    code[2] = (char) _value;                                    \
+    code[2] = (code_t) _value;                                  \
     code += 3;                                                  \
   }                                                             \
   else {                                                        \
@@ -443,7 +443,8 @@ vinfo_t* psyco_read_array_item_var(PsycoObject* po, vinfo_t* v0,
 DEFINEFN
 bool psyco_write_array_item(PsycoObject* po, vinfo_t* src, vinfo_t* v, int index)
 {
-  char rg, modrm;
+  reg_t rg;
+  code_t modrm;
   long value = index*4;
   if (is_virtualtime(v->source))
     {
@@ -481,7 +482,7 @@ bool psyco_write_array_item(PsycoObject* po, vinfo_t* src, vinfo_t* v, int index
         }
       code[1] = modrm;
       if (COMPACT_ENCODING && (modrm & 0x40) != 0) {
-        code[2] = (char) value;
+        code[2] = (code_t) value;
         code += 3;
       }
       else {
@@ -508,7 +509,7 @@ bool psyco_write_array_item_var(PsycoObject* po, vinfo_t* src,
                            CompileTime_Get(v1_source)->value + QUARTER(ofsbase));
   else
     {
-      char src0, src1, rg1;
+      reg_t src0, src1, rg1;
       NonVirtualSource src_source, v0_source;
       src_source = vinfo_compute(src, po);
       if (src_source == SOURCE_ERROR) return false;
@@ -591,7 +592,7 @@ bool psyco_write_array_item_var(PsycoObject* po, vinfo_t* src,
 
 typedef struct {
   source_virtual_t header;
-  char cc;
+  code_t cc;
 } computed_cc_t;
 
 /* internal, see NEED_CC() */
@@ -779,7 +780,7 @@ static code_t* fx_writecases(code_t* code, code_t** lastcmp,
       if (offset < 128)
         {
           code[-2] = 0xEB;   /* JMP rel8 */
-          code[-1] = (char) offset;
+          code[-1] = (code_t) offset;
         }
       else
         {
@@ -810,7 +811,7 @@ static code_t* fx_writecases(code_t* code, code_t** lastcmp,
           if (offset < 128)
             {
               code[-2] = 0x7F;    /* JG rel8 */
-              code[-1] = (char) offset;
+              code[-1] = (code_t) offset;
             }
           else
             {
@@ -960,7 +961,7 @@ code_t* psyco_write_run_time_switch(fixed_switch_t* rts, code_t* code, reg_t reg
   if (rts->count > 0)
     {
       /* Fix the 1st operand (register number) used by all CMP instruction */
-      char new_value = 0xC0 | (7<<3) | reg;
+      code_t new_value = 0xC0 | (7<<3) | reg;
       code_t* fix = code+1;   /* 2nd byte of first CMP instruction */
       while (1)
         {

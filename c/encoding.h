@@ -224,7 +224,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   code[1] = 0xC0 | (group<<3) | (rg);                   \
   _v = value;                                           \
   if (COMPACT_ENCODING && -128 <= _v && _v < 128) {     \
-    code[2] = (char) _v;                                \
+    code[2] = (code_t) _v;                              \
     code[0] = 0x83;                                     \
     code += 3;                                          \
   }                                                     \
@@ -320,7 +320,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
       CHECK_NONZERO_REG(RSOURCE_REG(source));                                   \
     else*/ {                                                                    \
       INSTR_MODRM_FROM_RT(source, 0x83, 7<<3);  /* CMP (source), imm8 */        \
-      *code++ = (char) _value;                                                         \
+      *code++ = (code_t) _value;                                                \
     }                                                                           \
   else {                                                                        \
     INSTR_MODRM_FROM_RT(source, 0x81, 7<<3);    /* CMP (source), imm32 */       \
@@ -345,7 +345,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
     code += 4;                                                          \
   }                                                                     \
   else                                                                  \
-    *code++ = (char) _value;                                                   \
+    *code++ = (code_t) _value;                                          \
 } while (0)
 
 /* Shitfs. The counters must never be >=32. */
@@ -482,7 +482,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define PUSH_IMMED(immed)     do {                              \
   if (COMPACT_ENCODING && -128 <= (immed) && (immed) < 128) {   \
     code[0] = 0x6A;    /* PUSH imm8 */                          \
-    code[1] = (char) (immed);                                   \
+    code[1] = (code_t) (immed);                                 \
     code += 2;                                                  \
   }                                                             \
   else {                                                        \
@@ -561,7 +561,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   code[0] = 0x8D;   /* LEA dst,[rg1+immed] */                   \
   if (COMPACT_ENCODING && -128 <= _value && _value < 128) {     \
     code[1] = 0x40 | (dst)<<3 | (rg1);                          \
-    code[2] = (char) _value;                                    \
+    code[2] = (code_t) _value;                                  \
     code += 3;                                                  \
   }                                                             \
   else {                                                        \
@@ -818,14 +818,14 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 } while (0)
 
 #define IS_A_JUMP(code, targetaddr)                             \
-  (code[0]==(char)0xE9 ? (targetaddr=code+5+*(long*)(code+1), 1) : 0)
+  (code[0]==(code_t)0xE9 && (targetaddr=code+5+*(long*)(code+1), 1))
 
 #define IS_A_SINGLE_JUMP(code, codeend, targetaddr)             \
   ((codeend)-(code) == 5 && IS_A_JUMP(code, targetaddr))
 
 #define FAR_COND_JUMP_TO(addr, condition)   do {        \
   code[0] = 0x0F;    /* Jcond rel32 */                  \
-  code[1] = 0x80 | (char)(condition);                   \
+  code[1] = 0x80 | (code_t)(condition);                 \
   code += 6;                                            \
   *(long*)(code-4) = (addr) - code;                     \
 } while (0)
@@ -836,8 +836,8 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 #define SHORT_COND_JUMP_TO(addr, condition)  do {       \
   long _ofs = (addr) - (code+2);                        \
   extra_assert(-128 <= _ofs && _ofs < 128);             \
-  code[0] = 0x70 | (char)(condition);                   \
-  code[1] = (char) _ofs;                                \
+  code[0] = 0x70 | (code_t)(condition);                 \
+  code[1] = (code_t) _ofs;                              \
   code += 2;                                            \
 } while (0)
 
@@ -846,7 +846,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   code[0] = 0x81;                                               \
   code[1] = 0xC0 | (7<<3) | (rg);   /* CMP rg, imm32 */         \
   code[6] = 0x0F;                                               \
-  code[7] = 0x80 | (char)(CC_E);    /* JE rel32 */              \
+  code[7] = 0x80 | (code_t)(CC_E);    /* JE rel32 */            \
   code += 12;                                                   \
   *(long*)(code-4) = 0;  /* by default, go nowhere else */      \
 } while (0)
@@ -878,7 +878,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
     }                                                                   \
     else {                                                              \
       code[0] = 0x8D;				/* LEA		   */   \
-      code[1] = 0x84 | ((char)REG_386_ESP)<<3;	/*   ESP,	   */   \
+      code[1] = 0x84 | ((code_t)REG_386_ESP)<<3;/*   ESP,	   */   \
       code[2] = 0x24;				/*     [ESP+imm32] */   \
       *(long*)(code+3) = -(stack_correction);                           \
       code += 7;                                                        \
@@ -892,7 +892,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
    NEED_FREE_REG(rg);                                   \
    if (((vi)->source & (TimeMask|RunTime_StackMask)) == \
        (RunTime|RunTime_StackNone)) {                   \
-     char _rg2 = rg;                                    \
+     reg_t _rg2 = rg;                                   \
      rg = RUNTIME_REG(vi);                              \
      extra_assert(rg!=_rg2);                            \
      LOAD_REG_FROM_REG(_rg2, rg);                       \
