@@ -1216,9 +1216,13 @@ static vinfo_t* _PsycoEval_SliceIndex(PsycoObject* po, vinfo_t* v)
 			vinfo_t* vi_zero;
 			PyObject* long_zero;
 			long x;
+			vinfo_t* v_err;
 
-			if (!PycException_Matches(po, PyExc_OverflowError))
+			/* catch PyExc_OverflowError */
+			v_err = PycException_Matches(po, PyExc_OverflowError);
+			if (runtime_NON_NULL_t(po, v_err) != true)
 				return NULL;
+
 			/* It's an overflow error, so we need to
 			   check the sign of the long integer,
 			   set the value to INT_MAX or 0, and clear
@@ -1502,17 +1506,18 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 			goto fail;
 		if (!PyType_TypeCheck(vt, &PyTuple_Type)) {
 			/* 'v' is not a tuple */
-			if (!PsycoSequence_Check(vt)) {
-				/* don't bother displaying the function name
-				   which might not be known yet */
-				PycException_SetFormat(po, PyExc_TypeError,
+			v = PsycoSequence_Tuple(po, v);
+			if (v == NULL) {
+				/* catch PyExc_TypeError */
+				v = PycException_Matches(po, PyExc_TypeError);
+				if (runtime_NON_NULL_t(po, v) != true)
+					goto fail;
+				
+				PycException_SetString(po, PyExc_TypeError,
 						       "argument after * "
 						       "must be a sequence");
 				goto fail;
 			}
-			v = PsycoSequence_Tuple(po, v);
-			if (v == NULL)
-				goto fail;
 		}
 		else
 			vinfo_incref(v);
