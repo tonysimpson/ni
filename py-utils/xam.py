@@ -238,7 +238,7 @@ class CodeBuf:
                 k = k + 1
             if data[k:k+4] == '\x66\x66\x66\x66':
                 # detected a rt_local_buf_t structure
-                next, key = struct.unpack('ll', data[k+4:k+12])
+                next, key = struct.unpack('LL', data[k+4:k+12])
                 data = data[k+12:]
                 addr += k+12
                 self.cache_text = [
