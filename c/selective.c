@@ -30,7 +30,7 @@ DEFINEFN int do_selective(void *v, PyFrameObject *frame, int what, PyObject *arg
         tmp = PyDict_GetItem(g, name);
         if (tmp != NULL) {
           /* Rebind function to a proxy */
-          printf("psyco: rebinding %s to proxy\n", PyString_AS_STRING(name));
+          printf("psyco: compiling function %s\n", PyString_AS_STRING(name));
           value = FUN_BOUND;
           PyDict_SetItem(g, name, (PyObject*)psyco_PsycoFunction_New((PyFunctionObject*)tmp, MAX_RECURSION));
         }
