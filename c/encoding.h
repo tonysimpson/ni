@@ -903,5 +903,27 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   TEMP_RESTORE_REGS_FN_CALLS;                   \
 } while (0)
 
+#define ALIGN_PAD_CODE_PTR()     do {                                   \
+  if ((((long)code) & 15) > 8)   /* directive .p2align 4,,7 of 'as' */  \
+    code = (code_t*)((((long)code) & ~15) + 16);                        \
+} while (0)
+
+#define ALIGN_WITH_BYTE(byte)   do {                                       \
+  if ((((long)code) & 15) > 8)   /* directive .p2align 4,,7 of 'as' */     \
+    do {                                                                   \
+      *code++ = byte;                                                      \
+    } while ((((long)code) & 15) != 0);                                    \
+} while (0)
+
+/* XXX in the GNU 'as' padding is more subtle: it inserts only one or two
+     instructions that do nothing but take more space than a single NOP */
+#define ALIGN_WITH_NOP()    ALIGN_WITH_BYTE(0x90)
+
+#if ALL_CHECKS
+#define ALIGN_NO_FILL() ALIGN_WITH_BYTE(0xCC)   /* INT 03  (debugging) */
+#else
+#define ALIGN_NO_FILL() ALIGN_PAD_CODE_PTR()
+#endif
+
 
 #endif /* _ENCODING_H */

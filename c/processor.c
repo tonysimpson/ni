@@ -243,7 +243,7 @@ void* psyco_jump_proxy(PsycoObject* po, void* fn, int restore, int nb_args)
   result = (void*)(((long)code + 3) & ~ 3);
 #if CODE_DUMP
   while (code != (char*) result)
-    *code++ = 0xFE;   /* fill with invalid instructions */
+    *code++ = 0xCC;   /* fill with INT 3 (debugger trap) instructions */
 #endif
   *(void**)fixvalue = result;    /* set value at code+1 above */
   return result;

@@ -17,6 +17,8 @@
 # define STORE_CODE_END   /* always needed by CODE_DUMP */
 #endif
 
+#define WARN_TOO_MANY_BUFFERS    6    /* to detect missing buffer unlocks */
+
 
 /* a CodeBufferObject is a pointer to emitted code.
    The 'state' PsycoObject records the state of the compiler at
@@ -64,6 +66,9 @@ CodeBufferObject* psyco_proxy_code_buffer(PsycoObject* po, global_entries_t* ge)
 /* shrink a buffer returned by new_code_buffer() */
 EXTERNFN
 void psyco_shrink_code_buffer(CodeBufferObject* obj, int nsize);
+
+EXTERNFN
+int psyco_locked_buffers(void);
 
 #ifdef STORE_CODE_END
 #define SHRINK_CODE_BUFFER(obj, nsize, mode)    do {    \

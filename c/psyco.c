@@ -152,7 +152,7 @@ static PsycoObject* psyco_build_frame(PyCodeObject* co, vinfo_t* vglobals,
      the caller will have pushed them. */
   if (sources != NULL)
     {
-      source1 = PyCore_MALLOC(rtcount * sizeof(RunTimeSource));
+      source1 = (RunTimeSource*) PyCore_MALLOC(rtcount * sizeof(RunTimeSource));
       if (source1 == NULL && rtcount > 0)
         OUT_OF_MEMORY();
       *sources = source1;

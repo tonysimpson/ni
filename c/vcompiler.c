@@ -487,9 +487,10 @@ static code_t* psyco_resume_compile(PsycoObject* po, void* extra)
 {
   mergepoint_t* mp = psyco_exact_merge_point(po->pr.merge_points,
                                              po->pr.next_instr);
+  extra_assert(psyco_locked_buffers() == 0);  /* we are not compiling yet */
   return psyco_compile_code(po, mp)->codeptr;
   /* XXX don't know what to do with the reference returned by
-     XXX po->compile_code() */
+     XXX psyco_compile_code() */
 }
 
 
@@ -622,6 +623,7 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
   code_t* code1;
   CodeBufferObject* codebuf;
   CodeBufferObject* oldcodebuf;
+  bool compile_now;
   vinfo_array_t* diff = mp==NULL ? NULL :
                      psyco_compatible(po, &mp->entries, &oldcodebuf);
 
@@ -630,13 +632,26 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
   if (diff == NullArray)  /* exact match */
     return psyco_unify_code(po, oldcodebuf);
 
-  /* start a new buffer */
+  /* We compile the new code right now if we have a full mismatch and if
+     there are not too many locked big buffers in codemanager.c */
+  compile_now = diff==NULL && psyco_locked_buffers() < WARN_TOO_MANY_BUFFERS-1;
+  if (diff==NULL && !compile_now)
+    mp = NULL;  /* we are about to write a coding pause,
+                   don't register it in mp->entries */
+  
+  /* Normal case. Start a new buffer */
   codebuf = psyco_new_code_buffer(po, mp==NULL ? NULL : &mp->entries);
   if (codebuf == NULL)
     OUT_OF_MEMORY();
   po->code = codebuf->codeptr;
-  
-  if (diff != NULL)   /* partial match */
+
+  if (compile_now)
+    {
+      /* call the entry point function which performs the actual compilation
+         (this is the usual case) */
+      code1 = GLOBAL_ENTRY_POINT(po);
+    }
+  else if (diff != NULL)   /* partial match */
     {
       int i;
       for (i=diff->count; i--; )
@@ -647,9 +662,12 @@ CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
     }
   else
     {
-      /* call the entry point function which performs the actual compilation
-         (this is the usual case) */
-      code1 = GLOBAL_ENTRY_POINT(po);
+      /* detected too many locked buffers. This occurs when compiling a
+         function that calls a function that needs compiling, recursively.
+         Delay compilation until run-time, when psyco_locked_buffers() will
+         be 0. */
+      psyco_coding_pause(po, CC_ALWAYS_TRUE, &psyco_resume_compile, NULL, 0);
+      code1 = po->code;
     }
 
   /* we have written some code into a new codebuf, now shrink it to

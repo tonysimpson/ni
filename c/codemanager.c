@@ -1,58 +1,172 @@
 #include "codemanager.h"
 
-#ifdef STORE_CODE_END
-# define SET_CODE_END(proxy)    (b->codeend = (proxy) ? b->codeptr : NULL,   \
-                                 b->codemode = (proxy) ? "proxy" : "(compiling)")
-#else
-# define SET_CODE_END(proxy)    /* nothing */
-#endif
 
-#define NEW_CODE_BUFFER(extrasize, codepointer, setcodelimit)   \
-{                                                               \
-  PyObject* o;                                                  \
-  CodeBufferObject* b;                                          \
-  psyco_trash_object(NULL);                                     \
-                                                                \
-  /* PyObject_New is inlined */                                 \
-  o = PyObject_MALLOC(sizeof(CodeBufferObject) + (extrasize));  \
-  if (o == NULL)                                                \
-    return (CodeBufferObject*) PyErr_NoMemory();                \
-  b = (CodeBufferObject*) PyObject_INIT(o, &CodeBuffer_Type);   \
-  b->codeptr = (codepointer);                                   \
-  SET_CODE_END(!setcodelimit);                                  \
-  if (VERBOSE_LEVEL > 2)                                        \
-    debug_printf(("psyco: %s code buffer %p\n",                 \
-         extrasize ? "new" : "proxy", b->codeptr));             \
-                                                                \
-  fpo_mark_new(&b->snapshot);                                   \
-  if (po == NULL)                                               \
-    fpo_mark_unused(&b->snapshot);                              \
-  else                                                          \
-    {                                                           \
-      assert(!is_respawning(po));                               \
-      fpo_build(&b->snapshot, po);                              \
-      if (ge != NULL)                                           \
-        register_codebuf(ge, b);                                \
-      if (setcodelimit)                                         \
-        po->codelimit = b->codeptr + BIG_BUFFER_SIZE -          \
-                                     GUARANTEED_MINIMUM;        \
-      po->respawn_cnt = 0;                                      \
-      po->respawn_proxy = b;                                    \
-    }                                                           \
-  return b;                                                     \
+#define BUFFER_SIGNATURE    0xE673B506   /* arbitrary */
+
+typedef struct codemanager_buf_s {
+  long signature;
+  char* position;
+  bool inuse;
+  struct codemanager_buf_s* next;
+} codemanager_buf_t;
+
+static codemanager_buf_t* big_buffers = NULL;
+
+
+inline void check_signature(codemanager_buf_t* b)
+{
+  if (b->signature != BUFFER_SIGNATURE)
+    Py_FatalError("psyco: code buffer overwrite detected");
+}
+
+inline code_t* get_next_buffer(code_t** limit)
+{
+  char* p;
+  codemanager_buf_t* b;
+  codemanager_buf_t** bb;
+  int count;
+  for (b=big_buffers; b!=NULL; b=b->next)
+    {
+      check_signature(b);
+      if (!b->inuse)
+        {   /* returns the first (oldest) unlocked buffer */
+          b->inuse = true;
+          *limit = ((code_t*) b) - GUARANTEED_MINIMUM;
+          return (code_t*) b->position;
+        }
+    }
+  /* no more free buffer, allocate a new one */
+  p = (char*) PyCore_MALLOC(BIG_BUFFER_SIZE);
+  if (!p)
+    return (code_t*) PyErr_NoMemory();
+
+  /* the codemanager_buf_t structure is put at the end of the buffer,
+     with its signature to detect overflows (just in case) */
+  b = (codemanager_buf_t*) (p + BIG_BUFFER_SIZE - sizeof(codemanager_buf_t));
+  b->signature = BUFFER_SIGNATURE;
+  b->position = p;
+  b->inuse = true;
+  b->next = NULL;
+
+  /* insert 'b' at the end of the chained list */
+  count = 0;
+  for (bb=&big_buffers; *bb!=NULL; bb=&(*bb)->next)
+    count++;
+  if (count > WARN_TOO_MANY_BUFFERS)
+    fprintf(stderr, "psyco: warning: detected many (%d) buffers in use\n", count);
+  *bb = b;
+  *limit = ((code_t*) b) - GUARANTEED_MINIMUM;
+  return (code_t*) p;
+}
+
+DEFINEFN int psyco_locked_buffers(void)
+{
+  codemanager_buf_t* b;
+  int count = 0;
+  for (b=big_buffers; b!=NULL; b=b->next)
+    if (b->inuse)
+      count++;
+  return count;
+}
+
+inline void close_buffer_use(code_t* code)
+{
+  codemanager_buf_t* b;
+  for (b=big_buffers; b!=NULL; b=b->next)
+    {
+      check_signature(b);
+      if (b->position <= (char*) code && (char*) code <= (char*) b)
+        {
+          extra_assert(b->inuse);
+          ALIGN_NO_FILL();
+          if (code < ((code_t*) b) - BUFFER_MARGIN)
+            {
+              /* unlock the buffer */
+              b->position = code;
+              b->inuse = false;
+            }
+          else
+            {
+              /* buffer nearly full, remove it from the chained list */
+              codemanager_buf_t** bb;
+              for (bb=&big_buffers; *bb!=b; bb=&(*bb)->next)
+                ;
+              *bb = b->next;
+            }
+          return;
+        }
+    }
+  Py_FatalError("psyco: code buffer allocator corruption");
+}
+
+
+static CodeBufferObject* new_code_buffer(PsycoObject* po, global_entries_t* ge,
+                                         code_t* proxy_to)
+{
+  CodeBufferObject* b;
+  code_t* limit;
+  psyco_trash_object(NULL);
+
+  b = PyObject_New(CodeBufferObject, &CodeBuffer_Type);
+  if (b == NULL)
+    return NULL;
+  if (proxy_to != NULL)
+    {
+      limit = NULL;
+      b->codeptr = proxy_to;  /* points inside another code buffer */
+#ifdef STORE_CODE_END
+      b->codeend = proxy_to;
+      b->codemode = "proxy";
+#endif
+    }
+  else
+    {
+      /* start a new code buffer */
+      b->codeptr = get_next_buffer(&limit);
+      if (b->codeptr == NULL)
+        {
+          Py_DECREF(b);
+          return NULL;
+        }
+#ifdef STORE_CODE_END
+      b->codeend = NULL;
+      b->codemode = "(compiling)";
+#endif
+    }
+  
+  if (VERBOSE_LEVEL > 2)
+    debug_printf(("psyco: %s code buffer %p\n",
+                  proxy_to==NULL ? "new" : "proxy", b->codeptr));
+  
+  fpo_mark_new(&b->snapshot);
+  if (po == NULL)
+    fpo_mark_unused(&b->snapshot);
+  else
+    {
+      if (is_respawning(po))
+        Py_FatalError("psyco: internal bug: respawning in new_code_buffer()");
+      fpo_build(&b->snapshot, po);
+      if (ge != NULL)
+        register_codebuf(ge, b);
+      if (limit != NULL)
+        po->codelimit = limit;
+      po->respawn_cnt = 0;
+      po->respawn_proxy = b;
+    }
+  return b;
 }
 
 DEFINEFN
 CodeBufferObject* psyco_new_code_buffer(PsycoObject* po, global_entries_t* ge)
-     NEW_CODE_BUFFER(BIG_BUFFER_SIZE,                                           \
-                     ((code_t*)(b+1)),   /* buffer is after the object */       \
-                     1)
+{
+  return new_code_buffer(po, ge, NULL);
+}
 
 DEFINEFN
 CodeBufferObject* psyco_proxy_code_buffer(PsycoObject* po, global_entries_t* ge)
-     NEW_CODE_BUFFER(0,                                         \
-                     po->code,  /* buffer is elsewhere */       \
-                     0)
+{
+  return new_code_buffer(po, ge, po->code);
+}
 
 #if 0    /* not used in this version */
 DEFINEFN
@@ -82,20 +196,19 @@ DEFINEVAR void** psyco_codebuf_spec_dict_list = NULL;
 DEFINEFN
 void psyco_shrink_code_buffer(CodeBufferObject* obj, int nsize)
 {
-  void* ndata;
-  extra_assert(0 < nsize && nsize <= BIG_BUFFER_SIZE - GUARANTEED_MINIMUM);
-  ndata = PyObject_REALLOC(obj, sizeof(CodeBufferObject) + nsize);
-  //printf("psyco: shrink_code_buffer %p to %d\n", obj->codeptr, nsize);
+  code_t* codeend = obj->codeptr + nsize;
+  
   if (VERBOSE_LEVEL > 2)
     debug_printf(("psyco: disassemble %p %p    (%d bytes)\n", obj->codeptr,
-                  obj->codeptr + nsize, nsize));
+                  codeend, nsize));
   else if (VERBOSE_LEVEL > 1)
     debug_printf(("[%d]", nsize));
-  if (ndata != obj)   /* don't know what to do if this fails */
-    Py_FatalError("psyco: realloc() moved code memory");
+  
+  close_buffer_use(codeend);
+
 #ifdef STORE_CODE_END
   extra_assert(obj->codeend == NULL);
-  obj->codeend = obj->codeptr + nsize;
+  obj->codeend = codeend;
   obj->codemode = "normal";
 #endif
 #if CODE_DUMP

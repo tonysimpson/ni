@@ -74,15 +74,25 @@
 /*****************************************************************/
 
 /* Size of buffer to allocate when emitting code.
-   Can be relatively large, but not so large that special allocation
-   routines (like mmap) are invoked. We rely on the fact that
-   PyObject_REALLOC will not move the memory around when shrinking
-   a block of BIG_BUFFER_SIZE+sizeof(CodeBufferObject) bytes.
-   Numbers too large might cause serious fragmentation of the heap.
+   Can be as large as you like (most OSes will not actually allocate
+   RAM pages before they are actually used). We no longer perform
+   any realloc() on this; a single allocated code region is reused
+   for all code buffers until it is exhausted. There are BUFFER_MARGIN
+   unused bytes at the end, so BIG_BUFFER_SIZE has better be large to
+   minimize this effect.
+   Linux note: I've seen in my version of glibc's malloc() that it
+   uses mmap for sizes >= 128k, and that it will refuse the use mmap
+   more than 1024 times, which means that if you allocate blocks of
+   128k you cannot allocate more than 128M in total.
+   Note that Psyco will usually allocate and fill two buffers in
+   parallel, by the way vcompiler.c works. However, it occasionally
+   needs more; codemanager.c can handle any number of parallely-growing
+   buffers. There is a safeguard in vcompiler.c to put an upper bound
+   on this number (currently should not exceed 4).
    In debugging mode, we use a small size to stress the buffer-
    continuation coding routines. */
 #ifndef BIG_BUFFER_SIZE
-# define BIG_BUFFER_SIZE  (PSYCO_DEBUG ? 0x100+BUFFER_MARGIN : 0x3F00)
+# define BIG_BUFFER_SIZE  (PSYCO_DEBUG ? 2*BUFFER_MARGIN : 0x100000)
 #endif
 
 /* A safety margin for occasional overflows: we might write a few

@@ -36,7 +36,7 @@ SKIP = {'test_gc': NO_SYS_GETFRAME,
 if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
     SKIP['test_popen2'] = 'gets confused by Psyco debugging output to stderr'
 
-GROUP_TESTS = 4    # number of tests to run per Python process
+GROUP_TESTS = 40    # number of tests to run per Python process
 
 
 # Per-module user-filtered warnings don't work correctly
