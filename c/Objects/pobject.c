@@ -158,8 +158,8 @@ static defield_t getdictoffset(PsycoObject* po, vinfo_t* obj, vinfo_t** varindex
 	long dictoffset;
 	PyTypeObject *tp = Psyco_FastType(obj);
 
-	if (!(tp->tp_flags & Py_TPFLAGS_HAVE_CLASS))
-		return NO_PREV_FIELD;
+	/*if (!(tp->tp_flags & Py_TPFLAGS_HAVE_CLASS))
+	  return NO_PREV_FIELD;*/
 	dictoffset = tp->tp_dictoffset;
 	if (dictoffset == 0)
 		return NO_PREV_FIELD;
@@ -210,7 +210,7 @@ static defield_t getdictoffset(PsycoObject* po, vinfo_t* obj, vinfo_t** varindex
 			dictoffset = 0;
 		}
 	}
-	return DEF_ARRAY(PyObject*, dictoffset);
+	return FMUT(DEF_ARRAY(PyObject*, dictoffset));
 }
 
 DEFINEFN
@@ -218,7 +218,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 				    vinfo_t* vname)
 {
 	PyTypeObject* tp;
-	PyObject *descr;
+	PyObject *descr = NULL;
 	vinfo_t* res = NULL;
 	descrgetfunc f;
 	PyObject* name;
@@ -285,8 +285,11 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 	}
 
 	descr = _PyType_Lookup(tp, name);
+	Py_XINCREF(descr);
+	
 	f = NULL;
-	if (descr != NULL) {
+	if (descr != NULL &&
+	    PyType_HasFeature(descr->ob_type, Py_TPFLAGS_HAVE_CLASS)) {
 		f = descr->ob_type->tp_descr_get;
 		if (f != NULL && PyDescr_IsData(descr)) {
 			res = Psyco_META3(po, f, CfReturnRef|CfPyErrIfNull,
@@ -325,7 +328,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 			/* the __dict__ slot contains a non-NULL value */
 			res = psyco_generic_call(po, PyDict_GetItem,
 						 CfReturnNormal,
-						 "vl", dict, name);
+						 "vl", dict, (long) name);
 			vinfo_decref(dict, po);
 			if (res == NULL)
 				goto done;
@@ -370,7 +373,9 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 	}
 
 	if (descr != NULL) {
-		res = vinfo_new(CompileTime_New((long) descr));
+		source_known_t* sk = sk_new((long) descr, SkFlagPyObj);
+		descr = NULL;
+		res = vinfo_new(CompileTime_NewSk(sk));
 		goto done;
 	}
 
@@ -378,6 +383,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 			       "'%.50s' object has no attribute '%.400s'",
 			       tp->tp_name, PyString_AS_STRING(name));
   done:
+	Py_XDECREF(descr);
 	Py_DECREF(name);
 	return res;
 }
