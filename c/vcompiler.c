@@ -61,7 +61,7 @@ void* sk_malloc_block()
 {
   source_known_t* p;
   source_known_t* prev = (source_known_t*) sk_linked_list;
-  source_known_t* block = (source_known_t*)      \
+  source_known_t* block = (source_known_t*)
     PyCore_MALLOC(SK_BLOCK_COUNT*sizeof(source_known_t));
   if (block == NULL)
     /*return NULL;*/ OUT_OF_MEMORY();
