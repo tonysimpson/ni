@@ -2,11 +2,11 @@
 
 """Setup script for Psyco, the Python specializing compiler"""
 
-import os
+import os, sys
 from distutils.core import setup
 from distutils.extension import Extension
 
-PROCESSOR = 'i386'  # no other one available yet
+PROCESSOR = None  # autodetect
 
 ####################################################################
 #
@@ -54,6 +54,27 @@ except IOError:
     pass
 
 
+# processor auto-detection
+class ProcessorAutodetectError(Exception):
+    pass
+def autodetect():
+    platform = sys.platform.lower()
+    if platform.startswith('win'):   # assume an Intel Windows
+        return 'i386'
+    # assume we have 'uname'
+    mach = os.popen('uname -m', 'r').read().strip()
+    if not mach:
+        raise ProcessorAutodetectError, "cannot run 'uname -m'"
+    try:
+        return {'i386': 'i386',
+                'i486': 'i386',
+                'i586': 'i386',
+                'i686': 'i386',
+                }[mach]
+    except KeyError:
+        raise ProcessorAutodetectError, "unsupported processor '%s'" % mach
+
+
 # loads the list of source files from SOURCEDIR/files.py
 # and make the appropriate options for the Extension class.
 SOURCEDIR = 'c'
@@ -71,6 +92,14 @@ for name in ['PSYCO_DEBUG', 'VERBOSE_LEVEL',
     if globals().has_key(name):
         macros.append((name, str(globals()[name])))
 
+if PROCESSOR is None:
+    try:
+        PROCESSOR = autodetect()
+    except ProcessorAutodetectError, e:
+        print '%s: %s' % (e.__class__.__name__, e)
+        print 'Set PROCESSOR to one of the supported processor names in setup.py, line 9.'
+        sys.exit(2)
+    print "PROCESSOR = %r" % PROCESSOR
 processor_dir = 'c/' + PROCESSOR
 
 if ALL_STATIC:
