@@ -66,31 +66,34 @@ def buildfncache(globals, cache):
         if isinstance(x, types.MethodType):
             x = x.im_func
         if isinstance(x, types.FunctionType):
-            cache[x.func_code] = x
+            cache[x.func_code] = x, ''
         elif isinstance(x, clstypes):
-            for x in x.__dict__.values():
-                if isinstance(x, types.MethodType):
-                    x = x.im_func
-                if isinstance(x, types.FunctionType):
-                    cache[x.func_code] = x
+            for y in x.__dict__.values():
+                if isinstance(y, types.MethodType):
+                    y = y.im_func
+                if isinstance(y, types.FunctionType):
+                    cache[y.func_code] = y, x.__name__
 
 # code-to-function mapping (cache)
 function_cache = {}
 
 def trytobind(co, globals, log=1):
     try:
-        f = function_cache[co]
+        f, clsname = function_cache[co]
     except KeyError:
         buildfncache(globals, function_cache)
         try:
-            f = function_cache[co]
+            f, clsname = function_cache[co]
         except KeyError:
             if logger:
                 logger.write('warning: cannot find function %s in %s' %
                              (co.co_name, globals.get('__name__', '?')), 3)
             return  # give up
     if logger and log:
-        logger.write('bind function: %s' % co.co_name, 1)
+        modulename = globals.get('__name__', '?')
+        if clsname:
+            modulename += '.' + clsname
+        logger.write('bind function: %s.%s' % (modulename, co.co_name), 1)
     f.func_code = _psyco.proxycode(f)
 
 
@@ -100,7 +103,18 @@ if PYTHON_SUPPORT:
     
     def tag(co, globals):
         if logger:
-            logger.write('tag function: %s' % co.co_name, 1)
+            try:
+                f, clsname = function_cache[co]
+            except KeyError:
+                buildfncache(globals, function_cache)
+                try:
+                    f, clsname = function_cache[co]
+                except KeyError:
+                    clsname = ''  # give up
+            modulename = globals.get('__name__', '?')
+            if clsname:
+                modulename += '.' + clsname
+            logger.write('tag function: %s.%s' % (modulename, co.co_name), 1)
         tagged_codes.append((co, globals))
         _psyco.turbo_frame(co)
         _psyco.turbo_code(co)

@@ -193,13 +193,25 @@ As an example of a good real-life candidate for Psyco acceleration, I chose \str
 
 For these tests, we will use the file \file{TAL.markbench.py} of a Zope 2 installation (if you did not install Zope, the file is in the \file{lib/python} subdirectory of the source archive).  You may have to create a file named \file{.path} to be able to run \file{markbench.py}, as explained when you first try to run it.
 
-On a Dual Pentium Linux running Python 2.2.2, using the Zope 2.6 distribution, I get the following times:
+On a Dual Pentium Linux running Python 2.2.2, using the Zope 2.6.1 distribution, I get the following times (lower numbers mean faster runs; I have added the horizontal line at test 9 for emphasis):
 
 \begin{verbatim}
-\fixme
+##:        ZPT        TAL       DTML
+01:          0          0          0
+02:          0          0          0
+03:          2          1          0
+04:          9          6          3
+05:         16         12          4
+06:         19         13         10
+07:         15         10          1
+08:         10          7          1
+09: ------ 123 ------- 90 ------- 32
+10:         14          6          3
+11:         28         18         10
+12:         20         15          6
 \end{verbatim}
 
-If I add the following line at the top of \file{markbench.py} the times drop massively --- the longest-running tests run as much as three times faster!
+If I add the following line at the top of \file{markbench.py} the times drop massively --- the longest-running tests run two to three times faster!
 
 \begin{verbatim}
 import psyco; psyco.log(); psyco.full()
@@ -208,10 +220,22 @@ import psyco; psyco.log(); psyco.full()
 Results:
 
 \begin{verbatim}
-\fixme
+##:        ZPT        TAL       DTML
+01:          0          0          0
+02:          0          0          0
+03:          1          0          0
+04:          5          2          2
+05:          8          4          4
+06:         11          5         10
+07:          7          4          1
+08:          6          2          1
+09: ------- 61 ------- 34 ------- 32
+10:         10          3          2
+11:         17          7         10
+12:         11          6          6
 \end{verbatim}
 
-Here you see in the DTML test the first rule about Psyco: some code is obviously not seen by Psyco at all.  In other words for some reason this code runs in the normal interpreter only.  There are a lot of potential reasons for this, which range from Psyco failing to ``steal'' the code from Python before the latter executes it to code using unsupported constructs (see appendix \ref{unsupported}).
+Here you see in the DTML test the first rule about Psyco: some code is obviously not seen by Psyco at all.  In other words for some reason this code runs in the normal interpreter only.  There are a lot of potential reasons for this, which range from Psyco failing to ``steal'' the code from the Python interpreter before it executes it to code using unsupported constructs (see appendix \ref{unsupported}).
 
 \begin{verbatim}
 import psyco; psyco.log(); psyco.profile()
@@ -220,23 +244,72 @@ import psyco; psyco.log(); psyco.profile()
 Results:
 
 \begin{verbatim}
-\fixme
+##:        ZPT        TAL       DTML
+01:          0          0          0
+02:          0          0          0
+03:          4          3          0
+04:         15         11          3
+05:         20         13          5
+06:         16          5         12
+07:          7          5          1
+08:          5          2          1
+09: ------- 65 ------- 35 ------- 40
+10:         11          3          2
+11:         18          8         10
+12:         12          6          6
 \end{verbatim}
 
 If you use the profiler instead of compiling everything, the small tests won't run much faster, but the long-running ones will be about as fast as above.  It means that the profiler is a powerful tool that can be useful on arbitrarily large programs.  However, in the case of a large program in which you know where most of the processor time is spent, you can choose to selectively compile this part:
 
 \begin{verbatim}
 from TALInterpreter import TALInterpreter
-import psyco; psyco.log(); psyco.bind(TALInterpreter)
+import psyco; psyco.bind(TALInterpreter)
 \end{verbatim}
 
 Results:
 
 \begin{verbatim}
-\fixme
+##:        ZPT        TAL       DTML
+01:          0          0          0
+02:          0          0          0
+03:          2          0          0
+04:          9          2          2
+05:         16          4          4
+06:         19          5         10
+07:         14          4          1
+08:         10          3          1
+09: ------ 122 ------- 33 ------- 32
+10:         13          3          3
+11:         28          8         10
+12:         20          6          6
 \end{verbatim}
 
-Here you can see that only the TAL test is accelerated.  If you have a Zope server using TAL, you could try to add the above two lines to it.  You may get very interesting speed-ups for a very reasonable memory overweight (please tell me about it --- there is no real Zope server I can play with myself)!
+Here you can see that only the TAL test is accelerated.  If you have a Zope server using TAL, you could try to add the above two lines to it.  You may get very interesting speed-ups for a very reasonable memory overweight!  (untested: please tell me about it --- there is no real Zope server I can play with myself.)
+
+Another ceveat of Psyco is that it is not always easy to know which module or class Psyco has just acclerated in \code{psyco.full()} mode.  It took me some time to discover what I should bind to accelerate specifically the ZPT test.  Here is how: I ran Psyco in \code{psyco.log();psyco.profile()} mode, running only the ZPT test, and inspected the log file.  Indeed, when a function is about to be accelerated, Psyco writes a line \samp{tag function: xxx} (with Python 2.2.2) or \samp{bind function: xxx} (with previous versions of Python).  In this case I figured out from the \file{markbench.log-psyco} file that I had to write this:
+
+\begin{verbatim}
+import TAL.TALInterpreter
+import psyco; psyco.bind(TAL.TALInterpreter.TALInterpreter.interpret)
+\end{verbatim}
+
+Results:
+
+\begin{verbatim}
+##:        ZPT        TAL       DTML
+01:          0          0          0
+02:          0          0          0
+03:          1          2          0
+04:          5          6          2
+05:          9         11          4
+06:         11         13         10
+07:          8         10          1
+08:          6          7          1
+09: ------- 66 ------- 90 ------- 32
+10:         10          6          4
+11:         18         18         10
+12:         12         15          6
+\end{verbatim}
 
 
 \section{Old-style classes vs. Built-in types}\label{metaclass}
