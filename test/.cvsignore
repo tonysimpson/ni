@@ -8,3 +8,4 @@ expected-basetests.txt
 file2-basetests
 regrtester.local
 fulltester.local
+input-basetexts.py

@@ -85,6 +85,7 @@ compact_del(void *op)
 	PyObject_GC_Del(op);
 }
 
+#if 0
 DEFINEFN
 PyObject* PyCompact_New(void)
 {
@@ -96,6 +97,7 @@ PyObject* PyCompact_New(void)
 	}
 	return (PyObject*) o;
 }
+#endif
 
 static bool k_same_vinfo(vinfo_t* a, vinfo_t* b)
 {
@@ -311,21 +313,65 @@ static int compact_clear(PyCompactObject* ko)
 
 static PyObject* compact_getattro(PyCompactObject* ko, PyObject* attr)
 {
+	PyTypeObject* tp = ko->ob_type;
+	PyObject* descr;
+	descrgetfunc f = NULL;
 	compact_impl_t* impl = ko->k_impl;
 	PyObject* o;
-	
+
+	if (tp->tp_dict == NULL) {
+		if (PyType_Ready(tp) < 0)
+			return NULL;
+	}
+
 	Py_INCREF(attr);
 	K_INTERN(attr);
+
+	/* Special code for data descriptors first, as in
+					PyObject_GenericGetAttr() */
+	descr = _PyType_Lookup(tp, attr);
+	if (descr != NULL) {
+		Py_INCREF(descr);
+		if (PyType_HasFeature(descr->ob_type, Py_TPFLAGS_HAVE_CLASS)) {
+			f = descr->ob_type->tp_descr_get;
+			if (f != NULL && PyDescr_IsData(descr)) {
+				o = f(descr, (PyObject*) ko, (PyObject*) tp);
+				Py_DECREF(descr);
+				goto done;
+			}
+		}
+	}
+
+	/* Read data out of the compact memory buffer */
 	while (impl->attrname != NULL) {
 		if (impl->attrname == attr) {
 			o = direct_xobj_vinfo(impl->vattr, ko->k_data);
-			if (o != NULL || PyErr_Occurred())
-				goto finally;
+			if (o != NULL || PyErr_Occurred()) {
+				Py_XDECREF(descr);
+				goto done;
+			}
 		}
 		impl = impl->parent;
 	}
-	o = PyObject_GenericGetAttr((PyObject*) ko, attr);
- finally:
+
+	/* The end of PyObject_GenericGetAttr() */
+	if (f != NULL) {
+		o = f(descr, (PyObject*) ko, (PyObject*) tp);
+		Py_DECREF(descr);
+		goto done;
+	}
+
+	if (descr != NULL) {
+		o = descr;
+		/* descr was already increfed above */
+		goto done;
+	}
+
+	o = NULL;
+	PyErr_Format(PyExc_AttributeError,
+		     "'%.50s' object has no attribute '%.400s'",
+		     tp->tp_name, PyString_AS_STRING(attr));
+ done:
 	Py_DECREF(attr);
 	return o;
 }
@@ -449,7 +495,8 @@ compact_impl_t* k_duplicate_impl(compact_impl_t* base,
 }
 
 static
-int compact_setattro(PyCompactObject* ko, PyObject* attr, PyObject* value)
+int compact_set(PyCompactObject* ko, PyObject* attr, PyObject* value,
+		PyObject* pyerr_notfound)
 {
 	int err, smin, smax;
 	long immed_value;
@@ -457,9 +504,6 @@ int compact_setattro(PyCompactObject* ko, PyObject* attr, PyObject* value)
 	char* source_data;
 	compact_impl_t* impl;
 	compact_impl_t* p;
-
-        /* NB. this assumes that 'attr' is an already-interned string.
-           PyObject_SetAttr() should have interned it. */
 
 	/* recognize a few obvious object types and optimize accordingly
 	   Note that this is not related to Psyco's ability to store
@@ -529,8 +573,8 @@ int compact_setattro(PyCompactObject* ko, PyObject* attr, PyObject* value)
 
 	if (source_vi == NULL) {
 		/* deleting a non-existing attribute */
-		err = PyObject_GenericSetAttr((PyObject*) ko, attr, NULL);
-		goto finally;
+		PyErr_SetObject(pyerr_notfound, attr);
+		return -1;
 	}
 
 	/* setting a new attribute */
@@ -546,14 +590,40 @@ int compact_setattro(PyCompactObject* ko, PyObject* attr, PyObject* value)
 	return err;
 }
 
-static PyObject* compact_getslot(PyCompactObject* ko, PyObject* key)
+static
+int compact_setattro(PyCompactObject* ko, PyObject* attr, PyObject* value)
 {
-	compact_impl_t* impl = ko->k_impl;
-	PyObject* o;
+	PyTypeObject* tp = ko->ob_type;
+	PyObject* descr;
+	descrsetfunc f;
 
+        /* NB. this assumes that 'attr' is an already-interned string.
+           PyObject_SetAttr() should have interned it. */
+
+	/* Special code for data descriptors first, as in
+					PyObject_GenericSetAttr() */
+	if (tp->tp_dict == NULL) {
+		if (PyType_Ready(tp) < 0)
+			return -1;
+	}
+	descr = _PyType_Lookup(tp, attr);
+	if (descr != NULL &&
+	    PyType_HasFeature(descr->ob_type, Py_TPFLAGS_HAVE_CLASS)) {
+		f = descr->ob_type->tp_descr_set;
+		if (f != NULL && PyDescr_IsData(descr))
+			return f(descr, (PyObject*) ko, value);
+	}
+
+	return compact_set(ko, attr, value, PyExc_AttributeError);
+}
+
+static PyObject* k_interned_key(PyObject* key)
+{
 	if (key->ob_type != &PyString_Type) {
 		if (!PyString_Check(key)) {
-			PyErr_SetObject(PyExc_KeyError, key);
+			PyErr_SetString(PyExc_TypeError,
+					"keys in compact objects "
+					"must be strings");
 			return NULL;
 		}
 		key = PyString_FromStringAndSize(PyString_AS_STRING(key),
@@ -565,6 +635,72 @@ static PyObject* compact_getslot(PyCompactObject* ko, PyObject* key)
 		Py_INCREF(key);
 	}
 	K_INTERN(key);
+	return key;
+}
+
+#if 0
+DEFINEFN
+PyObject* PyCompact_GetSlot(PyObject* ko, PyObject* key)
+{
+	compact_impl_t* impl;
+	PyObject* o;
+
+	if (!PyCompact_Check(ko)) {
+		PyErr_BadInternalCall();
+		return NULL;
+	}
+
+	key = k_interned_key(key);
+	if (key == NULL)
+		return NULL;
+	
+	impl = ((PyCompactObject*) ko)->k_impl;
+	while (impl->attrname != NULL) {
+		if (impl->attrname == key) {
+			o = direct_xobj_vinfo(impl->vattr,
+					      ((PyCompactObject*) ko)->k_data);
+			if (o != NULL || PyErr_Occurred())
+				goto finally;
+		}
+		impl = impl->parent;
+	}
+	PyErr_SetObject(PyExc_KeyError, key);
+	o = NULL;
+ finally:
+	Py_DECREF(key);
+	return o;
+}
+
+DEFINEFN
+PyObject* PyCompact_SetSlot(PyObject* ko, PyObject* key, PyObject* value)
+{
+	int err;
+
+	if (!PyCompact_Check(ko)) {
+		PyErr_BadInternalCall();
+		return NULL;
+	}
+
+	key = k_interned_key(key);
+	if (key == NULL)
+		return NULL;
+
+	err = compact_set((PyCompactObject*) ko, key, value,
+			  PyExc_KeyError);
+	Py_DECREF(key);
+	return err;
+}
+#endif
+
+static PyObject* compact_getslot(PyCompactObject* ko, PyObject* key)
+{
+	compact_impl_t* impl = ko->k_impl;
+	PyObject* o;
+
+	key = k_interned_key(key);
+	if (key == NULL)
+		return NULL;
+
 	while (impl->attrname != NULL) {
 		if (impl->attrname == key) {
 			o = direct_xobj_vinfo(impl->vattr, ko->k_data);
@@ -578,6 +714,43 @@ static PyObject* compact_getslot(PyCompactObject* ko, PyObject* key)
  finally:
 	Py_DECREF(key);
 	return o;
+}
+
+static PyObject* compact_setslot(PyCompactObject* ko, PyObject* args)
+{
+	PyObject* key;
+	PyObject* value;
+	int err;
+
+	if (!PyArg_ParseTuple(args, "OO", &key, &value))
+		return NULL;
+
+	key = k_interned_key(key);
+	if (key == NULL)
+		return NULL;
+
+	err = compact_set(ko, key, value, PyExc_KeyError);
+	Py_DECREF(key);
+	if (err < 0)
+		return NULL;
+	Py_INCREF(Py_None);
+	return Py_None;
+}
+
+static PyObject* compact_delslot(PyCompactObject* ko, PyObject* key)
+{
+	int err;
+
+	key = k_interned_key(key);
+	if (key == NULL)
+		return NULL;
+
+	err = compact_set(ko, key, NULL, PyExc_KeyError);
+	Py_DECREF(key);
+	if (err < 0)
+		return NULL;
+	Py_INCREF(Py_None);
+	return Py_None;
 }
 
 static PyObject* compact_getmembers(PyCompactObject* ko, void* context)
@@ -600,12 +773,63 @@ static PyObject* compact_getmembers(PyCompactObject* ko, void* context)
 	return result;
 }
 
-static PyObject* compact_getdict(PyCompactObject* ko, void* context)
+static PyObject* compact_getdict(PyObject* ko, void* context)
 {
 	PyObject* t = need_cpsyco_obj("compactdictproxy");
 	if (t == NULL)
 		return NULL;
-	return PyObject_CallFunction(t, "O", (PyObject*) ko);
+	return PyObject_CallFunction(t, "O", ko);
+}
+
+static int compact_setdict(PyObject* ko, PyObject* value, void* context)
+{
+	PyObject* nval;
+	PyObject* d;
+	PyObject* tmp;
+
+	if (value == NULL) {
+		PyErr_SetString(PyExc_AttributeError,
+				"__dict__ attribute cannot be deleted");
+		return -1;
+	}
+	if (PyDict_Check(value)) {
+		nval = value;
+		Py_INCREF(nval);
+	}
+	else {
+		/* Force a complete copy of 'value' for the assignment
+		   x.__dict__ = x.__dict__.  Note that we could do better
+		   and just copy the memory buffer if we detect that
+		   'value' is the dict proxy of another compact object. */
+		if (!PyMapping_Check(value)) {
+			PyErr_SetString(PyExc_TypeError,
+					"__dict__ attribute must be set "
+					"to a mapping");
+			return -1;
+		}
+		nval = PyDict_New();
+		if (nval == NULL)
+			return -1;
+		if (PyDict_Merge(nval, value, 1) < 0)
+			goto error;
+	}
+	d = compact_getdict(ko, context);
+	if (d == NULL)
+		goto error;
+	tmp = PyObject_CallMethod(d, "clear", "");
+	if (tmp == NULL)
+		goto error;
+	Py_DECREF(tmp);
+	tmp = PyObject_CallMethod(d, "update", "O", nval);
+	if (tmp == NULL)
+		goto error;
+	Py_DECREF(tmp);
+	Py_DECREF(nval);
+	return 0;
+
+ error:
+	Py_DECREF(nval);
+	return -1;
 }
 
 
@@ -617,11 +841,13 @@ static PyObject* compact_getdict(PyCompactObject* ko, void* context)
  *     __bases__[-1] == psyco.compact
  */
 
+staticforward PyTypeObject PyCompactType_Type;
+
 static PyObject *
 compacttype_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
 {
 	int i, n;
-	PyObject *name, *bases, *dict, *slots, *result;
+	PyObject *name, *bases, *dict, *slots, *result, *nbases;
 	static char *kwlist[] = {"name", "bases", "dict", 0};
 
 	/* Check arguments: (name, bases, dict) */
@@ -645,27 +871,37 @@ compacttype_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
 		return NULL;
 	PyTuple_SET_ITEM(args, 0, name); Py_INCREF(name);
 
-	/* Append 'psyco.compact' to bases if necessary */
+	/* Append 'psyco.compact' to bases if necessary, i.e. if none of the
+	   provided bases already has a metaclass of psyco.compacttype.
+	   The goal is to ensure that all the instances of psyco.compacttype
+	   are classes that inherit from psyco.compact, but only add
+	   psyco.compact to the bases if absolutely necessary. */
 	n = PyTuple_GET_SIZE(bases);
-	if (n == 0 ||
-	    PyTuple_GET_ITEM(bases, n-1) != (PyObject*) &PyCompact_Type) {
-		result = PyTuple_New(n+1);
-		if (result == NULL) {
+	for (i=0; i<n; i++) {
+		if (PyObject_TypeCheck(PyTuple_GET_ITEM(bases, i),
+				       &PyCompactType_Type))
+			break;
+	}
+	if (i == n) {
+		/* no suitable base found, must append 'psyco.compact' */
+		nbases = PyTuple_New(n+1);
+		if (nbases == NULL) {
 			Py_DECREF(args);
 			return NULL;
 		}
 		for (i=0; i<n; i++) {
 			PyObject* o = PyTuple_GET_ITEM(bases, i);
-			PyTuple_SET_ITEM(result, i, o);
+			PyTuple_SET_ITEM(nbases, i, o);
 			Py_INCREF(o);
 		}
-		PyTuple_SET_ITEM(result, n, (PyObject*) &PyCompact_Type);
+		PyTuple_SET_ITEM(nbases, n, (PyObject*) &PyCompact_Type);
 		Py_INCREF(&PyCompact_Type);
-		bases = result;
 	}
-	else
+	else {
+		nbases = bases;
 		Py_INCREF(bases);
-	PyTuple_SET_ITEM(args, 1, bases);
+	}
+	PyTuple_SET_ITEM(args, 1, nbases);
 
 	/* Insert '__slots__=()' into a copy of 'dict' */
 	dict = PyDict_Copy(dict);
@@ -686,7 +922,7 @@ compacttype_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
 	return result;
 }
 
-static PyTypeObject PyCompactType_Type = {
+statichere PyTypeObject PyCompactType_Type = {
 	PyObject_HEAD_INIT(NULL)
 	0,                                      /*ob_size*/
 	"psyco.compacttype",                    /*tp_name*/
@@ -738,12 +974,14 @@ DEFINEVAR compact_impl_t* PyCompact_EmptyImpl;
 
 static PyMethodDef compact_methods[] = {
 	{"__getslot__",	(PyCFunction)compact_getslot, METH_O, NULL},
+	{"__setslot__",	(PyCFunction)compact_setslot, METH_VARARGS, NULL},
+	{"__delslot__",	(PyCFunction)compact_delslot, METH_O, NULL},
 	{NULL,		NULL}		/* sentinel */
 };
 
 static PyGetSetDef compact_getsets[] = {
 	{"__members__", (getter)compact_getmembers, NULL, NULL},
-	{"__dict__", (getter)compact_getdict, NULL, NULL},
+	{"__dict__", compact_getdict, compact_setdict, NULL},
 	{NULL}
 };
 

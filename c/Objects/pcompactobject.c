@@ -83,12 +83,15 @@ static vinfo_t* psy_k_load_vinfo(PsycoObject* po, vinfo_t* vsrc, vinfo_t* vk,
 
 static vinfo_t* pcompact_getattro(PsycoObject* po, vinfo_t* vk, vinfo_t* vattr)
 {
+	PyTypeObject* tp;
+	PyObject* descr = NULL;
+	descrgetfunc f = NULL;
 	long l;
 	vinfo_t* vimpl;
 	compact_impl_t* impl;
-	vinfo_t* vresult;
+	vinfo_t* vresult = NULL;
 	PyObject* name;
-	
+
 	/* don't try to optimize non-constant attribute names
 	   (see explanation in PsycoObject_GenericGetAttr()) */
 	if (!is_compiletime(vattr->source)) {
@@ -97,20 +100,47 @@ static vinfo_t* pcompact_getattro(PsycoObject* po, vinfo_t* vk, vinfo_t* vattr)
 					  "vv", vk, vattr);
 	}
 
-	/* read and temporarily promote the k_impl field of the object */
-	vimpl = psyco_get_const(po, vk, IMMUT_COMPACT_impl);
-	if (vimpl == NULL)
+	/* we need the type of 'obj' at compile-time */
+	tp = (PyTypeObject*) Psyco_NeedType(po, vk);
+	if (tp == NULL)
 		return NULL;
-	l = psyco_atcompiletime(po, vimpl);
-	if (l == -1)
-		return NULL;
-	psyco_forget_field(po, vk, IMMUT_COMPACT_impl);
-	impl = (compact_impl_t*) l;
-	
+
+	if (tp->tp_dict == NULL) {
+		if (PyType_Ready(tp) < 0) {
+			psyco_virtualize_exception(po);
+			return NULL;
+		}
+	}
+
 	/* use interned strings only */
 	name = (PyObject*) CompileTime_Get(vattr->source)->value;
 	Py_INCREF(name);
 	K_INTERN(name);
+
+	/* XXX this is broken in the same way as PsycoObject_GenericGetAttr() */
+	descr = _PyType_Lookup(tp, name);
+	if (descr != NULL) {
+		Py_INCREF(descr);
+		if (PyType_HasFeature(descr->ob_type, Py_TPFLAGS_HAVE_CLASS)) {
+			f = descr->ob_type->tp_descr_get;
+			if (f != NULL && PyDescr_IsData(descr)) {
+				vresult = Psyco_META3(po, f,
+						      CfReturnRef|CfPyErrIfNull,
+						      "lvl", descr, vk, tp);
+				goto done;
+			}
+		}
+	}
+
+	/* read and temporarily promote the k_impl field of the object */
+	vimpl = psyco_get_const(po, vk, IMMUT_COMPACT_impl);
+	if (vimpl == NULL)
+		goto done;
+	l = psyco_atcompiletime(po, vimpl);
+	if (l == -1)
+		goto done;
+	psyco_forget_field(po, vk, IMMUT_COMPACT_impl);
+	impl = (compact_impl_t*) l;
 
 	while (impl->attrname != NULL) {
 		if (impl->attrname == name) {
@@ -120,13 +150,30 @@ static vinfo_t* pcompact_getattro(PsycoObject* po, vinfo_t* vk, vinfo_t* vattr)
 			vinfo_t* vdata = NULL;
 			vresult = psy_k_load_vinfo(po, impl->vattr, vk, &vdata);
 			vinfo_xdecref(vdata, po);
-			goto finally;
+			goto done;
 		}
 		impl = impl->parent;
 	}
-	vresult = PsycoObject_GenericGetAttr(po, vk, vattr);
 
- finally:
+	/* The end of PyObject_GenericGetAttr() */
+	if (f != NULL) {
+		vresult = Psyco_META3(po, f, CfReturnRef|CfPyErrIfNull,
+				      "lvl", descr, vk, tp);
+		goto done;
+	}
+
+	if (descr != NULL) {
+		source_known_t* sk = sk_new((long) descr, SkFlagPyObj);
+		descr = NULL;
+		vresult = vinfo_new(CompileTime_NewSk(sk));
+		goto done;
+	}
+
+	PycException_SetFormat(po, PyExc_AttributeError,
+			       "'%.50s' object has no attribute '%.400s'",
+			       tp->tp_name, PyString_AS_STRING(name));
+ done:
+	Py_XDECREF(descr);
 	Py_DECREF(name);
 	return vresult;
 }
@@ -234,6 +281,9 @@ static bool psy_k_decref_objects(PsycoObject* po, vinfo_t* attr_vi,
 static bool pcompact_setattro(PsycoObject* po, vinfo_t* vk, PyObject* attr,
 			      vinfo_t* source_vi)
 {
+	PyTypeObject* tp;
+	PyObject* descr;
+	descrsetfunc f;
 	long l;
 	vinfo_t* vimpl;
 	compact_impl_t* impl;
@@ -247,6 +297,32 @@ static bool pcompact_setattro(PsycoObject* po, vinfo_t* vk, PyObject* attr,
 	vinfo_t* v2;
 	bool ok;
 	int smin, smax, s, s1, s2;
+
+	/* we need the type of 'obj' at compile-time */
+	tp = (PyTypeObject*) Psyco_NeedType(po, vk);
+	if (tp == NULL)
+		return false;
+
+	if (tp->tp_dict == NULL) {
+		if (PyType_Ready(tp) < 0) {
+			psyco_virtualize_exception(po);
+			return false;
+		}
+	}
+
+	/* XXX this is broken in the same way as PsycoObject_GenericGetAttr() */
+	descr = _PyType_Lookup(tp, attr);
+	if (descr != NULL &&
+	    PyType_HasFeature(descr->ob_type, Py_TPFLAGS_HAVE_CLASS)) {
+		f = descr->ob_type->tp_descr_set;
+		if (f != NULL && PyDescr_IsData(descr)) {
+			Py_INCREF(descr);   /* XXX leaks */
+			return Psyco_META3(po, f,
+					   CfNoReturnValue|CfPyErrIfNonNull,
+					   source_vi ? "lvv" : "lvl",
+					   descr, vk, source_vi) != NULL;
+		}
+	}
 
 	if (source_vi != NULL) {
 		/* force mutable virtual-time objects out of virtual-time,

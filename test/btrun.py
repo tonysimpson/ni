@@ -3,7 +3,7 @@
 
 >>> import sys, uu, psyco
 >>> psyco.full()
->>> import test1, test3, test5
+>>> import test1, test3, test5, compactobject
 
 >>> def prep():
 ...     uu.decode('file2-basetests.uu', 'file2-basetests')
@@ -617,3 +617,84 @@ xrange
 
 >>> test5.longrangetest()
 [1234567890123456789L, 1234567890123456790L]
+
+
+                         ###########################
+                         ####   COMPACTOBJECT   ####
+                         ###########################
+
+>>> for i in range(5): print compactobject.do_test(i) or i
+0
+1
+2
+3
+4
+
+>>> for i in range(5, 10):
+...     compactobject.do_test(i,
+...         do_test_1=psyco.proxy(compactobject.do_test_1))
+...     print i
+5
+6
+7
+8
+9
+
+>>> compactobject.pcompact_test()
+13
+hello
+None
+
+>>> compactobject.pcompact_creat('hel' + 'lo')
+(0, 0, 0) 3 None hello
+(0, 1, 2) 4 None hello
+(0, 2, 4) 5 None hello
+(0, 3, 6) 6 None hello
+(0, 4, 8) 7 None hello
+(0, 5, 10) 8 None hello
+(0, 6, 12) 9 None hello
+(0, 7, 14) 10 None hello
+(0, 8, 16) 11 None hello
+(0, 9, 18) 12 None hello
+(0, 10, 20) 13 None hello
+11
+0
+
+>>> compactobject.pcompact_modif('hel' + 'lo')
+hello 1 0 1
+hello 1 0 2
+hello 1 0 3
+hello 1 0 4
+hello 1 0 5
+hello 1 0 6
+hello 1 0 7
+hello 1 0 8
+hello 1 0 9
+hello 1 0 10
+hello 1 0 11
+hello 1 0 12
+hello 1 0 13
+hello 1 0 14
+hello 1 0 15
+hello 1 0 16
+hello 1 0 17
+hello 1 0 18
+hello 1 0 19
+hello 1 0 20
+hello 1 0 21
+0
+
+>>> print compactobject.test_rect()
+None
+
+>>> print compactobject.test_special_attributes()
+None
+
+>>> print compactobject.test_inheritance()
+None
+
+>>> print compactobject.test_data_descr()
+None
+
+>>> print compactobject.test_ass_dict()
+None

@@ -29,6 +29,9 @@ EXTERNVAR compact_impl_t* PyCompact_EmptyImpl;
 
 
 /* EXTERNFN PyObject* PyCompact_New(void); */
+/* EXTERNFN PyObject* PyCompact_GetSlot(PyObject* ko, PyObject* key); */
+/* EXTERNFN PyObject* PyCompact_SetSlot(PyObject* ko, PyObject* key, */
+/*                                      PyObject* value); */
 /* EXTERNFN int PyCompact_Extend(PyObject* ko, compact_impl_t* nimpl); */
 /* EXTERNFN compact_impl_t* PyCompact_ExtendImpl(compact_impl_t* oldimpl, */
 /*                                               PyObject* attr, */

@@ -9,9 +9,9 @@
         Psyco Home page: \url{http://psyco.sourceforge.net/}
 }
 
-\date{updated Dec 1st, 2004}
+\date{updated Dec 29th, 2004}
 
-\release{1.3}                   % release version
+\release{1.4}                   % release version
 
 \makeindex
 
@@ -328,19 +328,23 @@ Results:
 
 \section{Old-style classes vs. Built-in types}\label{metaclass}
 
-Althought Psyco can plug itself over various versions of the interpreter, there are some features that depend on specific extensions.  Extra features only available from Python 2.2.2 and up (not in 2.2) are depending on new hooks that the core interpreter offer.  While minor, these hooks are crucial for some features and they are the reason I recommend to upgrade your Python installation to 2.2.3.  On the other hand, differences between Python 2.1 and the 2.2 series are due to the general-purpose enhancements done by the Python team between these releases.
+Althought Psyco can plug itself over various versions of the interpreter, there are some features that depend on specific extensions.  Extra features only available from Python 2.2.2 and up (not in 2.2) are depending on new hooks that the core interpreter offers.  While minor, these hooks are crucial for some features and they are the reason I recommend to upgrade your Python installation to 2.2.3.  On the other hand, differences between Python 2.1 and the 2.2 series are due to the general-purpose enhancements done by the Python team between these releases.
 
-A major introduction of Python 2.2 are the so-called new-style classes, which have a (positive) performance impact on Psyco.  So \strong{with Python 2.2} you should, as much as possible, let your classes be built-in types and not old-style classes.  This means that your classes should inherit from \class{object} (directly or not; if its parent inherit from \class{object} it is fine).  This lets Psyco produce faster code.  Even better, if you add the line
+A major introduction of Python 2.2 are the so-called new-style classes, which have a (positive) performance impact on Psyco.  So \strong{with Python 2.2} you should, as much as possible, let your classes be built-in types and not old-style classes (which is done by inheriting from another new-style class, or from \class{object} for root classes).
+
+In addition, Psyco 1.4 provides a compact alternative to Python's new-style instances: the \class{psyco.compact} root class.  Currently, you have to use or inherit from \class{psyco.compact} explicitely.  This lets Psyco produce faster code and reduces the memory used by your instances.  Even better, if you add the line
 
 \begin{verbatim}
 from psyco.classes import *
 \end{verbatim}
 
-at the top of the module(s) that define the classes, then not only will all your classes automatically inherit from \class{object}, but all the methods defined in your classes will automatically be compiled as if you had called \function{psyco.bind()} on them.
+at the top of the module(s) that define the classes, then not only will all your classes automatically inherit from \class{psyco.compact}, but all the methods defined in your classes will automatically be compiled as if you had called \function{psyco.bind()} on them.
 
 \warning{In Python, instances of classes that inherit from a built-in type are subject to some semantic differences that you should know about.  These are described in \url{http://www.python.org/2.2.2/descrintro.html}.  An immediate difference is that if \var{x} contains an instance of such a new-style class, then \code{type(x)} will be \code{x.__class__} instead of \constant{types.InstanceType}.}
 
 \strong{In Python 2.1} there are no user-defined built-in types.  The statement \samp{from psyco.classes import *} has no effect but does not hurt.
+
+For more information see sections \ref{psycodotclasses} and \ref{psycocompact}.
 
 
 \section{Known bugs}\label{tutknownbugs}
@@ -585,14 +589,14 @@ With Python 2.2.2 (or up) you may try to add a line \samp{psyco.runonly()} after
 \end{excdesc}
 
 
-\section{The \module{psyco.classes} module}
+\section{The \module{psyco.classes} module}\label{psycodotclasses}
 
 The \module{psyco.classes} module defines a practical metaclass that you can use in your applications.  [Metaclasses were introduced in Python 2.2 only; this module contains no-op placeholders if you import it under Python 2.1.]
 
 A metaclass is the type of a class.  Just like a class controls how its instances behave, a metaclass controls how its classes behave.  The purpose of the present metaclass is to make your classes more Psyco-friendly.
 
 \begin{classdesc*}{psymetaclass}
-The new metaclass.  This is a subclass of \class{type}. Any user-defined class using this metaclass will be a new-style class and will automatically bind all the methods defined in the class body for compilation with Psyco.
+The new metaclass.  This is a subclass of \class{psyco.compacttype}. Any user-defined class using this metaclass will be a new-style class and will automatically bind all the methods defined in the class body for compilation with Psyco.  It will also automatically inherit from \class{psyco.compact} (see section \ref{psycocompact}).
 \end{classdesc*}
 
 \begin{classdesc*}{__metaclass__}
@@ -605,7 +609,7 @@ An empty class whose metaclass is \class{psymetaclass}, suitable for subclassing
 
 See \url{http://www.python.org/2.2.2/descrintro.html} for more information about old-style vs.\ new-style classes.  Be aware of the changes in semantics, as recalled in section \ref{metaclass} (Psyco tutorial).
 
-By using \class{psyco.classes.psymetaclass} as the metaclass of your commonly-used classes, you make all your classes new-style (Psyco can produce faster code to handle instances of these classes than old-style instances).  Additionally, Psyco will call \function{psyco.bind} for you on all methods defined in the class (this does not include inherited parent methods or methods added after the class is first created).
+By using \class{psyco.classes.__metaclass__} as the metaclass of your commonly-used classes, Psyco will call \function{psyco.bind} for you on all methods defined in the class (this does not include inherited parent methods or methods added after the class is first created).  Additionally, these classes are ``compact'' (section \ref{psycocompact}), i.e.\ Psyco can produce quite fast code to handle instances of these classes and they use less memory each.
 
 \subsection{Examples}
 
@@ -625,6 +629,74 @@ import psyco.classes
 class X(psyco.classes.psyobj):
     def f(x):
         return x+1
+\end{verbatim}
+
+
+\section{The \module{psyco.compact} type}\label{psycocompact}
+
+Starting from version 1.4, Psyco exports two extension types: \class{psyco.compact} and \class{psyco.compacttype}.  (In some future version, Psyco may be able to patch the features implemented by these types directly into the standard interpreter's built-in types).
+
+\begin{classdesc*}{psyco.compact}
+A base class whose instances are stored more compactly in memory.  Can be directly instantiated or subclassed.  The instances behave roughly like normal Python instances, i.e.\ you can store and read attributes, and put methods and other attributes in the subclasses, including Python's special methods (\function{__init__}, \function{__str__}, etc.). Their advantages over regular instances are:
+%
+\begin{itemize}
+\item They are more compact in memory, with a footprint similar to that of Python's \code{__slots__}-constrained instances.  For example, an instance with two integer attributes uses around 180 bytes in plain Python, and only around 44 if you use \code{__slots__} or with \class{psyco.compact}.  The advantage over \code{__slots__} is that you don't have to know all possible attributes in advance.
+\item In non-Psyco-accelerated function, there is a space/time trade-off: attribute accesses are a bit slower.  However,
+\item Psyco-accelerated functions handle \class{psyco.compact} instances extremely efficiently, both in space and in time.  For example, an assignment like \code{x.attr=(a,b,c)} stores the individual values of \code{a}, \code{b} and \code{c} directly into the instance data without building a tuple in memory.
+\end{itemize}
+
+There are a few visible differences and limitations:
+%
+\begin{enumerate}
+\item Explicit use of \code{__slots__} is forbidden.
+\item Weak references to instances are not allowed.  (Please write me if you would like me to remove this limitation.)
+\item Instances are not based on a real dictionary; the \code{__dict__} attribute returns a dictionary proxy (which however supports all dict operations, including writes).
+\item When assigning to \code{__dict__}, a copy of the data is stored into the instance; the dict and the instance do not reflect each other's future changes (they do in plain Python).
+\item Instances have a \code{__members__} attribute which lists the current attributes, in the order in which they have been set.
+\item For internal reasons, the subclasses' \code{__bases__} attribute will always contain \class{psyco.compact} as the last item, even if one or several other base classes were specified.
+\item Three methods \code{__getslot__}, \code{__setslot__} and \code{__delslot__} show up for internal purposes.
+\end{enumerate}
+\end{classdesc*}
+
+\begin{classdesc*}{psyco.compacttype}
+The metaclass of \class{psyco.compact}.  It inherits from \class{type}.  It means that when you subclass \class{psyco.compact}, your classes are by default of type \class{psyco.compacttype} instead of \class{type}.  The sole purpose of this metaclass is to force \class{psyco.compact} to appear in the subclasses' bases, and to check for \code{__slots__}.
+
+Note that you should not mix \class{psyco.classtype} classes and normal classes in the same hierarchy.  Although this might work, the instances will still each have an unused allocated dictionary.
+\end{classdesc*}
+
+\subsection{Examples}
+
+\begin{verbatim}
+import psyco
+class Rectangle(psyco.compact):
+    def __init__(self, w, h):
+        self.w = w
+        self.h = h
+    def getarea(self):
+        return self.w * self.h
+
+r = Rectangle(6, 7)
+assert r.__dict__ == {'w': 6, 'h': 7}
+print r.getarea()
+\end{verbatim}
+
+The above example runs without using Psyco's compilation features.  The \code{r} instance is stored compactly in memory.  (Thus this feature of Psyco probably works on any processor, but this hasn't been tested.)
+
+The same example using the metaclass:
+
+\begin{verbatim}
+import psyco
+class Rectangle:
+    __metaclass__ = psyco.compacttype
+    def __init__(self, w, h):
+        self.w = w
+        self.h = h
+    def getarea(self):
+        return self.w * self.h
+
+r = Rectangle(6, 7)
+assert r.__dict__ == {'w': 6, 'h': 7}
+print r.getarea()
 \end{verbatim}
 
 
@@ -800,8 +872,10 @@ At other points, Psyco makes assumptions that may be wrong (and will cause damag
 \item \strong{Built-ins} are assumed never to change.  Global variables can change, of course, but you must not add or remove a global variable to shadow or expose a built-in (at least not after a module is initialized).
 
 \item Python 2.2 and later only: do not \strong{dynamically change the methods} of the new-style classes (classes that inherit from a built-in type).
-  
-\item Do not use Psyco together with \strong{restricted execution} (the \module{rexec} module).
+
+\item Psyco assumes that \strong{types never change}.  This is basically wrong (you can assign to \code{__class__}).  This might cause Psyco to randomly believe that instances are still of their previous type.
+
+\item Do not use Psyco together with \strong{restricted execution} (the \module{rexec} module).  (Given that \module{rexec} is deprecated and not safe in the first place, not using it is probably a good idea anyway.)
 
 \end{itemize}
 

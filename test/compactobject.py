@@ -1,11 +1,10 @@
 import os, sys, random
 import psyco
-from psyco import _psyco
 
 
 def do_test_1(objects):
     d = [{} for i in range(20)]
-    s = [_psyco.compact() for i in range(20)]
+    s = [psyco.compact() for i in range(20)]
     attrnames = list('abcdefghijklmnopqrstuvwxyz')
     for j in range(5000):
         i = random.randrange(0, 20)
@@ -37,7 +36,7 @@ def do_test_1(objects):
                 pass
         assert d[i] == d1
 
-def do_test(n):
+def do_test(n, do_test_1=do_test_1):
     random.jumpahead(n*111222333444555666777L)
     objects = [None, -1, 0, 1, 123455+1, -99-1,
                'hel'+'lo', [1,2], {(5,): do_test}, 5.43+0.01, xrange(5)]
@@ -46,8 +45,10 @@ def do_test(n):
         #print '%5d  -> %r' % (sys.getrefcount(o), o)
         assert sys.getrefcount(o) == 4
 
+psyco.cannotcompile(do_test)
 
-def test_all(n):
+
+def subprocess_test(n):
     sys.stdout.flush()
     childpid = os.fork()
     if not childpid:
@@ -56,16 +57,9 @@ def test_all(n):
     childpid, status = os.wait()
     return os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
 
-def stress_test(repeat=20):
+def test_compact_stress(repeat=20):
     for i in range(repeat):
-        print i
-        if not test_all(i):
-            print
-            print "Test failed"
-            break
-    else:
-        print
-        print "OK"
+        yield subprocess_test, i
 
 # ____________________________________________________________
 
@@ -82,18 +76,20 @@ psyco.bind(read_x)
 psyco.bind(read_y)
 
 def pcompact_test():
-    k = _psyco.compact()
+    k = psyco.compact()
     k.x = 12
     k.z = None
     k.y = 'hello'
     print read_x(k)
     print read_y(k)
     print read_z(k)
-    psyco.dumpcodebuf()
+    #psyco.dumpcodebuf()
 
 def pcompact_creat(obj):
+    base = sys.getrefcount(obj)
+    items = []
     for i in range(11):
-        k = _psyco.compact()
+        k = psyco.compact()
         k.x = (0,i,i*2)
         k.y = i+1
         k.z = None
@@ -101,25 +97,128 @@ def pcompact_creat(obj):
         k.y = i+2
         k.y = i+3
         print k.x, k.y, k.z, k.t
-    print sys.getrefcount(obj)
+        items.append(k)
+        del k
+    print sys.getrefcount(obj) - base
+    del items[:]
+    print sys.getrefcount(obj) - base
 
 psyco.bind(pcompact_creat)
 
 def pcompact_modif(obj):
+    base = sys.getrefcount(obj)
     for i in range(21):
-        k = _psyco.compact()
+        k = psyco.compact()
         #k.x = i+1
         #k.y = (i*2,i*3,i*4,i*5,i*6,i*7)
         k.x = obj
         print k.x,
+        print sys.getrefcount(obj) - base,
         k.x = i+1
+        print sys.getrefcount(obj) - base,
         print k.x
         #k.x = len
         #k.x = i+2
         #print k.x, k.y
-    print sys.getrefcount(obj)
+    print sys.getrefcount(obj) - base
 
 psyco.bind(pcompact_modif)
+
+# ____________________________________________________________
+
+class Rect(psyco.compact):
+    def __init__(self, w, h):
+        self.w = w
+        self.h = h
+    def getarea(self):
+        return self.w * self.h
+
+def test_rect():
+    assert Rect(10, 12).getarea() == 120
+    assert Rect(0.5, 2.5).getarea() == 1.25
+    assert Rect([1,2,3], 2).getarea() == [1,2,3,1,2,3]
+
+def test_special_attributes():
+    missing = object()
+    r = Rect(6, 7)
+    assert r.__members__ == ['w', 'h']
+    assert r.__dict__.items() == [('w', 6), ('h', 7)]
+    assert r.__dict__ == {'w': 6, 'h': 7}
+    assert {'w': 6, 'h': 7} == r.__dict__
+    assert list(r.__dict__) == ['w', 'h']
+    del r.__dict__['w']
+    assert getattr(r, 'w', missing) is missing
+    assert r.h == 7
+    assert r.__members__ == ['h']
+    assert r.__dict__.items() == [('h', 7)]
+    assert r.__dict__ == {'h': 7}
+    assert {'h': 7} == r.__dict__
+    assert list(r.__dict__) == ['h']
+    del r.h
+    assert r.__members__ == []
+    assert getattr(r, 'w', missing) is missing
+    assert getattr(r, 'h', missing) is missing
+
+def test_inheritance():
+    class X(psyco.compact):
+        pass
+    class Y(psyco.compact):
+        pass
+    class Z(X):
+        pass
+    x = X()
+    x.a = 5
+    assert [s for s in dir(x) if not s.startswith('__')] == ['a']
+    x.__class__ = Y
+    assert type(x) is Y
+    assert x.__class__ is Y
+    assert Y.__bases__ == (psyco.compact,)
+    assert Z.__bases__ == (X,)
+    Z.__bases__ = (Y,)
+    assert Z.__bases__ == (Y,)
+
+psyco.cannotcompile(test_inheritance)  # because of type mutation
+
+def test_data_descr():
+    global done
+    done = []
+    class X(psyco.compact):
+        def g(self): done.append('g')
+        def s(self, value): done.append(value)
+        def d(self): done.append('d')
+        a = property(g,s,d)
+    x = X()
+    x.__dict__['a'] = 'this is hidden'
+    r = x.a
+    assert r is None
+    x.a = 123
+    del x.a
+    del x.a
+    assert done == ['g', 123, 'd', 'd']
+    assert x.__dict__ == {'a': 'this is hidden'}
+    x.__dict__ = {'a': 'this too'}
+    assert x.__dict__ == {'a': 'this too'}
+    assert done == ['g', 123, 'd', 'd']
+
+def test_ass_dict():
+    missing = object()
+    x = psyco.compact()
+    x.a = 5
+    assert x.__dict__ == {'a': 5}
+    x.__dict__ = {'b': 6}
+    assert x.b == 6
+    assert getattr(x, 'a', missing) is missing
+    assert x.__dict__ == {'b': 6}
+    y = psyco.compact()
+    y.__dict__ = x.__dict__
+    assert y.__dict__ == {'b': 6}
+    y.__dict__ = y.__dict__
+    assert y.__dict__ == {'b': 6}
+
+def test_with_psyco():
+    yield psyco.proxy(test_rect)
+    yield psyco.proxy(test_special_attributes)
+    yield psyco.proxy(test_data_descr)
 
 # ____________________________________________________________
 
@@ -127,6 +226,6 @@ if __name__ == '__main__':
     import time; print "break!"; time.sleep(1)
     #stress_test()
     #pcompact_test()
-    pcompact_creat('hello')
-    pcompact_modif('hello')
+    pcompact_creat('hel' + 'lo')
+    pcompact_modif('hel' + 'lo')
     psyco.dumpcodebuf()
