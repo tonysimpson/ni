@@ -104,8 +104,7 @@ static vinfo_t* get_len_of_range(PsycoObject* po, vinfo_t* lo, vinfo_t* hi
 		return psyco_vi_Zero();
 }
 
-static vinfo_t* pbuiltin_range_or_xrange(PsycoObject* po,
-					 vinfo_t* vargs, PyTypeObject* ntype)
+static vinfo_t* pbuiltin_range_or_xrange(PsycoObject* po, vinfo_t* vargs)
 {
 	vinfo_t* result = NULL;
 	vinfo_t* ilen;
@@ -130,12 +129,8 @@ static vinfo_t* pbuiltin_range_or_xrange(PsycoObject* po,
 		ihigh = PsycoInt_AsLong(po, PsycoTuple_GET_ITEM(vargs, 1));
 		if (ihigh == NULL) goto End;
 		break;
-	default: {
-		void* fn = (ntype == &PyList_Type) ? cimpl_range : cimpl_xrange;
-		return psyco_generic_call(po, fn,
-					  CfReturnRef|CfPyErrIfNull,
-					  "lv", NULL, vargs);
-	    }
+	default:
+		return NULL;
 	}
 	ilen = get_len_of_range(po, ilow, ihigh);
 	if (ilen == NULL) goto End;
@@ -145,7 +140,7 @@ static vinfo_t* pbuiltin_range_or_xrange(PsycoObject* po,
 	result->array->items[OB_TYPE] =
 		vinfo_new(CompileTime_New((long)(&PyList_Type)));
 	/* XXX implement xrange() completely and replace '&PyList_Type'
-	   above by 'ntype' */
+	   above by '&PyRange_Type' for this case */
 	result->array->items[RANGE_LEN] = ilen;
 	result->array->items[RANGE_START] = ilow;
 	ilow = NULL;
@@ -159,19 +154,35 @@ static vinfo_t* pbuiltin_range_or_xrange(PsycoObject* po,
 
 static vinfo_t* pbuiltin_range(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 {
-	return pbuiltin_range_or_xrange(po, vargs, &PyList_Type);
+  vinfo_t* result = pbuiltin_range_or_xrange(po, vargs);
+  if (result == NULL && !PycException_Occurred(po))
+    result = psyco_generic_call(po, cimpl_range,
+                                CfReturnRef|CfPyErrIfNull,
+                                "lv", NULL, vargs);
+  return result;
 }
 
 static vinfo_t* pbuiltin_xrange(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 {
-	return pbuiltin_range_or_xrange(po, vargs, &PyRange_Type);
+  vinfo_t* result = pbuiltin_range_or_xrange(po, vargs);
+  if (result == NULL && !PycException_Occurred(po))
+    result = psyco_generic_call(po, cimpl_xrange,
+                                CfReturnRef|CfPyErrIfNull,
+                                "lv", NULL, vargs);
+  return result;
 }
 
 static vinfo_t* prange_new(PsycoObject* po, vinfo_t* vtype,
 			   vinfo_t* vargs, vinfo_t* vkw)
 {
-	/* for Python >= 2.3, where __builtin__.xrange is a type */
-	return pbuiltin_range_or_xrange(po, vargs, &PyRange_Type);
+  /* for Python >= 2.3, where __builtin__.xrange is a type */
+  vinfo_t* result = pbuiltin_range_or_xrange(po, vargs);
+  if (result == NULL && !PycException_Occurred(po))
+    result = psyco_generic_call(po, PyRange_Type.tp_new,
+                                CfReturnRef|CfPyErrIfNull,
+                                "lvl", &PyRange_Type,
+                                vargs, NULL);
+  return result;
 }
 
 static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
