@@ -1,6 +1,6 @@
 #include "mergepoints.h"
 #include "vcompiler.h"
-#include <opcode.h>
+#include "Python/pycinternal.h"
 
 
  /***************************************************************/

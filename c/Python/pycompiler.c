@@ -25,7 +25,7 @@
 #include "../Objects/ptupleobject.h"
 
 #include <eval.h>
-#include <opcode.h>
+#include "pycinternal.h"
 
 
 #define KNOWN_VAR(type, varname, loc)   \
