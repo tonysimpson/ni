@@ -331,7 +331,10 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		END_CODE
 	}
 #endif
-	
+
+	BEGIN_CODE
+	NEED_CC();
+
 	for (count=0; arguments[count]; count++) {
 		if (argtags[count] == 'v') {
 			/* We collect all the sources in 'args' now,
@@ -344,8 +347,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		}
 	}
 
-	BEGIN_CODE
-	SAVE_REGS_FN_CALLS;
+	SAVE_REGS_FN_CALLS(false);   /* CC saved above */
 	stackbase = po->stack_depth;
 	po->stack_depth += totalstackspace;
 	STACK_CORRECTION(totalstackspace);

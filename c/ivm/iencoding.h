@@ -191,7 +191,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code);
 EXTERNFN void psyco_inverted_cc(PsycoObject* po);
 
-#define SAVE_REGS_FN_CALLS            NEED_CC()
+#define SAVE_REGS_FN_CALLS(cc)        do { if (cc) NEED_CC(); } while (0)
 
 #define TEMP_SAVE_REGS_FN_CALLS       do { /* nothing */ } while (0)
 

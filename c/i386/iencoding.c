@@ -52,7 +52,7 @@ void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
   if (restore)
     TEMP_SAVE_REGS_FN_CALLS;
   else
-    SAVE_REGS_FN_CALLS;
+    SAVE_REGS_FN_CALLS(true);
 
   /* first pushed argument */
   if (extraarg != SOURCE_DUMMY)

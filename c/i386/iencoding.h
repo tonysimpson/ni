@@ -860,8 +860,8 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 } while (0)
 
 /* save all registers that might be clobbered by a call to a C function */
-#define SAVE_REGS_FN_CALLS   do {               \
-  NEED_CC();                                    \
+#define SAVE_REGS_FN_CALLS(cc)   do {           \
+  if (cc) NEED_CC();                            \
   NEED_REGISTER(REG_386_EAX);                   \
   NEED_REGISTER(REG_386_ECX);                   \
   NEED_REGISTER(REG_386_EDX);                   \
