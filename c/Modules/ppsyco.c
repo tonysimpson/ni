@@ -229,7 +229,7 @@ static vinfo_t* ppsyco_input(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 INITIALIZATIONFN
 void psyco_initpsyco(void)
 {
-	PyObject* md = Psyco_DefineMetaModule("_psyco");
+	PyObject* md = CPsycoModule;
 
 #define DEFMETA(name)							\
     cimpl_ ## name = Psyco_DefineModuleFn(md, #name, METH_VARARGS,	\
@@ -244,5 +244,4 @@ void psyco_initpsyco(void)
 	DEFMETA( input );
 
 #undef DEFMETA
-	Py_XDECREF(md);
 }
