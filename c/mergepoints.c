@@ -87,6 +87,13 @@
                              op == BUILD_LIST ||        \
                              op == BUILD_MAP)
 
+/* opcodes that can only be compiled at module top-level,
+   when locals() is globals() */
+#define IS_MODULE_INSTR(op) (op == STORE_NAME ||        \
+                             op == DELETE_NAME ||       \
+                             op == LOAD_NAME ||         \
+                             op == IMPORT_STAR)
+
 /* all other supported instructions must be listed here. */
 #define OTHER_OPCODE(op)  (op == UNARY_POSITIVE ||            \
                            op == UNARY_NEGATIVE ||            \
@@ -143,9 +150,6 @@
                            op == STORE_GLOBAL ||              \
                            op == DELETE_GLOBAL ||             \
                            op == LOAD_GLOBAL ||               \
-                           op == STORE_NAME ||                \
-                           op == DELETE_NAME ||               \
-                           op == LOAD_NAME ||                 \
                            op == LOAD_ATTR ||                 \
                            /* COMPARE_OP special-cased */     \
                            op == IMPORT_NAME ||               \
@@ -222,6 +226,7 @@
 #define MP_HAS_J_MULTIPLE  0x10
 #define MP_LIGHT           0x20
 #define MP_IS_CTXDEP       0x40
+#define MP_IS_MODULE       0x80
 
 #define F(op)      ((IS_JUMP_INSTR(op)    ? MP_IS_JUMP        : 0) |    \
                     (HAS_JREL_INSTR(op)   ? MP_HAS_JREL       : 0) |    \
@@ -229,12 +234,13 @@
                     (HAS_J_MULTIPLE(op)   ? MP_HAS_J_MULTIPLE : 0) |    \
                     (IS_LIGHT_INSTR(op)   ? MP_LIGHT          : 0) |    \
                     (IS_CTXDEP_INSTR(op)  ? MP_IS_CTXDEP      : 0) |    \
+                    (IS_MODULE_INSTR(op)  ? MP_IS_MODULE      : 0) |    \
                     (OTHER_OPCODE(op)     ? MP_OTHER          : 0))
 
 /* opcode table -- the preprocessor expands this into several hundreds KB
    of code (which reduces down to 256 bytes!).  Hopefully not a problem
    for modern C compilers */
-static const char instr_control_flow[256] = {
+static const unsigned char instr_control_flow[256] = {
   F(0x00), F(0x01), F(0x02), F(0x03), F(0x04), F(0x05), F(0x06), F(0x07),
   F(0x08), F(0x09), F(0x0A), F(0x0B), F(0x0C), F(0x0D), F(0x0E), F(0x0F),
   F(0x10), F(0x11), F(0x12), F(0x13), F(0x14), F(0x15), F(0x16), F(0x17),
@@ -485,7 +491,7 @@ static void analyse_variables(struct instrnode_s* instrnodes,
 
 
 DEFINEFN
-PyObject* psyco_build_merge_points(PyCodeObject* co)
+PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
 {
   PyObject* s;
   mergepoint_t* mp;
@@ -616,11 +622,11 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
             unsigned char op = instrnodes[i].opcode;
             int oparg = instrnodes[i+1].mask;
             int nextinstr = i+1 + instrnodes[i+1].back;
-            char flags = instr_control_flow[(int) op];
+            unsigned char flags = instr_control_flow[(int) op];
             if (flags == 0)
               if (op != COMPARE_OP || !SUPPORTED_COMPARE_ARG(oparg))
                 {
-                  /* unsupported instruction */
+                unsupported_instruction:
                   debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
                                ("unsupported opcode %d at %s:%d\n",
                                 (int) op, PyCodeObject_NAME(co), i));
@@ -654,6 +660,12 @@ PyObject* psyco_build_merge_points(PyCodeObject* co)
               {
                 instrnodes[nextinstr].inpaths = 99;
                 instrnodes[nextinstr].mp = MPSET_FORCE;
+              }
+            if (flags & MP_IS_MODULE)
+              {
+                if (  /*!module*/  1)  // disabled, currently buggy
+                  goto unsupported_instruction;
+                mp_flags |= MP_FLAGS_MODULE;
               }
             
             /* compact the next1-next2-next3 */
@@ -877,7 +889,7 @@ mergepoint_t* psyco_next_merge_point(PyObject* mergepoints,
 }
 
 DEFINEFN
-PyObject* psyco_get_merge_points(PyCodeObject* co)
+PyObject* psyco_get_merge_points(PyCodeObject* co, int module)
 {
-  return PyCodeStats_MergePoints(PyCodeStats_Get(co));
+  return PyCodeStats_MergePoints(PyCodeStats_Get(co), module);
 }

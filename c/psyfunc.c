@@ -70,7 +70,7 @@ static bool fncall_init(struct fncall_arg_s* fncall,
       return false;
     }
   fncall->co = co;
-  fncall->merge_points = psyco_get_merge_points(co);
+  fncall->merge_points = psyco_get_merge_points(co, 0);
   return fncall->merge_points != Py_None;
 }
 
@@ -308,7 +308,7 @@ PsycoObject* psyco_restore_inline_po(PsycoObject* po, vinfo_array_t** a)
   vinfo_xdecref(v, NULL);
   array_release(array);
 
-  pyc_data_build(po, psyco_get_merge_points(po->pr.co));
+  pyc_data_build(po, psyco_get_merge_points(po->pr.co, -1));
   po->pr.f_builtins = NULL;  /* because the globals might have changed */
   return po;
 }

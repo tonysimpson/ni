@@ -515,7 +515,7 @@ PsycoObject* fpo_unfreeze(FrozenPsycoObject* fpo)
   fz_unfreeze(&po->vlocals, fpo);
   fpo_find_regs_array(&po->vlocals, po);
   frozen_copy(&po->pr, fpo->fz_pyc_data);
-  pyc_data_build(po, psyco_get_merge_points(po->pr.co));
+  pyc_data_build(po, psyco_get_merge_points(po->pr.co, -1));
   psyco_assert_coherent(po);
   return po;
 }

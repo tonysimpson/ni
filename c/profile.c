@@ -498,16 +498,17 @@ static PyObject* profile_call(PyFrameObject* frame, PyObject* arg)
 			if (cs->st_codebuf == NULL) {
 				/* not already compiled, compile it now */
 				PyObject* g = frame->f_globals;
-				int rec;
+				int rec, module;
 				stats_printf(("stats: compile code:  %s\n",
 					      PyCodeObject_NAME(frame->f_code)));
 				if (PyInt_Check(cs->st_globals))
 					rec = PyInt_AS_LONG(cs->st_globals);
 				else
 					rec = DEFAULT_RECURSION;
+                                module = frame->f_globals == frame->f_locals;
 				cs->st_codebuf = PsycoCode_CompileCode(
 								frame->f_code,
-								g, rec);
+								g, rec, module);
 				if (cs->st_codebuf == Py_None)
 					g = NULL;  /* failed */
 				else {
@@ -564,15 +565,16 @@ static PyObject* do_fullcompile(PyFrameObject* frame, PyObject* arg)
 	if (cs->st_codebuf == NULL) {
 		/* not already compiled, compile it now */
 		PyObject* g = frame->f_globals;
-		int rec;
+		int rec, module;
 		stats_printf(("stats: full compile code:  %s\n",
 			      PyCodeObject_NAME(frame->f_code)));
 		if (cs->st_globals && PyInt_Check(cs->st_globals))
 			rec = PyInt_AS_LONG(cs->st_globals);
 		else
 			rec = DEFAULT_RECURSION;
+                module = frame->f_globals == frame->f_locals;
 		cs->st_codebuf = PsycoCode_CompileCode(frame->f_code,
-						       g, rec);
+						       g, rec, module);
 		if (cs->st_codebuf == Py_None)
 			g = NULL;  /* failed */
 		else {

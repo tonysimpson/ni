@@ -17,7 +17,7 @@
    Never sets an exception. */
 inline PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
 {
-	int i, extras;
+	int i, extras, module;
 	vinfo_t* v;
 	PsycoObject* po;
 	RunTimeSource rsrc;
@@ -33,7 +33,8 @@ inline PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
           /*#endif*/
 		goto fail;
 	}
-	merge_points = PyCodeStats_MergePoints(PyCodeStats_Get(co));
+        module = f->f_globals == f->f_locals;
+	merge_points = PyCodeStats_MergePoints(PyCodeStats_Get(co), module);
 	if (merge_points == Py_None) {
 		/* unsupported bytecode instructions */
 		goto fail;
@@ -109,7 +110,8 @@ inline PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
    given code object */
 inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
                                       PyObject* globals,
-                                      int recursion)
+                                      int recursion,
+                                      int module)
 {
 	int i, argc, ncells, nfrees, extras;
 	PyObject* merge_points;
@@ -118,7 +120,7 @@ inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
 	source_known_t* sk;
 	vinfo_t* v;
 	
-	merge_points = PyCodeStats_MergePoints(PyCodeStats_Get(co));
+	merge_points = PyCodeStats_MergePoints(PyCodeStats_Get(co), module);
 	if (merge_points == Py_None) {
 		/* unsupported bytecode instructions */
 		goto fail;
@@ -218,11 +220,12 @@ inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
 DEFINEFN
 PyObject* PsycoCode_CompileCode(PyCodeObject* co,
                                 PyObject* globals,
-                                int recursion)
+                                int recursion,
+                                int module)
 {
 	mergepoint_t* mp;
 	PsycoObject* po;
-	PyObject* o = PsycoObject_FromCode(co, globals, recursion);
+	PyObject* o = PsycoObject_FromCode(co, globals, recursion, module);
 	if (o == Py_None)
 		return o;
 

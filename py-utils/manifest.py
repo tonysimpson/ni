@@ -4,7 +4,9 @@ import os, cvs
 def psycofiles():
     root = cvs.Directory(os.pardir)
     for dir in root.alldirs():
-        for name, info in dir.fileinfo.items():
+        items = dir.fileinfo.items()
+        items.sort()
+        for name, info in items:
             if name != '.cvsignore':
                 yield os.path.join(dir.relpath, name)
 

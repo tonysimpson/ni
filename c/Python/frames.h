@@ -25,7 +25,8 @@
    Never sets an exception. */
 EXTERNFN PyObject* PsycoCode_CompileCode(PyCodeObject* co,
                                          PyObject* globals,
-                                         int recursion);
+                                         int recursion,
+                                         int module);
 
 /* Same as PsycoCode_CompileCode, but starts compiling from the middle
    of a frame */
