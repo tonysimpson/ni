@@ -29,7 +29,15 @@ built-in types as classes is recommended (see comments in
 INSTALLATION
 ------------
 
-As usual::
+From the binary distributions, take the whole directory called 'psyco',
+and move it into the 'site-packages' directory of your Python distribution,
+typically located at '/usr/lib/pythonxx/site-packages/' on Linux or
+'<path-to-python>\Lib\site-packages\' on Windows.
+
+After installing, you should then have a directory '../site-packages/psyco/'
+containing only a few '.py' files and a compiled '_psyco.xxx' file.
+
+From the source distribution, just type::
 
     python setup.py build
     python setup.py install

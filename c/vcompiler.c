@@ -64,15 +64,13 @@ void sk_release(source_known_t *sk)
 DEFINEFN
 vinfo_t* vinfo_copy(vinfo_t* vi)
 {
-  vinfo_t* result = vinfo_new(vi->source);
+  vinfo_t* result = vinfo_new_skref(vi->source);
   result->array = vi->array;
   if (result->array->count > 0)
     {
       result->array = array_new(result->array->count);
       duplicate_array(result->array, vi->array);
     }
-  if (is_compiletime(result->source))
-    sk_incref(CompileTime_Get(result->source));
   return result;
 }
 

@@ -42,9 +42,16 @@ __version__ = (0,5,0)
 
 error = _psyco.error
 
+class warning(Warning):
+    pass
+
+
 def jit(tick=5):
     """Enable just-in-time compilation.
 Argument is number of invocations before rebinding."""
+    if sys.version_info[:3] < (2,1,3):
+        from warnings import warn
+        warn('psyco.jit() uses the profiler which is incompatible with nested scopes due to a Python bug', warning)
     _psyco.selective(tick)
 
 def bind(func, rec=_psyco.DEFAULT_RECURSION):

@@ -254,6 +254,10 @@ inline vinfo_t* vinfo_new(Source src) {
 	vi->array = NullArray;
 	return vi;
 }
+inline vinfo_t* vinfo_new_skref(Source src) {
+	if (is_compiletime(src)) sk_incref(CompileTime_Get(src));
+	return vinfo_new(src);
+}
 
 /* copy constructor */
 EXTERNFN vinfo_t* vinfo_copy(vinfo_t* vi);

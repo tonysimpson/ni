@@ -63,6 +63,14 @@ attributes). More serious, tricky code or an attacker can make Psyco crash
 by subtly adding or removing methods from built-in types created with the
 class keyword.
 
+Subtypes of built-in types can break
+------------------------------------
+
+Python 2.2 allows subclasses of built-in types to be defined. This has not
+been tested with Psyco; Psyco is known to break with the currently pre-alpha
+Python 2.3, because it introduces 'bool' as a subtype of 'int'. This will
+be fixed, probably in time for the final Python 2.3 release.
+
 Not tested with restricted execution
 ------------------------------------
 

@@ -252,16 +252,15 @@ static void fz_uncompress(vinfo_array_t* result)
     {
       vinfo_t* a;
       int opc = fz_getopc();
-      if (opc == 0) {        /* new item with no sub-array (optimized path) */
-        a = vinfo_new(fz_getarg());
+      if (opc >= 0) {        /* new item, potentially with its sub-array */
+        a = vinfo_new_skref(fz_getarg());
+        if (opc != 0) {       /* test to make the common path (opc==0) faster */
+          a->array = array_new(opc);
+          fz_uncompress(a->array);
+        }
       }
       else if (opc == FZ_OPC_NULL) {   /* NULL */
         continue;  /* there is already NULL in result->items[i] */
-      }
-      else if (opc > 0) {        /* new item with its sub-array */
-        a = vinfo_new(fz_getarg());
-        a->array = array_new(opc);
-        fz_uncompress(a->array);
       }
       else {       /* link to an item not built yet */
         fz_pushstack(opc, &result->items[i]);
