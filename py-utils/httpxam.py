@@ -155,6 +155,8 @@ class CodeBufHTTPHandler(SimpleHTTPRequestHandler):
                             co = psyco.unproxy(co)
                         except TypeError:
                             pass
+                        except psyco.error:
+                            pass
                         if hasattr(co, 'func_code'):
                             co = co.func_code
                     data = '<p>PsycoObject structure at this point:</p>\n'

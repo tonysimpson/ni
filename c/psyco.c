@@ -434,12 +434,13 @@ PyObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec)
 	/* return 'func' itself if the PsycoFunctionObject cannot be made */
 	if (func->func_closure != NULL) {
 		Py_INCREF(func);
-		return func;
+		return (PyObject*) func;
 	}
-	return psyco_PsycoFunction_NewEx((PyCodeObject*) func->func_code,
-					 func->func_globals,
-					 func->func_defaults,
-					 rec);
+	return (PyObject*)
+		psyco_PsycoFunction_NewEx((PyCodeObject*) func->func_code,
+					  func->func_globals,
+					  func->func_defaults,
+					  rec);
 }
 
 DEFINEFN

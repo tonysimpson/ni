@@ -1186,12 +1186,19 @@ static code_t* data_new_buffer(code_t* code, struct dmove_s* dm)
   return codebuf->codeptr + codesize;
 }
 
-#define ORIGINAL_VINFO(spos)   (*(vinfo_t**)(dm->usages + (spos)))
+#define ORIGINAL_VINFO(spos)    (*(vinfo_t**)(dm->usages + (            \
+		extra_assert(0 <= (spos) && (spos) < dm->usages_size),  \
+                (spos))))
 
 static void data_original_table(vinfo_t* a, RunTimeSource bsource,
                                 struct dmove_s* dm)
 {
-  /* called on each run-time vinfo_t in the FrozenPsycoObject */
+  /* called on each run-time vinfo_t in the FrozenPsycoObject.
+     Record in the array dm->usages which vinfo_t is found at what position
+     in the stack. Ignore the ones after dm->usages_size: they correspond to
+     stack positions which will soon be deleted (because the stack will
+     shrink). Note: this uses the fact that RUNTIME_STACK_NONE is zero
+     and uses the 0th item of dm->usages_size as general trash. */
   if (RUNTIME_STACK(a) < dm->usages_size)
     ORIGINAL_VINFO(RUNTIME_STACK(a)) = a;
 }
@@ -1234,7 +1241,9 @@ static void data_update_stack(vinfo_t* a, RunTimeSource bsource,
      is forbidden by psyco_compatible() because decrefing 'a'
      would potentially leave a freed pointer in 'b'. */
   extra_assert(!has_rtref(a->source));
-  
+
+  /* The operation below is: copy the value currently held by 'a'
+     into the stack position 'dststack'. */
   rgb = getreg(bsource);
   if (rgb != REG_NONE)
     dm->copy_regs[(int)rgb] = a;
@@ -1243,40 +1252,49 @@ static void data_update_stack(vinfo_t* a, RunTimeSource bsource,
   else
     {
       rg = RUNTIME_REG(a);
-      if (rg == REG_NONE)
-        {
+      if (rg == REG_NONE)  /* load 'a' into a register before it can be */
+        {                  /* stored back in the stack                  */
           NEED_FREE_REG(rg);
           LOAD_REG_FROM_EBP_BASE(rg, srcstack);
           REG_NUMBER(po, rg) = a;
-          SET_RUNTIME_REG_TO(a, rg);
+          /*SET_RUNTIME_REG_TO(a, rg); ignored*/
         }
-      a->source = RunTime_NewStack(dststack, rg, false);
+      /* is there already a pending value at 'dststack'? */
       overridden = ORIGINAL_VINFO(dststack);
-      if (overridden == NULL)
-        goto can_save_only;
-      ORIGINAL_VINFO(dststack) = NULL;
+      if (overridden == NULL || RUNTIME_STACK(overridden) != dststack)
+        goto can_save_only; /* no -- just save the new value to 'dststack'.
+                               The case RUNTIME_STACK(overridden) != dststack
+                               corresponds to a vinfo_t which has been moved
+                               elsewhere in the mean time. */
+      
+      /* yes -- careful! We might have to save the current value of
+         'dststack' before we can overwrite it. */
+      SET_RUNTIME_STACK_TO_NONE(overridden);
   
       if (!RUNTIME_REG_IS_NONE(overridden))
         {
-          SET_RUNTIME_STACK_TO_NONE(overridden);
+          /* no need to save the value, it is already in a register too */
         can_save_only:
+          /* copy 'a' to 'dststack' */
           SAVE_REG_TO_EBP_BASE(rg, dststack);
-          if (rgb == REG_NONE)
-            {
-              /* value has been stored in the stack
-                 and it is no longer needed in a register */
+          /*if (rgb == REG_NONE)
+             {
               REG_NUMBER(po, rg) = NULL;
-              SET_RUNTIME_REG_TO_NONE(a);
-            }
+              rg = REG_NONE;
+             }*/
         }
       else
         {
+          /* save 'a' to 'dststack' and load the previous value of 'dststack'
+             back into the register 'rg' */
           XCHG_REG_AND_EBP_BASE(rg, dststack);
-          REG_NUMBER(po, rg) = overridden;
           SET_RUNTIME_REG_TO(overridden, rg);
-          SET_RUNTIME_STACK_TO_NONE(overridden);
-          SET_RUNTIME_REG_TO_NONE(a);
+          REG_NUMBER(po, rg) = overridden;
+          rg = REG_NONE;
         }
+      /* Now 'a' is at 'dststack', but might still be in 'rg' too */
+      a->source = RunTime_NewStack(dststack, rg, false);
+      ORIGINAL_VINFO(dststack) = a; /* 'a' is now there */
       
       if (code > dm->code_limit)
         /* oops, buffer overflow. Start a new buffer */
@@ -1385,11 +1403,13 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
             {
               if (rg != i)
                 {
+                  /* the value of 'a' is currently in register 'rg' but
+                     should go into register 'i'. */
                   NEED_REGISTER(i);
                   LOAD_REG_FROM_REG(i, rg);
-                  SET_RUNTIME_REG_TO(a, i);
-                  REG_NUMBER(po, rg) = NULL;
-                  REG_NUMBER(po, i) = a;
+                  /*SET_RUNTIME_REG_TO(a, i);
+                    REG_NUMBER(po, rg) = NULL;
+                    REG_NUMBER(po, i) = a;*/
                 }
               dm.copy_regs[i] = NULL;
             }
@@ -1410,7 +1430,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
         }
     }
   /* update the registers (2): stack-to-register POPs */
-  if (popsdepth == po->stack_depth)
+  if (popsdepth == po->stack_depth) /* only if no PUSHes have messed things up */
     for (i=0; pops[i]>=0 || pops[i+1]>=0; i++)
       {
         char reg = pops[i];
