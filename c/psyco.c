@@ -968,6 +968,7 @@ PyMODINIT_FUNC init_psyco(void)
   PyExc_PsycoError = PyErr_NewException("psyco.error", NULL, NULL);
   if (PyExc_PsycoError == NULL)
     return;
+  Py_INCREF(PyExc_PsycoError);
   if (PyModule_AddObject(CPsycoModule, "error", PyExc_PsycoError))
     return;
   Py_INCREF(&PsycoFunction_Type);
