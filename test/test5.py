@@ -270,6 +270,18 @@ def longrangetest():
     else:
         print [L, L+1]
 
+def proxy_defargs():
+    d = {}
+    exec """
+def f():
+    g()
+def g(a=12):
+    print a
+""" in d
+    d['f'] = psyco.proxy(d['f'])
+    d['g'] = psyco.proxy(d['g'])
+    d['f']()
+
 if sys.version_info < (2,3):
     def arraytest():
         print "S"
@@ -285,5 +297,6 @@ if __name__ == '__main__':
     time.sleep(0.5)
     #psyco.full()
     #longrangetest()
-    psyco.proxy(arraytest)()
+    #psyco.proxy(arraytest)()
+    proxy_defargs()
     psyco.dumpcodebuf()

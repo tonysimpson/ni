@@ -641,6 +641,9 @@ xrange
 >>> test5.arraytest()
 S
 
+>>> test5.proxy_defargs()
+12
+
 
                          ###########################
                          ####   COMPACTOBJECT   ####
