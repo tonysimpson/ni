@@ -43,6 +43,38 @@ vinfo_t* PsycoObject_Call(PsycoObject* po, vinfo_t* callable_object,
 	return NULL;
 }
 
+DEFINEFN
+vinfo_t* PsycoEval_CallObjectWithKeywords(PsycoObject* po,
+					  vinfo_t* callable_object,
+					  vinfo_t* args, vinfo_t* kw)
+{
+	vinfo_t* result;
+	
+	if (args == NULL)
+		args = PsycoTuple_New(0, NULL);
+	else if (Psyco_TypeSwitch(po, args, &psyfs_tuple) != 0) {
+		goto use_proxy;
+	}
+	else
+		vinfo_incref(args);
+
+	if (kw != NULL && Psyco_TypeSwitch(po, kw, &psyfs_dict) != 0) {
+		vinfo_decref(args, po);
+		goto use_proxy;
+	}
+
+	result = PsycoObject_Call(po, callable_object, args, kw);
+	vinfo_decref(args, po);
+	return result;
+
+   use_proxy:
+	if (PsycoErr_Occurred(po))
+		return NULL;
+	return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
+				  CfReturnRef|CfPyErrIfNull,
+				  "vvv", callable_object, args, kw);
+}
+
 
 DEFINEFN
 vinfo_t* PsycoObject_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key)
@@ -264,6 +296,22 @@ vinfo_t* PsycoNumber_Invert(PsycoObject* po, vinfo_t* vi)
 				   CfReturnRef|CfPyErrIfNull, "v", vi);
 
 	return type_error(po, "bad operand type for unary ~");
+}
+
+DEFINEFN
+vinfo_t* PsycoNumber_Absolute(PsycoObject* po, vinfo_t* vi)
+{
+	PyNumberMethods *m;
+	PyTypeObject* tp = Psyco_NeedType(po, vi);
+	if (tp == NULL)
+		return NULL;
+
+	m = tp->tp_as_number;
+	if (m && m->nb_absolute)
+		return Psyco_META1(po, m->nb_absolute,
+				   CfReturnRef|CfPyErrIfNull, "v", vi);
+
+	return type_error(po, "bad operand type for abs()");
 }
 
 #ifdef Py_TPFLAGS_CHECKTYPES

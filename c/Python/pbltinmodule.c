@@ -5,12 +5,15 @@
 #include "../Objects/pstringobject.h"
 
 
-static cfunc_descr_t cd_range = { "range", METH_VARARGS };
-static cfunc_descr_t cd_xrange= { "xrange",METH_VARARGS };
-static cfunc_descr_t cd_chr   = { "chr",   METH_VARARGS };
-static cfunc_descr_t cd_ord   = { "ord",   METH_O };
-static cfunc_descr_t cd_id    = { "id",    METH_O };
-static cfunc_descr_t cd_len   = { "len",   METH_O };
+static cfunc_descr_t cd_range	= { "range",	METH_VARARGS };
+static cfunc_descr_t cd_xrange	= { "xrange",	METH_VARARGS };
+static cfunc_descr_t cd_chr	= { "chr",	METH_VARARGS };
+static cfunc_descr_t cd_ord	= { "ord",	METH_O };
+static cfunc_descr_t cd_id	= { "id",	METH_O };
+static cfunc_descr_t cd_len	= { "len",	METH_O };
+static cfunc_descr_t cd_abs	= { "abs",	METH_O };
+static cfunc_descr_t cd_apply	= { "apply",	METH_VARARGS };
+static cfunc_descr_t cd_divmod	= { "divmod",	METH_VARARGS };
 /*static cfunc_descr_t cd_type  = { "type",  CD_META_TP_NEW };*/
 
 
@@ -233,6 +236,65 @@ static vinfo_t* pbuiltin_len(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 	return result;
 }
 
+static vinfo_t* pbuiltin_abs(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
+{
+	return PsycoNumber_Absolute(po, vobj);
+}
+
+static vinfo_t* pbuiltin_apply(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
+{
+	vinfo_t* alist = NULL;
+	vinfo_t* kwdict = NULL;
+	vinfo_t* retval;
+	int tuplesize = PsycoTuple_Load(vargs);  /* -1 if unknown */
+
+	switch (tuplesize) {
+	case 3:
+		kwdict = PsycoTuple_GET_ITEM(vargs, 2);
+		if (Psyco_TypeSwitch(po, alist, &psyfs_dict) != 0) {
+			/* 'kwdict' is not a dictionary */
+			break;
+		}
+		/* fall through */
+	case 2:
+		alist = PsycoTuple_GET_ITEM(vargs, 1);
+		if (Psyco_TypeSwitch(po, alist, &psyfs_tuple) != 0) {
+			/* 'alist' is not a tuple */
+			/* XXX implement PsycoSequence_Tuple() */
+			break;
+		}
+		/* fall through */
+	case 1:
+		retval = PsycoEval_CallObjectWithKeywords(po,
+					PsycoTuple_GET_ITEM(vargs, 0),
+					alist, kwdict);
+		return retval;
+	}
+
+	if (PsycoErr_Occurred(po))
+		return NULL;
+	return psyco_generic_call(po, cd_apply.cd_function,
+				  CfReturnRef|CfPyErrIfNull,
+				  "lv", NULL, vargs);
+}
+
+static vinfo_t* pbuiltin_divmod(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
+{
+	int tuplesize = PsycoTuple_Load(vargs);  /* -1 if unknown */
+	
+	if (tuplesize == 2) {
+		return PsycoNumber_Divmod(po,
+					  PsycoTuple_GET_ITEM(vargs, 0),
+					  PsycoTuple_GET_ITEM(vargs, 1));
+	}
+
+	if (PsycoErr_Occurred(po))
+		return NULL;
+	return psyco_generic_call(po, cd_divmod.cd_function,
+				  CfReturnRef|CfPyErrIfNull,
+				  "lv", NULL, vargs);
+}
+
 
 /***************************************************************/
 
@@ -243,6 +305,9 @@ static meta_impl_t meta_bltin[] = {
 	{&cd_ord,	&pbuiltin_ord},
 	{&cd_id,	&pbuiltin_id},
 	{&cd_len,	&pbuiltin_len},
+	{&cd_abs,	&pbuiltin_abs},
+	{&cd_apply,	&pbuiltin_apply},
+	{&cd_divmod,	&pbuiltin_divmod},
 	/*{&cd_type,	&pbuiltin_type},*/
 	{NULL,		NULL}	/* sentinel */
 };

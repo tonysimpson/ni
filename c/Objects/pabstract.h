@@ -21,6 +21,10 @@
 /* 'kw' may be NULL */
 EXTERNFN vinfo_t* PsycoObject_Call(PsycoObject* po, vinfo_t* callable_object,
                                    vinfo_t* args, vinfo_t* kw);
+/* 'args' and 'kw' may be NULL; this version performs type checks */
+EXTERNFN vinfo_t* PsycoEval_CallObjectWithKeywords(PsycoObject* po,
+                                                   vinfo_t* callable_object,
+						   vinfo_t* args, vinfo_t* kw);
 
 EXTERNFN vinfo_t* PsycoObject_Size(PsycoObject* po, vinfo_t* vi);
 EXTERNFN vinfo_t* PsycoObject_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key);
@@ -41,6 +45,7 @@ EXTERNFN vinfo_t* PsycoSequence_Contains(PsycoObject* po, vinfo_t* seq,
 EXTERNFN vinfo_t* PsycoNumber_Positive(PsycoObject* po, vinfo_t* vi);
 EXTERNFN vinfo_t* PsycoNumber_Negative(PsycoObject* po, vinfo_t* vi);
 EXTERNFN vinfo_t* PsycoNumber_Invert(PsycoObject* po, vinfo_t* vi);
+EXTERNFN vinfo_t* PsycoNumber_Absolute(PsycoObject* po, vinfo_t* vi);
 
 EXTERNFN vinfo_t* PsycoNumber_Add(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
 EXTERNFN vinfo_t* PsycoNumber_Or(PsycoObject* po, vinfo_t* v1, vinfo_t* v2);
