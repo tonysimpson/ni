@@ -20,6 +20,7 @@ ps-gz: $(ps-gz)
 all  : $(all)
 
 %: %.tex
+	-rm -fr $@
 	${MKHOWTO} $<
 
 %.dvi: %.tex
