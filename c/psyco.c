@@ -152,7 +152,7 @@ static PsycoObject* psyco_build_frame(PyCodeObject* co, vinfo_t* vglobals,
      the caller will have pushed them. */
   if (sources != NULL)
     {
-      source1 = (RunTimeSource*) PyCore_MALLOC(rtcount * sizeof(RunTimeSource));
+      source1 = PyMem_NEW(RunTimeSource, rtcount);
       if (source1 == NULL && rtcount > 0)
         OUT_OF_MEMORY();
       *sources = source1;
@@ -296,7 +296,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   /* get the run-time argument sources and push them on the stack
      and write the actual CALL */
   result = psyco_call_psyco(po, codebuf, sources, argcount, finfo);
-  PyCore_FREE(sources);
+  PyMem_FREE(sources);
   return result;
 
  fail_to_default:
@@ -907,7 +907,7 @@ void psyco_dump_code_buffers(void)
 
       for (obj=psyco_codebuf_chained_list; obj != NULL; obj=obj->chained_list)
         bufcount++;
-      buftable = (long*) PyCore_MALLOC(bufcount*sizeof(long));
+      buftable = PyMem_NEW(long, bufcount);
       fwrite(&bufcount, sizeof(bufcount), 1, f);
       fwrite(buftable, sizeof(long), bufcount, f);
 
@@ -1016,7 +1016,7 @@ void psyco_dump_code_buffers(void)
         fseek(f, sizeof(bufcount), 0);
         fwrite(buftable, sizeof(long), bufcount, f);
       }
-      PyCore_FREE(buftable);
+      PyMem_FREE(buftable);
       assert(!PyErr_Occurred());
       fclose(f);
       PyErr_Restore(exc, val, tb);

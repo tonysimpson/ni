@@ -887,9 +887,7 @@ stack_frame_info_t* psyco_finfo(PsycoObject* callee)
 	static stack_frame_info_t* current = NULL;
 	static stack_frame_info_t* end = NULL;
 	if (current == end) {
-		current = (stack_frame_info_t*)
-			PyCore_MALLOC(FRAME_STACK_ALLOC_BY *
-				      sizeof(stack_frame_info_t));
+		current = PyMem_NEW(stack_frame_info_t, FRAME_STACK_ALLOC_BY);
 		if (current == NULL)
 			OUT_OF_MEMORY();
 		end = current + FRAME_STACK_ALLOC_BY;

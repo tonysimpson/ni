@@ -36,13 +36,13 @@
 
 #define BLOCKALLOC_INTERN_DEF(name, type, EVAR, EFN)		\
 inline type* psyco_llalloc_##name(void) {			\
-	type* vi = (type*) PyCore_MALLOC(sizeof(type));		\
+	type* vi = (type*) PyMem_MALLOC(sizeof(type));		\
 	if (vi == NULL)						\
 		OUT_OF_MEMORY();				\
 	return vi;						\
 }								\
 inline void psyco_llfree_##name(type* vi) {			\
-	PyCore_FREE((char*) vi);				\
+	PyMem_FREE((char*) vi);					\
 }
 
 #define BLOCKALLOC_INTERN_IMPL(name, type, blocksize, DVAR, DFN)  /* nothing */
@@ -78,7 +78,7 @@ DFN  void* psyco_ll_newblock_##name()					\
 	int block_count = (blocksize)/sizeof(type);			\
 	type* p;							\
 	type* prev = (type*) psyco_linked_list_##name;			\
-	type* block = (type*) PyCore_MALLOC(block_count*sizeof(type));	\
+	type* block = PyMem_NEW(type, block_count);			\
 	extra_assert(block_count > 0 && sizeof(type) >= sizeof(void*));	\
 	if (block == NULL)						\
 		OUT_OF_MEMORY();					\

@@ -23,9 +23,9 @@ vinfo_array_t* array_grow1(vinfo_array_t* array, int ncount)
   int i = array->count;
   extra_assert(ncount > i);
   if (i == 0)
-    array = PyCore_MALLOC(sizeof(int) + ncount * sizeof(vinfo_t*));
+    array = PyMem_MALLOC(sizeof(int) + ncount * sizeof(vinfo_t*));
   else
-    array = PyCore_REALLOC(array, sizeof(int) + ncount * sizeof(vinfo_t*));
+    array = PyMem_REALLOC(array, sizeof(int) + ncount * sizeof(vinfo_t*));
   if (array == NULL)
     OUT_OF_MEMORY();
   array->count = ncount;
@@ -331,7 +331,7 @@ DEFINEFN void PsycoObject_Delete(PsycoObject* po)
 {
   pyc_data_release(&po->pr);
   deallocate_array(&po->vlocals, NULL);
-  PyCore_FREE(po);
+  PyMem_FREE(po);
 }
 
 

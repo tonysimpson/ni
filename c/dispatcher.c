@@ -127,7 +127,7 @@ static vcompat_internal_t cmpinternal = { NULL, NULL };
 static signed char* fz_internal_copy(vcompat_internal_t* current, int nsize)
 {
   int opc_size = current->buf_end - current->buf_opc;
-  signed char* buf = (signed char*) PyCore_MALLOC(nsize);
+  signed char* buf = (signed char*) PyMem_MALLOC(nsize);
   if (buf == NULL)
     OUT_OF_MEMORY();
   memcpy(buf, current->buf_begin,
@@ -145,7 +145,7 @@ static void fz_internal_expand(void)
   if (nsize < 64) nsize = 64;
   nbuf = fz_internal_copy(&cmpinternal, nsize);
   if (cmpinternal.buf_begin != cmpinternal.buf_end)
-    PyCore_FREE((char*) cmpinternal.buf_begin);
+    PyMem_FREE(cmpinternal.buf_begin);
   cmpinternal.buf_begin = nbuf;
   cmpinternal.buf_end = nbuf + nsize;
   cmpinternal.buf_opc = cmpinternal.buf_end - opc_size;
@@ -378,7 +378,7 @@ inline void fz_release(FrozenPsycoObject* fpo) {
     {
       fz_load_fpo(fpo);
       fz_parse(fz_getopc(), true);  /* find the beginning of the pseudo-code */
-      PyCore_FREE((char*) cmpinternal.buf_args);
+      PyMem_FREE(cmpinternal.buf_args);
     }
 }
 
@@ -1339,7 +1339,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   extra_assert(lastmatch->diff == NullArray);  /* unify with exact match only */
   psyco_assert_coherent(po);
   dm.usages_size = sdepth + sizeof(vinfo_t**);
-  dm.usages = (char*) PyCore_MALLOC(dm.usages_size);
+  dm.usages = (char*) PyMem_MALLOC(dm.usages_size);
   if (dm.usages == NULL)
     OUT_OF_MEMORY();
   memset(dm.usages, 0, dm.usages_size);   /* set to all NULL */
@@ -1448,7 +1448,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   if (code > dm.code_limit && po->codelimit != NULL)
     code = data_new_buffer(code, &dm);
   
-  PyCore_FREE(dm.usages);
+  PyMem_FREE(dm.usages);
   if (dm.private_codebuf == NULL)
     {
       Py_INCREF(target_codebuf);      /* no new buffer created */

@@ -75,7 +75,7 @@ void memchk_ef_free(void* data)
   s->npages = 0;
   err = mprotect(s, npages * PAGESIZE, PROT_NONE);
   assert(!err);
-  //fprintf(stderr, "PyCore_FREE(%p): mprotect %p %x\n", data, s, npages*PAGESIZE);
+  //fprintf(stderr, "PyMem_FREE(%p): mprotect %p %x\n", data, s, npages*PAGESIZE);
 }
 
 DEFINEFN
@@ -83,12 +83,12 @@ void* memchk_ef_realloc(void* data, int nsize)
 {
   int size;
   struct _alloc_s* s = _na_find(data);
-  void* ndata = PyCore_MALLOC(nsize);
+  void* ndata = PyMem_MALLOC(nsize);
 
   assert(s->ptr == data);
   size = ((char*)s) + s->npages * PAGESIZE - (char*)data;
   memcpy(ndata, data, size<nsize ? size : nsize);
-  PyCore_FREE(data);
+  PyMem_FREE(data);
   return ndata;
 }
 

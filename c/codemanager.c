@@ -36,7 +36,7 @@ inline code_t* get_next_buffer(code_t** limit)
         }
     }
   /* no more free buffer, allocate a new one */
-  p = (char*) PyCore_MALLOC(BIG_BUFFER_SIZE);
+  p = (char*) PyMem_MALLOC(BIG_BUFFER_SIZE);
   if (!p)
     return (code_t*) PyErr_NoMemory();
 

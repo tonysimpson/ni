@@ -373,13 +373,13 @@ inline void frozen_copy(pyc_data_t* target, pyc_data_t* source) {
 	memcpy(target, source, frozen_size(source));
 }
 inline pyc_data_t* pyc_data_new(pyc_data_t* original) {
-	pyc_data_t* pyc = (pyc_data_t*) PyCore_MALLOC(frozen_size(original));
+	pyc_data_t* pyc = (pyc_data_t*) PyMem_MALLOC(frozen_size(original));
 	if (pyc == NULL) OUT_OF_MEMORY();
 	frozen_copy(pyc, original);
 	return pyc;
 }
 inline void pyc_data_delete(pyc_data_t* pyc) {
-	PyCore_FREE(pyc);
+	PyMem_FREE(pyc);
 }
 
 /* to keep a trace of the Psyco stack frames */

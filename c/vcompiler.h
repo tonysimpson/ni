@@ -222,7 +222,7 @@ struct vinfo_array_s {
 /* construction */
 EXTERNFN vinfo_array_t* array_grow1(vinfo_array_t* array, int ncount);
 inline void array_release(vinfo_array_t* array) {
-	if (array->count > 0) PyCore_FREE(array);
+	if (array->count > 0) PyMem_FREE(array);
 }
 inline vinfo_array_t* array_new(int ncount) {
 	if (ncount > 0)
@@ -431,7 +431,7 @@ inline void psyco_assert_coherent(PsycoObject* po) { }   /* nothing */
 /* construction */
 inline PsycoObject* PsycoObject_New(int vlocalscnt) {
 	int psize = PSYCOOBJECT_SIZE(vlocalscnt);
-	PsycoObject* po = (PsycoObject*) PyCore_MALLOC(psize);
+	PsycoObject* po = (PsycoObject*) PyMem_MALLOC(psize);
 	if (po == NULL)
 		OUT_OF_MEMORY();
 	memset(po, 0, psize);

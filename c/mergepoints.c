@@ -207,7 +207,7 @@ inline PyObject* build_merge_points(PyCodeObject* co)
   int mp_flags = MP_FLAGS_EXTRA;
   int length = PyString_GET_SIZE(co->co_code);
   unsigned char* source = (unsigned char*) PyString_AS_STRING(co->co_code);
-  char* paths = (char*) PyCore_MALLOC(length);
+  char* paths = (char*) PyMem_MALLOC(length);
   int i, lasti, count, oparg = 0;
   if (paths == NULL)
     OUT_OF_MEMORY();
@@ -245,7 +245,7 @@ inline PyObject* build_merge_points(PyCodeObject* co)
                           "bytecode %d at %s:%d\n",
                           (int) op, PyCodeObject_NAME(co), i0));
 #endif            
-	    PyCore_FREE(paths);
+	    PyMem_FREE(paths);
 	    Py_INCREF(Py_None);
 	    return Py_None;
 	  }
@@ -299,7 +299,7 @@ inline PyObject* build_merge_points(PyCodeObject* co)
 	mp++;
       }
   mp->bytecode_position = mp_flags;
-  PyCore_FREE(paths);
+  PyMem_FREE(paths);
   return s;
 }
 

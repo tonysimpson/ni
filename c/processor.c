@@ -672,7 +672,7 @@ condition_code_t psyco_vsource_cc(Source source)
 
 #ifdef COPY_CODE_IN_HEAP
 #  define COPY_CODE(target, source, type)   do {	\
-	char* c = PyCore_MALLOC(sizeof(source));	\
+	char* c = PyMem_MALLOC(sizeof(source));		\
 	if (c == NULL) {				\
 		PyErr_NoMemory();			\
 		return;					\
@@ -863,10 +863,10 @@ int psyco_build_run_time_switch(fixed_switch_t* rts, long kflags,
   int i, size;
   
     /* a large enough buffer, will be shrunk later */
-  codeorigin = (code_t*) PyCore_MALLOC(FX_BASE_SIZE + count * FX_MAX_ITEM_SIZE);
+  codeorigin = (code_t*) PyMem_MALLOC(FX_BASE_SIZE + count * FX_MAX_ITEM_SIZE);
   if (codeorigin == NULL)
     goto out_of_memory;
-  fxc = (struct fxcase_s*) PyCore_MALLOC(count *
+  fxc = (struct fxcase_s*) PyMem_MALLOC(count *
                                          (sizeof(struct fxcase_s)+sizeof(long)));
   if (fxc == NULL)
     goto out_of_memory;
@@ -910,7 +910,7 @@ int psyco_build_run_time_switch(fixed_switch_t* rts, long kflags,
   *(long*)(codeend-4) = 0;
 
   size = codeend - codeorigin;
-  codeorigin = (code_t*) PyCore_REALLOC(codeorigin, size);
+  codeorigin = (code_t*) PyMem_REALLOC(codeorigin, size);
   if (codeorigin == NULL)
     goto out_of_memory;
 
@@ -926,8 +926,8 @@ int psyco_build_run_time_switch(fixed_switch_t* rts, long kflags,
   return 0;
 
  out_of_memory:
-  PyCore_FREE(fxc);
-  PyCore_FREE(codeorigin);
+  PyMem_FREE(fxc);
+  PyMem_FREE(codeorigin);
   PyErr_NoMemory();
   return -1;
 }
