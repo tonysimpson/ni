@@ -50,7 +50,6 @@ SRC = [
     Object('methodobject'),
     Object('stringobject'),
     Object('structmember', 0),
-    Source('Objects/psycofuncobject.c',	'psy_psycofuncobject_init'),
     Object('tupleobject'),
 
     Module('array'),

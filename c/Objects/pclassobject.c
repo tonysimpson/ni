@@ -81,7 +81,7 @@ static vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,
 	if (im_self == NULL)
 		return NULL;
 
-	cc = integer_non_null(po, im_self);
+	cc = object_non_null(po, im_self);
 	if (cc == CC_ERROR)  /* error or more likely promotion */
 		return NULL;
 	

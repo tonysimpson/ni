@@ -65,6 +65,17 @@ inline void Psyco_AssertType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
 		      vinfo_new(CompileTime_New((long) tp)));
 }
 
+/* Same as integer_non_null() but assumes we are testing a PyObject* pointer,
+   so that only compile-time NULLs or run-time pointers from which we have
+   not read anything yet can be NULL. Virtual-time pointers are assumed never
+   to be NULL. */
+inline condition_code_t object_non_null(PsycoObject* po, vinfo_t* v) {
+	if (is_virtualtime(v->source) || v->array != NullArray)
+		return CC_ALWAYS_TRUE;
+	else
+		return integer_non_null(po, v);
+}
+
 
 /* The following functions are Psyco implementations of common functions
    of the standard interpreter. */

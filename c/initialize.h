@@ -33,7 +33,6 @@
 # include "Objects/pmethodobject.c"
 # include "Objects/pstringobject.c"
 # include "Objects/pstructmember.c"
-# include "Objects/psycofuncobject.c"
 # include "Objects/ptupleobject.c"
 # include "Modules/parray.c"
 #else /* if !ALL_STATIC */
@@ -53,7 +52,6 @@
   EXTERNFN void psy_longobject_init(void);	/* Objects/plongobject.c */
   EXTERNFN void psy_methodobject_init(void);	/* Objects/pmethodobject.c */
   EXTERNFN void psy_stringobject_init(void);	/* Objects/pstringobject.c */
-  EXTERNFN void psy_psycofuncobject_init(void);	/* Objects/psycofuncobject.c */
   EXTERNFN void psy_tupleobject_init(void);	/* Objects/ptupleobject.c */
   EXTERNFN void psyco_initarray(void);	/* Modules/parray.c */
 #endif /* !ALL_STATIC */
@@ -75,7 +73,6 @@ inline void initialize_all_files(void) {
   psy_longobject_init();	/* Objects/plongobject.c */
   psy_methodobject_init();	/* Objects/pmethodobject.c */
   psy_stringobject_init();	/* Objects/pstringobject.c */
-  psy_psycofuncobject_init();	/* Objects/psycofuncobject.c */
   psy_tupleobject_init();	/* Objects/ptupleobject.c */
   psyco_initarray();	/* Modules/parray.c */
 }

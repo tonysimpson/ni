@@ -114,6 +114,11 @@ def f9(n):
 def f10():
     apply(f9, (50,))
 
+def f11(n):
+    def subtracter(x, y=n):
+        return x-y
+    return subtracter(1000)
+
 
 def go(f, *args):
     print '-'*80
@@ -154,6 +159,7 @@ def go7(start=-2-1j, end=1+1j, step=0.04+0.08j):
 
 
 if __name__ == "__main__":
+    go(f11, 50)
     go1()
     go4()
     go5()

@@ -209,29 +209,24 @@ typedef struct {
 } source_virtual_t;
 
 
-/* Build a PsycoObject "frame" corresponding to the call of a Python
-   function. Raise a Python exception and return NULL in case of failure.
-   Return BF_UNSUPPORTED if the bytecode contains unsupported instructions.
-   The 'arginfo' array gives the number of arguments as well as
-   additional information about them. It will be expanded with the
-   default values of missing arguments, if any, and finally released.
-   If 'sources!=NULL', it is set to an array of the sources of the values
-   that must be pushed to make the call. */
-EXTERNFN PsycoObject* psyco_build_frame(PyFunctionObject* function,
-                                        vinfo_array_t* arginfo, int recursion,
-                                        long** sources);
-/* 'sources' is actually of type 'RunTimeSource**' */
-#define BF_UNSUPPORTED  ((PsycoObject*) -1)
-
 /* Encode a call to the given Python function, compiling it as needed. */
-EXTERNFN vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyFunctionObject* function,
+EXTERNFN vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
+                                    vinfo_t* vglobals, vinfo_t* vdefaults,
                                     vinfo_t* arg_tuple, int recursion);
 
 
-/* Psyco proxies for Python functions */
+/* Psyco proxies for Python functions. Calling a proxy has the same effect
+   as calling the function it has been built from, except that the function
+   is compiled first. As proxies are real Python objects, calling them is
+   the only way to go from Python's base level to Psyco's meta-level.
+   Note that (unlike in previous versions of Psyco) proxies should not be
+   seen by user Python code. Use _psyco.proxycode() to build a proxy and
+   emcompass it in a code object. */
 typedef struct {
   PyObject_HEAD
-  PyFunctionObject* psy_func;   /* Python function object */
+  PyCodeObject* psy_code;  /*                                     */
+  PyObject* psy_globals;   /*  same as in Python function object  */
+  PyObject* psy_defaults;  /*                                     */
   int psy_recursion;    /* # levels to automatically compile called functions */
   PyObject* psy_fastcall;       /* cache mapping arg count to code bufs */
 } PsycoFunctionObject;
@@ -241,6 +236,10 @@ EXTERNVAR PyTypeObject PsycoFunction_Type;
 
 EXTERNFN PsycoFunctionObject* psyco_PsycoFunction_New(PyFunctionObject* func,
                                                       int rec);
+EXTERNFN PsycoFunctionObject* psyco_PsycoFunction_NewEx(PyCodeObject* code,
+                                                PyObject* globals,
+                                                PyObject* defaults, /* or NULL */
+                                                int rec);
 
 
 #if CODE_DUMP

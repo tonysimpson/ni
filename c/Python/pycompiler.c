@@ -698,6 +698,22 @@ static code_t* do_changed_global(changed_global_t* cg)
 	return cg->originalmacrocode;
 }
 
+PyObject* psy_get_builtins(PyObject* globals)
+{
+	PyObject* builtins;
+	/* code copied from frameobject.c */
+	/* XXX we currently consider the absence
+	   of builtins to be a fatal error */
+	builtins = PyDict_GetItem((PyObject*) globals, s_builtin_object);
+	assert(builtins != NULL);
+	if (PyModule_Check(builtins)) {
+		builtins = PyModule_GetDict(builtins);
+		assert(builtins != NULL);
+	}
+	assert(PyDict_Check(builtins));
+        return builtins;
+}
+
 
 #define GLOBAL_NAME_ERROR_MSG \
 	"global name '%.200s' is not defined"
@@ -821,19 +837,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 	else {
 		/* no such global variable, get the builtins */
 		if (po->pr.f_builtins == NULL) {
-			PyObject* builtins;
-				/* code copied from frameobject.c */
-				/* XXX we currently consider the absence
-				   of builtins to be a fatal error */
-			builtins = PyDict_GetItem((PyObject*) globals,
-						  s_builtin_object);
-			assert(builtins != NULL);
-			if (PyModule_Check(builtins)) {
-				builtins = PyModule_GetDict(builtins);
-				assert(builtins != NULL);
-			}
-			assert(PyDict_Check(builtins));
-			po->pr.f_builtins = builtins;
+			po->pr.f_builtins = psy_get_builtins((PyObject*)globals);
 		}
 		result = PyDict_GetItem(po->pr.f_builtins, key);
 		
@@ -1038,6 +1042,24 @@ static bool psyco_assign_slice(PsycoObject* po, vinfo_t* u,
  /***   Run-time implementation of various opcodes            ***/
 
 /* the code of the following functions is "copy-pasted" from ceval.c */
+
+static PyObject* cimpl_load_global(PyObject* globals, PyObject* w)
+{
+	PyObject* x = PyDict_GetItem(globals, w);
+	if (x == NULL) {
+		x = PyDict_GetItem(psy_get_builtins(globals), w);
+		if (x == NULL) {
+			char* obj_str = PyString_AsString(w);
+			if (obj_str)
+				PyErr_Format(PyExc_NameError,
+					     GLOBAL_NAME_ERROR_MSG,
+					     obj_str);
+			return NULL;
+		}
+	}
+	Py_INCREF(x);
+	return x;
+}
 
 static int cimpl_print_expr(PyObject* v)
 {
@@ -1946,12 +1968,11 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 	case STORE_GLOBAL:
 	{
-		KNOWN_VAR(PyObject*, globals, LOC_GLOBALS);
 		PyObject* w = GETNAMEV(oparg);
 
 		if (!psyco_generic_call(po, PyDict_SetItem,
 					CfNoReturnValue|CfPyErrIfNonNull,
-					"llv", globals, w, TOP()))
+					"vlv", LOC_GLOBALS, w, TOP()))
 			break;
 		POP_DECREF();
 		goto fine;
@@ -1959,19 +1980,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 	case DELETE_GLOBAL:
 	{
-		KNOWN_VAR(PyObject*, globals, LOC_GLOBALS);
 		PyObject* w = GETNAMEV(oparg);
 
-		if (!psyco_generic_call(po, PyDict_DelItem,
-					CfNoReturnValue|CfPyErrIfNonNull,
-					"ll", globals, w)) {
-			/*XXX if (!Py_Occurred() at run-time)*/
+		if (runtime_NON_NULL_f(po, psyco_generic_call(po, PyDict_DelItem,
+					CfReturnNormal, "vl", LOC_GLOBALS, w))) {
 			PycException_SetFormat(po, PyExc_NameError,
 					       GLOBAL_NAME_ERROR_MSG,
 					       PyString_AsString(w));
 			break;
 		}
-		POP_DECREF();
 		goto fine;
 	}
 	
@@ -1986,11 +2003,23 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	case LOAD_GLOBAL:
 	{
 		PyObject* namev = GETNAMEV(oparg);
-                PyObject* value = load_global(po, namev, next_instr);
-		if (value == NULL)
-			break;
-		v = vinfo_new(CompileTime_NewSk(sk_new((long) value,
-						       SkFlagPyObj)));
+                PyObject* value;
+		if (is_compiletime(LOC_GLOBALS->source)) {
+			/* Common case */
+			value = load_global(po, namev, next_instr);
+			if (value == NULL)
+				break;
+			v = vinfo_new(CompileTime_NewSk(sk_new((long) value,
+							       SkFlagPyObj)));
+		}
+		else {
+			/* Globals dict is unknown at compile-time */
+			v = psyco_generic_call(po, cimpl_load_global,
+					       CfReturnRef|CfPyErrIfNull,
+					       "vl", LOC_GLOBALS, namev);
+			if (v == NULL)
+				break;
+		}
 		PUSH(v);
 		goto fine;
 	}

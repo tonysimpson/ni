@@ -77,18 +77,29 @@ static vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
                               vinfo_t* arg, vinfo_t* kw)
 {
 	/* calling a Python function: compile the called function if
-	   auto_recursion > 0. We promote the Python function to
-	   compile-time if it is not known yet. */
-
-	/* XXX this is not how it should be done! We must read the
-	   function's func_code, func_globals and func_defaults
-	   and pass them further. The code below forces all functions
-	   out of virtual-time. */
+	   auto_recursion > 0. */
 	if (po->pr.auto_recursion > 0 && psyco_knowntobe(kw, (long) NULL)) {
-		PyObject* pyfunc = psyco_pyobj_atcompiletime(po, func);
-		if (pyfunc == NULL)
-			return NULL;
-		return psyco_call_pyfunc(po, (PyFunctionObject*) pyfunc,
+		PyCodeObject* co;
+		vinfo_t* fcode;
+		vinfo_t* fglobals;
+		vinfo_t* fdefaults;
+		
+		fcode = get_array_item(po, func, FUNC_CODE);
+		if (fcode == NULL)
+			return false;
+		co = (PyCodeObject*) psyco_pyobj_atcompiletime(po, fcode);
+		if (co == NULL)
+			return false;
+
+		fglobals = get_array_item(po, func, FUNC_GLOBALS);
+		if (fglobals == NULL)
+			return false;
+
+		fdefaults = get_array_item(po, func, FUNC_DEFAULTS);
+		if (fdefaults == NULL)
+			return false;
+
+		return psyco_call_pyfunc(po, co, fglobals, fdefaults,
 					 arg, po->pr.auto_recursion - 1);
 	}
 	else
