@@ -780,6 +780,14 @@ static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
                       if ((KNOWN_SOURCE(b)->refcount1_flags &
                            SkFlagFixed) != 0)
                         goto incompatible;  /* b's value is fixed */
+                      if ((KNOWN_SOURCE(a)->refcount1_flags &
+                           SkFlagFixed) != 0 && KNOWN_SOURCE(a)->value == 0)
+                        goto incompatible;  /* hack: */
+                          /* fixed known-to-be-zero values have a special
+                             role to play with local variables: undefined
+                             variables. These must *never* be un-promoted
+                             to run-time, because we will get a NULL
+                             pointer and a segfault. Argh. */
                       else {
                         /* approximative match, might un-promote 'a' from
                            compile-time to run-time. */
@@ -876,6 +884,14 @@ static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
               if ((CompileTime_Get(bsource)->refcount1_flags &
                    SkFlagFixed) != 0)
                 return false;  /* b's value is fixed */
+              if ((KNOWN_SOURCE(a)->refcount1_flags &
+                   SkFlagFixed) != 0 && KNOWN_SOURCE(a)->value == 0)
+                return false;  /* hack: */
+                  /* fixed known-to-be-zero values have a special
+                     role to play with local variables: undefined
+                     variables. These must *never* be un-promoted
+                     to run-time, because we will get a NULL
+                     pointer and a segfault. Argh. */
               else {
                 /* approximative match, might un-promote 'a' from
                    compile-time to run-time. */
