@@ -1364,6 +1364,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   int i;
   struct dmove_s dm;
   code_t* code = po->code;
+  code_t* backpointer;
   CodeBufferObject* target_codebuf = lastmatch->matching;
   int sdepth = get_stack_depth(&target_codebuf->snapshot);
   int popsdepth;
@@ -1482,12 +1483,19 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
 #if PSYCO_DEBUG
   extra_assert(has_ccreg == (po->ccreg != NULL));
 #endif
+  backpointer = code;
   JUMP_TO(target_codebuf->codeptr);
   
   /* start a new buffer if the last JUMP_TO overflowed,
      but not if we had no room at all in the first place. */
   if (code > dm.code_limit && po->codelimit != NULL)
-    code = data_new_buffer(code, &dm);
+    {
+      /* the JMP instruction emitted by JUMP_TO() is not position-
+         independent; we must emit it again at the new position */
+      code = data_new_buffer(backpointer, &dm);
+      JUMP_TO(target_codebuf->codeptr);
+      assert(code <= dm.code_limit);
+    }
   
   PyMem_FREE(dm.usages);
   if (dm.private_codebuf == NULL)
