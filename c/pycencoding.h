@@ -72,6 +72,9 @@
 
 /* emit the equivalent of the Py_INCREF() macro */
 /* the PyObject* is stored in the register 'rg' */
+/* XXX if Py_REF_DEBUG is set (Python debug mode), the
+       following will not properly update _Py_RefTotal.
+       Don't trust _Py_RefTotal with Psyco.     */
 #define INC_OB_REFCNT(rg)			do {    \
   NEED_CC_REG(rg);                                      \
   INC_OB_REFCNT_internal(rg);                           \
@@ -139,76 +142,35 @@
   code += 2;                                            \
 } while (0)
 
-/* the equivalent of Py_DECREF() */
-#define DEC_OB_REFCNT(rg)	do {                                            \
-  DEC_OB_REFCNT_NZ(rg);                                                         \
-  extra_assert(offsetof(PyObject, ob_type) < 128);                              \
-  extra_assert(offsetof(PyTypeObject, tp_dealloc) < 128);                       \
-  CODE_FOUR_BYTES(code,                                                         \
-            0x75,          /* JNZ rel8 */                                       \
-            16 - 2,        /* to the end of this code block */                  \
-            PUSH_REG_INSTR(REG_386_EAX),   /* XXX if COMPACT_ENCODING, */       \
-            PUSH_REG_INSTR(REG_386_ECX));  /* XXX  avoid these PUSH    */       \
-  CODE_FOUR_BYTES(code+4,                                                       \
-            PUSH_REG_INSTR(REG_386_EDX),   /* XXX  when unnecessary    */       \
-            PUSH_REG_INSTR(rg),                                                 \
-            0x8B,          /* MOV EAX, [reg+ob_type] */                         \
-            0x40 | (rg));                                                       \
-  CODE_FOUR_BYTES(code+8,                                                       \
-            offsetof(PyObject, ob_type),                                        \
-            0xFF,         /* CALL [EAX+tp_dealloc] */                           \
-            0x50,                                                               \
-            offsetof(PyTypeObject, tp_dealloc));                                \
-  CODE_FOUR_BYTES(code+12,                                                      \
-            POP_REG_INSTR(REG_386_EDX),                                         \
-            POP_REG_INSTR(REG_386_EDX),                                         \
-            POP_REG_INSTR(REG_386_ECX),                                         \
-            POP_REG_INSTR(REG_386_EAX));                                        \
-  code += 16;                                                                   \
-} while (0)
+/* internal utilities for the macros below */
+EXTERNFN code_t* decref_dealloc_calling(code_t* code, PsycoObject* po, reg_t rg,
+                                        destructor fn);
 
-/* the same as above, when we know that the reference counter is
-   reaching zero */
-#define DEC_OB_REFCNT_Z(rg)    do {                             \
-  --- note: this is not used ---                                \
-  extra_assert(offsetof(PyObject, ob_refcnt) == 0);             \
-  extra_assert(offsetof(PyObject, ob_type) < 128);              \
-  extra_assert(offsetof(PyTypeObject, tp_dealloc) < 128);       \
-  SAVE_REGS_FN_CALL;                                            \
-  SET_REG_ADDR_TO_IMMED(rg, 0);                                 \
-  code[0] = PUSH_REG_INSTR(rg);                                 \
-  code[1] = 0x8B;          /* MOV EAX, [reg+ob_type] */         \
-  code[2] = 0x40 | (rg);                                        \
-  CODE_FOUR_BYTES(code+3,                                       \
-            offsetof(PyObject, ob_type),                        \
-            0xFF,         /* CALL [EAX+tp_dealloc] */           \
-            0x50,                                               \
-            offsetof(PyTypeObject, tp_dealloc));                \
-  code += 7;                                                    \
-  po->stack_depth += 4;                                         \
-} while (0)
+/* the equivalent of Py_DECREF().
+   XXX Same remark as INC_OB_REFCNT().
+   We correctly handle the Py_TRACE_REFS case,
+   however, by calling the _Py_Dealloc() function.
+   Slow but correct (and you have the debugging Python
+   version anyway, so you are not looking for top speed
+   but just testing things). */
+#ifdef Py_TRACE_REFS
+/* debugging only */
+# define DEC_OB_REFCNT(rg)  (code=decref_dealloc_calling(code, po, rg,  \
+                                                         _Py_Dealloc))
+#else
+# define DEC_OB_REFCNT(rg)  (code=decref_dealloc_calling(code, po, rg, NULL))
+#endif
 
 /* the equivalent of Py_DECREF() when we know the type of the object
    (assuming that tp_dealloc never changes for a given type) */
-#define DEC_OB_REFCNT_T(rg, type)     do {                                      \
-  DEC_OB_REFCNT_NZ(rg);                                                         \
-  CODE_FOUR_BYTES(code,                                                         \
-            0x75,          /* JNZ rel8 */                                       \
-            15 - 2,        /* to the end of this code block */                  \
-            PUSH_REG_INSTR(REG_386_EAX),   /* XXX if COMPACT_ENCODING, */       \
-            PUSH_REG_INSTR(REG_386_ECX));  /* XXX  avoid these PUSH    */       \
-  code[4] = PUSH_REG_INSTR(REG_386_EDX);   /* XXX  when unnecessary    */       \
-  code[5] = PUSH_REG_INSTR(rg);                                                 \
-  code[6] = 0xE8;    /* CALL */                                                 \
-  code += 11;                                                                   \
-  *(long*)(code-4) = (code_t*)((type)->tp_dealloc) - code;                      \
-  CODE_FOUR_BYTES(code,                                                         \
-            POP_REG_INSTR(REG_386_EDX),                                         \
-            POP_REG_INSTR(REG_386_EDX),                                         \
-            POP_REG_INSTR(REG_386_ECX),                                         \
-            POP_REG_INSTR(REG_386_EAX));                                        \
-  code += 4;                                                                    \
-} while (0)
+#ifdef Py_TRACE_REFS
+/* debugging only */
+# define DEC_OB_REFCNT_T(rg, type)  (code=decref_dealloc_calling(code, po, rg, \
+                                                                 _Py_Dealloc))
+#else
+# define DEC_OB_REFCNT_T(rg, type)  (code=decref_dealloc_calling(code, po, rg, \
+                                                          (type)->tp_dealloc))
+#endif
 
 
 /***************************************************************/
