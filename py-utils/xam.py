@@ -1,5 +1,5 @@
 import os, sys, re, htmlentitydefs, struct
-import _psyco
+from psyco import _psyco
 
 tmpfile = '~tmpfile.tmp'
 
