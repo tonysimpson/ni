@@ -1,4 +1,4 @@
-import psyco, dis, types
+import psyco, dis, types, sys
 
 def f(filename, mode='r'):
     s = ""
@@ -46,6 +46,14 @@ def booltest():
     print [a | b for a in (False,True) for b in (False,True)]
     print [a ^ b for a in (False,True) for b in (False,True)]
 
+def exc_test():
+    try:
+        failure = [][1]   # opcode 9, line 2 from the start of the function
+    except:
+        exc, value, tb = sys.exc_info()
+        print exc.__name__, str(value)
+        print tb.tb_lineno - tb.tb_frame.f_code.co_firstlineno, tb.tb_lasti
+
 
 if __name__ == '__main__':
     import time
@@ -60,5 +68,6 @@ if __name__ == '__main__':
     #psyco.bind(f4)
     #print f4("some-string")
     psyco.full()
-    print overflowtest()
+    #print overflowtest()
+    exc_test()
     psyco.dumpcodebuf()

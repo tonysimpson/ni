@@ -421,3 +421,7 @@ ${True}
 ${[a & b for a in (False,True) for b in (False,True)]}
 ${[a | b for a in (False,True) for b in (False,True)]}
 ${[a ^ b for a in (False,True) for b in (False,True)]}
+
+>>> test5.exc_test()
+IndexError list index out of range
+2 9

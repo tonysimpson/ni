@@ -3167,10 +3167,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
         {
           /* log traceback info for real Python exceptions,
              unless re-raised by END_FINALLY */
-          int lasti = po->pr.next_instr - 1;
-          if (HAS_ARG(opcode))
-            lasti -= 2;
-          PsycoTraceBack_Here(po, lasti);
+          PsycoTraceBack_Here(po, po->pr.next_instr);
         }
       
       /* Unwind the Python stack until we find a handler for
