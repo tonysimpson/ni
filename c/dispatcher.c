@@ -795,14 +795,14 @@ typedef struct { /* produced at compile time and read by the dispatcher */
   PsycoObject* po;        /* state before promotion */
   vinfo_t* fix;           /* variable to promote */
   PyObject* spec_dict;    /* local cache (promotions to already-seen values) */
-  long kflags;            /* SkFlagXxx to use in new source_known_t */
 #ifdef CODE_DUMP_FILE
   long signature;         /* must be last, with spec_dict and kflags before */
 #endif
 } rt_promotion_t;
 
-static CodeBufferObject* do_promotion_internal(rt_promotion_t* fs, long value,
-                                               PyObject* key)
+static CodeBufferObject* do_promotion_internal(rt_promotion_t* fs,
+                                               PyObject* key,
+                                               source_known_t* sk)
 {
   CodeBufferObject* codebuf;
   vinfo_t* v;
@@ -824,9 +824,7 @@ static CodeBufferObject* do_promotion_internal(rt_promotion_t* fs, long value,
   CHKTIME(v->source, RunTime);   /* from run-time to compile-time */
   extra_assert(RUNTIME_REG_IS_NONE(v));   /* taken care of in
                                              finish_promotion() */
-  if ((fs->kflags & SkFlagPyObj) != 0)
-    Py_INCREF((PyObject*) value);
-  v->source = CompileTime_NewSk(sk_new(value, fs->kflags));
+  v->source = CompileTime_NewSk(sk);
 
   /* compile from this new state, in which 'v' has been promoted to
      compile-time. */
@@ -856,7 +854,7 @@ static code_t* do_promotion_long(rt_promotion_t* fs, long value)
   /* have we already seen this value? */
   codebuf = (CodeBufferObject*) PyDict_GetItem(fs->spec_dict, key);
   if (codebuf == NULL)   /* no -> we must build new code */
-    codebuf = do_promotion_internal(fs, value, key);
+    codebuf = do_promotion_internal(fs, key, sk_new(value, SkFlagFixed));
   Py_DECREF(key);
   return codebuf->codeptr;   /* done -> jump to codebuf */
 }
@@ -868,7 +866,11 @@ static code_t* do_promotion_pyobj(rt_promotion_t* fs, PyObject* key)
   /* have we already seen this value? */
   codebuf = (CodeBufferObject*) PyDict_GetItem(fs->spec_dict, key);
   if (codebuf == NULL)   /* no -> we must build new code */
-    codebuf = do_promotion_internal(fs, (long) key, key);
+    {
+      Py_INCREF(key);
+      codebuf = do_promotion_internal(fs, key, sk_new((long) key,
+                                                      SkFlagFixed|SkFlagPyObj));
+    }
   return codebuf->codeptr;   /* done -> jump to codebuf */
 }
 
@@ -907,7 +909,6 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
   fs->po = po;    /* don't release 'po' */
   fs->fix = fix;
   fs->spec_dict = d;
-  fs->kflags = kflags;
 #ifdef CODE_DUMP_FILE
   fs->signature = SPEC_DICT_SIGNATURE;
 #endif
