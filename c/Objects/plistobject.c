@@ -69,6 +69,52 @@ static vinfo_t* plist_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 	return result;
 }
 
+static bool plist_ass_item(PsycoObject* po, vinfo_t* a, vinfo_t* i, vinfo_t* v)
+{
+	condition_code_t cc;
+	vinfo_t* vlen;
+	vinfo_t* ob_item;
+	vinfo_t* old_value;
+	bool ok;
+
+	if (v == NULL) {
+		/* XXX implement item deletion */
+		return psyco_generic_call(po, PyList_Type.tp_as_sequence->
+					  sq_ass_item,
+					  CfNoReturnValue|CfPyErrIfNonNull,
+					  "vvl", a, i, (long) NULL) != NULL;
+	}
+
+	vlen = read_array_item(po, a, VAR_OB_SIZE);
+	if (vlen == NULL)
+		return false;
+	
+	cc = integer_cmp(po, i, vlen, Py_GE|COMPARE_UNSIGNED);
+        vinfo_decref(vlen, po);
+	if (cc == CC_ERROR)
+		return false;
+
+	if (runtime_condition_f(po, cc)) {
+		PycException_SetString(po, PyExc_IndexError,
+				       "list assignment index out of range");
+		return false;
+	}
+
+	ob_item = read_array_item(po, a, LIST_OB_ITEM);
+	if (ob_item == NULL)
+		return false;
+
+	old_value = read_array_item_var(po, ob_item, 0, i, false);
+	ok = (old_value != NULL) &&
+		write_array_item_var_ref(po, ob_item, 0, i, v, false);
+
+	vinfo_decref(ob_item, po);
+	if (ok) psyco_decref_v(po, old_value);
+	vinfo_xdecref(old_value, po);
+
+	return ok;
+}
+
 
 INITIALIZATIONFN
 void psy_listobject_init(void)
@@ -76,4 +122,5 @@ void psy_listobject_init(void)
 	PySequenceMethods *m = PyList_Type.tp_as_sequence;
 	Psyco_DefineMeta(m->sq_length, psyco_generic_mut_ob_size);
 	Psyco_DefineMeta(m->sq_item, plist_item);
+	Psyco_DefineMeta(m->sq_ass_item, plist_ass_item);
 }
