@@ -89,6 +89,12 @@ static vinfo_t* ptype_call(PsycoObject* po, vinfo_t* vtype,
 				  "vvv", vtype, varg, vkw);
 }
 
+static bool pobject_init(PsycoObject* po, vinfo_t* vself,
+			 vinfo_t* vargs, vinfo_t* vkwds)
+{
+	return true;
+}
+
 #endif  /* NEW_STYLE_TYPES */
 
 
@@ -97,5 +103,6 @@ void psy_typeobject_init(void)
 {
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	Psyco_DefineMeta(PyType_Type.tp_call, ptype_call);
+	Psyco_DefineMeta(PyBaseObject_Type.tp_init, pobject_init);
 #endif
 }
