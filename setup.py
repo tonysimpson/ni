@@ -1,6 +1,10 @@
 #! /usr/bin/env python
 
-"""Setup script for Psyco, the Python specializing compiler"""
+"""Psyco shows that it is possible to execute Python code at speeds
+approaching that of fully compiled languages, by "specialization".
+This extension module for the unmodified interpreter accelerates
+user programs with little or not change in their sources, by a
+factor that can be very interesting (2-10 times is common)."""
 
 import os, sys
 from distutils.core import setup
@@ -123,17 +127,39 @@ if sys.platform == 'win32':
     macros.insert(0, ('NDEBUG', '1'))  # prevents from being linked against python2x_d.lib
 
 
-setup (	name="psyco",
-      	version="1.2",
-      	description="Psyco, the Python specializing compiler",
-      	author="Armin Rigo",
-        author_email="arigo@users.sourceforge.net",
-      	url="http://psyco.sourceforge.net/",
+CLASSIFIERS = [
+    'Development Status :: 5 - Production/Stable',
+    'Intended Audience :: Developers',
+    'License :: OSI Approved :: MIT License',
+    'Operating System :: OS Independent',
+    'Programming Language :: Python',
+    'Programming Language :: C',
+    'Topic :: Software Development :: Compilers',
+    'Topic :: Software Development :: Interpreters',
+    ]
+
+try:
+    import distutils.command.register
+except ImportError:
+    kwds = {}
+else:
+    kwds = {'classifiers': CLASSIFIERS}
+
+
+setup (	name             = "psyco",
+      	version          = "1.2",
+      	description      = "Psyco, the Python specializing compiler",
+      	author           = "Armin Rigo",
+        author_email     = "arigo@users.sourceforge.net",
+      	url              = "http://psyco.sourceforge.net/",
+        license          = "MIT License",
+        long_description = __doc__,
+        platforms        = ["i386"],
         packages=['psyco'],
       	ext_modules=[Extension(name = 'psyco._psyco',
                                sources = sources,
                                extra_compile_args = extra_compile_args,
                                extra_link_args = extra_link_args,
                                define_macros = macros,
-                               include_dirs = [processor_dir])]
-        )
+                               include_dirs = [processor_dir])],
+        **kwds )
