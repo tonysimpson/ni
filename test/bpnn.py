@@ -39,8 +39,8 @@ def makeMatrix(I, J, fill=0.0):
     return m
 
 class NN:
-    __psyco_bind__ = []   # disable automatic rebinding, so that we
-                          # can do it manually and compare the timings
+    __psyco__bind__ = []   # disable automatic rebinding, so that we
+                           # can do it manually and compare the timings
     
     def __init__(self, ni, nh, no):
         # number of input, hidden, and output nodes
