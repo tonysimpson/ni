@@ -684,7 +684,7 @@ inline int psyco_richmemcmp(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 		case Py_NE:
 			return 1;
 		default:
-			/* pass */
+			break;
 		}
 		if (psyco_knowntobe(vlen, 0))
 			return (op == Py_LT || op == Py_LE);
