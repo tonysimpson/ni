@@ -23,7 +23,8 @@ struct arraydescr {
 	int (*setitem)(struct arrayobject *, int, PyObject *);
 };
 typedef struct arrayobject {
-	PyObject_VAR_HEAD
+	PyObject_HEAD
+	int ob_size;
 	char *ob_item;
 	struct arraydescr *ob_descr;
 } arrayobject;
@@ -70,7 +71,7 @@ static vinfo_t* integral_getitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,
 
 static vinfo_t* p_c_getitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi)
 {
-        defield_t rdf = FMUT(DEF_ARRAY(signed char, 0));
+        defield_t rdf = FMUT(UNSIGNED_ARRAY(unsigned char, 0));
 	vinfo_t* chr = generic_getitem(po, ap, vi, rdf);
 	if (chr != NULL) {
 		vinfo_t* result = PsycoCharacter_New(chr);
@@ -199,7 +200,7 @@ static bool p_c_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi, vinfo_t* v)
 
 	if (value != NULL) {
 		/* 'v' is really a string of size 1 */
-		defield_t rdf = FMUT(DEF_ARRAY(char, 0));
+		defield_t rdf = FMUT(UNSIGNED_ARRAY(char, 0));
 		bool result = generic_setitem(po, ap, vi, value, rdf);
 		vinfo_decref(value, po);
 		return result;
