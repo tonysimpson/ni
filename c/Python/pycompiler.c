@@ -1051,18 +1051,31 @@ static code_t* do_changed_global(changed_global_t* cg)
 
 PyObject* psy_get_builtins(PyObject* globals)
 {
+	static PyObject* minimal_builtins = NULL;
 	PyObject* builtins;
 	/* code copied from frameobject.c */
-	/* XXX we currently consider the absence
-	   of builtins to be a fatal error */
 	builtins = PyDict_GetItem((PyObject*) globals, s_builtin_object);
-	psyco_assert(builtins != NULL);
-	if (PyModule_Check(builtins)) {
-		builtins = PyModule_GetDict(builtins);
-		psyco_assert(builtins != NULL);
+	if (builtins) {
+		if (PyDict_Check(builtins))
+			return builtins;
+		if (PyModule_Check(builtins)) {
+			builtins = PyModule_GetDict(builtins);
+			if (builtins) {
+				psyco_assert(PyDict_Check(builtins));
+				return builtins;
+			}
+		}
 	}
-	psyco_assert(PyDict_Check(builtins));
-        return builtins;
+	/* No builtins!  Make up a minimal one 
+	   Give them 'None', at least. */
+	if (minimal_builtins == NULL) {
+		minimal_builtins = PyDict_New();
+		if (minimal_builtins == NULL || 
+		    PyDict_SetItemString(minimal_builtins,
+					 "None", Py_None) < 0)
+			OUT_OF_MEMORY();
+	}
+	return minimal_builtins;
 }
 
 
