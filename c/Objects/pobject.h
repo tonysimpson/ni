@@ -181,5 +181,8 @@ EXTERNVAR fixed_switch_t psyfs_none;
 /* NOTE: don't forget to update pobject.c when adding new variables here */
 #endif
 
+/* for dispatcher.c */
+EXTERNFN vinfo_t* Psyco_SafelyDeleteVar(PsycoObject* po, vinfo_t* vi);
+
 
 #endif /* _PSY_OBJECT_H */

@@ -3,6 +3,7 @@
 #include "mergepoints.h"
 #include "blockalloc.h"
 #include "Python/pycompiler.h"   /* for pyc_data_xxx() */
+#include "Objects/pobject.h"     /* for Psyco_SafelyDeleteVar() */
 #include <idispatcher.h>
 
 
@@ -1374,6 +1375,7 @@ void psyco_delete_unused_vars(PsycoObject* po, global_entries_t* ge)
   for (i=0; i<limit; i++)
     {
       int num;
+      vinfo_t* vi;
       PyObject* o1 = PyList_GET_ITEM(plist, i);
       if (!PyInt_Check(o1))
         break;
@@ -1382,8 +1384,9 @@ void psyco_delete_unused_vars(PsycoObject* po, global_entries_t* ge)
       /* note that if psyco_delete_unused_vars() is called by
          psyco_compile_code(), before any buffer is allocated,
          it may not emit any code. */
-      vinfo_decref(LOC_LOCALS_PLUS[num], po);
-      LOC_LOCALS_PLUS[num] = psyco_vi_Zero();
+      vi = LOC_LOCALS_PLUS[num];
+      LOC_LOCALS_PLUS[num] = Psyco_SafelyDeleteVar(po, vi);
+      vinfo_decref(vi, po);
     }
 }
 
