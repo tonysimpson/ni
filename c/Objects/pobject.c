@@ -601,7 +601,7 @@ static vinfo_t* collect_undeletable_vars(vinfo_t* vi, vinfo_t* link)
 			   tp == &PyBool_Type ||
 #endif
 			   tp == &PyFloat_Type || tp == &PyLong_Type ||
-			   tp == &PyRange_Type))
+			   tp == Py_None->ob_type || tp == &PyRange_Type))
 			break;  /* known safe type */
 		/* make a linked list of results */
 		vi->tmp = link;
