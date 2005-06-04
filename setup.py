@@ -146,6 +146,19 @@ except ImportError:
 else:
     kwds = {'classifiers': CLASSIFIERS}
 
+py_modules = ['psyco.%s' % os.path.splitext(fn)[0]
+              for fn in os.listdir('py-support')
+              if os.path.splitext(fn)[1].lower() == '.py']
+py_modules.remove('psyco.__init__')
+if sys.version_info < (2, 2):
+    print 'skipping psyco/kdictproxy.py (Python >= 2.2 only)'
+    py_modules.remove('psyco.kdictproxy')
+
+if sys.version_info < (2, 2, 2):
+    print
+    print '*** NOTE: it is recommended to use Psyco with Python 2.2.2 or above ***'
+    print
+
 
 setup (	name             = "psyco",
       	version          = "1.4",
@@ -156,7 +169,8 @@ setup (	name             = "psyco",
         license          = "MIT License",
         long_description = __doc__,
         platforms        = ["i386"],
-        packages=['psyco'],
+        py_modules       = py_modules,
+        package_dir      = {'psyco': 'py-support'},
       	ext_modules=[Extension(name = 'psyco._psyco',
                                sources = sources,
                                extra_compile_args = extra_compile_args,
