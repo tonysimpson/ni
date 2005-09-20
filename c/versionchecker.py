@@ -13,11 +13,11 @@ FILES = {
     '../psyco/support.py': re.compile(r'__version__\s*=\s*(0x[0-9a-fA-F]+)'),
     '../doc/psycoguide.tex': re.compile(r'\\release\{([0-9.]+)\}'),
     '../setup.py': re.compile(r'version\s*=\s*\"([0-9.]+)\"'),
-    '../../my/psyco/dist/Makefile': re.compile(r'version\s*=\s*([0-9.]+)'),
-    '../../my/psyco/site/content/index.rst': re.compile(r'`Psyco ([0-9.]+)@'),
-    '../../my/psyco/site/content/download.rst': re.compile(r'Current version is ([0-9.]+)'),
-    '../../my/psyco/site/content/./download.rst': re.compile(r'Download Release ([0-9.]+)'),
-    '../../my/psyco/site/content/doc.rst': re.compile(r'Psyco release ([0-9.]+)'),
+#    '../../my/psyco/dist/Makefile': re.compile(r'version\s*=\s*([0-9.]+)'),
+    '../../www/content/index.rst': re.compile(r'`Psyco ([0-9.]+)@'),
+    '../../www/content/download.rst': re.compile(r'Current version is ([0-9.]+)'),
+    '../../www/content/./download.rst': re.compile(r'Download Release ([0-9.]+)'),
+    '../../www/content/doc.rst': re.compile(r'Psyco release ([0-9.]+)'),
     '../README.txt': re.compile(r'VERSION ([0-9.]+)'),
     }
 
