@@ -223,6 +223,21 @@ class CodeBuf:
         bigbuf = codeboundary[i][1]
         return prev, next, bigbuf
 
+    def splitheader(self):
+        data = self.data
+        addr = self.addr
+        k = 0
+        while data[k:k+1] == '\xCC':
+            k = k + 1
+        if data[k:k+4] == '\x66\x66\x66\x66':
+            # detected a rt_local_buf_t structure
+            next, key = struct.unpack('LL', data[k+4:k+12])
+            data = data[k+12:]
+            addr += k+12
+        else:
+            next = key = None
+        return data, addr, next, key
+
     def __getattr__(self, attr):
         if attr == 'data':
             prev, next, bigbuf = self.getboundary()
@@ -231,22 +246,14 @@ class CodeBuf:
             return data
         if attr == 'cache_text':
             # produce the disassembly listing
-            data = self.data
-            addr = self.addr
-            k = 0
-            while data[k:k+1] == '\xCC':
-                k = k + 1
-            if data[k:k+4] == '\x66\x66\x66\x66':
-                # detected a rt_local_buf_t structure
-                next, key = struct.unpack('LL', data[k+4:k+12])
-                data = data[k+12:]
-                addr += k+12
-                self.cache_text = [
-                    'Created by promotion of the value 0x%x\n' % key,
-                    'Next promoted value at buffer 0x%x\n' % next,
-                    ]
-            else:
-                self.cache_text = []
+            data, addr, next, key = self.splitheader()
+            self.cache_text = []
+            if key is not None:
+                self.cache_text.append(
+                    'Created by promotion of the value 0x%x\n' % key)
+            if next is not None:
+                self.cache_text.append(
+                    'Next promoted value at buffer 0x%x\n' % next)
             self.cache_text += machine_code_dump(data, addr,
                                                  CodeBuf.machine_code_format)
             return self.cache_text

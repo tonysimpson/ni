@@ -50,7 +50,8 @@ def main(DIRECTORY):
         f = open(outfilename, 'w')
         for codebuf in codebufs:
             if codebuf.data:
-                for freq, lst in dump(codebuf.data):
+                data, addr, next, key = codebuf.splitheader()
+                for freq, lst in dump(data):
                     if len(lst) > 1:
                         print >> f, 'psycodump(%d, [%s]).' % (freq,
                                                               ', '.join(lst))

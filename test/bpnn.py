@@ -189,3 +189,4 @@ if __name__ == '__main__':
     v, t4 = time(demo)
     v, t5 = time(demo)
     print t1, t2, t3, t4, t5
+    psyco.dumpcodebuf()
