@@ -3,10 +3,10 @@ python ivmoptimize.py path [ path ... ]
 
 This script optimizes and regenerates the 'ivm' virtual machine
 used by Psyco on non-i386 platforms.  You need to compile Psyco
-in debugging mode and use 'psyco.dump()' to generate one or more
-dump files called 'psyco.dump'.  Run then the present script with
-the path(s) to the 'psyco.dump' file(s).  Finally, recompile Psyco
-in normal (optimized) mode.
+in debugging mode (see below) and use 'psyco.dumpcodebuf()' to
+generate one or more dump files called 'psyco.dump'.  Run then
+the present script with the path(s) to the 'psyco.dump' file(s).
+Finally, you have to recompile Psyco in normal (optimized) mode.
 
 You need SWI Prolog to do that.  http://www.swi-prolog.org/
 
@@ -30,7 +30,7 @@ except NameError:
 LOCALDIR = os.path.dirname(LOCALDIR)
 
 
-def main(paths, maxlength=8, optmode='optimize1.pl'):
+def main(paths, maxlength=8, optmode='optimize.pl'):
     outfilenames = [os.path.abspath(ivmextract.main(dir)) for dir in paths]
     os.chdir(os.path.join(LOCALDIR, os.pardir, 'c', 'ivm', 'prolog'))
     g = open("mode_combine.pl", "w")
@@ -46,7 +46,11 @@ def main(paths, maxlength=8, optmode='optimize1.pl'):
         print >> sys.stderr, "*** the Prolog program %s failed" % optmode
         sys.exit(1)
     g.close()
-    os.system('pl -f insns.pl -g main_emit -t halt')
+    err = os.system('pl -f insns.pl -g main_emit -t halt')
+    if err == 0:
+        print
+        print 'Done.  If you compile Psyco, its ivm virtual machine will now'
+        print 'be optimized for the usage patterns found in the dump files.'
 
 
 if __name__ == '__main__':
