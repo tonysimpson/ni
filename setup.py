@@ -162,7 +162,7 @@ if sys.version_info < (2, 2, 2):
 
 
 setup (	name             = "psyco",
-      	version          = "1.4",
+      	version          = "1.5",
       	description      = "Psyco, the Python specializing compiler",
       	author           = "Armin Rigo",
         author_email     = "arigo@users.sourceforge.net",
