@@ -1,4 +1,0 @@
-*.o
-*.py[co]
-psyco.dump
-*.log-psyco

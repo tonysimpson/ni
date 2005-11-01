@@ -1,7 +1,0 @@
-insns-*.i
-insns-table.py
-mode_combine.pl
-optimize.tmp
-psyco.ivmdump
-*.po
-*.itf
