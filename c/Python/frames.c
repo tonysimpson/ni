@@ -676,6 +676,7 @@ PyObject* psyco_get_globals(void)
 }
 
 #if HAVE_PYTHON_SUPPORT
+static PyFrameObject* cached_frame = NULL;
 static PyObject* visit_first_frame(PyObject* o, void* ignored)
 {
 	if (PyFrame_Check(o)) {
@@ -684,9 +685,33 @@ static PyObject* visit_first_frame(PyObject* o, void* ignored)
 	}
 	else {
 		/* a Psyco frame: emulate it */
-		PyFrameObject* f = psyco_emulate_frame(o);
-		psyco_trash_object((PyObject*) f);
-		return (PyObject*) f;
+		/* we can't return a new reference, so we have to remember
+		   the last frame we emulated and free it now.  This is
+		   not too bad since we can use this as a cache and avoid
+		   rebuilding the new emulated frame all the time. */
+		PyFrameObject* f;
+		PyFrameObject* newf;
+		PyObject* co = PyTuple_GetItem(o, 0);
+		PyObject* globals = PyTuple_GetItem(o, 1);
+		extra_assert(co != NULL);
+		extra_assert(globals != NULL);
+		while (cached_frame != NULL) {
+			f = cached_frame;
+			if (f->f_code == co && f->f_globals == globals)
+				return f;  /* reuse it */
+			cached_frame = NULL;
+			Py_DECREF(f);  /* might set cached_frame again
+					  XXX could this loop never end? */
+		}
+		newf = psyco_build_pyframe(co, globals);
+		while (cached_frame != NULL) {
+			/* worst-case safe...  this is unlikely */
+			f = cached_frame;
+			cached_frame = NULL;
+			Py_DECREF(f);
+		}
+		cached_frame = newf;   /* transfer ownership */
+		return (PyObject*) newf;
 	}
 }
 static PyFrameObject* psyco_threadstate_getframe(PyThreadState* self)
