@@ -152,6 +152,12 @@ vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,
 #endif
 }
 
+ /***************************************************************/
+  /*** instances and classes                                   ***/
+
+DEF_KNOWN_RET_TYPE_3(pinstance_new, PyInstance_New,
+		     CfReturnRef|CfPyErrIfNull, &PyInstance_Type)
+
 
 INITIALIZATIONFN
 void psy_classobject_init(void)
@@ -159,6 +165,7 @@ void psy_classobject_init(void)
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	Psyco_DefineMeta(PyMethod_Type.tp_call, pinstancemethod_call);
 #endif
+	Psyco_DefineMeta(PyInstance_New,	pinstance_new);
 
         INIT_SVIRTUAL(psyco_computed_method, compute_method,
 		      direct_compute_method,
