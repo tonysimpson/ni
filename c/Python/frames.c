@@ -697,8 +697,9 @@ static PyObject* visit_first_frame(PyObject* o, void* ignored)
 		extra_assert(globals != NULL);
 		while (cached_frame != NULL) {
 			f = cached_frame;
-			if (f->f_code == co && f->f_globals == globals)
-				return f;  /* reuse it */
+			if ((PyObject*) f->f_code == co
+			    && f->f_globals == globals)
+				return (PyObject*) f;  /* reuse it */
 			cached_frame = NULL;
 			Py_DECREF(f);  /* might set cached_frame again
 					  XXX could this loop never end? */

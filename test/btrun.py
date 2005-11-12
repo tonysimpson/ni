@@ -648,6 +648,8 @@ S
 ('f1', 1)
 ('f2', 0)
 
+>>> test5.makeSelection()
+do stuff here
 
                          ###########################
                          ####   COMPACTOBJECT   ####

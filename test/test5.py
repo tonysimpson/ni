@@ -307,6 +307,23 @@ else:
         class S(array.array): pass
         print type(S('i')).__name__
 
+
+class CompositeElement:
+    def __init__(self):
+        self.children = []
+
+    def append(self, child):
+        self.children.append(child)
+        return self
+
+def makeSelection():
+    """Segfault bug (thanks xorAxAx)"""
+    result = CompositeElement()
+    result.append(CompositeElement().append(42))
+    print 'do stuff here'
+    assert isinstance(result.children[0], CompositeElement)
+
+
 if __name__ == '__main__':
     import time
     print "break!"
@@ -315,5 +332,5 @@ if __name__ == '__main__':
     #longrangetest()
     #psyco.proxy(arraytest)()
     #proxy_defargs()
-    setfilter()
+    makeSelection()
     psyco.dumpcodebuf()

@@ -3387,6 +3387,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
               LOC_INLINING = po->pr.val;
               po->pr.val = NULL;
               clear_pseudo_exception(po);
+              need_reference(po, LOC_INLINING); /* see test5.makeSelection() */
               continue;
             }
 
