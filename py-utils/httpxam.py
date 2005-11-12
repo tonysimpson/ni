@@ -89,14 +89,15 @@ def cache_load(filename, codename, cache={}):
         modulecode = cache[filename]
     except KeyError:
         try:
-            f = open(filename, 'r')
+            f = open(filename, 'rU')
             source = f.read()
             f.close()
-        except IOError:
-            return None
-        try:
             modulecode = compile(source, filename, 'exec')
-        except:
+        except Exception, e:
+            print repr(source)
+            print '*** While loading %s:' % (filename,)
+            import traceback
+            traceback.print_exc()
             return None
 
     return recfindcode(modulecode, codename)
