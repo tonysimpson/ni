@@ -150,8 +150,7 @@ def generate(processor=None):
         print >> f, '#endif /* PSYCO_INITIALIZATION */'
     f.close()
 
-
-if __name__ == '__main__':
+def main():
     generate()
     for processor in PROCESSOR_SRC.keys():
         generate(processor)
@@ -159,3 +158,6 @@ if __name__ == '__main__':
     import os, sys; sys.path.insert(0, os.path.join(os.pardir, 'py-utils'))
     import manifest
     manifest.generate()
+
+if __name__ == '__main__':
+    main()

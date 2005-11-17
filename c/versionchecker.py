@@ -40,3 +40,5 @@ if len(versions) != 1:
     raise Exception, versions
 else:
     print "versionchecker: ok"
+
+import files; files.main()
