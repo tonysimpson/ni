@@ -39,8 +39,10 @@ def do_test_1(objects):
 
 def do_test(n, do_test_1=do_test_1):
     random.jumpahead(n*111222333444555666777L)
-    objects = [None, -1, 0, 1, 123455+1, -99-1,
-               'hel'+'lo', [1,2], {(5,): do_test}, 5.43+0.01, xrange(5)]
+    N = 1
+    TAIL = 'lo'
+    objects = [None, -1, 0, 1, 123455+N, -99-N,
+               'hel'+TAIL, [1,2], {(5,): do_test}, 5.43+0.01*N, xrange(5)]
     do_test_1(objects)
     for o in objects[4:]:
         #print '%5d  -> %r' % (sys.getrefcount(o), o)
@@ -226,8 +228,8 @@ def test_with_psyco():
 
 if __name__ == '__main__':
     import time; print "break!"; time.sleep(1)
-    #stress_test()
+    subprocess_test(10)
     #pcompact_test()
-    pcompact_creat('hel' + 'lo')
-    pcompact_modif('hel' + 'lo')
+    #pcompact_creat('hel' + 'lo')
+    #pcompact_modif('hel' + 'lo')
     psyco.dumpcodebuf()
