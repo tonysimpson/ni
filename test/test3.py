@@ -261,12 +261,12 @@ def test_getframe():
         except ValueError:
             break
         #print '%-26s %-60s %-40s' % (f, f.f_code, f.f_locals.keys())
-        print f.f_code.co_name
+        print f.f_code.co_name.replace('<module>', '?')
         i += 1
 
 def test_getframe1():
     return test_getframe()
-    exec ""  # prevents Psyco compilation
+psyco.cannotcompile(test_getframe1)
 
 def test_getframe_b():
     import sys
@@ -274,12 +274,12 @@ def test_getframe_b():
     print 'test_getframe_b():'
     f = sys._getframe()
     while f is not None:
-        print f.f_code.co_name
+        print f.f_code.co_name.replace('<module>', '?')
         f = f.f_back    # walk the stack with f_back
 
 def test_getframe_b1():
     return test_getframe_b()
-    exec ""  # prevents Psyco compilation
+psyco.cannotcompile(test_getframe_b1)
 
 def f28():
     test_getframe()
