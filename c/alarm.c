@@ -192,7 +192,7 @@ static PyMethodDef alarm_methods[] = {
 	{NULL,		NULL}		/* sentinel */
 };
 
-static PyObject* alarm_getattr(PyObject* self, char* name)
+static PyObject* alarm_getattr(PyObject* self, CONST_CHAR* name)
 {
   return Py_FindMethod(alarm_methods, self, name);
 }

@@ -842,7 +842,7 @@ compacttype_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
 {
 	int i, n;
 	PyObject *name, *bases, *dict, *slots, *result, *nbases;
-	static char *kwlist[] = {"name", "bases", "dict", 0};
+	static CONST_CHAR *kwlist[] = {"name", "bases", "dict", 0};
 
 	/* Check arguments: (name, bases, dict) */
 	if (!PyArg_ParseTupleAndKeywords(args, kwds, "SO!O!:compacttype",
