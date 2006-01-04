@@ -22,7 +22,7 @@
 /* the following known values have the SkFlagFixed set */
 #define DEF_SK_AND_VI(name)                             \
 EXTERNVAR source_known_t psyco_sk##name;                \
-inline vinfo_t* psyco_vi_##name(void) {                 \
+PSY_INLINE vinfo_t* psyco_vi_##name(void) {                 \
   sk_incref(&psyco_sk##name);                           \
   return vinfo_new(CompileTime_NewSk(&psyco_sk##name)); \
 }
@@ -66,20 +66,20 @@ EXTERNVAR source_virtual_t EInline;    /* inline a frame inside a parent frame *
 
 
 /* Check whether a pseudo-exception is currently set */
-inline bool PycException_Occurred(PsycoObject* po) {
+PSY_INLINE bool PycException_Occurred(PsycoObject* po) {
 	return po->pr.exc != NULL;
 }
 
 
 /* raise an arbitrary pseudo-exception (consumes the references) */
 EXTERNFN void PycException_Clear(PsycoObject* po);
-inline void PycException_Raise(PsycoObject* po, vinfo_t* exc, vinfo_t* val) {
+PSY_INLINE void PycException_Raise(PsycoObject* po, vinfo_t* exc, vinfo_t* val) {
 	if (PycException_Occurred(po))
 		PycException_Clear(po);
 	po->pr.exc = exc;
 	po->pr.val = val;
 }
-inline void PycException_Restore(PsycoObject* po, vinfo_t* exc,
+PSY_INLINE void PycException_Restore(PsycoObject* po, vinfo_t* exc,
 				 vinfo_t* val, vinfo_t* tb) {
 	PycException_Raise(po, exc, val);
 	po->pr.tb = tb;
@@ -98,10 +98,10 @@ EXTERNFN void PycException_SetVInfo(PsycoObject* po, PyObject* e, vinfo_t* v);
 /* checking for the Python class of an exception */
 EXTERNFN vinfo_t* PycException_Matches(PsycoObject* po, PyObject* e);
 
-inline bool PycException_Is(PsycoObject* po, source_virtual_t* sv) {
+PSY_INLINE bool PycException_Is(PsycoObject* po, source_virtual_t* sv) {
 	return po->pr.exc->source == VirtualTime_New(sv);
 }
-inline bool PycException_IsPython(PsycoObject* po) {
+PSY_INLINE bool PycException_IsPython(PsycoObject* po) {
 	Source src = po->pr.exc->source;
 	if (is_virtualtime(src)) {
 		return !(src == VirtualTime_New(&EReturn) ||
@@ -136,7 +136,7 @@ EXTERNFN void PycException_Promote(PsycoObject* po,
    by raising a EPromotion exception if needed. Returns -1 in
    this case; use PycException_Occurred() to know if it is really
    an exception or a plain normal -1. */
-inline long psyco_atcompiletime(PsycoObject* po, vinfo_t *vi) {
+PSY_INLINE long psyco_atcompiletime(PsycoObject* po, vinfo_t *vi) {
 	if (!compute_vinfo(vi, po))
 		return -1;
 	if (is_runtime(vi->source)) {
@@ -151,7 +151,7 @@ inline long psyco_atcompiletime(PsycoObject* po, vinfo_t *vi) {
 }
 /* the same if the value to promote is itself a PyObject* which can be
    used as key in the look-up dictionary */
-inline PyObject* psyco_pyobj_atcompiletime(PsycoObject* po, vinfo_t *vi) {
+PSY_INLINE PyObject* psyco_pyobj_atcompiletime(PsycoObject* po, vinfo_t *vi) {
 	if (!compute_vinfo(vi, po))
 		return NULL;
 	if (is_runtime(vi->source)) {
@@ -170,7 +170,7 @@ inline PyObject* psyco_pyobj_atcompiletime(PsycoObject* po, vinfo_t *vi) {
    In this case we must only promote the known values. So instead
    of writing 'switch (psyco_atcompiletime(po, vi))' you
    must write 'switch (psyco_switch_index(po, vi, fs))' */
-inline int psyco_switch_index(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) {
+PSY_INLINE int psyco_switch_index(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) {
 	if (!compute_vinfo(vi, po))
 		return -1;
 	if (is_runtime(vi->source)) {
@@ -185,7 +185,7 @@ inline int psyco_switch_index(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) 
 
 /* lazy comparison. Returns true if 'vi' is non-NULL, compile-time, and has the
    given value, and false otherwise. */
-inline bool psyco_knowntobe(vinfo_t* vi, long value) {
+PSY_INLINE bool psyco_knowntobe(vinfo_t* vi, long value) {
 	return vi != NULL && is_compiletime(vi->source) &&
 		CompileTime_Get(vi->source)->value == value;
 }
@@ -214,7 +214,7 @@ inline bool psyco_knowntobe(vinfo_t* vi, long value) {
 /* Psyco meta-equivalent of PyErr_Occurred(). Not to be confused with
    PycException_Occurred(), which tells whether a Psyco-level exception
    is currently set. */
-inline vinfo_t* psyco_PyErr_Occurred(PsycoObject* po) {
+PSY_INLINE vinfo_t* psyco_PyErr_Occurred(PsycoObject* po) {
 	if (PycException_Occurred(po) && PycException_IsPython(po)) {
 		return psyco_vi_One();
 	}
@@ -258,7 +258,7 @@ EXTERNVAR PyObject* Psyco_Meta_Dict;  /* key is a PyIntObject holding the
 					 a PyIntObject holding the address
 					 of the corresponding Psyco function. */
 EXTERNFN void Psyco_DefineMeta(void* c_function, void* psyco_function);
-inline void* Psyco_Lookup(void* c_function) {
+PSY_INLINE void* Psyco_Lookup(void* c_function) {
 	PyObject* value;
 	PyObject* key = PyInt_FromLong((long) c_function);
 	if (key == NULL) OUT_OF_MEMORY();
@@ -330,13 +330,13 @@ EXTERNFN vinfo_t* Psyco_Meta3x(PsycoObject* po, void* c_function, int flags,
 
 /* construction for non-frozen snapshots */
 EXTERNFN void pyc_data_build(PsycoObject* po, PyObject* merge_points);
-inline void pyc_data_release(pyc_data_t* pyc) {
+PSY_INLINE void pyc_data_release(pyc_data_t* pyc) {
 	vinfo_xdecref(pyc->val, NULL);
 	vinfo_xdecref(pyc->exc, NULL);
         vinfo_xdecref(pyc->tb,  NULL);
 	Py_XDECREF(pyc->changing_globals);
 }
-inline void pyc_data_duplicate(pyc_data_t* target, pyc_data_t* source) {
+PSY_INLINE void pyc_data_duplicate(pyc_data_t* target, pyc_data_t* source) {
 	memcpy(target, source, sizeof(pyc_data_t));
 	target->exc = NULL;
         target->val = NULL;
@@ -345,19 +345,19 @@ inline void pyc_data_duplicate(pyc_data_t* target, pyc_data_t* source) {
 }
 
 /* construction for frozen snapshots */
-inline size_t frozen_size(pyc_data_t* pyc) {
+PSY_INLINE size_t frozen_size(pyc_data_t* pyc) {
 	return offsetof(pyc_data_t, blockstack) + pyc->iblock*sizeof(PyTryBlock);
 }
-inline void frozen_copy(pyc_data_t* target, pyc_data_t* source) {
+PSY_INLINE void frozen_copy(pyc_data_t* target, pyc_data_t* source) {
 	memcpy(target, source, frozen_size(source));
 }
-inline pyc_data_t* pyc_data_new(pyc_data_t* original) {
+PSY_INLINE pyc_data_t* pyc_data_new(pyc_data_t* original) {
 	pyc_data_t* pyc = (pyc_data_t*) PyMem_MALLOC(frozen_size(original));
 	if (pyc == NULL) OUT_OF_MEMORY();
 	frozen_copy(pyc, original);
 	return pyc;
 }
-inline void pyc_data_delete(pyc_data_t* pyc) {
+PSY_INLINE void pyc_data_delete(pyc_data_t* pyc) {
 	PyMem_FREE(pyc);
 }
 

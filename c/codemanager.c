@@ -25,7 +25,7 @@ static codemanager_buf_t* big_buffers = NULL;
 static codemanager_buf_t* completed_big_buffers = NULL;
 
 
-inline void check_signature(codemanager_buf_t* b)
+PSY_INLINE void check_signature(codemanager_buf_t* b)
 {
   if (b->signature != BUFFER_SIGNATURE)
     Py_FatalError("psyco: code buffer overwrite detected");

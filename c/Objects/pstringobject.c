@@ -51,7 +51,7 @@ static PyObject* direct_compute_char(vinfo_t* v, char* data)
 }
 
 
-inline vinfo_t* PsycoCharacter_NEW(vinfo_t* chrval)
+PSY_INLINE vinfo_t* PsycoCharacter_NEW(vinfo_t* chrval)
 {
 	/* consumes a ref to 'chrval' */
 	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_char));
@@ -70,7 +70,7 @@ vinfo_t* PsycoCharacter_New(vinfo_t* chrval)
 	return PsycoCharacter_NEW(chrval);
 }
 
-inline defield_t first_character(vinfo_t* v)
+PSY_INLINE defield_t first_character(vinfo_t* v)
 {
 	if (v->source == VirtualTime_New(&psyco_computed_char))
 		return (defield_t) CHARACTER_CHAR;
@@ -175,7 +175,7 @@ static PyObject* direct_compute_strslice(vinfo_t* v, char* data)
 	return result;
 }
 
-inline vinfo_t* PsycoStrSlice_NEW(vinfo_t* source, vinfo_t* start, vinfo_t* len)
+PSY_INLINE vinfo_t* PsycoStrSlice_NEW(vinfo_t* source, vinfo_t* start, vinfo_t* len)
 {
 	/* consumes a ref to all arguments */
 	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_strslice));
@@ -363,7 +363,7 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v)
 	return true;
 }
 
-inline vinfo_t* PsycoCatStr_NEW(PsycoObject* po,
+PSY_INLINE vinfo_t* PsycoCatStr_NEW(PsycoObject* po,
 				vinfo_t* totallength, vinfo_t* list)
 {
 	/* consumes a ref to the arguments */
@@ -390,7 +390,7 @@ inline vinfo_t* PsycoCatStr_NEW(PsycoObject* po,
 	return result;
 }
 
-inline vinfo_t* pstring_as_catlist(vinfo_t* vs)
+PSY_INLINE vinfo_t* pstring_as_catlist(vinfo_t* vs)
 {
 	/* the resulting list is guaranteed to be of length >= 1 */
 	vinfo_t* list;
@@ -664,7 +664,7 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 /* higher-level meta-version of memcmp(): compares the data in string 'v' of length
    'vlen' with the data in string 'w' of length 'wlen'.
    Return 0 (no), 1 (yes), or -1 (error). */
-inline int psyco_richmemcmp(PsycoObject* po, vinfo_t* v, vinfo_t* w,
+PSY_INLINE int psyco_richmemcmp(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 			    vinfo_t* vlen, vinfo_t* wlen, int op)
 {
 	condition_code_t cc;
@@ -867,7 +867,7 @@ static vinfo_t* pstring_mod(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 /* buffer-based over-allocated concatenations.                 */
 static source_virtual_t psyco_computed_bufstr;
 
-inline vinfo_t* PsycoBufStr_NEW(vinfo_t* vcb, vinfo_t* vlen)
+PSY_INLINE vinfo_t* PsycoBufStr_NEW(vinfo_t* vcb, vinfo_t* vlen)
 {
 	/* consumes a ref to its args */
 	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_bufstr));

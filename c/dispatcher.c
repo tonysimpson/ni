@@ -18,32 +18,32 @@
    See the "!VLOCALS_OPC" version of compatible_array().
 */
 
-inline void fz_build(FrozenPsycoObject* fpo, vinfo_array_t* aa) {
+PSY_INLINE void fz_build(FrozenPsycoObject* fpo, vinfo_array_t* aa) {
   fpo->fz_vlocals = array_new(aa->count);
   duplicate_array(fpo->fz_vlocals, aa);
 }
 
-inline void fz_unfreeze(vinfo_array_t* aa, FrozenPsycoObject* fpo) {
+PSY_INLINE void fz_unfreeze(vinfo_array_t* aa, FrozenPsycoObject* fpo) {
   assert_cleared_tmp_marks(fpo->fz_vlocals);
   duplicate_array(aa, fpo->fz_vlocals);
   clear_tmp_marks(fpo->fz_vlocals);
 }
 
-inline void fz_release(FrozenPsycoObject* fpo) {
+PSY_INLINE void fz_release(FrozenPsycoObject* fpo) {
   array_delete(fpo->fz_vlocals, NULL);
 }
 
       /* invariant: all snapshot.fz_vlocals in the fatlist have
          all their 'tmp' fields set to NULL. */
-inline void fz_check_invariant(FrozenPsycoObject* fpo) {
+PSY_INLINE void fz_check_invariant(FrozenPsycoObject* fpo) {
   assert_cleared_tmp_marks(fpo->fz_vlocals);
 }
 
-inline void fz_restore_invariant(FrozenPsycoObject* fpo) {
+PSY_INLINE void fz_restore_invariant(FrozenPsycoObject* fpo) {
   clear_tmp_marks(fpo->fz_vlocals);
 }
 
-inline int fz_top_array_count(FrozenPsycoObject* fpo) {
+PSY_INLINE int fz_top_array_count(FrozenPsycoObject* fpo) {
   return fpo->fz_vlocals->count;
 }
 
@@ -160,14 +160,14 @@ static void fz_internal_expand(void)
 /* Note: the pseudo-code is built in left-to-right array order,
    but it is intended to be read backwards, thus uncompression creates
    the arrays right-to-left. */
-inline void fz_putarg(Source arg)
+PSY_INLINE void fz_putarg(Source arg)
 {
   if (cmpinternal.buf_opc < (signed char*) (cmpinternal.buf_args+1))
     fz_internal_expand();
   *cmpinternal.buf_args++ = arg;
 }
 
-inline void fz_putopc(int opc)
+PSY_INLINE void fz_putopc(int opc)
 {
   if (!(-128 <= opc && opc < 128))
     {
@@ -260,12 +260,12 @@ static void fz_compress(vinfo_array_t* aa)
    the 'source' field *before* its sub-array. This will complicate
    compatible_array() a bit. */
 
-inline Source fz_getarg(void)
+PSY_INLINE Source fz_getarg(void)
 {
   return *--cmpinternal.buf_args;
 }
 
-inline int fz_getopc(void)
+PSY_INLINE int fz_getopc(void)
 {
   int result = *cmpinternal.buf_opc++;
   if (result == FZ_OPC_EXT)
@@ -376,7 +376,7 @@ static void fz_find_rt1(vinfo_array_t* aa, int length,
     }
 }
 
-inline void fz_load_fpo(FrozenPsycoObject* fpo) {
+PSY_INLINE void fz_load_fpo(FrozenPsycoObject* fpo) {
   cmpinternal.buf_opc  = (signed char*) fpo->fz_vlocals_opc;
   cmpinternal.buf_args =                fpo->fz_vlocals_opc;
 }
@@ -388,7 +388,7 @@ DEFINEFN void fz_find_runtimes(vinfo_array_t* aa, FrozenPsycoObject* fpo,
   fz_find_rt1(aa, fz_getopc(), callback, extra);
 }
 
-inline void fz_build(FrozenPsycoObject* fpo, vinfo_array_t* aa)
+PSY_INLINE void fz_build(FrozenPsycoObject* fpo, vinfo_array_t* aa)
 {
   int opc_size, arg_size;
   signed char* nbuf;
@@ -409,14 +409,14 @@ inline void fz_build(FrozenPsycoObject* fpo, vinfo_array_t* aa)
   fpo->fz_vlocals_opc = (Source*) (nbuf + arg_size);
 }
 
-inline void fz_load_fpo_stack(FrozenPsycoObject* fpo) {
+PSY_INLINE void fz_load_fpo_stack(FrozenPsycoObject* fpo) {
   fz_load_fpo(fpo);
   cmpinternal.tmp_counter = 0;
   cmpinternal.vcilink = &cmpinternal.sentinel;
   cmpinternal.sentinel.time = INT_MAX;   /* sentinel */
 }
 
-inline int fz_top_array_count(FrozenPsycoObject* fpo) {
+PSY_INLINE int fz_top_array_count(FrozenPsycoObject* fpo) {
   int result;
   if (fpo->fz_vlocals_opc == NULL)
     return 0;
@@ -426,7 +426,7 @@ inline int fz_top_array_count(FrozenPsycoObject* fpo) {
   return result;
 }
 
-inline void fz_unfreeze(vinfo_array_t* aa, FrozenPsycoObject* fpo) {
+PSY_INLINE void fz_unfreeze(vinfo_array_t* aa, FrozenPsycoObject* fpo) {
   fz_load_fpo_stack(fpo);
   aa->count = fz_getopc();
   fz_uncompress(aa);
@@ -434,7 +434,7 @@ inline void fz_unfreeze(vinfo_array_t* aa, FrozenPsycoObject* fpo) {
   extra_assert(cmpinternal.vcilink == &cmpinternal.sentinel);
 }
 
-inline void fz_release(FrozenPsycoObject* fpo) {
+PSY_INLINE void fz_release(FrozenPsycoObject* fpo) {
   if (fpo->fz_vlocals_opc != NULL)
     {
       fz_load_fpo(fpo);
@@ -443,10 +443,10 @@ inline void fz_release(FrozenPsycoObject* fpo) {
     }
 }
 
-inline void fz_check_invariant(FrozenPsycoObject* fpo) {
+PSY_INLINE void fz_check_invariant(FrozenPsycoObject* fpo) {
 }
 
-inline void fz_restore_invariant(FrozenPsycoObject* fpo) {
+PSY_INLINE void fz_restore_invariant(FrozenPsycoObject* fpo) {
 }
 
 
@@ -991,7 +991,7 @@ static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
   return false;
 }
 
-inline bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
+PSY_INLINE bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
                                 vcompatible_t* result) {
   return compatible_array(aa, fpo->fz_vlocals, &result->diff);
 }
@@ -1344,7 +1344,7 @@ static void skip_compatible_array(int count)
 }
 #endif  /* COMPRESS_COMPILETIME_SUBITEMS */
 
-inline bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
+PSY_INLINE bool fz_compatible_array(vinfo_array_t* aa, FrozenPsycoObject* fpo,
                                 vcompatible_t* result) {
   bool ok;
   fz_load_fpo_stack(fpo);
@@ -1657,7 +1657,7 @@ typedef struct { /* produced at compile time and read by the dispatcher */
 
 #if PROMOTION_TACTIC == 0
 #define NEED_PYOBJ_KEY
-inline code_t* lookup_old_promotion_values(rt_promotion_t* fs,
+PSY_INLINE code_t* lookup_old_promotion_values(rt_promotion_t* fs,
                                            PyObject* key)
 {
   /* have we already seen this value? */
@@ -1673,7 +1673,7 @@ inline code_t* lookup_old_promotion_values(rt_promotion_t* fs,
 #  if PROMOTION_FAST_COMMON_CASE
 static
 #  else
-inline
+PSY_INLINE
 #  endif
 code_t* lookup_old_promotion_values(rt_promotion_t* fs, long value)
 {

@@ -50,7 +50,7 @@ EXTERNFN PsycoFunctionObject* psyco_PsycoFunction_NewEx(PyCodeObject* code,
                                                 int rec);
 EXTERNFN PyObject* psyco_proxycode(PyFunctionObject* func, int rec);
 
-inline bool is_proxycode(PyCodeObject* code) {
+PSY_INLINE bool is_proxycode(PyCodeObject* code) {
   return PyTuple_Size(code->co_consts) > 1 &&
     PsycoFunction_Check(PyTuple_GET_ITEM(code->co_consts, 1));
 }

@@ -46,7 +46,7 @@ struct ipromotion_s {
 };
 
 
-inline code_t* fix_fast_common_case(void* fs, long value,
+PSY_INLINE code_t* fix_fast_common_case(void* fs, long value,
                                     code_t* codeptr)
 {
 #if PROMOTION_FAST_COMMON_CASE
@@ -56,7 +56,7 @@ inline code_t* fix_fast_common_case(void* fs, long value,
   return codeptr;
 }
 
-inline void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promotion)
+PSY_INLINE void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promotion)
 {
   long xsource;
   struct ipromotion_s* fs;
@@ -95,7 +95,7 @@ inline void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promotion
 /***************************************************************/
  /***   Misc.                                                 ***/
 
-inline void* conditional_jump_to(PsycoObject* po, code_t* target,
+PSY_INLINE void* conditional_jump_to(PsycoObject* po, code_t* target,
                                  condition_code_t condition)
 {
   BEGIN_CODE
@@ -112,7 +112,7 @@ inline void* conditional_jump_to(PsycoObject* po, code_t* target,
   return po->code;
 }
 
-inline void change_cond_jump_target(void* tag, code_t* newtarget)
+PSY_INLINE void change_cond_jump_target(void* tag, code_t* newtarget)
 {
   code_t* code = (code_t*) tag;
   /* safety check: do not write a JMP whose target is itself...
@@ -121,14 +121,14 @@ inline void change_cond_jump_target(void* tag, code_t* newtarget)
   CHANGE_JUMP_TO(newtarget);
 }
 
-inline code_t* resume_after_cond_jump(void* tag)
+PSY_INLINE code_t* resume_after_cond_jump(void* tag)
 {
   return (code_t*) tag;
 }
 
 /* reserve a small buffer of code behind po->code in which conditional
    code can be stored.  See make_code_conditional(). */
-inline void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2,
+PSY_INLINE void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2,
                                            condition_code_t condition)
 {
   code_t* code2 = po->code + SIZE_OF_SHORT_CONDITIONAL_JUMP;
@@ -139,7 +139,7 @@ inline void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2,
 
 /* mark a small buffer reserved by setup_conditional_code_bounds() to be
    only executed if 'condition' holds. */
-inline void make_code_conditional(PsycoObject* po, code_t* codeend,
+PSY_INLINE void make_code_conditional(PsycoObject* po, code_t* codeend,
                                   condition_code_t condition, void* extra)
 {
   code_t* target;

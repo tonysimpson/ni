@@ -34,7 +34,7 @@ EXTERNVAR source_virtual_t psyco_computed_seqiter;
 /* !! consumes a ref on 'seq' */
 EXTERNFN vinfo_t* PsycoSeqIter_NEW(PsycoObject* po, vinfo_t* seq);
 
-inline vinfo_t* PsycoSeqIter_New(PsycoObject* po, vinfo_t* seq)
+PSY_INLINE vinfo_t* PsycoSeqIter_New(PsycoObject* po, vinfo_t* seq)
 {
 	vinfo_incref(seq);
 	return PsycoSeqIter_NEW(po, seq);

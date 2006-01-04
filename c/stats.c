@@ -134,7 +134,7 @@ bool psyco_stats_write(PyObject* args, PyObject* kwds)
 
 /* very cheap very weak pseudo-random number generator */
 static unsigned int c_seek = 1;
-inline unsigned int c_random(void)
+PSY_INLINE unsigned int c_random(void)
 {
 	return (c_seek = c_seek * 9);
 }

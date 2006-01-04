@@ -10,7 +10,7 @@
 
 /* See comments in i386/ipyencoding.h about these functions */
 
-inline void* dictitem_check_change(PsycoObject* po,
+PSY_INLINE void* dictitem_check_change(PsycoObject* po,
                                    PyDictObject* dict, PyDictEntry* ep)
 {
 	int index        = ep - dict->ma_table;
@@ -38,7 +38,7 @@ inline void* dictitem_check_change(PsycoObject* po,
 
 #define DICT_ITEM_CHECK_CC   CC_FLAG
 
-inline void dictitem_update_nochange(void* originalmacrocode,
+PSY_INLINE void dictitem_update_nochange(void* originalmacrocode,
 				     PyDictObject* dict, PyDictEntry* new_ep)
 {
 	int index = new_ep - dict->ma_table;
@@ -46,7 +46,7 @@ inline void dictitem_update_nochange(void* originalmacrocode,
 	*arg5 = index;
 }
 
-inline void psyco_incref_nv(PsycoObject* po, vinfo_t* v)
+PSY_INLINE void psyco_incref_nv(PsycoObject* po, vinfo_t* v)
 {
 	BEGIN_CODE
 	INSN_nv_push(v->source);
@@ -54,7 +54,7 @@ inline void psyco_incref_nv(PsycoObject* po, vinfo_t* v)
 	END_CODE
 }
 
-inline void psyco_incref_rt(PsycoObject* po, vinfo_t* v)
+PSY_INLINE void psyco_incref_rt(PsycoObject* po, vinfo_t* v)
 {
 	BEGIN_CODE
 	INSN_rt_push(v->source);
@@ -62,7 +62,7 @@ inline void psyco_incref_rt(PsycoObject* po, vinfo_t* v)
 	END_CODE
 }
 
-inline void psyco_decref_rt(PsycoObject* po, vinfo_t* v)
+PSY_INLINE void psyco_decref_rt(PsycoObject* po, vinfo_t* v)
 {
 	BEGIN_CODE
 	INSN_rt_push(v->source);
@@ -70,7 +70,7 @@ inline void psyco_decref_rt(PsycoObject* po, vinfo_t* v)
 	END_CODE
 }
 
-inline void psyco_decref_c(PsycoObject* po, PyObject* o)
+PSY_INLINE void psyco_decref_c(PsycoObject* po, PyObject* o)
 {
 	word_t* arg;
 	BEGIN_CODE

@@ -35,13 +35,13 @@
 #ifdef PSYCO_NO_LINKED_LISTS
 
 #define BLOCKALLOC_INTERN_DEF(name, type, EVAR, EFN)		\
-inline type* psyco_llalloc_##name(void) {			\
+PSY_INLINE type* psyco_llalloc_##name(void) {			\
 	type* vi = (type*) PyMem_MALLOC(sizeof(type));		\
 	if (vi == NULL)						\
 		OUT_OF_MEMORY();				\
 	return vi;						\
 }								\
-inline void psyco_llfree_##name(type* vi) {			\
+PSY_INLINE void psyco_llfree_##name(type* vi) {			\
 	PyMem_FREE((char*) vi);					\
 }
 
@@ -56,7 +56,7 @@ inline void psyco_llfree_##name(type* vi) {			\
 #define BLOCKALLOC_INTERN_DEF(name, type, EVAR, EFN)		\
 EVAR void** psyco_linked_list_##name;				\
 EFN  void*  psyco_ll_newblock_##name(void);			\
-inline type* psyco_llalloc_##name(void) {			\
+PSY_INLINE type* psyco_llalloc_##name(void) {			\
 	type* vi;						\
 	if (psyco_linked_list_##name == NULL)			\
 		vi = (type*) psyco_ll_newblock_##name();	\
@@ -69,7 +69,7 @@ inline type* psyco_llalloc_##name(void) {			\
         BLOCKALLOC_DEBUG_CHECK(vi, type)			\
 	return vi;						\
 }								\
-inline void psyco_llfree_##name(type* vi) {			\
+PSY_INLINE void psyco_llfree_##name(type* vi) {			\
 	if (PSYCO_DEBUG)					\
 		memset(vi, 0xCD, sizeof(type));			\
 	*(void**) vi = psyco_linked_list_##name;		\

@@ -42,7 +42,7 @@ EXTERNFN PyCodeStats* PyCodeStats_MaybeGet(PyCodeObject* co);
 #endif
 
 /* compute and return a Borrowed reference to st_mergepoints */
-inline PyObject* PyCodeStats_MergePoints(PyCodeStats* cs, int module) {
+PSY_INLINE PyObject* PyCodeStats_MergePoints(PyCodeStats* cs, int module) {
 	PyObject* mp = cs->st_mergepoints;
 	if (mp == NULL) {
 		mp = psyco_build_merge_points((PyCodeObject*) cs->cs_key,

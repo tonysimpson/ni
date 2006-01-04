@@ -27,7 +27,7 @@
 EXTERNVAR source_virtual_t psyco_computed_float;
 
 /* !! consumes a references to vdouble. PsycoFloat_FromLong() does not. */
-inline vinfo_t* PsycoFloat_FROM_DOUBLE(vinfo_t* vdouble1, vinfo_t* vdouble2)
+PSY_INLINE vinfo_t* PsycoFloat_FROM_DOUBLE(vinfo_t* vdouble1, vinfo_t* vdouble2)
 {
 	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_float));
 	result->array = array_new(FLOAT_TOTAL);
@@ -38,7 +38,7 @@ inline vinfo_t* PsycoFloat_FROM_DOUBLE(vinfo_t* vdouble1, vinfo_t* vdouble2)
 	return result;
 }
 
-inline vinfo_t* PsycoFloat_FromDouble(vinfo_t* vdouble1, vinfo_t* vdouble2)
+PSY_INLINE vinfo_t* PsycoFloat_FromDouble(vinfo_t* vdouble1, vinfo_t* vdouble2)
 {
 	vinfo_incref(vdouble1);
 	vinfo_incref(vdouble2);
@@ -47,12 +47,12 @@ inline vinfo_t* PsycoFloat_FromDouble(vinfo_t* vdouble1, vinfo_t* vdouble2)
 
 EXTERNFN vinfo_t* PsycoFloat_FromFloat(PsycoObject* po, vinfo_t* vfloat);
 
-inline vinfo_t* PsycoFloat_AS_DOUBLE_1(PsycoObject* po, vinfo_t* v)
+PSY_INLINE vinfo_t* PsycoFloat_AS_DOUBLE_1(PsycoObject* po, vinfo_t* v)
 {	/* no type check; does not return a new reference. */
 	return psyco_get_const(po, v, FLOAT_ob_fval);
 }
 
-inline vinfo_t* PsycoFloat_AS_DOUBLE_2(PsycoObject* po, vinfo_t* v)
+PSY_INLINE vinfo_t* PsycoFloat_AS_DOUBLE_2(PsycoObject* po, vinfo_t* v)
 {	/* no type check; does not return a new reference. */
 	return psyco_get_const(po, v, FIELD_PART2(FLOAT_ob_fval));
 }

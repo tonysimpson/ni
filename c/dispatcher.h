@@ -46,11 +46,11 @@ struct FrozenPsycoObject_s {
 
 
 /* construction */
-inline void fpo_mark_new(FrozenPsycoObject* fpo) {
+PSY_INLINE void fpo_mark_new(FrozenPsycoObject* fpo) {
 	fpo->fz_respawned_cnt = 0;
 	fpo->fz_respawned_from = NULL;
 }
-inline void fpo_mark_unused(FrozenPsycoObject* fpo) {
+PSY_INLINE void fpo_mark_unused(FrozenPsycoObject* fpo) {
 #if VLOCALS_OPC
 	fpo->fz_vlocals_opc = NULL;
 #else
@@ -65,7 +65,7 @@ EXTERNFN void fpo_release(FrozenPsycoObject* fpo);
 EXTERNFN PsycoObject* fpo_unfreeze(FrozenPsycoObject* fpo);
 
 /* inspection */
-inline int get_stack_depth(FrozenPsycoObject* fpo) {
+PSY_INLINE int get_stack_depth(FrozenPsycoObject* fpo) {
 	return fpo->fz_stuff.fz_stack_depth;
 }
 
@@ -117,7 +117,7 @@ struct global_entries_s {
 };
 
 /* initialize a global_entries_t structure */
-inline void psyco_ge_init(global_entries_t* ge) {
+PSY_INLINE void psyco_ge_init(global_entries_t* ge) {
 	ge->fatlist = PyList_New(0);
 	if (ge->fatlist == NULL)
 		OUT_OF_MEMORY();
@@ -125,12 +125,12 @@ inline void psyco_ge_init(global_entries_t* ge) {
 
 /* register the code buffer; it will be found by future calls to
    psyco_compatible(). */
-inline int register_codebuf(global_entries_t* ge, CodeBufferObject* codebuf) {
+PSY_INLINE int register_codebuf(global_entries_t* ge, CodeBufferObject* codebuf) {
 	return PyList_Append(ge->fatlist, (PyObject*) codebuf);
 }
 
 /* for mergepoints.c */
-inline void psyco_ge_unused_var(global_entries_t* ge, int num)
+PSY_INLINE void psyco_ge_unused_var(global_entries_t* ge, int num)
 {
 	PyObject* o = PyInt_FromLong(num);
 	if (o == NULL || PyList_Append(ge->fatlist, o))
@@ -176,7 +176,7 @@ EXTERNFN int psyco_simplify_array(vinfo_array_t* array,
 
 /* Emit the code to prepare for Psyco code calling Psyco code in
    a compiled function call */
-inline bool psyco_forking(PsycoObject* po, vinfo_array_t* array) {
+PSY_INLINE bool psyco_forking(PsycoObject* po, vinfo_array_t* array) {
 	/* Some virtual-time objects cannot remain virtualized across calls,
 	   because if the called function pulls them out of virtual-time,
 	   the caller will not know it.  This is unacceptable for
@@ -232,7 +232,7 @@ EXTERNFN code_t* psyco_do_respawn(void* arg, int extrasize);
 EXTERNFN code_t* psyco_dont_respawn(void* arg, int extrasize);
 EXTERNFN void psyco_respawn_detected(PsycoObject* po);
 #define detect_respawn_ex(po)  (!++(po)->respawn_cnt)
-inline bool detect_respawn(PsycoObject* po) {
+PSY_INLINE bool detect_respawn(PsycoObject* po) {
 	if (detect_respawn_ex(po)) {
 		psyco_respawn_detected(po);
 		return true;
@@ -240,7 +240,7 @@ inline bool detect_respawn(PsycoObject* po) {
 	else
 		return false;
 }
-inline bool is_respawning(PsycoObject* po) { return po->respawn_cnt < 0; }
+PSY_INLINE bool is_respawning(PsycoObject* po) { return po->respawn_cnt < 0; }
 
 /* the following powerful function stands for 'if the processor flag (cond) is
    set at run-time, then...'. Of course we do not know yet if this will be
@@ -248,13 +248,13 @@ inline bool is_respawning(PsycoObject* po) { return po->respawn_cnt < 0; }
    respawns if needed. 'cond' may be CC_ALWAYS_xxx or a real processor flag.
    runtime_condition_f() assumes the outcome is generally false,
    runtime_condition_t() assumes the outcome is generally true. */
-inline bool runtime_condition_f(PsycoObject* po, condition_code_t cond) {
+PSY_INLINE bool runtime_condition_f(PsycoObject* po, condition_code_t cond) {
 	extra_assert(cond != CC_ERROR);
 	if (cond == CC_ALWAYS_FALSE) return false;
 	if (cond == CC_ALWAYS_TRUE) return true;
         return psyco_prepare_respawn(po, cond);
 }
-inline bool runtime_condition_t(PsycoObject* po, condition_code_t cond) {
+PSY_INLINE bool runtime_condition_t(PsycoObject* po, condition_code_t cond) {
 	extra_assert(cond != CC_ERROR);
 	if (cond == CC_ALWAYS_TRUE) return true;
 	if (cond == CC_ALWAYS_FALSE) return false;

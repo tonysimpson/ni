@@ -29,7 +29,7 @@ EXTERNFN PyObject* PyCStruct_New(size_t size, destructor d);
 
 /* lookup in the given dict for the item whose key is a CStruct with
    the given key as cs_key */
-inline PyObject* PyCStruct_DictGet(PyObject* dict, PyObject* key)
+PSY_INLINE PyObject* PyCStruct_DictGet(PyObject* dict, PyObject* key)
 {
   cstruct_header_t sample;
   sample.ob_type = &PyCStruct_Type;

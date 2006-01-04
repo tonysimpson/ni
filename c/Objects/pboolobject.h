@@ -27,7 +27,7 @@
 EXTERNVAR source_virtual_t psyco_computed_bool;
 
 /* !! consumes a reference to vlong. PsycoBool_FromLong() does not. */
-inline vinfo_t* PsycoBool_FROM_LONG(vinfo_t* vlong)
+PSY_INLINE vinfo_t* PsycoBool_FROM_LONG(vinfo_t* vlong)
 {
 	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_bool));
 	result->array = array_new(BOOL_TOTAL);
@@ -36,7 +36,7 @@ inline vinfo_t* PsycoBool_FROM_LONG(vinfo_t* vlong)
 	result->array->items[iBOOL_OB_IVAL] = vlong;  assert_nonneg(vlong);
 	return result;
 }
-inline vinfo_t* PsycoBool_FromLong(vinfo_t* vlong)
+PSY_INLINE vinfo_t* PsycoBool_FromLong(vinfo_t* vlong)
 {
 	vinfo_incref(vlong);
 	return PsycoBool_FROM_LONG(vlong);

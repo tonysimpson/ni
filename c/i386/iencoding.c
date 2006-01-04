@@ -135,13 +135,13 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 
 
 /* run-time vinfo_t creation */
-inline vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonneg) {
+PSY_INLINE vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonneg) {
 	vinfo_t* vi = vinfo_new(RunTime_New(reg, ref, nonneg));
 	REG_NUMBER(po, reg) = vi;
 	return vi;
 }
 
-inline code_t* write_modrm(code_t* code, code_t middle,
+PSY_INLINE code_t* write_modrm(code_t* code, code_t middle,
                            reg_t base, reg_t index, int shift,
                            unsigned long offset)
 {

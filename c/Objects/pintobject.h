@@ -26,7 +26,7 @@
 EXTERNVAR source_virtual_t psyco_computed_int;
 
 /* !! consumes a reference to vlong. PsycoInt_FromLong() does not. */
-inline vinfo_t* PsycoInt_FROM_LONG(vinfo_t* vlong)
+PSY_INLINE vinfo_t* PsycoInt_FROM_LONG(vinfo_t* vlong)
 {
 	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_int));
 	result->array = array_new(INT_TOTAL);
@@ -35,13 +35,13 @@ inline vinfo_t* PsycoInt_FROM_LONG(vinfo_t* vlong)
 	result->array->items[iINT_OB_IVAL] = vlong;
 	return result;
 }
-inline vinfo_t* PsycoInt_FromLong(vinfo_t* vlong)
+PSY_INLINE vinfo_t* PsycoInt_FromLong(vinfo_t* vlong)
 {
 	vinfo_incref(vlong);
 	return PsycoInt_FROM_LONG(vlong);
 }
 
-inline vinfo_t* PsycoInt_AS_LONG(PsycoObject* po, vinfo_t* v)
+PSY_INLINE vinfo_t* PsycoInt_AS_LONG(PsycoObject* po, vinfo_t* v)
 {	/* no type check; does not return a new reference. */
 	return psyco_get_const(po, v, INT_ob_ival);
 }
@@ -50,7 +50,7 @@ inline vinfo_t* PsycoInt_AS_LONG(PsycoObject* po, vinfo_t* v)
 EXTERNFN vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v);
 
 
-inline vinfo_t* PsycoIntInt_RichCompare(PsycoObject* po, vinfo_t* v,
+PSY_INLINE vinfo_t* PsycoIntInt_RichCompare(PsycoObject* po, vinfo_t* v,
 					vinfo_t* w, int op)
 {	/* only for two integer objects */
 	vinfo_t* a;

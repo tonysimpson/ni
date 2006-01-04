@@ -10,7 +10,7 @@
 
 
 /* emit Py_INCREF(v) */
-inline bool psyco_incref_v(PsycoObject* po, vinfo_t* v)
+PSY_INLINE bool psyco_incref_v(PsycoObject* po, vinfo_t* v)
 {
   if (!compute_vinfo(v, po)) return false;
   psyco_incref_nv(po, v);
@@ -18,7 +18,7 @@ inline bool psyco_incref_v(PsycoObject* po, vinfo_t* v)
 }
 
 /* emit Py_DECREF(v) */
-inline void psyco_decref_v(PsycoObject* po, vinfo_t* v)
+PSY_INLINE void psyco_decref_v(PsycoObject* po, vinfo_t* v)
 {
   switch (gettime(v->source)) {
     
@@ -36,7 +36,7 @@ inline void psyco_decref_v(PsycoObject* po, vinfo_t* v)
 /* can eat a reference if we had one in the first place, and
    if no one else will require it (i.e. there is only one reference
    left to 'vi') */
-inline bool eat_reference(vinfo_t* vi)
+PSY_INLINE bool eat_reference(vinfo_t* vi)
 {
   if (has_rtref(vi->source) && vi->refcount == 1)
     {
@@ -48,14 +48,14 @@ inline bool eat_reference(vinfo_t* vi)
 }
 
 /* force a reference to be consumed */
-inline void consume_reference(PsycoObject* po, vinfo_t* vi)
+PSY_INLINE void consume_reference(PsycoObject* po, vinfo_t* vi)
 {
 	if (!eat_reference(vi))
 		psyco_incref_v(po, vi);
 }
 
 /* make sure we have a reference on 'vi' */
-inline void need_reference(PsycoObject* po, vinfo_t* vi)
+PSY_INLINE void need_reference(PsycoObject* po, vinfo_t* vi)
 {
   if ((vi->source & (TimeMask | RunTime_NoRef)) == (RunTime | RunTime_NoRef))
     {

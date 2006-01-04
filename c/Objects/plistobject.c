@@ -12,7 +12,7 @@
 /*DEFINEVAR vinfo_t* psyco_empty_list;*/
 static source_virtual_t psyco_computed_vlist;
 
-inline int vlist_length(vinfo_t* v)
+PSY_INLINE int vlist_length(vinfo_t* v)
 {
 	int len = v->array->count - VLIST_ITEMS;
 #if ALL_CHECKS
@@ -68,7 +68,7 @@ static bool compute_vlist(PsycoObject* po, vinfo_t* v)
 	return false;
 }
 
-inline vinfo_t* list_maybe_compute(PsycoObject* po, vinfo_t* v)
+PSY_INLINE vinfo_t* list_maybe_compute(PsycoObject* po, vinfo_t* v)
 {
 	/* force a list out of virtual-time if it is too long.
 	   decref v in case of error. */
@@ -83,7 +83,7 @@ inline vinfo_t* list_maybe_compute(PsycoObject* po, vinfo_t* v)
 }
 
 
-inline vinfo_t* PsycoList_NEW(int size)
+PSY_INLINE vinfo_t* PsycoList_NEW(int size)
 {
 	/* returns a virtual list. The caller should use list_maybe_compute()
 	   after initialization. */

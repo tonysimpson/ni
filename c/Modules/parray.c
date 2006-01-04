@@ -46,7 +46,7 @@ typedef struct arrayobject {
    index equal to -1; to do the equivalent of the array module's object
    type checking, you must call setitem() with a *compile-time* value of -1. */
 
-inline vinfo_t* generic_getitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,
+PSY_INLINE vinfo_t* generic_getitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,
 				defield_t rdf)
 {
 	vinfo_t* result;
@@ -155,7 +155,7 @@ static vinfo_t* p_d_getitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi)
 #endif
 
 
-inline bool generic_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,
+PSY_INLINE bool generic_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,
 			    vinfo_t* value, defield_t rdf)
 {
 	bool result;

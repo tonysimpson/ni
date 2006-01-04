@@ -501,7 +501,7 @@ PyObject* direct_xobj_vinfo(vinfo_t* vi, char* data)
 /*****************************************************************/
 
 
-inline vinfo_t* field_read(PsycoObject* po, vinfo_t* vi, long offset,
+PSY_INLINE vinfo_t* field_read(PsycoObject* po, vinfo_t* vi, long offset,
 			   vinfo_t* vindex, defield_t df, bool newref)
 {
 	vinfo_t* result = psyco_memory_read(po, vi, offset, vindex,

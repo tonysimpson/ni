@@ -31,10 +31,10 @@ typedef long VirtualTimeSource;
 #define VirtualTime     2
 #define TimeMask        (CompileTime | VirtualTime)
 
-inline bool is_runtime(Source s)     { return (s & TimeMask) == RunTime; }
-inline bool is_compiletime(Source s) { return (s & CompileTime) != 0; }
-inline bool is_virtualtime(Source s) { return (s & VirtualTime) != 0; }
-inline long gettime(Source s)        { return s & TimeMask; }
+PSY_INLINE bool is_runtime(Source s)     { return (s & TimeMask) == RunTime; }
+PSY_INLINE bool is_compiletime(Source s) { return (s & CompileTime) != 0; }
+PSY_INLINE bool is_virtualtime(Source s) { return (s & VirtualTime) != 0; }
+PSY_INLINE long gettime(Source s)        { return s & TimeMask; }
 #define CHKTIME(src, time)           extra_assert(gettime(src) == (time))
 
 
@@ -60,7 +60,7 @@ inline long gettime(Source s)        { return s & TimeMask; }
 #define RunTime_FlagsMask    RunTime_NoRef
 
 /* construction */
-inline RunTimeSource RunTime_New1(int stack_position,
+PSY_INLINE RunTimeSource RunTime_New1(int stack_position,
 #if REG_TOTAL > 0
 				  reg_t reg,
 #endif
@@ -86,43 +86,43 @@ inline RunTimeSource RunTime_New1(int stack_position,
 #endif
 
 /* field inspection */
-inline bool has_rtref(Source s) {
+PSY_INLINE bool has_rtref(Source s) {
 	return (s & (TimeMask|RunTime_NoRef)) == RunTime;
 }
 #if REG_TOTAL > 0
-inline reg_t getreg(RunTimeSource s)     { CHKTIME(s, RunTime); return (reg_t)(s >> 28); }
+PSY_INLINE reg_t getreg(RunTimeSource s)     { CHKTIME(s, RunTime); return (reg_t)(s >> 28); }
 #endif
-inline bool is_reg_none(RunTimeSource s) { CHKTIME(s, RunTime); return s < 0; }
-inline int getstack(RunTimeSource s)     { CHKTIME(s, RunTime); return s & RunTime_StackMask; }
-inline bool is_runtime_with_reg(Source s) {
+PSY_INLINE bool is_reg_none(RunTimeSource s) { CHKTIME(s, RunTime); return s < 0; }
+PSY_INLINE int getstack(RunTimeSource s)     { CHKTIME(s, RunTime); return s & RunTime_StackMask; }
+PSY_INLINE bool is_runtime_with_reg(Source s) {
   return (s & (TimeMask|(1<<31))) == 0;
 }
-inline bool is_rtnonneg(RunTimeSource s) { CHKTIME(s, RunTime); return s & RunTime_NonNeg; }
+PSY_INLINE bool is_rtnonneg(RunTimeSource s) { CHKTIME(s, RunTime); return s & RunTime_NonNeg; }
 
 
 /* mutation */
-inline RunTimeSource remove_rtref(RunTimeSource s) { CHKTIME(s, RunTime); return s | RunTime_NoRef; }
-inline RunTimeSource add_rtref(RunTimeSource s)    { CHKTIME(s, RunTime); return s & ~RunTime_NoRef; }
+PSY_INLINE RunTimeSource remove_rtref(RunTimeSource s) { CHKTIME(s, RunTime); return s | RunTime_NoRef; }
+PSY_INLINE RunTimeSource add_rtref(RunTimeSource s)    { CHKTIME(s, RunTime); return s & ~RunTime_NoRef; }
 #if REG_TOTAL > 0
-inline RunTimeSource set_rtreg_to(RunTimeSource s, reg_t newreg) {
+PSY_INLINE RunTimeSource set_rtreg_to(RunTimeSource s, reg_t newreg) {
 	CHKTIME(s, RunTime);
 	return (s & ~RunTime_RegMask) | ((long) newreg << 28);
 }
-inline RunTimeSource set_rtreg_to_none(RunTimeSource s) {
+PSY_INLINE RunTimeSource set_rtreg_to_none(RunTimeSource s) {
 	CHKTIME(s, RunTime);
 	return s | ((long) REG_NONE << 28);
 }
 #endif
-inline RunTimeSource set_rtstack_to(RunTimeSource s, int stack) {
+PSY_INLINE RunTimeSource set_rtstack_to(RunTimeSource s, int stack) {
 	CHKTIME(s, RunTime);
 	extra_assert(getstack(s) == RunTime_StackNone);
 	return s | stack;
 }
-inline RunTimeSource set_rtstack_to_none(RunTimeSource s) {
+PSY_INLINE RunTimeSource set_rtstack_to_none(RunTimeSource s) {
 	CHKTIME(s, RunTime);
 	return s & ~RunTime_StackMask;
 }
-inline RunTimeSource set_rtnonneg(RunTimeSource s) {
+PSY_INLINE RunTimeSource set_rtnonneg(RunTimeSource s) {
 	CHKTIME(s, RunTime);
 	return s | RunTime_NonNeg;
 }
@@ -154,41 +154,41 @@ typedef struct {
 
 /* refcounting */
 EXTERNFN void sk_release(source_known_t *sk);
-inline void sk_incref(source_known_t *sk) { sk->refcount1_flags += SkFlagEnd; }
-inline void sk_decref(source_known_t *sk) {
+PSY_INLINE void sk_incref(source_known_t *sk) { sk->refcount1_flags += SkFlagEnd; }
+PSY_INLINE void sk_decref(source_known_t *sk) {
 	if ((sk->refcount1_flags -= SkFlagEnd)<0) sk_release(sk);
 }
 
 /* construction */
 BLOCKALLOC_INTERFACE(sk, source_known_t)
 
-inline source_known_t* sk_new(long v, long flags) {
+PSY_INLINE source_known_t* sk_new(long v, long flags) {
 	source_known_t* sk = psyco_llalloc_sk();
 	sk->refcount1_flags = flags;
 	sk->value = v;
 	return sk;
 }
-inline void sk_delete(source_known_t* sk) {
+PSY_INLINE void sk_delete(source_known_t* sk) {
 	psyco_llfree_sk(sk);
 }
 
 
 /* Compile-time sources */
 /* construction */
-inline CompileTimeSource CompileTime_NewSk(source_known_t* newsource) {
+PSY_INLINE CompileTimeSource CompileTime_NewSk(source_known_t* newsource) {
 	extra_assert((((long) newsource) & TimeMask) == 0);
 	return (CompileTimeSource) (((char*) newsource) + CompileTime);
 }
-inline CompileTimeSource CompileTime_New(long value) {
+PSY_INLINE CompileTimeSource CompileTime_New(long value) {
 	return CompileTime_NewSk(sk_new(value, 0));
 }
 
 /* inspection */
-inline source_known_t* CompileTime_Get(CompileTimeSource s) {
+PSY_INLINE source_known_t* CompileTime_Get(CompileTimeSource s) {
 	CHKTIME(s, CompileTime);
 	return (source_known_t*)(((char*) s) - CompileTime);
 }
-inline CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
+PSY_INLINE CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
 	source_known_t* sk = CompileTime_Get(s);
         extra_assert((sk->refcount1_flags & SkFlagPyObj) == 0);
 	if (sk->refcount1_flags < SkFlagEnd) {
@@ -258,13 +258,13 @@ inline CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
 #define NW_FORCE                NESTED_WEIGHT_END  /* always force */
 
 /* construction */
-inline VirtualTimeSource VirtualTime_New(source_virtual_t* sv) {
+PSY_INLINE VirtualTimeSource VirtualTime_New(source_virtual_t* sv) {
 	extra_assert((((long) sv) & TimeMask) == 0);
 	return (VirtualTimeSource) (((char*) sv) + VirtualTime);
 }
 
 /* inspection */
-inline source_virtual_t* VirtualTime_Get(VirtualTimeSource s) {
+PSY_INLINE source_virtual_t* VirtualTime_Get(VirtualTimeSource s) {
 	CHKTIME(s, VirtualTime);
 	return (source_virtual_t*)(((char*) s) - VirtualTime);
 }
@@ -302,10 +302,10 @@ struct vinfo_array_s {
 
 /* construction */
 EXTERNFN vinfo_array_t* array_grow1(vinfo_array_t* array, int ncount);
-inline void array_release(vinfo_array_t* array) {
+PSY_INLINE void array_release(vinfo_array_t* array) {
 	if (array->count > 0) PyMem_FREE(array);
 }
-inline vinfo_array_t* array_new(int ncount) {
+PSY_INLINE vinfo_array_t* array_new(int ncount) {
 	if (ncount > 0)
 		return array_grow1(NullArray, ncount);
 	else
@@ -328,14 +328,14 @@ struct vinfo_s {
 /* construction */
 BLOCKALLOC_INTERFACE(vinfo, vinfo_t)
 
-inline vinfo_t* vinfo_new(Source src) {
+PSY_INLINE vinfo_t* vinfo_new(Source src) {
 	vinfo_t* vi = psyco_llalloc_vinfo();
 	vi->refcount = 1;
 	vi->source = src;
 	vi->array = NullArray;
 	return vi;
 }
-inline vinfo_t* vinfo_new_skref(Source src) {
+PSY_INLINE vinfo_t* vinfo_new_skref(Source src) {
 	if (is_compiletime(src)) sk_incref(CompileTime_Get(src));
 	return vinfo_new(src);
 }
@@ -348,17 +348,17 @@ EXTERNFN vinfo_t* vinfo_copy(vinfo_t* vi);
 	extra_assert(vi->refcount >= 1);			\
 	extra_assert(vi->refcount < 0x1000000 /* arbitrary */);
 EXTERNFN void vinfo_release(vinfo_t* vi, PsycoObject* po);
-inline void vinfo_incref(vinfo_t* vi) { VINFO_CHECKREF ++vi->refcount; }
-inline void vinfo_decref(vinfo_t* vi, PsycoObject* po) {
+PSY_INLINE void vinfo_incref(vinfo_t* vi) { VINFO_CHECKREF ++vi->refcount; }
+PSY_INLINE void vinfo_decref(vinfo_t* vi, PsycoObject* po) {
 	VINFO_CHECKREF
 	if (!--vi->refcount) vinfo_release(vi, po);
 }
-inline void vinfo_xdecref(vinfo_t* vi, PsycoObject* po) {
+PSY_INLINE void vinfo_xdecref(vinfo_t* vi, PsycoObject* po) {
 	if (vi != NULL) vinfo_decref(vi, po);
 }
 
 /* promoting out of virtual-time */
-inline bool compute_vinfo(vinfo_t* vi, PsycoObject* po) {
+PSY_INLINE bool compute_vinfo(vinfo_t* vi, PsycoObject* po) {
 	if (is_virtualtime(vi->source)) {
 		if (!VirtualTime_Get(vi->source)->compute_fn(po, vi))
 			return false;
@@ -371,20 +371,20 @@ EXTERNFN bool psyco_limit_nested_weight(PsycoObject* po, vinfo_array_t* array,
 EXTERNFN long direct_read_vinfo(vinfo_t* vi, char* data);
 EXTERNFN PyObject* direct_xobj_vinfo(vinfo_t* vi, char* data);
 
-inline bool vinfo_known_equal(vinfo_t* v, vinfo_t* w) {
+PSY_INLINE bool vinfo_known_equal(vinfo_t* v, vinfo_t* w) {
 	return (v->source == w->source &&
 		(v == w || !is_virtualtime(v->source)));
 }
 
 /* misc */
-inline bool is_nonneg(Source s) {
+PSY_INLINE bool is_nonneg(Source s) {
 	switch (gettime(s)) {
 	case RunTime:     return is_rtnonneg(s);
 	case CompileTime: return CompileTime_Get(s)->value >= 0;
 	default:          return false;
 	}
 }
-inline void assert_nonneg(vinfo_t* v) {
+PSY_INLINE void assert_nonneg(vinfo_t* v) {
 	if (is_runtime(v->source))
 		v->source = set_rtnonneg(v->source);
 	else
@@ -392,22 +392,22 @@ inline void assert_nonneg(vinfo_t* v) {
 }
 
 /* sub-array (see also psyco_get_field()&co.) */
-inline void vinfo_array_grow(vinfo_t* vi, int ncount) {
+PSY_INLINE void vinfo_array_grow(vinfo_t* vi, int ncount) {
 	if (ncount > vi->array->count)
 		vi->array = array_grow1(vi->array, ncount);
 }
 EXTERNFN void vinfo_array_shrink(PsycoObject* po, vinfo_t* vi, int ncount);
-inline vinfo_t* vinfo_getitem(vinfo_t* vi, int index) {
+PSY_INLINE vinfo_t* vinfo_getitem(vinfo_t* vi, int index) {
 	if (((unsigned int) index) < ((unsigned int) vi->array->count))
 		return vi->array->items[index];
 	else
 		return NULL;
 }
-inline vinfo_t* vinfo_needitem(vinfo_t* vi, int index) {
+PSY_INLINE vinfo_t* vinfo_needitem(vinfo_t* vi, int index) {
 	vinfo_array_grow(vi, index+1);
 	return vi->array->items[index];
 }
-inline void vinfo_setitem(PsycoObject* po, vinfo_t* vi, int index,
+PSY_INLINE void vinfo_setitem(PsycoObject* po, vinfo_t* vi, int index,
                           vinfo_t* newitem) {
 	/* consumes a reference to 'newitem' */
 	if (newitem != NULL) {
@@ -426,15 +426,15 @@ EXTERNFN void clear_tmp_marks(vinfo_array_t* array);
 EXTERNFN void assert_cleared_tmp_marks(vinfo_array_t* array);
 EXTERNFN void assert_array_contains_nonct(vinfo_array_t* array, vinfo_t* vi);
 #else
-inline void assert_cleared_tmp_marks(vinfo_array_t* array) { }   /* nothing */
-inline void assert_array_contains_nonct(vinfo_array_t* a, vinfo_t* v) { }
+PSY_INLINE void assert_cleared_tmp_marks(vinfo_array_t* array) { }   /* nothing */
+PSY_INLINE void assert_array_contains_nonct(vinfo_array_t* a, vinfo_t* v) { }
 #endif
 EXTERNFN void duplicate_array(vinfo_array_t* target, vinfo_array_t* source);
-inline void deallocate_array(vinfo_array_t* array, PsycoObject* po) {
+PSY_INLINE void deallocate_array(vinfo_array_t* array, PsycoObject* po) {
 	int i = array->count;
 	while (i--) vinfo_xdecref(array->items[i], po);
 }
-inline void array_delete(vinfo_array_t* array, PsycoObject* po) {
+PSY_INLINE void array_delete(vinfo_array_t* array, PsycoObject* po) {
 	deallocate_array(array, po);
 	array_release(array);
 }
@@ -542,17 +542,17 @@ EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
 
 /* functions to read or write a field from or to the structure 
    pointed to by 'vi': */
-inline vinfo_t* psyco_get_field(PsycoObject* po, vinfo_t* vi, defield_t df) {
+PSY_INLINE vinfo_t* psyco_get_field(PsycoObject* po, vinfo_t* vi, defield_t df) {
 	return psyco_internal_getfld(po, FIELD_INDEX(df), df,
 				     vi, FIELD_OFFSET(df));
 }
-inline vinfo_t* psyco_get_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df,
+PSY_INLINE vinfo_t* psyco_get_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df,
 				    int index) {
 	long ofs = index << FIELD_SIZE2(df);
 	return psyco_internal_getfld(po, FIELD_INDEX(df) + index, df,
 				     vi, FIELD_OFFSET(df) + ofs);
 }
-inline vinfo_t* psyco_get_field_offset(PsycoObject* po, vinfo_t* vi,
+PSY_INLINE vinfo_t* psyco_get_field_offset(PsycoObject* po, vinfo_t* vi,
 				       defield_t df, long offset) {
 	extra_assert((long)df & FIELD_MUTABLE);
 	return psyco_internal_getfld(po, FIELD_RESERVED_INDEX, df,
@@ -560,12 +560,12 @@ inline vinfo_t* psyco_get_field_offset(PsycoObject* po, vinfo_t* vi,
 }
 EXTERNFN vinfo_t* psyco_get_field_array(PsycoObject* po, vinfo_t* vi,
 					defield_t df, vinfo_t* vindex);
-inline bool psyco_put_field(PsycoObject* po, vinfo_t* vi, defield_t df,
+PSY_INLINE bool psyco_put_field(PsycoObject* po, vinfo_t* vi, defield_t df,
 			    vinfo_t* value) {
 	return psyco_internal_putfld(po, FIELD_INDEX(df), df,
 				     vi, FIELD_OFFSET(df), value);
 }
-inline bool psyco_put_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df, 
+PSY_INLINE bool psyco_put_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df, 
 				int index, vinfo_t* value) {
 	long ofs = index << FIELD_SIZE2(df);
 	return psyco_internal_putfld(po, FIELD_INDEX(df) + index, df,
@@ -582,12 +582,12 @@ EXTERNFN bool psyco_put_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
 /* these special-case convenient functions do not return a new
    vinfo_t* reference that you have to worry about and eventually release;
    but they only work for immutable fields. */
-inline vinfo_t* psyco_get_const(PsycoObject* po, vinfo_t* vi, defield_t df) {
+PSY_INLINE vinfo_t* psyco_get_const(PsycoObject* po, vinfo_t* vi, defield_t df) {
 	return psyco_internal_getfld(po, FIELD_INDEX(df),
                                      (defield_t) ((long)df | FIELD_INTL_NOREF),
 				     vi, FIELD_OFFSET(df));
 }
-inline vinfo_t* psyco_get_nth_const(PsycoObject* po, vinfo_t* vi, defield_t df,
+PSY_INLINE vinfo_t* psyco_get_nth_const(PsycoObject* po, vinfo_t* vi, defield_t df,
 				    int index) {
 	long ofs = index << FIELD_SIZE2(df);
 	return psyco_internal_getfld(po, FIELD_INDEX(df) + index,
@@ -599,11 +599,11 @@ inline vinfo_t* psyco_get_nth_const(PsycoObject* po, vinfo_t* vi, defield_t df,
    immutable field changes after all, or when a virtual-time structure that
    stores mutable fields is computed (because the mutable fields can actually
    be mutated by anyone after the structure is computed). */
-inline void psyco_forget_field(PsycoObject* po, vinfo_t* vi, defield_t df) {
+PSY_INLINE void psyco_forget_field(PsycoObject* po, vinfo_t* vi, defield_t df) {
 	CHECK_FIELD_INDEX(df);
 	vinfo_setitem(po, vi, FIELD_INDEX(df), NULL);
 }
-inline void psyco_forget_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df,
+PSY_INLINE void psyco_forget_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df,
 				   int index) {
 	CHECK_FIELD_INDEX(df);
 	vinfo_setitem(po, vi, FIELD_INDEX(df) + index, NULL);
@@ -619,7 +619,7 @@ EXTERNFN void psyco_assert_field(PsycoObject* po, vinfo_t* vi, defield_t df,
 /* in debugging mode, use the function;  while optimizing, we favour
    the macro version below because GCC does not completely optimize out
    recursive calls to functions with completely constant arguments. */
-inline int field_next_index(defield_t df, bool ovf) {
+PSY_INLINE int field_next_index(defield_t df, bool ovf) {
 	if (df == NO_PREV_FIELD)
 		return 0;
 	else {
@@ -735,7 +735,7 @@ EXTERNFN void psyco_assert_coherent1(PsycoObject* po, bool full);
 #define psyco_assert_coherent(po)    psyco_assert_coherent1(po, true)
 
 /* construction */
-inline PsycoObject* PsycoObject_New(int vlocalscnt) {
+PSY_INLINE PsycoObject* PsycoObject_New(int vlocalscnt) {
 	int psize = PSYCOOBJECT_SIZE(vlocalscnt);
 	PsycoObject* po = (PsycoObject*) PyMem_MALLOC(psize);
 	if (po == NULL)
@@ -744,12 +744,12 @@ inline PsycoObject* PsycoObject_New(int vlocalscnt) {
 	return po;
 }
 EXTERNFN PsycoObject* psyco_duplicate(PsycoObject* po);  /* internal */
-inline PsycoObject* PsycoObject_Duplicate(PsycoObject* po) {
+PSY_INLINE PsycoObject* PsycoObject_Duplicate(PsycoObject* po) {
 	clear_tmp_marks(&po->vlocals);
 	return psyco_duplicate(po);
 }
 EXTERNFN void PsycoObject_Delete(PsycoObject* po);
-inline PsycoObject* PsycoObject_Resize(PsycoObject* po, int nvlocalscnt) {
+PSY_INLINE PsycoObject* PsycoObject_Resize(PsycoObject* po, int nvlocalscnt) {
 	int psize = PSYCOOBJECT_SIZE(nvlocalscnt);
 	return (PsycoObject*) PyMem_REALLOC(po, psize);
 }

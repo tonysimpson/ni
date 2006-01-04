@@ -65,7 +65,7 @@ struct stack_frame_info_s {
 	PyCodeObject* co;
 	PyObject* globals;  /* NULL if not compile-time */
 };
-inline stack_frame_info_t* finfo_last(stack_frame_info_t* finfo) {
+PSY_INLINE stack_frame_info_t* finfo_last(stack_frame_info_t* finfo) {
 #if NEED_STACK_FRAME_HACK
 	if (finfo->link_stack_depth < 0) finfo -= finfo->link_stack_depth;
 #endif

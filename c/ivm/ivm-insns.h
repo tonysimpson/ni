@@ -64,7 +64,7 @@ typedef long word_t;
 
 /* meta-instructions */
 #if CODE_DUMP
-inline code_t* META_dynamicfreq2(code_t* code) {
+PSY_INLINE code_t* META_dynamicfreq2(code_t* code) {
   word_t* arg;
   INSN_dynamicfreq(&arg);
   *arg = 0;
@@ -100,7 +100,7 @@ inline code_t* META_dynamicfreq2(code_t* code) {
 #endif
 
 
-inline code_t* insn_code_label(void* code1)
+PSY_INLINE code_t* insn_code_label(void* code1)
 {
   code_t* code = (code_t*) code1;
   INSN_label_marker();

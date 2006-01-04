@@ -16,6 +16,6 @@
   EXTERNFN void psyco_processor_init(void);	/* iprocessor.c */
 #endif /* !ALL_STATIC */
 
-inline void initialize_processor_files(void) {
+PSY_INLINE void initialize_processor_files(void) {
   psyco_processor_init();	/* iprocessor.c */
 }

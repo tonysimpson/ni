@@ -32,12 +32,12 @@ EXTERNFN void fz_find_runtimes(vinfo_array_t* aa, FrozenPsycoObject* fpo,
 #define INTERNAL_PROMOTION_FIELDS    /* nothing */
 
 
-inline code_t* fix_fast_common_case(void* fs, long value, code_t* codeptr)
+PSY_INLINE code_t* fix_fast_common_case(void* fs, long value, code_t* codeptr)
 {
 	return codeptr;
 }
 
-inline void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promotion)
+PSY_INLINE void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promotion)
 {
 	return psyco_call_code_builder(po, do_promotion, 0, fix->source);
 }
@@ -46,7 +46,7 @@ inline void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promotion
 /***************************************************************/
  /***   Misc.                                                 ***/
 
-inline void* conditional_jump_to(PsycoObject* po, code_t* target,
+PSY_INLINE void* conditional_jump_to(PsycoObject* po, code_t* target,
 				 condition_code_t condition)
 {
 	/* no INSN_PUSHED() in this function! Otherwise, fix
@@ -73,13 +73,13 @@ inline void* conditional_jump_to(PsycoObject* po, code_t* target,
 	}
 }
 
-inline void change_cond_jump_target(void* tag, code_t* newtarget)
+PSY_INLINE void change_cond_jump_target(void* tag, code_t* newtarget)
 {
 	word_t* arg = (word_t*)tag;
 	*arg = (word_t) newtarget;
 }
 
-inline code_t* resume_after_cond_jump(void* tag)
+PSY_INLINE code_t* resume_after_cond_jump(void* tag)
 {
 	word_t* arg = (word_t*)tag;
 	return (code_t*) (arg+1);
@@ -88,7 +88,7 @@ inline code_t* resume_after_cond_jump(void* tag)
 
 /* reserve a small buffer of code behind po->code in which conditional
    code can be stored.  That code should only be executed if 'condition'. */
-inline void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2,
+PSY_INLINE void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2,
 					   condition_code_t condition)
 {
 	code_t* forward_distance_ptr;
@@ -102,7 +102,7 @@ inline void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2,
 }
 
 /* Backpatch the distance over which to skip the conditional code. */
-inline void make_code_conditional(PsycoObject* po, code_t* codeend,
+PSY_INLINE void make_code_conditional(PsycoObject* po, code_t* codeend,
                                   condition_code_t condition, void* extra)
 {
 	code_t* forward_distance_ptr = (code_t*) extra;

@@ -74,7 +74,7 @@
    checking if a globals' dictionary still map the given key to
    the given value.
    XXX 'dict' must never be released! */
-inline void* dictitem_check_change(PsycoObject* po,
+PSY_INLINE void* dictitem_check_change(PsycoObject* po,
                                    PyDictObject* dict, PyDictEntry* ep)
 {
   int index        = ep - dict->ma_table;
@@ -98,7 +98,7 @@ inline void* dictitem_check_change(PsycoObject* po,
   return codebase;
 }
 
-inline void dictitem_update_nochange(void* originalmacrocode,
+PSY_INLINE void dictitem_update_nochange(void* originalmacrocode,
                                      PyDictObject* dict, PyDictEntry* new_ep)
 {
   int index = new_ep - dict->ma_table;
@@ -214,7 +214,7 @@ EXTERNFN code_t* decref_dealloc_calling(code_t* code, PsycoObject* po, reg_t rg,
  /***   generic reference counting functions                  ***/
 
 /* emit Py_INCREF(v) for run-time v */
-inline void psyco_incref_rt(PsycoObject* po, vinfo_t* v)
+PSY_INLINE void psyco_incref_rt(PsycoObject* po, vinfo_t* v)
 {
   reg_t rg;
   BEGIN_CODE
@@ -225,7 +225,7 @@ inline void psyco_incref_rt(PsycoObject* po, vinfo_t* v)
 }
 
 /* emit Py_INCREF(v) for non-virtual v */
-inline void psyco_incref_nv(PsycoObject* po, vinfo_t* v)
+PSY_INLINE void psyco_incref_nv(PsycoObject* po, vinfo_t* v)
 {
   if (!is_compiletime(v->source))
     psyco_incref_rt(po, v);
@@ -239,7 +239,7 @@ inline void psyco_incref_nv(PsycoObject* po, vinfo_t* v)
 
 /* emit Py_DECREF(v) for run-time v. Used by vcompiler.c when releasing a
    run-time vinfo_t holding a reference to a Python object. */
-inline void psyco_decref_rt(PsycoObject* po, vinfo_t* v)
+PSY_INLINE void psyco_decref_rt(PsycoObject* po, vinfo_t* v)
 {
   PyTypeObject* tp = Psyco_KnownType(v);
   reg_t rg;
@@ -254,7 +254,7 @@ inline void psyco_decref_rt(PsycoObject* po, vinfo_t* v)
 }
 
 /* emit Py_DECREF(o) for a compile-time o */
-inline void psyco_decref_c(PsycoObject* po, PyObject* o)
+PSY_INLINE void psyco_decref_c(PsycoObject* po, PyObject* o)
 {
   BEGIN_CODE
   DEC_KNOWN_OB_REFCNT_NZ(o);

@@ -43,7 +43,7 @@
    a promotion exception). */
 EXTERNFN PyTypeObject* Psyco_NeedType(PsycoObject* po, vinfo_t* vi);
 
-inline PyTypeObject* Psyco_FastType(vinfo_t* vi) {
+PSY_INLINE PyTypeObject* Psyco_FastType(vinfo_t* vi) {
 	/* fast version.  Only call this when you know the type has
 	   already been loaded by a previous Psyco_NeedType() */
 	vinfo_t* vtp = vinfo_getitem(vi, iOB_TYPE);
@@ -60,7 +60,7 @@ inline PyTypeObject* Psyco_FastType(vinfo_t* vi) {
 /* Check for the type of an object. Returns the index in the set 'fs' or
    -1 if not in the set (or if exception). Used this is better than
    Psyco_NeedType() if you are only interested in some types, not all of them. */
-inline int Psyco_TypeSwitch(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) {
+PSY_INLINE int Psyco_TypeSwitch(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) {
 	vinfo_t* vtp = get_array_item(po, vi, OB_TYPE);
 	if (vtp == NULL)
 		return -1;
@@ -70,7 +70,7 @@ inline int Psyco_TypeSwitch(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) {
 
 /* Is the given object is of the given type (or a subtype of it) ?
    Returns -1 in case of error or if promotion is requested. */
-inline int Psyco_VerifyType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
+PSY_INLINE int Psyco_VerifyType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
 	PyTypeObject* vtp = Psyco_NeedType(po, vi);
 	if (vtp == NULL)
 		return -1;
@@ -83,7 +83,7 @@ EXTERNFN PyTypeObject* Psyco_KnownType(vinfo_t* vi);
 /* Use this to assert the type of an object. Do not use unless you are
    sure about it! (e.g. don't use this for integer-computing functions
    if they might return a long in case of overflow) */
-inline void Psyco_AssertType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
+PSY_INLINE void Psyco_AssertType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
 	psyco_assert_field(po, vi, OB_type, (long) tp);
 }
 
@@ -91,7 +91,7 @@ inline void Psyco_AssertType(PsycoObject* po, vinfo_t* vi, PyTypeObject* tp) {
    so that only compile-time NULLs or run-time pointers from which we have
    not read anything yet can be NULL. Virtual-time pointers are assumed never
    to be NULL. */
-inline condition_code_t object_non_null(PsycoObject* po, vinfo_t* v) {
+PSY_INLINE condition_code_t object_non_null(PsycoObject* po, vinfo_t* v) {
 	if (is_virtualtime(v->source) || v->array != NullArray)
 		return CC_ALWAYS_TRUE;
 	else

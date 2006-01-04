@@ -108,7 +108,7 @@ static int alarm_traverse(PyAlarmObject* self, visitproc visit, void* arg)
 }
 #endif
 
-inline int alarm_clear(PyAlarmObject* self)
+PSY_INLINE int alarm_clear(PyAlarmObject* self)
 {
   PyObject* nargs = self->args;
   self->args = NULL;

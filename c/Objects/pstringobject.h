@@ -52,11 +52,11 @@
 #endif
 
 
-inline vinfo_t* PsycoString_AS_STRING(PsycoObject* po, vinfo_t* v)
+PSY_INLINE vinfo_t* PsycoString_AS_STRING(PsycoObject* po, vinfo_t* v)
 {	/* no type check */
 	return integer_add_i(po, v, offsetof(PyStringObject, ob_sval), false);
 }
-inline vinfo_t* PsycoString_GET_SIZE(PsycoObject* po, vinfo_t* v)
+PSY_INLINE vinfo_t* PsycoString_GET_SIZE(PsycoObject* po, vinfo_t* v)
 {	/* no type check */
 	return psyco_get_const(po, v, FIX_size);
 }

@@ -43,14 +43,14 @@ EXTERNFN mergepoint_t* psyco_next_merge_point(PyObject* mergepoints,
 					      int position);
 
 /* Get a pointer to the very first mergepoint_t structure in the array */
-inline mergepoint_t* psyco_first_merge_point(PyObject* mergepoints)
+PSY_INLINE mergepoint_t* psyco_first_merge_point(PyObject* mergepoints)
 {
   extra_assert(PyString_Check(mergepoints));
   return (mergepoint_t*) PyString_AS_STRING(mergepoints);
 }
 
 /* Same as psyco_next_merge_point() but returns NULL if bytecode_ptr!=position */
-inline mergepoint_t* psyco_exact_merge_point(PyObject* mergepoints,
+PSY_INLINE mergepoint_t* psyco_exact_merge_point(PyObject* mergepoints,
                                              int position)
 {
   mergepoint_t* mp = psyco_next_merge_point(mergepoints, position);
@@ -67,14 +67,14 @@ inline mergepoint_t* psyco_exact_merge_point(PyObject* mergepoints,
 #define MP_FLAGS_CONTROLFLOW    16   /* can use early deletion of locals      */
 #define MP_FLAGS_EXTRA       (-256)
 
-inline int psyco_mp_flags(PyObject* mergepoints)
+PSY_INLINE int psyco_mp_flags(PyObject* mergepoints)
 {
   char* endptr = PyString_AS_STRING(mergepoints)+PyString_GET_SIZE(mergepoints);
   return ((int*) endptr)[-1];
 }
 
 /* end of PsycoObject construction */
-inline mergepoint_t* PsycoObject_Ready(PsycoObject* po) {
+PSY_INLINE mergepoint_t* PsycoObject_Ready(PsycoObject* po) {
 	mergepoint_t* mp;
 	psyco_assert_coherent(po);
 	mp = psyco_first_merge_point(po->pr.merge_points);

@@ -316,7 +316,7 @@ struct instrnode_s {
 /* how many variables fit in the 'int' bitfield of instrnode_s */
 #define VARS_PER_PASS   (sizeof(int)*8-1)
 
-inline bool back_propagate_mask(struct instrnode_s* instrnodes,
+PSY_INLINE bool back_propagate_mask(struct instrnode_s* instrnodes,
                                 struct instrnode_s* node,
                                 int var0)
 {
@@ -363,7 +363,7 @@ inline bool back_propagate_mask(struct instrnode_s* instrnodes,
   return modif;
 }
 
-inline void mark_var_uses(struct instrnode_s* instrnodes,
+PSY_INLINE void mark_var_uses(struct instrnode_s* instrnodes,
                           struct instrnode_s* node,
                           int var0)
 {
@@ -388,7 +388,7 @@ inline void mark_var_uses(struct instrnode_s* instrnodes,
     }
 }
 
-inline int function_args_mask(int var0, int ninitialized)
+PSY_INLINE int function_args_mask(int var0, int ninitialized)
 {
   int bits = ninitialized - var0;
   if (bits <= 0)
@@ -430,7 +430,7 @@ static void forward_propagate(struct instrnode_s* node, int newmask, int var0)
     }
 }
 
-inline void find_unused_vars(struct instrnode_s* instrnodes,
+PSY_INLINE void find_unused_vars(struct instrnode_s* instrnodes,
                              struct instrnode_s* node,
                              int var0)
 {

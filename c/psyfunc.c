@@ -124,7 +124,7 @@ static bool fncall_collect_arguments(struct fncall_arg_s* fncall,
   return true;
 }
 
-inline void fncall_finish_store(struct fncall_arg_s* fncall,
+PSY_INLINE void fncall_finish_store(struct fncall_arg_s* fncall,
                                 PsycoObject* po)
 {
   array_release(fncall->inputvinfos);

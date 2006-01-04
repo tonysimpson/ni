@@ -52,7 +52,7 @@ typedef struct {
 	vmstackframe_t* topframe;     /* most recent stack frame */
 } PyVMStack;
 
-inline PyVMStack* vm_get_stack(PyObject* tdict)
+PSY_INLINE PyVMStack* vm_get_stack(PyObject* tdict)
 {
 	PyVMStack* st = (PyVMStack*) PyDict_GetItem(tdict, Py_None);
 	if (st == NULL) {
@@ -85,7 +85,7 @@ inline PyVMStack* vm_get_stack(PyObject* tdict)
 #define macro_args              /* nothing */
 #define macro_noarg             ()  /* macro call with no argument */
 
-inline long abs_o(long a) { return a < 0 ? -a : a; }
+PSY_INLINE long abs_o(long a) { return a < 0 ? -a : a; }
 #define ovf_checkabs_o(a)       (a == LONG_MIN)
 #define ovf_checkneg_o(a)       (a == LONG_MIN)
 #define ovf_checkadd_o(a, b)    (((a+b)^a) < 0 && (a^b) >= 0)
@@ -152,7 +152,7 @@ typedef word_t (*ccalled_fn_t_7) (word_t,word_t,word_t,word_t,word_t,word_t,word
 	((PyDictObject*)dict)->ma_table[index].me_value != (PyObject*)result)
 #define impl_dynamicfreq        (((word_t*) nextip)[-1] ++)
 
-inline vmstackframe_t* vm_pyenter(PyVMStack* vmst, vmstackframe_t* frame,
+PSY_INLINE vmstackframe_t* vm_pyenter(PyVMStack* vmst, vmstackframe_t* frame,
 				  word_t finfo, word_t* currentsp)
 {
 	vmstackframe_t* top = psyco_llalloc_vmstackframe();
@@ -167,7 +167,7 @@ inline vmstackframe_t* vm_pyenter(PyVMStack* vmst, vmstackframe_t* frame,
 	vmst->topframe = top;
 	return top;
 }
-inline vmstackframe_t* vm_pyleave(PyVMStack* vmst, vmstackframe_t* top,
+PSY_INLINE vmstackframe_t* vm_pyleave(PyVMStack* vmst, vmstackframe_t* top,
 				  word_t* currentsp)
 {
 	vmstackframe_t* prevtop = top->prevframe;

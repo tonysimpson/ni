@@ -600,7 +600,7 @@ vinfo_t* PycException_Matches(PsycoObject* po, PyObject* e)
 	return result;
 }
 
-inline void clear_pseudo_exception(PsycoObject* po)
+PSY_INLINE void clear_pseudo_exception(PsycoObject* po)
 {
 	extra_assert(PycException_Occurred(po));
 	if (po->pr.tb != NULL) {
@@ -688,7 +688,7 @@ void cimpl_finalize_frame_locals(PyObject* f_exc_type,
 	PySys_SetObject("exc_traceback", f_exc_traceback);
 }
 
-inline void cimpl_set_exc_info(PyObject* target[],
+PSY_INLINE void cimpl_set_exc_info(PyObject* target[],
 			       PyObject** f_exc_type,
 			       PyObject** f_exc_value,
 			       PyObject** f_exc_traceback)
@@ -781,7 +781,7 @@ void PycException_Fetch(PsycoObject* po)
 	}
 }
 
-inline bool PycException_FetchNormalize(PsycoObject* po)
+PSY_INLINE bool PycException_FetchNormalize(PsycoObject* po)
 {
 	vinfo_t* result;
 	vinfo_array_t* array = array_new(3);
@@ -897,7 +897,7 @@ static PyObject* cimpl_vt_traceback(PyCodeObject* code, PyObject* globals,
 }
 
 /* record a traceback entry for the current virtual Python exception */
-inline void PsycoTraceBack_Here(PsycoObject* po, int lasti)
+PSY_INLINE void PsycoTraceBack_Here(PsycoObject* po, int lasti)
 {
 	int lineno = PyCode_Addr2Line(po->pr.co, lasti);
 	

@@ -129,7 +129,7 @@
 # define EXTERNFN    static
 # define DEFINEVAR   statichere
 # define DEFINEFN    static
-# define INITIALIZATIONFN  inline
+# define INITIALIZATIONFN  PSY_INLINE
 #else
 # define EXTERNVAR
 # define EXTERNFN
@@ -193,9 +193,9 @@ EXTERNFN void psyco_trace_execution_noerr(char* msg, void* code_position);
 
 
 #if INLINE_COMMON_FUNCTIONS
-# define inline      __inline static
+# define PSY_INLINE	__inline static
 #else
-# define inline      static
+# define PSY_INLINE	static
 #endif
 
 #if HEAVY_MEM_CHECK

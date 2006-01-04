@@ -15,7 +15,7 @@
 /* turn a running frame into its Psyco equivalent, a PsycoObject.
    Return Py_None if the frame cannot be turned into a PsycoObject.
    Never sets an exception. */
-inline PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
+PSY_INLINE PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
 {
 	int i, extras, module;
 	vinfo_t* v;
@@ -108,7 +108,7 @@ inline PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
 
 /* same as PsycoObject_FromFrame() on any not-yet-started frame with the
    given code object */
-inline PyObject* PsycoObject_FromCode(PyCodeObject* co,
+PSY_INLINE PyObject* PsycoObject_FromCode(PyCodeObject* co,
                                       PyObject* globals,
                                       int recursion,
                                       int module)
@@ -428,7 +428,7 @@ void PyFrameRuntime_dealloc(PyFrameRuntime* self)
 	/* nothing */
 }
 
-inline PyFrameObject* psyco_build_pyframe(PyObject* co, PyObject* globals)
+PSY_INLINE PyFrameObject* psyco_build_pyframe(PyObject* co, PyObject* globals)
 {
 	PyFrameObject* back;
 	PyFrameObject* result;

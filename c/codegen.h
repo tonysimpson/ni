@@ -73,7 +73,7 @@ EXTERNFN bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr,
 /* XXX to do: references from the code buffers. This is tricky because
    we can have quite indirect references, or references to a subobject of
    a Python object, or to a field only of a Python object, etc... */
-inline long reference_from_code(PsycoObject* po, CompileTimeSource source)
+PSY_INLINE long reference_from_code(PsycoObject* po, CompileTimeSource source)
 {
 	--- DISABLED ---
 	source_known_t* sk = CompileTime_Get(source);
@@ -147,7 +147,7 @@ EXTERNFN vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 				   Source argsources[], int argcount,
 				   struct stack_frame_info_s* finfo);
 
-inline int get_arguments_count(vinfo_array_t* vlocals) {
+PSY_INLINE int get_arguments_count(vinfo_array_t* vlocals) {
 	int retpos = getstack(vlocals->items[INDEX_LOC_CONTINUATION]->source);
 	extra_assert(retpos != RunTime_StackNone);
 	return (retpos-(INITIAL_STACK_DEPTH+sizeof(long))) / sizeof(long);
@@ -231,7 +231,7 @@ EXTERNFN vinfo_t* integer_conditional(PsycoObject* po, condition_code_t cc,
 /* make a run-time copy of a vinfo_t */
 EXTERNFN vinfo_t* make_runtime_copy(PsycoObject* po, vinfo_t* v);
 
-inline int intlog2(long value) {
+PSY_INLINE int intlog2(long value) {
   int counter = 0;
   while ((1<<counter) < value)
     counter++;
@@ -323,7 +323,7 @@ EXTERNFN void psyco_fix_switch_case(fixed_switch_t* rts, code_t* code,
 
 /* is the given run-time vinfo_t known to be none of the values
    listed in rts? */
-inline bool known_to_be_default(vinfo_t* vi, fixed_switch_t* rts) {
+PSY_INLINE bool known_to_be_default(vinfo_t* vi, fixed_switch_t* rts) {
 	return vi->array == NullArrayAt(rts->zero);
 }
 

@@ -29,7 +29,7 @@ EXTERNFN vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
    PyCFunction_New(). */
 EXTERNVAR source_virtual_t psyco_computed_cfunction;
 
-inline vinfo_t* PsycoCFunction_New(PsycoObject* po, PyMethodDef* ml,
+PSY_INLINE vinfo_t* PsycoCFunction_New(PsycoObject* po, PyMethodDef* ml,
                                    vinfo_t* self)
 {
 	vinfo_t* result = vinfo_new(VirtualTime_New(&psyco_computed_cfunction));

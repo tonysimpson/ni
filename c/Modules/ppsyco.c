@@ -15,7 +15,7 @@ static PyCFunction cimpl_input;
 /***************************************************************/
  /***   Psyco meta-version of functions accessing the locals  ***/
 
-inline bool psyco_fast_locals_ok(PsycoObject* po)
+PSY_INLINE bool psyco_fast_locals_ok(PsycoObject* po)
 {
 	return !(psyco_mp_flags(po->pr.merge_points) & MP_FLAGS_CONTROLFLOW);
 }

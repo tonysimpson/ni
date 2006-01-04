@@ -16,5 +16,5 @@
 #else /* if !ALL_STATIC */
 #endif /* !ALL_STATIC */
 
-inline void initialize_processor_files(void) {
+PSY_INLINE void initialize_processor_files(void) {
 }

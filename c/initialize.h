@@ -113,7 +113,7 @@
   EXTERNFN void psyco_initpsyco(void);	/* Modules/ppsyco.c */
 #endif /* !ALL_STATIC */
 
-inline void initialize_all_files(void) {
+PSY_INLINE void initialize_all_files(void) {
   initialize_processor_files();
   psyco_compiler_init();	/* vcompiler.c */
   psyco_stats_init();	/* stats.c */

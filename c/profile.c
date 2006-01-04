@@ -109,7 +109,7 @@ static ceval_events_t* new_cevents(PyThreadState* tstate)
 	return cev;
 }
 
-inline ceval_events_t* get_cevents(PyThreadState* tstate)
+PSY_INLINE ceval_events_t* get_cevents(PyThreadState* tstate)
 {
 	PyObject* dict = tstate->dict;
 	if (dict != NULL) {
@@ -187,7 +187,7 @@ static void unset_ceval_hook(ceval_events_t* cev, int when,
   } while (0)
 #endif
 
-inline bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
+PSY_INLINE bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f)
 {
 	bool r = true;
 	int n;
@@ -280,7 +280,7 @@ static void extended_SetTrace(PyThreadState* tstate, Py_tracefunc func,
 	tstate->use_tracing = ((func != NULL)
 			       || (tstate->c_profilefunc != NULL));
 }
-inline bool pstartprofile(PyThreadState* tstate)
+PSY_INLINE bool pstartprofile(PyThreadState* tstate)
 {
 	/* Set Python profile function to our function */
 	if (tstate->c_profilefunc == NULL) {
@@ -290,13 +290,13 @@ inline bool pstartprofile(PyThreadState* tstate)
 	}
 	return tstate->c_profilefunc == &do_trace_or_profile;
 }
-inline void pstopprofile(PyThreadState* tstate)
+PSY_INLINE void pstopprofile(PyThreadState* tstate)
 {
 	if (tstate->c_profilefunc == &do_trace_or_profile) {
 		extended_SetProfile(tstate, NULL, NULL);
 	}
 }
-inline bool pstarttrace(PyThreadState* tstate)
+PSY_INLINE bool pstarttrace(PyThreadState* tstate)
 {
 	/* Set Python profile function to our function */
 	if (tstate->c_tracefunc == NULL) {
@@ -306,7 +306,7 @@ inline bool pstarttrace(PyThreadState* tstate)
 	}
 	return tstate->c_tracefunc == &do_trace_or_profile;
 }
-inline void pstoptrace(PyThreadState* tstate)
+PSY_INLINE void pstoptrace(PyThreadState* tstate)
 {
 	if (tstate->c_tracefunc == &do_trace_or_profile) {
 		extended_SetTrace(tstate, NULL, NULL);
@@ -359,7 +359,7 @@ static PyMethodDef def_profile_wrapper = { "wrapper", &trace_or_profile_wrapper,
 	tstate->sys_ ## name ## func = (fn);		\
 	Py_XDECREF(fun);				\
 }
-inline bool pstartprofile(PyThreadState* tstate)
+PSY_INLINE bool pstartprofile(PyThreadState* tstate)
 {
 	if (obj_pwrapper == NULL) {
 	 	obj_pwrapper = PyCFunction_New(&def_profile_wrapper, NULL);
@@ -372,13 +372,13 @@ inline bool pstartprofile(PyThreadState* tstate)
 	}
 	return tstate->sys_profilefunc == obj_pwrapper;
 }
-inline void pstopprofile(PyThreadState* tstate)
+PSY_INLINE void pstopprofile(PyThreadState* tstate)
 {
 	if (tstate->sys_profilefunc == obj_pwrapper) {
 		SET_PYTHON_HOOKS(profile, NULL)
 	}
 }
-inline bool pstarttrace(PyThreadState* tstate)
+PSY_INLINE bool pstarttrace(PyThreadState* tstate)
 {
 	if (obj_pwrapper == NULL) {
 	 	obj_pwrapper = PyCFunction_New(&def_profile_wrapper, NULL);
@@ -391,7 +391,7 @@ inline bool pstarttrace(PyThreadState* tstate)
 	}
 	return tstate->sys_tracefunc == obj_pwrapper;
 }
-inline void pstoptrace(PyThreadState* tstate)
+PSY_INLINE void pstoptrace(PyThreadState* tstate)
 {
 	if (tstate->sys_tracefunc == obj_pwrapper) {
 		SET_PYTHON_HOOKS(trace, NULL)

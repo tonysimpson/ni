@@ -52,7 +52,7 @@
 
 typedef int time_measure_t;
 
-inline time_measure_t get_measure(PyThreadState* tstate)
+PSY_INLINE time_measure_t get_measure(PyThreadState* tstate)
 {
 	int result = tstate->tick_counter;
 	tstate->tick_counter = 0;
@@ -76,7 +76,7 @@ inline time_measure_t get_measure(PyThreadState* tstate)
 #endif
 
 /* 'tstate' parameter ignored */
-inline time_measure_t get_measure(PyThreadState* tstate)
+PSY_INLINE time_measure_t get_measure(PyThreadState* tstate)
 {
 	static time_measure_t prevtime = (time_measure_t) 0;
 	time_measure_t curtime = CURRENT_TIME_READER();

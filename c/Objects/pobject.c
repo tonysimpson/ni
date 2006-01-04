@@ -492,7 +492,7 @@ static vinfo_t* try_rich_compare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int op
 	return psyco_vi_NotImplemented();
 }
 
-inline vinfo_t* convert_3way_to_object(PsycoObject* po, int op, vinfo_t* c)
+PSY_INLINE vinfo_t* convert_3way_to_object(PsycoObject* po, int op, vinfo_t* c)
 {
 	condition_code_t cc = integer_cmp_i(po, c, 0, op);
 	if (cc == CC_ERROR)
@@ -500,7 +500,7 @@ inline vinfo_t* convert_3way_to_object(PsycoObject* po, int op, vinfo_t* c)
 	return PsycoBool_FromCondition(po, cc);
 }
 
-inline vinfo_t* try_3way_to_rich_compare(PsycoObject* po, vinfo_t* v,
+PSY_INLINE vinfo_t* try_3way_to_rich_compare(PsycoObject* po, vinfo_t* v,
 					 vinfo_t* w, int op)
 {
 	/* XXX implement me (some day) */
