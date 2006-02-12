@@ -45,6 +45,7 @@ def booltest():
     print [a & b for a in (False,True) for b in (False,True)]
     print [a | b for a in (False,True) for b in (False,True)]
     print [a ^ b for a in (False,True) for b in (False,True)]
+    print not (False in ())
 
 def exc_test():
     try:
@@ -323,8 +324,41 @@ def makeSelection():
     print 'do stuff here'
     assert isinstance(result.children[0], CompositeElement)
 
+class Class1(object):
+    pass
+def class_creation_1(n=400000):
+    for i in xrange(n):
+        Class1()
+    print "ok"
+
+class Class2(object):
+    def __init__(self, a):
+        self.a = a
+def class_creation_2(n=400000):
+    for i in xrange(n):
+        c = Class2(i)
+        assert c.a == i
+    print "ok"
+
+class Class3(object):
+    def __init__(self):
+        return 42
+def class_creation_3():
+    try:
+        Class3()
+    except TypeError:
+        if sys.version_info < (2,5):
+            print "should not get a TypeError with Python < 2.5"
+        else:
+            print "ok"
+    else:
+        if sys.version_info < (2,5):
+            print "ok"
+        else:
+            print "should have raised TypeError!"
 
 if __name__ == '__main__':
+    from test1 import go, print_results
     import time
     print "break!"
     time.sleep(0.5)
@@ -332,5 +366,9 @@ if __name__ == '__main__':
     #longrangetest()
     #psyco.proxy(arraytest)()
     #proxy_defargs()
-    makeSelection()
+    #makeSelection()
+    go(class_creation_1)
+    go(class_creation_2)
+    go(class_creation_3)
     psyco.dumpcodebuf()
+    print_results()

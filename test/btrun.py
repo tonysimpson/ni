@@ -447,6 +447,7 @@ ${True}
 ${[a & b for a in (False,True) for b in (False,True)]}
 ${[a | b for a in (False,True) for b in (False,True)]}
 ${[a ^ b for a in (False,True) for b in (False,True)]}
+${True}
 
 >>> test5.exc_test()
 IndexError list index out of range
@@ -650,6 +651,15 @@ S
 
 >>> test5.makeSelection()
 do stuff here
+
+>>> test5.class_creation_1(1111)
+ok
+
+>>> test5.class_creation_2(1111)
+ok
+
+>>> test5.class_creation_3()
+ok
 
                          ###########################
                          ####   COMPACTOBJECT   ####

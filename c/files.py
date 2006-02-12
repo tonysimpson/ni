@@ -137,9 +137,9 @@ def generate(processor=None):
     print >> f, '#endif /* !ALL_STATIC */'
     print >> f
     if processor:
-        print >> f, 'inline void initialize_processor_files(void) {'
+        print >> f, 'PSY_INLINE void initialize_processor_files(void) {'
     else:
-        print >> f, 'inline void initialize_all_files(void) {'
+        print >> f, 'PSY_INLINE void initialize_all_files(void) {'
         print >> f, '  initialize_processor_files();'
     for s in src:
         if s.initname:

@@ -107,50 +107,79 @@ vinfo_t* PsycoFunction_New(PsycoObject* po, vinfo_t* fcode,
   /*** function objects meta-implementation                    ***/
 
 DEFINEFN
+vinfo_t* pfunction_direct_call(PsycoObject* po, PyObject* f,
+                               vinfo_t* arg, vinfo_t* kw, bool allow_inline)
+{
+	PyObject* glob;
+	PyObject* defl;
+	PyCodeObject* co;
+	vinfo_t* fglobals;
+	vinfo_t* fdefaults;
+	vinfo_t* result;
+	int saved_inlining;
+
+	co = (PyCodeObject*) PyFunction_GET_CODE(f);
+	if (PyCode_GetNumFree(co) > 0)
+		goto fallback;
+	
+	glob = PyFunction_GET_GLOBALS(f);
+	defl = PyFunction_GET_DEFAULTS(f);
+	Py_INCREF(glob);
+	fglobals = vinfo_new(CompileTime_NewSk(sk_new
+					       ((long)glob, SkFlagPyObj)));
+	if (defl == NULL)
+		fdefaults = psyco_vi_Zero();
+	else {
+		Py_INCREF(defl);
+		fdefaults = vinfo_new(CompileTime_NewSk(sk_new
+						     ((long)defl, SkFlagPyObj)));
+	}
+
+	saved_inlining = po->pr.is_inlining;
+	if (!allow_inline)
+		po->pr.is_inlining = true;
+	result = psyco_call_pyfunc(po, co, fglobals, fdefaults,
+				   arg, po->pr.auto_recursion);
+	po->pr.is_inlining = saved_inlining;
+	vinfo_decref(fdefaults, po);
+	vinfo_decref(fglobals, po);
+	return result;
+
+ fallback:
+#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
+        return psyco_generic_call(po, PyFunction_Type.tp_call,
+                                  CfReturnRef|CfPyErrIfNull,
+                                  "lvv", (long) f, arg, kw);
+#else
+        /* PyFunction_Type.tp_call == NULL... */
+        return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
+                                  CfReturnRef|CfPyErrIfNull,
+                                  "lvv", (long) f, arg, kw);
+#endif
+}
+
+DEFINEFN
 vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
                         vinfo_t* arg, vinfo_t* kw)
 {
 	if (psyco_knowntobe(kw, (long) NULL)) {
-		PyCodeObject* co;
-		vinfo_t* fcode;
-		vinfo_t* fglobals;
-		vinfo_t* fdefaults;
 
 		if (!is_virtualtime(func->source)) {
 			/* run-time or compile-time values: promote the
 			   function object as a whole into compile-time */
-			vinfo_t* result;
 			PyObject* f = psyco_pyobj_atcompiletime(po, func);
-			PyObject* glob;
-			PyObject* defl;
 			if (f == NULL)
 				return NULL;
-
-			co = (PyCodeObject*) PyFunction_GET_CODE(f);
-			if (PyCode_GetNumFree(co) > 0)
-				goto fallback;
-			glob = PyFunction_GET_GLOBALS(f);
-			defl = PyFunction_GET_DEFAULTS(f);
-			Py_INCREF(glob);
-			fglobals = vinfo_new(CompileTime_NewSk(sk_new
-					     ((long)glob, SkFlagPyObj)));
-			if (defl == NULL)
-				fdefaults = psyco_vi_Zero();
-			else {
-				Py_INCREF(defl);
-				fdefaults = vinfo_new(CompileTime_NewSk(sk_new
-						     ((long)defl, SkFlagPyObj)));
-			}
-			
-			result = psyco_call_pyfunc(po, co, fglobals, fdefaults,
-						 arg, po->pr.auto_recursion);
-			vinfo_decref(fdefaults, po);
-			vinfo_decref(fglobals, po);
-			return result;
+			return pfunction_direct_call(po, f, arg, kw, true);
 		}
 		else {
 			/* virtual-time function objects: read the
 			   individual components */
+			PyCodeObject* co;
+			vinfo_t* fcode;
+			vinfo_t* fglobals;
+			vinfo_t* fdefaults;
+
 			fcode = vinfo_getitem(func, iFUNC_CODE);
 			if (fcode == NULL)
 				return NULL;
@@ -171,7 +200,6 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 		}
 	}
 
-   fallback:
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
         return psyco_generic_call(po, PyFunction_Type.tp_call,
                                   CfReturnRef|CfPyErrIfNull,

@@ -131,21 +131,21 @@ static vinfo_t* pbuiltin_xrange(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 }
 
 #if NEW_STYLE_TYPES
-static vinfo_t* prange_new(PsycoObject* po, vinfo_t* vtype,
+static vinfo_t* prange_new(PsycoObject* po, PyTypeObject* type,
 			   vinfo_t* vargs, vinfo_t* vkw)
 {
 	/* for Python >= 2.3, where __builtin__.xrange is a type */
 	vinfo_t* istart;
 	vinfo_t* ilen;
+	psyco_assert(type == &PyRange_Type);   /* no subclassing xrange */
 	if (parse_range_args(po, vargs, &istart, &ilen)) {
 		return PsycoXRange_NEW(po, istart, ilen);
 	}
 	if (PycException_Occurred(po))
 		return NULL;
-	return psyco_generic_call(po, PyRange_Type.tp_new,
+	return psyco_generic_call(po, type->tp_new,
 				  CfReturnRef|CfPyErrIfNull,
-				  "lvv", &PyRange_Type,
-				  vargs, vkw);
+				  "lvv", type, vargs, vkw);
 }
 #else
 # define prange_new  NULL
