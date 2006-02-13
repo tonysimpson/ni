@@ -3,6 +3,7 @@
 #include "pcompactobject.h"
 #include "../Python/pycompiler.h"
 #include "ptupleobject.h"
+#include "ptypeobject.h"
 
 #define IMMUT_COMPACT_impl DEF_FIELD(PyCompactObject, compact_impl_t*, \
 							k_impl, OB_type)
@@ -498,31 +499,21 @@ static bool pcompact_setattro(PsycoObject* po, vinfo_t* vk, PyObject* attr,
 static vinfo_t* pcompact_new(PsycoObject* po, PyTypeObject* type,
 			     vinfo_t* vargs, vinfo_t* vkwds)
 {
-	if (psyco_knowntobe(vkwds, (long) NULL) &&
-	    PsycoTuple_Load(vargs) == 0) {
-		/* no arguments passed */
-		bool ok;
-		vinfo_t* vk;
-		vinfo_t* vimpl;
-		vk = psyco_generic_call(po, type->tp_alloc,
-					CfReturnRef|CfPyErrIfNull,
-					"ll", type, 0);
-		if (vk != NULL) {
-			Psyco_AssertType(po, vk, type);
-			vimpl = vinfo_new(CompileTime_New((long) PyCompact_EmptyImpl));
-			ok = psyco_put_field(po, vk, COMPACT_impl, vimpl);
-			vinfo_decref(vimpl, po);
-			if (!ok) {
-				vinfo_decref(vk, po);
-				return NULL;
-			}
+	/* first delegate to object_new() */
+	bool ok;
+	vinfo_t* vimpl;
+	vinfo_t* vk = psyco_pobject_new(po, type, vargs, vkwds);
+	if (vk != NULL) {
+		extra_assert(Psyco_KnownType(vk) == type);
+		vimpl = vinfo_new(CompileTime_New((long) PyCompact_EmptyImpl));
+		ok = psyco_put_field(po, vk, COMPACT_impl, vimpl);
+		vinfo_decref(vimpl, po);
+		if (!ok) {
+			vinfo_decref(vk, po);
+			return NULL;
 		}
-		return vk;
 	}
-	/* fall back */
-	return psyco_generic_call(po, PyCompact_Type.tp_new,
-				  CfReturnRef|CfPyErrIfNull,
-				  "lvv", type, vargs, vkwds);
+	return vk;
 }
 
 

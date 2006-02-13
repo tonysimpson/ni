@@ -22,20 +22,26 @@ dump_last = 0.0
 def write(s, level):
     t = time()
     f = t-int(t)
-    current.write("%s.%02d  %-*s%s\n" % (
-        strftime("%X", localtime(int(t))),
-        int(f*100.0), 63-level, s,
-        "%"*level))
-    current.flush()
+    try:
+        current.write("%s.%02d  %-*s%s\n" % (
+            strftime("%X", localtime(int(t))),
+            int(f*100.0), 63-level, s,
+            "%"*level))
+        current.flush()
+    except (OSError, IOError):
+        pass
 
 def psycowrite(s):
     t = time()
     f = t-int(t)
-    current.write("%s.%02d  %-*s%s\n" % (
-        strftime("%X", localtime(int(t))),
-        int(f*100.0), 60, s.strip(),
-        "% %"))
-    current.flush()
+    try:
+        current.write("%s.%02d  %-*s%s\n" % (
+            strftime("%X", localtime(int(t))),
+            int(f*100.0), 60, s.strip(),
+            "% %"))
+        current.flush()
+    except (OSError, IOError):
+        pass
 
 ##def writelines(lines, level=0):
 ##    if lines:

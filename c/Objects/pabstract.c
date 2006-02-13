@@ -779,7 +779,35 @@ vinfo_t* PsycoNumber_Remainder(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 DEFINEFN
 vinfo_t* PsycoNumber_Power(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, vinfo_t*v3)
 {
-	/* XXX implement the ternary operators */
+	/* limited support -- the goal is only to support
+	   (int-or-long-or-float) ** (int-or-long-or-float) */
+	vinfo_t* x;
+	PyTypeObject* vtp;
+	PyTypeObject* wtp;
+	ternaryfunc f;
+	vtp = Psyco_NeedType(po, v1);
+	if (vtp == NULL)
+		return NULL;
+	if (vtp != &PyInt_Type && vtp != &PyLong_Type && vtp != &PyFloat_Type)
+		goto fallback;
+	wtp = Psyco_NeedType(po, v2);
+	if (wtp == NULL)
+		return NULL;
+	if (wtp != &PyInt_Type && wtp != &PyLong_Type && wtp != &PyFloat_Type)
+		goto fallback;
+	if (vtp == &PyFloat_Type || wtp == &PyFloat_Type)
+		f = PyFloat_Type.tp_as_number->nb_power;
+	else if (vtp == &PyLong_Type || wtp == &PyLong_Type)
+		f = PyLong_Type.tp_as_number->nb_power;
+	else
+		f = PyInt_Type.tp_as_number->nb_power;
+	x = Psyco_META3(po, f, CfReturnRef|CfPyErrIfNull,
+			"vvv", v1, v2, v3);
+	if (IS_IMPLEMENTED(x))
+		return x;  /* may be NULL */
+	vinfo_decref(x, po);
+
+ fallback:
 	return psyco_generic_call(po, PyNumber_Power, CfReturnRef|CfPyErrIfNull,
 				  "vvv", v1, v2, v3);
 }

@@ -4,7 +4,7 @@
 >>> import sys, uu, psyco
 >>> psyco.full()
 >>> import test1, test3, test5
->>> import compactobject
+>>> import test_compactobject as compactobject
 
 >>> def prep():
 ...     uu.decode('file2-basetests.uu', 'file2-basetests')
@@ -661,6 +661,27 @@ ok
 >>> test5.class_creation_3()
 ok
 
+>>> test5.class_creation_4(1111)
+ok
+
+>>> test5.power_int(1)
+332833500
+
+>>> test5.power_int(10)
+332833500
+
+>>> test5.power_int_long(1)
+long 332833500
+
+>>> test5.power_int_long(10)
+long 332833500
+
+>>> test5.power_float(1)
+float 7038164
+
+>>> test5.power_float(10)
+float 7038164
+
                          ###########################
                          ####   COMPACTOBJECT   ####
                          ###########################
@@ -725,18 +746,3 @@ hello 1 0 19
 hello 1 0 20
 hello 1 0 21
 0
-
->>> print compactobject.test_rect()
-None
-
->>> print compactobject.test_special_attributes()
-None
-
->>> print compactobject.test_inheritance()
-None
-
->>> print compactobject.test_data_descr()
-None
-
->>> print compactobject.test_ass_dict()
-None

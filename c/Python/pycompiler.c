@@ -45,6 +45,8 @@ void Psyco_DefineMeta(void* c_function, void* psyco_function)
 			return;
 	}
 	if (c_function == NULL) {
+		/* known occurrences:
+		   in Python 2.1, PyString_Type.tp_richcompare == NULL */
 		debug_printf(1, ("init: C function pointer NULL in CPython\n"));
 		return;
 	}

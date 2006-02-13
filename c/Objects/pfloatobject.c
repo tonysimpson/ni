@@ -4,6 +4,11 @@
 
 #if HAVE_FP_FN_CALLS
 
+#ifdef WANT_SIGFPE_HANDLER
+# define CF_PURE_FP_HELPER	(CfPure|CfNoReturnValue|CfPyErrIfNonNull)
+#else
+# define CF_PURE_FP_HELPER	(CfPure|CfNoReturnValue)
+#endif
 
 static int
 cimpl_fp_cmp(double a, double b) {
@@ -61,44 +66,80 @@ cimpl_fp_div(double a, double b, double* result) {
     return 0;
 }
 
-#if 0
-/* Pow isn't ready yet, so this hasn't been tested */
 static int
 cimpl_fp_pow(double iv, double iw, double* result) {
-    /* Sort out special cases here instead of relying on pow() */
-    if (iw == 0) {          /* v**0 is 1, even 0**0 */
-        *result = 1.0;
-        return 0;
-    }
-    if (iv == 0.0) {  /* 0**w is error if w<0, else 0 */
-        if (iw < 0.0) {
-            PyErr_SetString(PyExc_ZeroDivisionError,
-                "0.0 cannot be raised to a negative power");
-            return -1;
-        }
-        *result = 0.0;
-        return 0;
-    }
-    if (iv < 0.0 && iw != floor(iw)) {
-        PyErr_SetString(PyExc_ValueError,
-            "negative number cannot be raised to a fractional power");
-        return -1;
-    }
-    errno = 0;
-    PyFPE_START_PROTECT("pow", return NULL)
-        *result = pow(iv, iw);
-    PyFPE_END_PROTECT(*result)
-#ifdef Py_SET_ERANGE_IF_OVERFLOW
-        Py_SET_ERANGE_IF_OVERFLOW(*result);
+	double ix;
+	/* Sort out special cases here instead of relying on pow() */
+	if (iw == 0) {          /* v**0 is 1, even 0**0 */
+		*result = 1.0;
+		return 0;
+	}
+	if (iv == 0.0) {  /* 0**w is error if w<0, else 0 */
+		if (iw < 0.0) {
+			PyErr_SetString(PyExc_ZeroDivisionError,
+				"0.0 cannot be raised to a negative power");
+			return -1;
+		}
+		*result = 0.0;
+		return 0;
+	}
+	if (iv < 0.0) {
+		/* Whether this is an error is a mess, and bumps into libm
+		 * bugs so we have to figure it out ourselves.
+		 */
+		if (iw != floor(iw)) {
+			PyErr_SetString(PyExc_ValueError, "negative number "
+				"cannot be raised to a fractional power");
+			return -1;
+		}
+		/* iw is an exact integer, albeit perhaps a very large one.
+		 * -1 raised to an exact integer should never be exceptional.
+		 * Alas, some libms (chiefly glibc as of early 2003) return
+		 * NaN and set EDOM on pow(-1, large_int) if the int doesn't
+		 * happen to be representable in a *C* integer.  That's a
+		 * bug; we let that slide in math.pow() (which currently
+		 * reflects all platform accidents), but not for Python's **.
+		 */
+		 if (iv == -1.0 && !Py_IS_INFINITY(iw) && iw == iw) {
+		 	/* XXX the "iw == iw" was to weed out NaNs.  This
+		 	 * XXX doesn't actually work on all platforms.
+		 	 */
+		 	/* Return 1 if iw is even, -1 if iw is odd; there's
+		 	 * no guarantee that any C integral type is big
+		 	 * enough to hold iw, so we have to check this
+		 	 * indirectly.
+		 	 */
+		 	ix = floor(iw * 0.5) * 2.0;
+			*result = ix == iw ? 1.0 : -1.0;
+			return 0;
+		}
+		/* Else iv != -1.0, and overflow or underflow are possible.
+		 * Unless we're to write pow() ourselves, we have to trust
+		 * the platform to do this correctly.
+		 */
+	}
+	errno = 0;
+	PyFPE_START_PROTECT("pow", return -1)
+	ix = pow(iv, iw);
+	PyFPE_END_PROTECT(ix)
+#ifdef Py_ADJUST_ERANGE1
+	Py_ADJUST_ERANGE1(ix);
+#else
+# ifdef Py_SET_ERANGE_IF_OVERFLOW
+        Py_SET_ERANGE_IF_OVERFLOW(ix);
+# endif
 #endif
-    if (errno != 0) {
-        /* XXX could it be another type of error? */
-        PyErr_SetFromErrno(PyExc_OverflowError);
-        return -1;
-    }
-    return 0;
+	if (errno != 0) {
+		/* We don't expect any errno value other than ERANGE, but
+		 * the range of libm bugs appears unbounded.
+		 */
+		PyErr_SetFromErrno(errno == ERANGE ? PyExc_OverflowError :
+						     PyExc_ValueError);
+		return -1;
+	}
+	*result = ix;
+	return 0;
 }
-#endif  /* 0 */
 
 static int
 cimpl_fp_nonzero(double a) {
@@ -443,7 +484,7 @@ static vinfo_t* pfloat_add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
     vinfo_array_t* result;
     CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_add, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
+    x = psyco_generic_call(po, cimpl_fp_add, CF_PURE_FP_HELPER,
                            "vvvva", a1, a2, b1, b2, result);
     RELEASE_DOUBLE2(a1, a2, b1, b2);
     if (x != NULL) {
@@ -459,7 +500,7 @@ static vinfo_t* pfloat_sub(PsycoObject* po, vinfo_t* v, vinfo_t* w)
     vinfo_array_t* result;
     CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_sub, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
+    x = psyco_generic_call(po, cimpl_fp_sub, CF_PURE_FP_HELPER,
                            "vvvva", a1, a2, b1, b2, result);
     RELEASE_DOUBLE2(a1, a2, b1, b2);
     if (x != NULL) {
@@ -475,7 +516,7 @@ static vinfo_t* pfloat_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
     vinfo_array_t* result;
     CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_mul, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
+    x = psyco_generic_call(po, cimpl_fp_mul, CF_PURE_FP_HELPER,
                            "vvvva", a1, a2, b1, b2, result);
     RELEASE_DOUBLE2(a1, a2, b1, b2);
     if (x != NULL) {
@@ -501,6 +542,29 @@ static vinfo_t* pfloat_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
     return x;
 }
 
+static vinfo_t* pfloat_pow(PsycoObject* po, vinfo_t* v, vinfo_t* w, vinfo_t* z)
+{
+    vinfo_t *a1, *a2, *b1, *b2, *x;
+    vinfo_array_t* result;
+    if (!psyco_knowntobe(z, (long) Py_None))
+	    goto fallback;
+    CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
+    result = array_new(2);
+    x = psyco_generic_call(po, cimpl_fp_pow, CF_PURE_FP_HELPER,
+                           "vvvva", a1, a2, b1, b2, result);
+    RELEASE_DOUBLE2(a1, a2, b1, b2);
+    if (x != NULL) {
+	    x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]);
+    }
+    array_release(result);
+    return x;
+
+ fallback:
+    return psyco_generic_call(po, PyFloat_Type.tp_as_number->nb_power,
+			      CfReturnRef|CfPyErrIfNull,
+			      "vvv", v, w, z);
+}
+
 
 INITIALIZATIONFN
 void psy_floatobject_init(void)
@@ -516,6 +580,7 @@ void psy_floatobject_init(void)
     Psyco_DefineMeta(m->nb_subtract, pfloat_sub);
     Psyco_DefineMeta(m->nb_multiply, pfloat_mul);
     Psyco_DefineMeta(m->nb_divide,   pfloat_div);
+    Psyco_DefineMeta(m->nb_power,    pfloat_pow);
 
     if (PyFloat_Type.tp_compare == NULL)  /* Python >= 2.4 */
       Psyco_DefineMeta(PyFloat_Type.tp_richcompare, pfloat_richcompare);

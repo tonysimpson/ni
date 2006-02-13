@@ -519,6 +519,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
   PyTryBlock blockstack[CO_MAXBLOCKS];
   int iblock, bytecodeweight, iblockmax = 0;
   bool valid_controlflow = true;
+  PyObject *etype, *evalue, *etb;
 
   if (length == 0)
     {
@@ -545,6 +546,8 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
   if (instrnodes == NULL)
     OUT_OF_MEMORY();
   memset(instrnodes, 0, ibytes);
+
+  PyErr_Fetch(&etype, &evalue, &etb);
 
   /* parse the bytecode once, filling the instrnodes[].opcode,back,mask fields */
   iblock = 0;
@@ -669,10 +672,9 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
                   debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
                                ("unsupported opcode %d at %s:%d\n",
                                 (int) op, PyCodeObject_NAME(co), i));
-                negative_exit:
-                  PyMem_FREE(instrnodes);
-                  Py_INCREF(Py_None);
-                  return Py_None;
+                  s = Py_None;
+                  Py_INCREF(s);
+                  goto done;
                 }
             if (flags & (MP_HAS_JREL|MP_HAS_JABS))
               {
@@ -746,7 +748,11 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
       if (res < 0)
         PyErr_WriteUnraisable(psyco_codeobj_filter_fn);
       if (res <= 0)
-        goto negative_exit;
+        {
+          s = Py_None;
+          Py_INCREF(s);
+          goto done;
+        }
     }
 
   /* set and count merge points */
@@ -913,7 +919,10 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
       analyse_variables(instrnodes, instrnodes+length, co);
     }
 #endif
+
+ done:
   PyMem_FREE(instrnodes);
+  PyErr_Restore(etype, evalue, etb);
   return s;
 }
 

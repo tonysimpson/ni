@@ -112,8 +112,11 @@ void psyco_flog(char* msg, ...)
   va_list vargs;
   PyObject* s;
   PyObject* r;
+  PyObject *etype, *evalue, *etb;
   extra_assert(psyco_logger != NULL);
 
+  PyErr_Fetch(&etype, &evalue, &etb);
+  
 #ifdef HAVE_STDARG_PROTOTYPES
   va_start(vargs, msg);
 #else
@@ -126,10 +129,12 @@ void psyco_flog(char* msg, ...)
     OUT_OF_MEMORY();
   r = PyObject_CallFunction(psyco_logger, "O", s);
   if (r == NULL)
-    PyErr_WriteUnraisable(s);
+    PyErr_WriteUnraisable(psyco_logger);
   else
     Py_DECREF(r);
   Py_DECREF(s);
+
+  PyErr_Restore(etype, evalue, etb);
 }
 
 

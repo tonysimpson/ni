@@ -1,4 +1,4 @@
-import psyco, dis, types, sys
+import psyco, dis, types, sys, math
 
 def f(filename, mode='r'):
     s = ""
@@ -324,14 +324,15 @@ def makeSelection():
     print 'do stuff here'
     assert isinstance(result.children[0], CompositeElement)
 
-class Class1(object):
-    pass
+class Class1:
+    __metaclass__ = type
 def class_creation_1(n=400000):
     for i in xrange(n):
         Class1()
     print "ok"
 
-class Class2(object):
+class Class2:
+    __metaclass__ = type
     def __init__(self, a):
         self.a = a
 def class_creation_2(n=400000):
@@ -340,35 +341,68 @@ def class_creation_2(n=400000):
         assert c.a == i
     print "ok"
 
-class Class3(object):
+class Class3:
+    __metaclass__ = type
     def __init__(self):
         return 42
 def class_creation_3():
     try:
         Class3()
     except TypeError:
-        if sys.version_info < (2,5):
-            print "should not get a TypeError with Python < 2.5"
+        if (2,2) <= sys.version_info < (2,5):
+            print "got a TypeError, but new-style classes don't"
+            print "check the __init__() return value before 2.5"
         else:
             print "ok"
     else:
-        if sys.version_info < (2,5):
+        if (2,2) <= sys.version_info < (2,5):
             print "ok"
         else:
-            print "should have raised TypeError!"
+            print "__init__() => 42: should have raised TypeError!"
+
+class Class4:
+    __metaclass__ = type
+    def __init__(self, a=None):
+        self.a = a
+def class_creation_4(n=200000):
+    for i in xrange(n):
+        c = Class4(a=i)
+        assert c.a == i
+    print "ok"
+
+def power_int(n=2000):
+    for j in range(n):
+        x = 0
+        for i in range(1000):
+            x += i ** 2
+    print x
+
+def power_int_long(n=200):
+    for j in range(n):
+        x = 0
+        for i in range(1000):
+            x += i ** 2L
+    print type(x).__name__[:4], int(x)
+
+def power_float(n=500):
+    for j in range(n):
+        x = 0.0
+        for i in range(1000):
+            x += i ** 1.409999992
+    print type(x).__name__, int(x)
+
 
 if __name__ == '__main__':
     from test1 import go, print_results
     import time
     print "break!"
     time.sleep(0.5)
-    #psyco.full()
-    #longrangetest()
-    #psyco.proxy(arraytest)()
-    #proxy_defargs()
-    #makeSelection()
     go(class_creation_1)
     go(class_creation_2)
     go(class_creation_3)
+    go(class_creation_4)
+    #go(power_int)
+    #go(power_int_long)
+    #go(power_float)
     psyco.dumpcodebuf()
     print_results()

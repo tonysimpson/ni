@@ -16,11 +16,10 @@ import sys, os, time
 # following entries:
 
 # basetests.py        -- run elementary tests
-# regrtester2.py 0/5  -- 1st fifth of all regr tests with psyco.full()
-# regrtester2.py 1/5  -- 2nd fifth of all regr tests with psyco.full()
-# regrtester2.py 2/5  -- 3rd fifth of all regr tests with psyco.full()
-# regrtester2.py 3/5  -- 4th fifth of all regr tests with psyco.full()
-# regrtester2.py 4/5  -- 5th fifth of all regr tests with psyco.full()
+# regrtester2.py 0/10  -- 1st tenth of all regr tests with psyco.full()
+# regrtester2.py 1/10  -- 2nd tenth of all regr tests with psyco.full()
+# ...
+# regrtester2.py 9/10  -- last tenth of all regr tests with psyco.full()
 # (idem)              -- the same, with psyco.profile()
 #
 
@@ -41,19 +40,19 @@ PSYCO_MODES = [
     {'PSYCO_DEBUG': 0, 'VERBOSE_LEVEL': 0, 'CODE_DUMP': 0, 'ALL_STATIC': 1},
     ]
 
+FRACTION = 10
+
 RUNNING_MODES = [
-    ("basetests.py",  {}),
-    ("regrtester2.py 0/5 -nodump", {"regrtester.local": "psyco.full()"}),
-    ("regrtester2.py 1/5 -nodump", {"regrtester.local": "psyco.full()"}),
-    ("regrtester2.py 2/5 -nodump", {"regrtester.local": "psyco.full()"}),
-    ("regrtester2.py 3/5 -nodump", {"regrtester.local": "psyco.full()"}),
-    ("regrtester2.py 4/5 -nodump", {"regrtester.local": "psyco.full()"}),
-    ("regrtester2.py 0/5 -nodump", {"regrtester.local": "psyco.profile()"}),
-    ("regrtester2.py 1/5 -nodump", {"regrtester.local": "psyco.profile()"}),
-    ("regrtester2.py 2/5 -nodump", {"regrtester.local": "psyco.profile()"}),
-    ("regrtester2.py 3/5 -nodump", {"regrtester.local": "psyco.profile()"}),
-    ("regrtester2.py 4/5 -nodump", {"regrtester.local": "psyco.profile()"}),
+        ("basetests.py",  {}),
     ]
+for n in range(FRACTION):
+    RUNNING_MODES.append(
+        ("regrtester2.py %d/%d -nodump" % (n, FRACTION),
+                          {"regrtester.local": "psyco.full()"}))
+for n in range(FRACTION):
+    RUNNING_MODES.append(
+        ("regrtester2.py %d/%d -nodump" % (n, FRACTION),
+                          {"regrtester.local": "psyco.profile()"}))
 
 compiled_version = None
 
@@ -61,6 +60,7 @@ compiled_version = None
 def run(path, *argv):
     print '='*10, path, ' '.join(argv)
     sys.stdout.flush()
+    path = os.path.expanduser(path)
     err = os.spawnv(os.P_WAIT, path, [path]+list(argv))
     if err:
         print '='*60

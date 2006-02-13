@@ -23,9 +23,8 @@
 
 EXTERNFN vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
                                  vinfo_t* arg, vinfo_t* kw);
-EXTERNFN vinfo_t* pfunction_direct_call(PsycoObject* po, PyObject* f,
-					vinfo_t* arg, vinfo_t* kw,
-					bool allow_inline);
+EXTERNFN vinfo_t* pfunction_simple_call(PsycoObject* po, PyObject* f,
+					vinfo_t* arg, bool allow_inline);
 
 
 /***************************************************************/

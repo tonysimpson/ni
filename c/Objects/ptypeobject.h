@@ -10,4 +10,8 @@
 #include "pabstract.h"
 
 
+EXTERNFN vinfo_t* psyco_pobject_new(PsycoObject* po, PyTypeObject* type,
+                                    vinfo_t* varg, vinfo_t* vkw);
+
+
 #endif /* _PSY_TYPEOBJECT_H */

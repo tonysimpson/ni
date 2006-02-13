@@ -37,6 +37,48 @@ static long cimpl_int_div(long x, long y)
 	return xdivy;
 }
 
+static long cimpl_int_pow2_nonneg(long iv, long iw)
+{
+	long ix, prev, temp;
+	extra_assert(iw >= 0);
+	/* code from Python 2.5 */
+ 	temp = iv;
+	ix = 1;
+	while (iw > 0) {
+	 	prev = ix;	/* Save value for overflow check */
+	 	if (iw & 1) {
+		 	ix = ix*temp;
+			if (temp == 0)
+				break; /* Avoid ix / 0 */
+			if (ix / temp != prev)
+				goto overflow;
+		}
+	 	iw >>= 1;	/* Shift exponent down by 1 bit */
+	        if (iw==0) break;
+	 	prev = temp;
+	 	temp *= temp;	/* Square the value of temp */
+	 	if (prev != 0 && temp / prev != prev)
+			goto overflow;
+	}
+	return ix;
+
+ overflow:
+	/* the exception will be cleared by the caller */
+	PyErr_SetString(PyExc_OverflowError, "punt and do this in python code");
+	return -1;
+}
+
+static long cimpl_int_pow2(long iv, long iw)
+{
+	if (iw < 0) {
+		/* the exception will be cleared by the caller */
+		PyErr_SetString(PyExc_ValueError,
+				"punt and do this in python code");
+		return -1;
+	}
+	return cimpl_int_pow2_nonneg(iv, iw);
+}
+
 DEFINEFN
 vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v)
 {
@@ -287,6 +329,35 @@ static vinfo_t* pint_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 				  "vv", v, w);
 }
 
+static vinfo_t* pint_pow(PsycoObject* po, vinfo_t* v, vinfo_t* w, vinfo_t* z)
+{
+	vinfo_t* a;
+	vinfo_t* b;
+	vinfo_t* x;
+	void* cimpl;
+	if (!psyco_knowntobe(z, (long) Py_None)) {
+		return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_power,
+				CfPure|CfReturnRef|CfPyErrNotImplemented,
+					  "vvv", v, w, z);
+	}
+	CONVERT_TO_LONG(v, a);
+	CONVERT_TO_LONG(w, b);
+	if (is_nonneg(w->source))
+		cimpl = cimpl_int_pow2_nonneg;
+	else
+		cimpl = cimpl_int_pow2;
+	x = psyco_generic_call(po, cimpl,
+			       CfPure|CfReturnNormal|CfPyErrCheckMinus1,
+			       "vv", a, b);
+	if (x != NULL)
+		return PsycoInt_FROM_LONG(x);
+	/* Either an error occured or it overflowed. In either case let python deal with it */
+	PycException_Clear(po);
+	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_power,
+				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  "vvv", v, w, z);
+}
+
 DEFINEFN
 vinfo_t* pint_base2op(PsycoObject* po, vinfo_t* v, vinfo_t* w,
                       vinfo_t*(*op)(PsycoObject*,vinfo_t*,vinfo_t*))
@@ -461,6 +532,7 @@ void psy_intobject_init(void)
         /* partial implementations not emitting machine code */
         Psyco_DefineMeta(m->nb_divide,   pint_div);
 	Psyco_DefineMeta(m->nb_remainder,pint_mod);
+	Psyco_DefineMeta(m->nb_power,    pint_pow);
 
 	INIT_SVIRTUAL(psyco_computed_int, compute_int,
 		      direct_compute_int, 0, 0, 0);

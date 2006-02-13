@@ -105,17 +105,15 @@ static int cimpl_check_noarg(PyObject* args, PyObject* kwds)
 	return 0;
 }
 
-static vinfo_t* pobject_new(PsycoObject* po, PyTypeObject* type,
-			    vinfo_t* varg, vinfo_t* vkw)
+DEFINEFN
+vinfo_t* psyco_pobject_new(PsycoObject* po, PyTypeObject* type,
+			   vinfo_t* varg, vinfo_t* vkw)
 {
 	if (type->tp_init == object_init) {
-		int safe = 0;
-		int nb_args;
-		if (psyco_knowntobe(vkw, (long) NULL)) {
-			nb_args = PsycoTuple_Load(varg);
-			if (nb_args == 0)
-				safe = 1;
-		}
+		/* same rule as in object_new(): check that no argument
+		   is passed if type->tp_init == object_init */
+		int safe = (psyco_knowntobe(vkw, (long) NULL) &&
+			    PsycoTuple_Load(varg) == 0);
 		if (!safe && !psyco_generic_call(po, cimpl_check_noarg,
 						 CfNoReturnValue|CfPyErrIfNeg,
 						 "vv", varg, vkw))
@@ -140,6 +138,9 @@ static bool pobject_init(PsycoObject* po, vinfo_t* vself,
 	return true;
 }
 
+#define INLINE_GENERIC_ALLOC (PY_VERSION_HEX >= 0x02030000)   /* 2.3 */
+
+#if INLINE_GENERIC_ALLOC
 static PyObject* cimpl_alloc_gc_heap(PyTypeObject* type)
 {
 	size_t size = type->tp_basicsize;
@@ -187,16 +188,20 @@ static PyObject* cimpl_alloc_nongc_nonheap(PyTypeObject* type)
 	PyObject_INIT(obj, type);
 	return obj;
 }
+#endif  /* INLINE_GENERIC_ALLOC */
 
 static vinfo_t* ptype_genericalloc(PsycoObject* po, PyTypeObject* type,
 				   int nitems)
 {
 	vinfo_t* v_result;
+#if INLINE_GENERIC_ALLOC
 	if (type->tp_itemsize != 0) {
+#endif
 		/* fallback */
 		v_result = psyco_generic_call(po, PyType_GenericAlloc,
 					      CfReturnRef|CfPyErrIfNull,
 					      "ll", type, nitems);
+#if INLINE_GENERIC_ALLOC
 	}
 	else {
 		void* cimpl;
@@ -216,6 +221,7 @@ static vinfo_t* ptype_genericalloc(PsycoObject* po, PyTypeObject* type,
 					      CfReturnRef|CfPyErrIfNull,
 					      "l", type);
 	}
+#endif
 	if (v_result != NULL) {
 		Psyco_AssertType(po, v_result, type);
 	}
@@ -251,6 +257,8 @@ static vinfo_t* soft_method_call(PsycoObject* po,
 	argcount = PsycoTuple_Load(vargs);
 	if (argcount < 0)
 		return NULL;  /* fallback */
+	if (!psyco_knowntobe(vkwds, (long) NULL))
+		return NULL;  /* fallback */
 
 	newarg = PsycoTuple_New(argcount+1, NULL);
 	vinfo_incref(vself);
@@ -261,7 +269,7 @@ static vinfo_t* soft_method_call(PsycoObject* po,
 		PsycoTuple_GET_ITEM(newarg, i+1) = v;
 	}
 	Py_INCREF(descr);
-	v_res = pfunction_direct_call(po, descr, newarg, vkwds, false);
+	v_res = pfunction_simple_call(po, descr, newarg, false);
 	vinfo_decref(newarg, po);
 	return v_res;
 }
@@ -271,7 +279,6 @@ static bool pslot_tp_init(PsycoObject* po, vinfo_t* vself,
 {
 	static PyObject *init_str;
 	vinfo_t* v_res;
-	condition_code_t cc;
 	bool ok;
 	PyTypeObject* type = Psyco_KnownType(vself);
 	if (type == NULL) {
@@ -289,17 +296,20 @@ static bool pslot_tp_init(PsycoObject* po, vinfo_t* vself,
 	}
 
 #if PY_VERSION_HEX >= 0x02050000   /* 2.5 */
-	/* check that __init__ returned None */
-	cc = integer_cmp_i(po, v_res, (long) Py_None, Py_EQ);
-	if (cc == CC_ERROR) {
+	{
+		/* check that __init__ returned None */
+		condition_code_t cc;
+		cc = integer_cmp_i(po, v_res, (long) Py_None, Py_EQ);
+		if (cc == CC_ERROR) {
+			vinfo_decref(v_res, po);
+			return false;
+		}
+		ok = runtime_condition_t(po, cc);
 		vinfo_decref(v_res, po);
-		return false;
-	}
-	ok = runtime_condition_t(po, cc);
-	vinfo_decref(v_res, po);
-	if (!ok) {
-		PycException_SetString(po, PyExc_TypeError,
-				       "__init__() should return None");
+		if (!ok) {
+			PycException_SetString(po, PyExc_TypeError,
+					       "__init__() should return None");
+		}
 	}
 #else
 	vinfo_decref(v_res, po);   /* ignore return value */
@@ -327,7 +337,7 @@ void psy_typeobject_init(void)
 	object_new  = PyBaseObject_Type.tp_new;
 	object_init = PyBaseObject_Type.tp_init;
 	Psyco_DefineMeta(type_call, ptype_call);
-	Psyco_DefineMeta(object_new, pobject_new);
+	Psyco_DefineMeta(object_new, psyco_pobject_new);
 	Psyco_DefineMeta(object_init, pobject_init);
 	Psyco_DefineMeta(PyType_GenericNew, ptype_genericnew);
 	Psyco_DefineMeta(PyType_GenericAlloc, ptype_genericalloc);

@@ -107,8 +107,8 @@ vinfo_t* PsycoFunction_New(PsycoObject* po, vinfo_t* fcode,
   /*** function objects meta-implementation                    ***/
 
 DEFINEFN
-vinfo_t* pfunction_direct_call(PsycoObject* po, PyObject* f,
-                               vinfo_t* arg, vinfo_t* kw, bool allow_inline)
+vinfo_t* pfunction_simple_call(PsycoObject* po, PyObject* f,
+                               vinfo_t* arg, bool allow_inline)
 {
 	PyObject* glob;
 	PyObject* defl;
@@ -147,14 +147,14 @@ vinfo_t* pfunction_direct_call(PsycoObject* po, PyObject* f,
 
  fallback:
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
-        return psyco_generic_call(po, PyFunction_Type.tp_call,
-                                  CfReturnRef|CfPyErrIfNull,
-                                  "lvv", (long) f, arg, kw);
+	return psyco_generic_call(po, PyFunction_Type.tp_call,
+				  CfReturnRef|CfPyErrIfNull,
+				  "lvl", (long) f, arg, 0);
 #else
-        /* PyFunction_Type.tp_call == NULL... */
-        return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
-                                  CfReturnRef|CfPyErrIfNull,
-                                  "lvv", (long) f, arg, kw);
+	/* PyFunction_Type.tp_call == NULL... */
+	return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
+				  CfReturnRef|CfPyErrIfNull,
+				  "lvl", (long) f, arg, 0);
 #endif
 }
 
@@ -170,7 +170,7 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 			PyObject* f = psyco_pyobj_atcompiletime(po, func);
 			if (f == NULL)
 				return NULL;
-			return pfunction_direct_call(po, f, arg, kw, true);
+			return pfunction_simple_call(po, f, arg, true);
 		}
 		else {
 			/* virtual-time function objects: read the
@@ -201,14 +201,14 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 	}
 
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
-        return psyco_generic_call(po, PyFunction_Type.tp_call,
-                                  CfReturnRef|CfPyErrIfNull,
-                                  "vvv", func, arg, kw);
+	return psyco_generic_call(po, PyFunction_Type.tp_call,
+				  CfReturnRef|CfPyErrIfNull,
+				  "vvv", func, arg, kw);
 #else
-        /* PyFunction_Type.tp_call == NULL... */
-        return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
-                                  CfReturnRef|CfPyErrIfNull,
-                                  "vvv", func, arg, kw);
+	/* PyFunction_Type.tp_call == NULL... */
+	return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
+				  CfReturnRef|CfPyErrIfNull,
+				  "vvv", func, arg, kw);
 #endif
 }
 

@@ -60,9 +60,9 @@ def subprocess_test(n):
     childpid, status = os.wait()
     return os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
 
-def test_compact_stress(repeat=20):
-    for i in range(repeat):
-        yield subprocess_test, i
+##def test_compact_stress(repeat=20):
+##    for i in range(repeat):
+##        yield subprocess_test, i
 
 # ____________________________________________________________
 
@@ -140,6 +140,21 @@ def test_rect():
     assert Rect(10, 12).getarea() == 120
     assert Rect(0.5, 2.5).getarea() == 1.25
     assert Rect([1,2,3], 2).getarea() == [1,2,3,1,2,3]
+
+class ClassWithNoInit(psyco.compact):
+    pass
+
+def test_init_arguments():
+    import py
+    def f1(): Rect()
+    def f2(): psyco.compact(12)
+    def f3(): ClassWithNoInit(21)
+    py.test.raises(TypeError, f1)
+    py.test.raises(TypeError, f2)
+    py.test.raises(TypeError, f3)
+    py.test.raises(TypeError, psyco.proxy(f1))
+    py.test.raises(TypeError, psyco.proxy(f2))
+    py.test.raises(TypeError, psyco.proxy(f3))
 
 def test_special_attributes():
     missing = object()
@@ -223,6 +238,10 @@ def test_with_psyco():
     yield psyco.proxy(test_rect)
     yield psyco.proxy(test_special_attributes)
     yield psyco.proxy(test_data_descr)
+
+def test_compact_stress(repeat=20):
+    for i in range(repeat):
+        yield do_test, i
 
 # ____________________________________________________________
 

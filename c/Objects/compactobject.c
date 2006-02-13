@@ -53,30 +53,22 @@ static void debug_k_impl(compact_impl_t* p)
 
 /*****************************************************************/
 
-static int
-compact_init(PyObject *self, PyObject *args, PyObject *kwds)
-{
-	return 0;
-}
+/* static int */
+/* compact_init(PyObject *self, PyObject *args, PyObject *kwds) */
+/* { */
+/* 	return 0; */
+/* } */
+
+static newfunc object_new;
 
 static PyObject *
 compact_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-	PyCompactObject* ko;
-
-	/* See comments in typeobject.c:object_new() */
-	if (type->tp_init == compact_init && (PyTuple_GET_SIZE(args) ||
-	     (kwds && PyDict_Check(kwds) && PyDict_Size(kwds)))) {
-		PyErr_SetString(PyExc_TypeError,
-				"default __new__ takes no parameters");
-		return NULL;
-	}
-
-	ko = (PyCompactObject*) type->tp_alloc(type, 0);
+	PyObject* ko = object_new(type, args, kwds);
 	if (ko != NULL) {
-		ko->k_impl = &k_empty_impl;
+		((PyCompactObject*) ko)->k_impl = &k_empty_impl;
 	}
-	return (PyObject*) ko;
+	return ko;
 }
 
 #if 0
@@ -1018,7 +1010,7 @@ DEFINEVAR PyTypeObject PyCompact_Type = {
 	0,                                      /* tp_descr_get */
 	0,                                      /* tp_descr_set */
 	0,                                      /* tp_dictoffset */
-	compact_init,                           /* tp_init */
+	0,                                      /* tp_init */
 	0,                                      /* tp_alloc */
 	compact_new,                            /* tp_new */
 };
@@ -1026,6 +1018,7 @@ DEFINEVAR PyTypeObject PyCompact_Type = {
 INITIALIZATIONFN
 void psyco_compact_init(void)
 {
+	object_new = PyBaseObject_Type.tp_new;
 	PyCompact_EmptyImpl = &k_empty_impl;
 	PyCompactType_Type.tp_base = &PyType_Type;
 	PyCompact_Type.tp_free = _PyObject_GC_Del;
