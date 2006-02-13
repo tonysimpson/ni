@@ -13,15 +13,22 @@ execution of any Python code.
 REQUIREMENTS
 ------------
 
-Psyco works on any recent version of Python (currently 2.1 to 2.4).
-At present it *requires* a *PC* (i.e. a 386-compatible processor),
-but it is OS-independant.
+Psyco works on almost any version of Python (currently 2.1 to
+2.5).  At present it *requires* a *32-bit* *PC* (i.e. a
+386-compatible processor), but it is OS-independant.
 
-This program is still incomplete, but still it seems to have been
-quite stable for some time and can give good results.
+This program is still and will always be incomplete, but it
+has been stable for a long time and can give good results.
 
-Note that Psyco works a bit better with Python versions starting
-from 2.2.2.
+There are no plans to port Psyco to 64-bit architectures.
+This would be rather involved.  Psyco is only being
+maintained, not further developed.  The development efforts of
+the author are now focused on PyPy, which will include
+Psyco-like techniques.  (http://codespeak.net/pypy)
+
+Note that Psyco works better with Python versions starting
+from 2.2.2, and support for older versions may be dropped in
+the future as they become really out-of-date.
 
 
 QUICK INTRODUCTION
