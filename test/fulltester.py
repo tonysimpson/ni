@@ -15,7 +15,7 @@ import sys, os, time
 # The testset_list is called RUNNING_MODES below, and has the 
 # following entries:
 
-# basetests.py        -- run elementary tests
+# test_base.py         -- run elementary tests
 # regrtester2.py 0/10  -- 1st tenth of all regr tests with psyco.full()
 # regrtester2.py 1/10  -- 2nd tenth of all regr tests with psyco.full()
 # ...
@@ -43,7 +43,7 @@ PSYCO_MODES = [
 FRACTION = 10
 
 RUNNING_MODES = [
-        ("basetests.py",  {}),
+        ("test_base.py",  {}),
     ]
 for n in range(FRACTION):
     RUNNING_MODES.append(
