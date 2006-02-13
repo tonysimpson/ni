@@ -97,12 +97,11 @@ standard_mode(Size,  _, i([_|T]), Value) :- standard_mode(Size, _, i(T), Value).
 standard_mode(Size,  _, i([]),    Cond)  :- standard_mode(Size, _, i, Cond).
 
 
-%mode_combine([addo, pop]).
-%mode_combine([s_push(0), immed(char), cmplt, jcondfar(1, long)]).
+%mode_combine([s_push(0), immed(char), cmplt, jcondfar(long)]).
 %mode_combine([s_push(0), immed(char), add, pop2nd]).
 %mode_combine([s_push(truestack(byte)), immed(char), add, pop2nd]).
 %
-%mode_combine([not, jcondfar(0, long)]).
+%mode_combine([not, jcondfar(long)]).
 %
 %mode_combine([immed(long), immed(long), threeway(0)]).
 %mode_combine([immed(long), immed(long), threeway(1)]).

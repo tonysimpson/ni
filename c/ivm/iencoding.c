@@ -236,14 +236,21 @@ vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
 		immed_false = tmp;
 	}
 	BEGIN_CODE
-	INSN_flag_push();
+	if (po->ccreg == NULL) {
+		INSN_flag_push();
+	}
+	else {
+		vinfo_t* v = po->ccreg;
+		code = psyco_compute_cc(po, code);
+		INSN_rt_push(v->source);
+	}
 	INSN_immed(-1);
 	INSN_add();
-        INSN_immed(immed_false - immed_true);
-        INSN_and();
-        INSN_immed(immed_true);
-        INSN_add();
-        INSNPUSHED(1);
+	INSN_immed(immed_false - immed_true);
+	INSN_and();
+	INSN_immed(immed_true);
+	INSN_add();
+	INSNPUSHED(1);
 	END_CODE
 	return vinfo_new(RunTime_TOSF(false,
 				      immed_true >= 0 && immed_false >= 0));

@@ -151,6 +151,13 @@ typedef word_t (*ccalled_fn_t_7) (word_t,word_t,word_t,word_t,word_t,word_t,word
 	((PyDictObject*)dict)->ma_table[index].me_key != (PyObject*)key ||	\
 	((PyDictObject*)dict)->ma_table[index].me_value != (PyObject*)result)
 #define impl_dynamicfreq        (((word_t*) nextip)[-1] ++)
+#if PSYCO_DEBUG
+# define impl_debug_check_flag(x)   extra_assert(x == 0 || x == 1)
+# define impl_debug_forget_flag(x)  x = 0xABABABAB
+#else
+# define impl_debug_check_flag(x)   /* nothing */
+# define impl_debug_forget_flag(x)  /* nothing */
+#endif
 
 PSY_INLINE vmstackframe_t* vm_pyenter(PyVMStack* vmst, vmstackframe_t* frame,
 				  word_t finfo, word_t* currentsp)

@@ -309,15 +309,19 @@ insn_operate_stack(Insn, OldStack, NewStack) :-
         insn_operate_stack(Insn, OldStack, NewStack, dummy).
 
 :- det(insn_operate_flag/3).
-insn_operate_flag(Insn, OldFlag, NewFlag) :-
+insn_operate_flag(Insn, OldFlag, NewFlag, PreCode, PostCode) :-
         insn(Insn, _, _, Options),
-        (memberchk(flag(Mode), Options) ->
-            (Mode = set ->
-                true
-            ;
-            NewFlag = consumed)
+        (memberchk(flag(get), Options) ->
+            PreCode = [impl_debug_check_flag(OldFlag)],
+            PostCode = [impl_debug_forget_flag(OldFlag)],
+            NewFlag = consumed
         ;
-        NewFlag = OldFlag).
+        PreCode = [],
+        PostCode = [],
+        (memberchk(flag(set), Options) ->
+            true   % NewFlag stays a variable
+        ;
+        NewFlag = OldFlag)).
 
 map_operate((OldStack,_), _, _, in(N),  Item) :- !, stack_nth(OldStack, N, Item).
 map_operate(_, (NewStack,_), _, out(N), Item) :- !, stack_nth(NewStack, N, Item).
@@ -390,10 +394,10 @@ mode_operate1(Mode, (Stack1, Flag1, InitU1, CodeL1),
         maplist(init_arg, CondList, InitUnif, InitArgs),
         maplist(load_initexpr(Stack1), Args, CondList, InitArgs, UseArgs),
         insn_operate_stack(Insn, Stack1, Stack2, extra(CondList, UseArgs)),
-        insn_operate_flag(Insn, Flag1, Flag2),
+        insn_operate_flag(Insn, Flag1, Flag2, FlagPreCode, FlagPostCode),
         insn_operate_code(Insn, (Stack1, Flag1), (Stack2, Flag2), UseArgs, Code),
         append(InitU1, InitUnif, InitU2),
-        append(CodeL1, Code, CodeL2).
+        append(CodeL1, FlagPreCode, Code, FlagPostCode, CodeL2).
 
 :- det(mode_operate/2).
 mode_operate(Mode, block_locals(word_t, CodeBlock)) :-

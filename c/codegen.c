@@ -94,19 +94,36 @@ vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc)
       if (po->ccreg != NULL)
         {
           /* there is already a value in the processor flags register */
-          extra_assert(psyco_vsource_cc(po->ccreg->source) != CC_ALWAYS_FALSE);
+          condition_code_t prevcc = psyco_vsource_cc(po->ccreg->source);
+          extra_assert(prevcc != CC_ALWAYS_FALSE);
           
-          if (psyco_vsource_cc(po->ccreg->source) == cc)
+          if (prevcc == cc)
             {
               /* it is the same condition, so reuse it */
               result = po->ccreg;
               vinfo_incref(result);
               return result;
             }
-          /* it is not the same condition, save it */
-          BEGIN_CODE
-          NEED_CC();
-          END_CODE
+          else if (prevcc == INVERT_CC(cc))
+            {
+              /* it is the opposite condition: save it and check the saved
+                 result. XXX more efficient: introduce po->ccreg and
+                 po->invccreg */
+              vinfo_t* v = po->ccreg;
+              BEGIN_CODE
+              NEED_CC();
+              CHECK_NONZERO_FROM_RT(v->source, cc);
+              END_CODE
+              cc = INVERT_CC(cc);
+            }
+          else
+            {
+              /* it is not the same condition at all, save the old one and
+                 make a new one (should never occur with the ivm backend) */
+              BEGIN_CODE
+              NEED_CC();
+              END_CODE
+            }
         }
       extra_assert(po->ccreg == NULL);
       po->ccreg = vinfo_new(VirtualTime_New(cc_functions_table+(int)cc));

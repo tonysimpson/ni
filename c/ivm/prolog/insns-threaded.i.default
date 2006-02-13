@@ -768,7 +768,9 @@ lblopcode43:  /* [flag_push] */
 word_t local1;
 word_t local2;
 word_t local3;
+impl_debug_check_flag(flag);
 local1 = flag;
+impl_debug_forget_flag(flag);
 local2 = local1;
 local3 = accum;
 stack_nth(-1) = local3;
@@ -793,7 +795,9 @@ lblopcode45:  /* [jcondnear(indirect(code_t))] */
 {
 word_t local1;
 local1 = bytecode_next(code_t);
+impl_debug_check_flag(flag);
 impl_jcond(flag, nextip+local1);
+impl_debug_forget_flag(flag);
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -801,7 +805,9 @@ lblopcode46:  /* [jcondfar(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
+impl_debug_check_flag(flag);
 impl_jcond(flag, local1);
+impl_debug_forget_flag(flag);
 }
 goto *opcodetable[bytecode_nextopcode()];
 
