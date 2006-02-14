@@ -206,7 +206,7 @@ statichere PyTypeObject PyAlarm_Type = {
 	/* methods */
 	(destructor)alarm_dealloc,		/*tp_dealloc*/
 	0,					/*tp_print*/
-        alarm_getattr,				/*tp_getattr*/
+	(getattrfunc)alarm_getattr,		/*tp_getattr*/
 	0,					/*tp_setattr*/
 	0,					/*tp_compare*/
 	0,					/*tp_repr*/
