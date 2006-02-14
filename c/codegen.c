@@ -156,7 +156,7 @@ void psyco_resolved_cc(PsycoObject* po, condition_code_t cc_known_true)
       v = po->ccregs[index];
       if (v != NULL && psyco_vsource_cc(v->source) == cc_known_true)
         {
-          sk_incref(&psyco_skZero);
+          sk_incref(&psyco_skOne);
           v->source = CompileTime_NewSk(&psyco_skOne);
           po->ccregs[index] = NULL;
         }
