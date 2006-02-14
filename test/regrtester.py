@@ -14,6 +14,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_descr': 'seems that it mutates user-defined types and Psyco does not like it at all',
         'test_profilehooks': 'no profiling allowed with Psyco!',
         'test_profile': 'no profiling allowed with Psyco!',
+        'test_cProfile': 'no profiling allowed with Psyco!',
         'test_repr': 'self-nested tuples and lists not supported',
         'test_trace': 'no line tracing with Psyco',
         'test_threaded_import': 'Python hang-ups',
