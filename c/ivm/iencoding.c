@@ -52,6 +52,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	int i, initial_depth;
 	Source* p;
 	BEGIN_CODE
+	NEED_CC();     /* 'flag' and 'retval' are a single shared register */
 	ABOUT_TO_CALL_SUBFUNCTION(finfo);
 	initial_depth = po->stack_depth;
 	p = argsources;
