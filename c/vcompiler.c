@@ -896,8 +896,7 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
       */
       CodeBufferObject* oldcodebuf;
       code_t* codeend;
-      void* extra;
-      setup_conditional_code_bounds(po, po2, condition);
+      void* extra = setup_conditional_code_bounds(po, po2, condition);
       codeend = psyco_unify(po2, cmp, &oldcodebuf);
       make_code_conditional(po, codeend, condition, extra);
       /* XXX store reference to oldcodebuf somewhere */
