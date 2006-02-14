@@ -482,6 +482,9 @@ void fpo_release(FrozenPsycoObject* fpo)
 
 static void fpo_find_regs_array(vinfo_array_t* source, PsycoObject* po)
 {
+#if HAVE_CCREG
+  condition_code_t cc;
+#endif
   int i = source->count;
   while (i--)
     {
@@ -495,8 +498,8 @@ static void fpo_find_regs_array(vinfo_array_t* source, PsycoObject* po)
           else
 #endif
 #if HAVE_CCREG
-            if (psyco_vsource_cc(src) != CC_ALWAYS_FALSE)
-              po->ccreg = a;
+            if ((cc = psyco_vsource_cc(src)) != CC_ALWAYS_FALSE)
+              po->ccregs[INDEX_CC(cc)] = a;
             else
 #endif
               /* nothing */ ;
@@ -688,6 +691,7 @@ void* psyco_prepare_respawn_ex(PsycoObject* po, condition_code_t jmpcondition,
       /* write the jump to the proxy */
       po->code = calling_code;
       po->codelimit = calling_limit;
+      psyco_resolved_cc(po, INVERT_CC(jmpcondition)); /* no jump => cond false */
       rs->write_jmp = conditional_jump_to(po, (code_t*)codebuf->codestart,
                                           jmpcondition);
       dump_code_buffers();

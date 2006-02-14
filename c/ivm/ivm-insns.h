@@ -89,7 +89,7 @@ PSY_INLINE code_t* META_dynamicfreq2(code_t* code) {
   if ((cc) == CC_NOT_FLAG) {                            \
     INSN_flag_push();                                   \
     INSN_cmpz();                                        \
-    if (po->ccreg != NULL) psyco_inverted_cc(po);       \
+    if (HAS_CCREG(po)) psyco_inverted_cc(po);           \
   }                                                     \
 } while (0)
 

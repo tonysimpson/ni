@@ -682,6 +682,10 @@ float 7038164
 >>> test5.power_float(10)
 float 7038164
 
+>>> test5.conditional_doubletest_fold()
+ok(1)
+ok(2)
+
                          ###########################
                          ####   COMPACTOBJECT   ####
                          ###########################

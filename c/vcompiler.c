@@ -129,8 +129,13 @@ void vinfo_release(vinfo_t* vi, PsycoObject* po)
     
 #if HAVE_CCREG
   case VirtualTime:
-    if (po != NULL && vi == po->ccreg)
-      po->ccreg = NULL;
+    if (po != NULL)
+      {
+        int i;
+        for (i=0; i<HAVE_CCREG; i++)
+          if (vi == po->ccregs[i])
+            po->ccregs[i] = NULL;
+      }
     break;
 #endif
   }
@@ -140,9 +145,14 @@ void vinfo_release(vinfo_t* vi, PsycoObject* po)
   if (vi->array != NullArray)
     array_delete(vi->array, po);
 
-#if HAVE_CCREG
+#if HAVE_CCREG && PSYCO_DEBUG
   /* only virtual-time vinfos are allowed in po->ccreg */
-  extra_assert(po == NULL || vi != po->ccreg);
+  if (po != NULL)
+    {
+      int i;
+      for (i=0; i<HAVE_CCREG; i++)
+        extra_assert(vi != po->ccregs[i]);
+    }
 #endif
   psyco_llfree_vinfo(vi);
 }
@@ -258,8 +268,9 @@ static void coherent_array(vinfo_array_t* source, PsycoObject* po, int found[],
 #if HAVE_CCREG
         if (psyco_vsource_cc(src) != CC_ALWAYS_FALSE)
           {
-            extra_assert(po->ccreg == source->items[i]);
-            found[REG_TOTAL] = 1;
+            int index = INDEX_CC(psyco_vsource_cc(src));
+            extra_assert(po->ccregs[index] == source->items[i]);
+            found[REG_TOTAL+index] = 1;
           }
 #endif
 	if (source->items[i]->array != NullArray)
@@ -314,10 +325,10 @@ DEFINEFN
 void psyco_assert_coherent1(PsycoObject* po, bool full)
 {
   vinfo_array_t debug_extra_refs;
-  int found[REG_TOTAL+1];
+  int found[REG_TOTAL+HAVE_CCREG];
   int i;
   vinfo_t* err;
-  for (i=0; i<=REG_TOTAL; i++)
+  for (i=0; i<REG_TOTAL+HAVE_CCREG; i++)
     found[i] = 0;
   debug_extra_refs.count = 2;
   debug_extra_refs.items[0] = po->pr.exc;  /* normally private to pycompiler.c,*/
@@ -328,8 +339,9 @@ void psyco_assert_coherent1(PsycoObject* po, bool full)
     {
       RTVINFO_CHECKED(po, found);
 #if HAVE_CCREG
-      if (!found[REG_TOTAL])
-        extra_assert(po->ccreg == NULL);
+      for (i=0; i<HAVE_CCREG; i++)
+        if (!found[REG_TOTAL+i])
+          extra_assert(po->ccregs[i] == NULL);
 #endif
       hack_refcounts(&po->vlocals, -1, 0);
       hack_refcounts(&debug_extra_refs, -1, 0);
@@ -764,6 +776,8 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
                      (code_t*)(cp+1) + extrasize,
                      "coding_pause");
   /* fill in the coding_pause_t structure and the following 'extra' data */
+  psyco_resolved_cc(po, jmpcondition);  /* jmpcondition is true if we follow
+                                           the branch */
   cp->self = codebuf;
   cp->po = po;
   cp->resume_fn = resume_fn;
@@ -879,7 +893,10 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
       */
       CodeBufferObject* oldcodebuf;
       code_t* codeend;
-      void* extra = setup_conditional_code_bounds(po, po2, condition);
+      void* extra;
+      psyco_resolved_cc(po2, condition);
+      psyco_resolved_cc(po, INVERT_CC(condition));
+      setup_conditional_code_bounds(po, po2, condition);
       codeend = psyco_unify(po2, cmp, &oldcodebuf);
       make_code_conditional(po, codeend, condition, extra);
       /* XXX store reference to oldcodebuf somewhere */

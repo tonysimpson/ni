@@ -158,24 +158,48 @@ EXTERNFN condition_code_t cc_from_vsource(Source source);  /* in codegen.c */
 DEFINEFN
 code_t* psyco_compute_cc(PsycoObject* po, code_t* code)
 {
-	vinfo_t* v = po->ccreg;
-	condition_code_t cc = cc_from_vsource(v->source);
-
-	INSN_normalize_cc(cc);
+	vinfo_t* vf;
+	vinfo_t* vnf;
 	INSN_flag_push();
         INSNPUSHED(1);
 
-	v->source = RunTime_TOSF(false, true);
-	po->ccreg = NULL;
+	vf = po->ccregs[INDEX_CC(CC_FLAG)];
+	vnf = po->ccregs[INDEX_CC(CC_NOT_FLAG)];
+	if (vf != NULL) {
+		extra_assert(cc_from_vsource(vf->source) == CC_FLAG);
+		vf->source = RunTime_TOSF(false, true);
+		po->ccregs[INDEX_CC(CC_FLAG)] = NULL;
+	}
+	if (vnf != NULL) {
+		extra_assert(cc_from_vsource(vnf->source) == CC_NOT_FLAG);
+		if (vf != NULL) {
+			INSN_rt_push(vf->source);
+			INSNPUSHED(1);
+		}
+		INSN_cmpz();
+		INSN_flag_push();
+		vnf->source = RunTime_TOSF(false, true);
+		po->ccregs[INDEX_CC(CC_NOT_FLAG)] = NULL;
+	}
         return code;
 }
 
 DEFINEFN
 void psyco_inverted_cc(PsycoObject* po)
 {
-	vinfo_t* v = po->ccreg;
-	condition_code_t cc = cc_from_vsource(v->source);
-	v->source = psyco_source_condition(INVERT_CC(cc));
+	vinfo_t* v[2];
+	int i;
+	for (i=0; i<2; i++) {
+		v[i] = po->ccregs[i];
+	}
+	for (i=0; i<2; i++) {
+		condition_code_t cc = (condition_code_t) i;
+		if (v[i] != NULL) {
+			extra_assert(cc_from_vsource(v[i]->source) == cc);
+			v[i]->source = psyco_source_condition(INVERT_CC(cc));
+		}
+		po->ccregs[INDEX_CC(INVERT_CC(cc))] = v[i];
+	}
 }
 
 
@@ -229,20 +253,29 @@ DEFINEFN
 vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
 		      long immed_true, long immed_false)
 {
+	bool swap;
 	extra_assert(cc == CC_FLAG || cc == CC_NOT_FLAG);
-	if (cc == CC_NOT_FLAG) {
-		long tmp = immed_true;
-		immed_true = immed_false;
-		immed_false = tmp;
-	}
+	swap = (cc == CC_NOT_FLAG);
 	BEGIN_CODE
-	if (po->ccreg == NULL) {
+	if (!HAS_CCREG(po)) {
 		INSN_flag_push();
 	}
 	else {
-		vinfo_t* v = po->ccreg;
+		vinfo_t* v = po->ccregs[1];
+		if (v) {
+			swap = !swap;
+		}
+		else {
+			v = po->ccregs[0];
+			extra_assert(v);
+		}
 		code = psyco_compute_cc(po, code);
 		INSN_rt_push(v->source);
+	}
+	if (swap) {
+		long tmp = immed_true;
+		immed_true = immed_false;
+		immed_false = tmp;
 	}
 	INSN_immed(-1);
 	INSN_add();

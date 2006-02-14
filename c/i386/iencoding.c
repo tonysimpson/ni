@@ -111,7 +111,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	bool ccflags;
 	BEGIN_CODE
           /* cannot use NEED_CC() */
-	ccflags = (po->ccreg != NULL);
+        ccflags = HAS_CCREG(po);
 	if (ccflags)
 		PUSH_CC_FLAGS();
 	for (i=0; i<REG_TOTAL; i++)
@@ -381,16 +381,23 @@ EXTERNFN condition_code_t cc_from_vsource(Source source);  /* in codegen.c */
 DEFINEFN
 code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 {
-	vinfo_t* v = po->ccreg;
-	condition_code_t cc = cc_from_vsource(v->source);
+	int i;
+	vinfo_t* v;
+	condition_code_t cc;
 	reg_t rg;
+	for (i=0; i<2; i++) {
+		v = po->ccregs[i];
+		if (v == NULL)
+			continue;
+		cc = cc_from_vsource(v->source);
 
-	NEED_FREE_BYTE_REG(rg, reserved, REG_NONE);
-	LOAD_REG_FROM_CONDITION(rg, cc);
+		NEED_FREE_BYTE_REG(rg, reserved, REG_NONE);
+		LOAD_REG_FROM_CONDITION(rg, cc);
 
-	v->source = RunTime_New(rg, false, true);
-	REG_NUMBER(po, rg) = v;
-	po->ccreg = NULL;
+		v->source = RunTime_New(rg, false, true);
+		REG_NUMBER(po, rg) = v;
+		po->ccregs[i] = NULL;
+	}
         return code;
 }
 

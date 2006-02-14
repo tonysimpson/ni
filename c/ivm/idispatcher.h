@@ -63,6 +63,8 @@ PSY_INLINE void* conditional_jump_to(PsycoObject* po, code_t* target,
 	}
 	else {
 		word_t* arg;
+                /* the condition code should be resolved by the caller */
+                extra_assert(!HAS_CCREG(po));
 		BEGIN_CODE
 		INSN_normalize_cc(condition);
 		INSN_jcondfar(&arg);
@@ -92,6 +94,8 @@ PSY_INLINE void* setup_conditional_code_bounds(PsycoObject* po, PsycoObject* po2
 					   condition_code_t condition)
 {
 	code_t* forward_distance_ptr;
+        extra_assert(!HAS_CCREG(po));   /* the conditions should be resolved */
+        extra_assert(!HAS_CCREG(po2));  /* by the caller */
 	BEGIN_CODE
 	INSN_normalize_cc(INVERT_CC(condition));
 	INSN_jcondnear(&forward_distance_ptr);

@@ -2123,6 +2123,7 @@ static code_t* exit_function(PsycoObject* po)
 		if (!compute_and_raise_exception(po))
 			return NULL;
 		clear_pseudo_exception(po);
+                sk_incref(&psyco_skZero);
 		retsource = CompileTime_NewSk(&psyco_skZero); /*to return NULL */
 	}
 	

@@ -24,7 +24,10 @@ typedef enum {
         CC_ERROR         = -1 } condition_code_t;
 
 #define INVERT_CC(cc)    ((condition_code_t)((int)(cc) ^ 1))
-#define HAVE_CCREG     1
+#define HAVE_CCREG       2
+#define INDEX_CC(cc)     (extra_assert((cc) == CC_FLAG || (cc) == CC_NOT_FLAG), \
+                          (int)(cc))
+#define HAS_CCREG(po)    ((po)->ccregs[0] != NULL || (po)->ccregs[1] != NULL)
 
 #if PSYCO_DEBUG
 struct cc_s;
@@ -41,7 +44,7 @@ struct cc_s;
 #define PROCESSOR_PSYCOOBJECT_FIELDS                                            \
 	int stack_depth;   /* the size of data currently pushed in the stack */ \
         int minimal_stack_size;   /* total stack size that we are sure about */ \
-	vinfo_t* ccreg;            /* processor condition codes (aka flags)  */
+	vinfo_t* ccregs[2];       /* processor condition codes (aka flags)  */
 #define INIT_PROCESSOR_PSYCOOBJECT(po)           \
           ((po)->minimal_stack_size = VM_INITIAL_MINIMAL_STACK_SIZE)
 
@@ -95,11 +98,13 @@ struct cc_s;
 #define RTVINFO_MOVE(rtsource, vtarget)   do { /*nothing*/ } while (0)
 
 /* for PsycoObject_Duplicate() */
-#define DUPLICATE_PROCESSOR(result, po)   do {                  \
-	result->stack_depth = po->stack_depth;                  \
-	result->minimal_stack_size = po->minimal_stack_size;    \
-	if (po->ccreg != NULL)                                  \
-		result->ccreg = po->ccreg->tmp;                 \
+#define DUPLICATE_PROCESSOR(result, po)   do {				\
+	int i;								\
+	result->stack_depth = po->stack_depth;				\
+	result->minimal_stack_size = po->minimal_stack_size;		\
+	for (i=0; i<2; i++)                                   		\
+		if (po->ccregs[i] != NULL)                          	\
+			result->ccregs[i] = po->ccregs[i]->tmp;		\
 } while (0)
 
 #define RTVINFO_CHECK(po, vsource, found) do { /*nothing*/ } while (0)
@@ -184,7 +189,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 } while (0)
 
 #define NEED_CC()   do {                        \
-  if (po->ccreg != NULL)                        \
+  if (HAS_CCREG(po))                            \
     code = psyco_compute_cc(po, code);          \
 } while (0)
 /* internal */

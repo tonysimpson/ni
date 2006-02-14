@@ -155,6 +155,8 @@ PSY_INLINE void make_code_conditional(PsycoObject* po, code_t* codeend,
       code = codeend;
     }
   END_CODE
+  /* record the known value of 'condition' in the 'po' (non-jump) branch */
+  psyco_resolved_cc(po, INVERT_CC(condition));
 }
 
 

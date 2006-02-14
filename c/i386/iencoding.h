@@ -80,7 +80,9 @@ typedef enum {
         CC_ERROR         = -1 } condition_code_t;
 
 #define INVERT_CC(cc)    ((condition_code_t)((int)(cc) ^ 1))
-#define HAVE_CCREG       1
+#define HAVE_CCREG       2
+#define INDEX_CC(cc)     ((int)(cc) & 1)
+#define HAS_CCREG(po)    ((po)->ccregs[0] != NULL || (po)->ccregs[1] != NULL)
 
 
 /* the registers we want Psyco to use in compiled code,
@@ -99,7 +101,9 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define PROCESSOR_PSYCOOBJECT_FIELDS                                            \
   int stack_depth;         /* the size of data currently pushed in the stack */ \
   vinfo_t* reg_array[REG_TOTAL];   /* the 'vinfo_t' currently stored in regs */ \
-  vinfo_t* ccreg;                  /* processor condition codes (aka flags)  */ \
+  vinfo_t* ccregs[2];              /* processor condition codes (aka flags)  */ \
+                                   /* ccregs[0] is for "positive" conditions */ \
+                                   /* and ccregs[1] for "negative" ones      */ \
   reg_t last_used_reg;             /* the most recently used register        */
 #define INIT_PROCESSOR_PSYCOOBJECT(po)                                          \
   (po->last_used_reg = REG_LOOP_START)
@@ -172,8 +176,9 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   for (i=0; i<REG_TOTAL; i++)                           \
     if (REG_NUMBER(po, i) != NULL)                      \
       REG_NUMBER(result, i) = REG_NUMBER(po, i)->tmp;   \
-  if (po->ccreg != NULL)                                \
-    result->ccreg = po->ccreg->tmp;                     \
+  for (i=0; i<2; i++)                                   \
+    if (po->ccregs[i] != NULL)                          \
+      result->ccregs[i] = po->ccregs[i]->tmp;           \
                                                         \
   result->stack_depth = po->stack_depth;                \
   result->last_used_reg = po->last_used_reg;            \
@@ -695,7 +700,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
     if (REG_NUMBER(po, REG_386_EAX) != NULL) PUSH_REG(REG_386_EAX);     \
     if (REG_NUMBER(po, REG_386_ECX) != NULL) PUSH_REG(REG_386_ECX);     \
     if (REG_NUMBER(po, REG_386_EDX) != NULL) PUSH_REG(REG_386_EDX);     \
-    if (po->ccreg != NULL)               PUSH_CC_FLAGS();               \
+    if (HAS_CCREG(po))                       PUSH_CC_FLAGS();           \
   }                                                                     \
   else {                                                                \
     CODE_FOUR_BYTES(code,                                               \
@@ -709,7 +714,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 
 #define TEMP_RESTORE_REGS_FN_CALLS    do {                              \
   if (COMPACT_ENCODING) {                                               \
-    if (po->ccreg != NULL)               POP_CC_FLAGS();                \
+    if (HAS_CCREG(po))                       POP_CC_FLAGS();            \
     if (REG_NUMBER(po, REG_386_EDX) != NULL) POP_REG(REG_386_EDX);      \
     if (REG_NUMBER(po, REG_386_ECX) != NULL) POP_REG(REG_386_ECX);      \
     if (REG_NUMBER(po, REG_386_EAX) != NULL) POP_REG(REG_386_EAX);      \
@@ -727,7 +732,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 /* same as above, but concludes with a JMP *EAX */
 #define TEMP_RESTORE_REGS_FN_CALLS_AND_JUMP   do {                      \
   if (COMPACT_ENCODING) {                                               \
-    if (po->ccreg != NULL)               POP_CC_FLAGS();                \
+    if (HAS_CCREG(po))                       POP_CC_FLAGS();            \
     if (REG_NUMBER(po, REG_386_EDX) != NULL) POP_REG(REG_386_EDX);      \
     if (REG_NUMBER(po, REG_386_ECX) != NULL) POP_REG(REG_386_ECX);      \
   }                                                                     \
@@ -838,7 +843,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 #define NEED_CC()       NEED_CC_REG(REG_NONE)
 /* same as NEED_CC() but don't overwrite rg */
 #define NEED_CC_REG(rg)   do {                  \
-  if (po->ccreg != NULL)                        \
+  if (HAS_CCREG(po))                            \
     code = psyco_compute_cc(po, code, (rg));    \
 } while (0)
 /* same as NEED_CC() but don't overwrite the given source */
@@ -1014,7 +1019,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 /* correct the stack pointer */
 #define STACK_CORRECTION(stack_correction)   do {                       \
   if ((stack_correction) != 0) {                                        \
-    if (COMPACT_ENCODING && po->ccreg == NULL &&                        \
+    if (COMPACT_ENCODING && !HAS_CCREG(po) &&                           \
         -128 <= (stack_correction) && (stack_correction) < 128) {       \
       code[0] = 0x83;   /* SUB			*/                      \
       code[1] = 0xEC;   /*     ESP, imm8	*/                      \

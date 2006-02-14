@@ -219,7 +219,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   int popsdepth;
   char pops[REG_TOTAL+2];
 #if PSYCO_DEBUG
-  bool has_ccreg = (po->ccreg != NULL);
+  bool has_ccreg = HAS_CCREG(po);
 #endif
 
   extra_assert(lastmatch->diff == NullArray);  /* unify with exact match only */
@@ -331,7 +331,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   if (code > dm.code_limit)  /* start a new buffer if we wrote past the end */
     code = data_new_buffer(code, &dm);
 #if PSYCO_DEBUG
-  extra_assert(has_ccreg == (po->ccreg != NULL));
+  extra_assert(has_ccreg == HAS_CCREG(po));
 #endif
   backpointer = code;
   JUMP_TO((code_t*) target_codebuf->codestart);

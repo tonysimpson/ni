@@ -45,6 +45,7 @@ EXTERNFN VirtualTimeSource psyco_source_condition(condition_code_t cc);
    otherwise return CC_ALWAYS_FALSE. */
 #if HAVE_CCREG
 EXTERNFN condition_code_t psyco_vsource_cc(Source source);
+EXTERNFN void psyco_resolved_cc(PsycoObject* po, condition_code_t cc_known_true);
 #else
 # define psyco_vsource_cc(src)  CC_ALWAYS_FALSE
 #endif

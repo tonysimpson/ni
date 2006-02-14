@@ -391,18 +391,30 @@ def power_float(n=500):
             x += i ** 1.409999992
     print type(x).__name__, int(x)
 
+def conditional_doubletest_fold():
+    n = sys.getrefcount(conditional_doubletest_fold)   # anything > 0
+    if n < 0 and expression_not_evaluated:
+        print "BUG"
+    else:
+        print "ok(1)"
+    n = sys.getrefcount(conditional_doubletest_fold)   # anything > 0
+    if n >= 0 or expression_not_evaluated:
+        print "ok(2)"
+    else:
+        print "BUG"
 
 if __name__ == '__main__':
     from test1 import go, print_results
     import time
     print "break!"
     time.sleep(0.5)
-    go(class_creation_1)
-    go(class_creation_2)
-    go(class_creation_3)
-    go(class_creation_4)
+    #go(class_creation_1)
+    #go(class_creation_2)
+    #go(class_creation_3)
+    #go(class_creation_4)
     #go(power_int)
     #go(power_int_long)
     #go(power_float)
+    psyco.proxy(conditional_doubletest_fold)()
     psyco.dumpcodebuf()
     print_results()

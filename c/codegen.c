@@ -73,7 +73,7 @@ static bool generic_computed_cc(PsycoObject* po, vinfo_t* v)
 	/* also upon forking, because the condition codes cannot be
 	   sent as arguments (function calls typically require adds
 	   and subs to adjust the stack). */
-	extra_assert(po->ccreg == v);
+	/* 'v' should be one of the po->ccregs[_] here */
 	BEGIN_CODE
 	code = psyco_compute_cc(po, code
 #if REG_TOTAL > 0
@@ -91,30 +91,19 @@ vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc)
   vinfo_t* result;
   if ((int)cc < CC_TOTAL)
     {
-      if (po->ccreg != NULL)
+      int index = INDEX_CC(cc);
+      if (po->ccregs[index] != NULL)
         {
           /* there is already a value in the processor flags register */
-          condition_code_t prevcc = psyco_vsource_cc(po->ccreg->source);
+          condition_code_t prevcc = psyco_vsource_cc(po->ccregs[index]->source);
           extra_assert(prevcc != CC_ALWAYS_FALSE);
           
           if (prevcc == cc)
             {
               /* it is the same condition, so reuse it */
-              result = po->ccreg;
+              result = po->ccregs[index];
               vinfo_incref(result);
               return result;
-            }
-          else if (prevcc == INVERT_CC(cc))
-            {
-              /* it is the opposite condition: save it and check the saved
-                 result. XXX more efficient: introduce po->ccreg and
-                 po->invccreg */
-              vinfo_t* v = po->ccreg;
-              BEGIN_CODE
-              NEED_CC();
-              CHECK_NONZERO_FROM_RT(v->source, cc);
-              END_CODE
-              cc = INVERT_CC(cc);
             }
           else
             {
@@ -125,9 +114,9 @@ vinfo_t* psyco_vinfo_condition(PsycoObject* po, condition_code_t cc)
               END_CODE
             }
         }
-      extra_assert(po->ccreg == NULL);
-      po->ccreg = vinfo_new(VirtualTime_New(cc_functions_table+(int)cc));
-      result = po->ccreg;
+      extra_assert(po->ccregs[index] == NULL);
+      result = vinfo_new(VirtualTime_New(cc_functions_table+(int)cc));
+      po->ccregs[index] = result;
     }
   else
     result = vinfo_new(CompileTime_New(cc == CC_ALWAYS_TRUE));
@@ -153,6 +142,34 @@ condition_code_t psyco_vsource_cc(Source source)
         }
     }
   return CC_ALWAYS_FALSE;
+}
+
+DEFINEFN
+void psyco_resolved_cc(PsycoObject* po, condition_code_t cc_known_true)
+{
+  if ((int)cc_known_true < CC_TOTAL)
+    {
+      vinfo_t* v;
+      int index;
+
+      index = INDEX_CC(cc_known_true);
+      v = po->ccregs[index];
+      if (v != NULL && psyco_vsource_cc(v->source) == cc_known_true)
+        {
+          sk_incref(&psyco_skZero);
+          v->source = CompileTime_NewSk(&psyco_skOne);
+          po->ccregs[index] = NULL;
+        }
+
+      index = INDEX_CC(INVERT_CC(cc_known_true));
+      v = po->ccregs[index];
+      if (v != NULL && psyco_vsource_cc(v->source) == INVERT_CC(cc_known_true))
+        {
+          sk_incref(&psyco_skZero);
+          v->source = CompileTime_NewSk(&psyco_skZero);
+          po->ccregs[index] = NULL;
+        }
+    }
 }
 
 #else /* if !HAVE_CCREG */
