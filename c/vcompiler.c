@@ -877,7 +877,10 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
                         condition_code_t condition)
 {
   PsycoObject* po2 = PsycoObject_Duplicate(po);
-  vcompatible_t* cmp = mp==NULL ? NULL : psyco_compatible(po2, &mp->entries);
+  vcompatible_t* cmp;
+  psyco_resolved_cc(po2, condition);
+  psyco_resolved_cc(po, INVERT_CC(condition));
+  cmp = mp==NULL ? NULL : psyco_compatible(po2, &mp->entries);
 
   extra_assert((int)condition < CC_TOTAL);
 
@@ -894,8 +897,6 @@ void psyco_compile_cond(PsycoObject* po, mergepoint_t* mp,
       CodeBufferObject* oldcodebuf;
       code_t* codeend;
       void* extra;
-      psyco_resolved_cc(po2, condition);
-      psyco_resolved_cc(po, INVERT_CC(condition));
       setup_conditional_code_bounds(po, po2, condition);
       codeend = psyco_unify(po2, cmp, &oldcodebuf);
       make_code_conditional(po, codeend, condition, extra);
