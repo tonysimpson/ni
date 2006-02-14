@@ -77,6 +77,8 @@ def do_compile(python_version, psyco_mode):
         f.close()
     except IOError:
         backup = ''
+    if backup:
+        print "===== Note: ignoring your custom preferences.py"
     cwd = os.getcwd()
     try:
         f = open(preffile, 'w')
