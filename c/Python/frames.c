@@ -510,10 +510,11 @@ static PyObject* pvisitframes(PyObject*(*callback)(PyObject*,void*),
 
 			/* Enumerate the frames and store them in a
 			   last-in first-out linked list. The end is marked by
-			   a pointer with an odd integer value (actually the
-			   least significant byte of the integer value is -1,
-			   but real pointers cannot be odd at all because they
-			   are aligned anyway). */
+			   a pointer with an odd integer value (actually with
+                           i386 the least significant byte of the integer value
+                           is -1, and with ivm the end pointer's value is
+                           exactly 1; but real pointers cannot be odd at all
+                           because they are aligned anyway). */
 			revlist = NULL;
 			for (f1 = finfo; (((long)(*f1)) & 1) == 0;
 			     f1 = psyco_next_stack_frame(f1)) {

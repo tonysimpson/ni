@@ -110,7 +110,8 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	Source* p;
 	bool ccflags;
 	BEGIN_CODE
-          /* cannot use NEED_CC() */
+	/* cannot use NEED_CC(): it might clobber one of the registers
+	   mentioned in argsources */
         ccflags = HAS_CCREG(po);
 	if (ccflags)
 		PUSH_CC_FLAGS();
