@@ -53,7 +53,10 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	Source* p;
 	BEGIN_CODE
 	NEED_CC();     /* 'flag' and 'retval' are a single shared register */
+
 	ABOUT_TO_CALL_SUBFUNCTION(finfo);
+	/* no stack push between the INSN_pyenter above and the INSN_vmcall
+	   below, apart from function arguments! See iprocessor.c:impl_vmcall */
 	initial_depth = po->stack_depth;
 	p = argsources;
 	for (i=argcount; i--; p++) {

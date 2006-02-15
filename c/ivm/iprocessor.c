@@ -178,6 +178,7 @@ PSY_INLINE vmstackframe_t* vm_pyleave(PyVMStack* vmst, vmstackframe_t* top,
 				  word_t* currentsp)
 {
 	vmstackframe_t* prevtop = top->prevframe;
+	prevtop->finfo = FINFO_STOP;
 	prevtop->nextframe = NULL;
 	
 	if (prevtop->limit != top->limit) {
