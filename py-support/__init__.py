@@ -5,13 +5,14 @@
 
 """Psyco -- the Python Specializing Compiler.
 
-Typical usage: add the following lines to your application's main module:
+Typical usage: add the following lines to your application's main module,
+preferably after the other imports:
 
 try:
     import psyco
-    psyco.profile()
-except:
-    print 'Psyco not found, ignoring it'
+    psyco.full()
+except ImportError:
+    print 'Psyco not installed, the program will just run slower'
 """
 ###########################################################################
 
