@@ -5,9 +5,8 @@
 #include "ptupleobject.h"
 #include "ptypeobject.h"
 
-#define IMMUT_COMPACT_impl DEF_FIELD(PyCompactObject, compact_impl_t*, \
-							k_impl, OB_type)
-#define COMPACT_impl  FMUT(IMMUT_COMPACT_impl)
+#define COMPACT_impl  FMUT(DEF_FIELD(PyCompactObject, compact_impl_t*, \
+							k_impl, OB_type))
 #define COMPACT_data  FMUT(DEF_FIELD(PyCompactObject, char*,           \
 							k_data, COMPACT_impl))
 #define iCOMPACT_IMPL  FIELD_INDEX(COMPACT_impl)
@@ -82,13 +81,110 @@ static vinfo_t* psy_k_load_vinfo(PsycoObject* po, vinfo_t* vsrc, vinfo_t* vk,
 	return vresult;
 }
 
+struct source_tmp_virtual_s {
+	source_virtual_t sv;
+	PyObject* ko;
+};
+
+static struct source_tmp_virtual_s* stv_table_start = NULL;
+static struct source_tmp_virtual_s* stv_table_next = NULL;
+static struct source_tmp_virtual_s* stv_table_stop = NULL;
+
+static bool compute_stv_never(PsycoObject* po, vinfo_t* vk)
+{
+	psyco_fatal_msg("compute_stv_never");
+	return true;
+}
+
+inline struct source_tmp_virtual_s* malloc_stv(PyObject* ko)
+{
+	/* this leaks, but we try to minimize the impact by alloc'ing
+	   blocks and doing some sharing */
+	struct source_tmp_virtual_s* p;
+	for (p = stv_table_start; p != stv_table_next; p++) {
+		if (p->ko == ko)
+			return p;
+	}
+	if (p == stv_table_stop) {
+		p = (struct source_tmp_virtual_s*) malloc(
+			64 * sizeof(struct source_tmp_virtual_s*));
+		if (!p)
+			OUT_OF_MEMORY();
+		stv_table_start = p;
+		stv_table_stop = p + 64;
+	}
+	INIT_SVIRTUAL_NOCALL(p->sv, compute_stv_never, 0);
+	p->ko = ko;
+	stv_table_next = p + 1;
+	return p;
+}
+
+static compact_impl_t* pcompact_getimpl(PsycoObject* po, vinfo_t* vk)
+{
+	/* The problem is to promote the vimpl read out of vk.
+	   To be promotable it must be temporarily stored in vk->array.
+	   However, we cannot store a run-time vimpl in a compile-time vk.
+	   Ideally, this restriction should be lifted, but this
+	   would need a careful review of a lot of code and a lot
+	   of testing :-(
+	   Instead, this is done by temporarily turning the compile-time
+	   vk into a virtual-time value. */
+
+	long l;
+	vinfo_t* vimpl;
+	struct source_tmp_virtual_s* stv;
+	vinfo_t* vtype;
+	source_known_t* sk;
+
+	vimpl = vinfo_getitem(vk, iCOMPACT_IMPL);
+	if (vimpl == NULL) {
+		/* initial case */
+		vimpl = psyco_get_field(po, vk, COMPACT_impl);
+		if (vimpl == NULL)
+			return NULL;
+		extra_assert(is_runtime(vimpl->source));  /* freshly read */
+		if (is_compiletime(vk->source)) {
+			/* CompileTime -> VirtualTime */
+			/* leaks stv. */
+			sk = CompileTime_Get(vk->source);
+			stv = malloc_stv((PyObject*) sk->value);
+			sk_decref(sk);
+			vk->source = VirtualTime_New(&stv->sv);
+
+			/* store the type as a constant in vk->array */
+			vtype = vinfo_new(CompileTime_New(
+					(long)(stv->ko->ob_type)));
+			vinfo_setitem(po, vk, iOB_TYPE, vtype);
+		}
+		/* temporarily store vimpl in vk->array */
+		vinfo_setitem(po, vk, iCOMPACT_IMPL, vimpl);
+		l = psyco_atcompiletime(po, vimpl);
+		psyco_assert(l == -1);   /* must be promoting here */
+		return NULL;
+	}
+	else {
+		/* case 2: resuming after promotion */
+		psyco_assert(is_compiletime(vimpl->source));
+		/* remove vimpl after promotion */
+		l = CompileTime_Get(vimpl->source)->value;
+		vinfo_setitem(po, vk, iCOMPACT_IMPL, NULL);
+		if (is_virtualtime(vk->source)) {
+			/* VirtualTime -> CompileTime */
+			/* XXX fix this if virtual compactobjects
+			   are introduced! */
+			stv = ((struct source_tmp_virtual_s*)
+					VirtualTime_Get(vk->source));
+			vk->source = CompileTime_New((long) stv->ko);
+		}
+		return (compact_impl_t*) l;
+	}
+}
+
 static vinfo_t* pcompact_getattro(PsycoObject* po, vinfo_t* vk, vinfo_t* vattr)
 {
 	PyTypeObject* tp;
 	PyObject* descr = NULL;
 	descrgetfunc f = NULL;
-	long l;
-	vinfo_t* vimpl;
 	compact_impl_t* impl;
 	vinfo_t* vresult = NULL;
 	PyObject* name;
@@ -134,14 +230,9 @@ static vinfo_t* pcompact_getattro(PsycoObject* po, vinfo_t* vk, vinfo_t* vattr)
 	}
 
 	/* read and temporarily promote the k_impl field of the object */
-	vimpl = psyco_get_const(po, vk, IMMUT_COMPACT_impl);
-	if (vimpl == NULL)
+	impl = pcompact_getimpl(po, vk);
+	if (impl == NULL)
 		goto done;
-	l = psyco_atcompiletime(po, vimpl);
-	if (l == -1)
-		goto done;
-	psyco_forget_field(po, vk, IMMUT_COMPACT_impl);
-	impl = (compact_impl_t*) l;
 
 	while (impl->attrname != NULL) {
 		if (impl->attrname == name) {
@@ -285,7 +376,6 @@ static bool pcompact_setattro(PsycoObject* po, vinfo_t* vk, PyObject* attr,
 	PyTypeObject* tp;
 	PyObject* descr;
 	descrsetfunc f;
-	long l;
 	vinfo_t* vimpl;
 	compact_impl_t* impl;
 	compact_impl_t* k_impl;
@@ -337,15 +427,10 @@ static bool pcompact_setattro(PsycoObject* po, vinfo_t* vk, PyObject* attr,
 	}
 
 	/* read and temporarily promote the k_impl field of the object */
-	vimpl = psyco_get_const(po, vk, IMMUT_COMPACT_impl);
-	if (vimpl == NULL)
+	k_impl = pcompact_getimpl(po, vk);
+	if (k_impl == NULL)
 		return false;
-	l = psyco_atcompiletime(po, vimpl);
-	if (l == -1)
-		return false;
-	psyco_forget_field(po, vk, IMMUT_COMPACT_impl);
-	k_impl = (compact_impl_t*) l;
-
+	
 	for (impl = k_impl; impl->attrname != NULL; impl = impl->parent) {
 		if (impl->attrname != attr)
 			continue;

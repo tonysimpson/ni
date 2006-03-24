@@ -243,12 +243,36 @@ def test_compact_stress(repeat=20):
     for i in range(repeat):
         yield do_test, i
 
+rect1 = Rect(0, 0)
+
+def test_constant_obj():
+    def f1():
+        return rect1.w * rect1.h
+    def f2(a):
+        rect1.w = a
+    psyco.bind(f1)
+    psyco.bind(f2)
+    rect1.w = 6
+    rect1.h = 7
+    res = f1()
+    assert res == 42
+    f2(4)
+    res = f1()
+    assert res == 28
+    f2(0.5)
+    res = f1()
+    assert res == 3.5
+
 # ____________________________________________________________
 
 if __name__ == '__main__':
     import time; print "break!"; time.sleep(1)
-    subprocess_test(10)
+    #subprocess_test(10)
     #pcompact_test()
     #pcompact_creat('hel' + 'lo')
     #pcompact_modif('hel' + 'lo')
+    #test_constant_obj()
+    psyco.proxy(test_rect)()
+    #psyco.proxy(test_special_attributes)()
+    #psyco.proxy(test_data_descr)()
     psyco.dumpcodebuf()
