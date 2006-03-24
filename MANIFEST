@@ -149,11 +149,9 @@ py-utils/win32/README.TXT
 py-utils/xam.py
 py-utils/xamsupport.c
 setup.py
-test/basetests.py
 test/bpnn.py
 test/btrun.py
 test/classicregrtest.py
-test/compactobject.py
 test/file1-basetests
 test/file2-basetests.uu
 test/fulltester.py
@@ -166,3 +164,5 @@ test/regrtester2.py
 test/test1.py
 test/test3.py
 test/test5.py
+test/test_base.py
+test/test_compactobject.py
