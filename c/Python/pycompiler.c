@@ -1821,13 +1821,13 @@ static void cimpl_do_raise(PyObject *type, PyObject *value, PyObject *tb)
 		Py_DECREF(tmp);
 	}
 
-	if (PyString_Check(type))
-		;
+	if (PyString_CheckExact(type))
+		/* warning skipped */;
 
-	else if (PyClass_Check(type))
+	else if (PyExceptionClass_Check(type))
 		PyErr_NormalizeException(&type, &value, &tb);
 
-	else if (PyInstance_Check(type)) {
+	else if (PyExceptionInstance_Check(type)) {
 		/* Raising an instance.  The value should be a dummy. */
 		if (value != Py_None) {
 			PyErr_SetString(PyExc_TypeError,
@@ -1838,7 +1838,7 @@ static void cimpl_do_raise(PyObject *type, PyObject *value, PyObject *tb)
 			/* Normalize to raise <class>, <instance> */
 			Py_DECREF(value);
 			value = type;
-			type = (PyObject*) ((PyInstanceObject*)type)->in_class;
+			type = PyExceptionInstance_Class(type);
 			Py_INCREF(type);
 		}
 	}
@@ -1846,8 +1846,9 @@ static void cimpl_do_raise(PyObject *type, PyObject *value, PyObject *tb)
 		/* Not something you can raise.  You get an exception
 		   anyway, just not what you specified :-) */
 		PyErr_Format(PyExc_TypeError,
-			     "exceptions must be strings, classes, or "
-			     "instances, not %s", type->ob_type->tp_name);
+			     "exceptions must be classes, instances, or "
+			     "strings (deprecated), not %s",
+			     type->ob_type->tp_name);
 		goto raise_error;
 	}
 	PyErr_Restore(type, value, tb);
@@ -1974,7 +1975,11 @@ cimpl_build_class(PyObject* g,  /* globals */
 }
 
 static PyObject* cimpl_import_name(PyObject* globals, PyObject* name,
-				   PyObject* fromlist)
+				   PyObject* fromlist
+#if VERYCONVOLUTED_IMPORT_NAME
+				   , PyObject* fitharg
+#endif
+				   )
 {
 	PyObject* w;
 	PyObject* x = PyDict_GetItemString(psy_get_builtins(globals),
@@ -1984,6 +1989,16 @@ static PyObject* cimpl_import_name(PyObject* globals, PyObject* name,
 				"__import__ not found");
 		return NULL;
 	}
+#if VERYCONVOLUTED_IMPORT_NAME
+	if (PyInt_AsLong(fitharg) != -1 || PyErr_Occurred())
+		w = PyTuple_Pack(5,
+				 name,
+				 globals,
+				 Py_None,
+				 fromlist,
+				 fitharg);
+	else
+#endif
 	w = Py_BuildValue("(OOOO)",
 			  name,
 			  globals,
@@ -2983,13 +2998,24 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	case IMPORT_NAME:
 	{
 		PyObject* w = GETNAMEV(oparg);
-
+#if !VERYCONVOLUTED_IMPORT_NAME   /* Python < 2.5 */
 		x = psyco_generic_call(po, cimpl_import_name,
 				       CfReturnRef|CfPyErrIfNull,
 				       "vlv", LOC_GLOBALS, w, TOP());
 		if (x == NULL)
 			break;
 		POP_DECREF();
+#else
+		v = TOP();
+		u = NTOP(2);
+		x = psyco_generic_call(po, cimpl_import_name,
+				       CfReturnRef|CfPyErrIfNull,
+				       "vlvv", LOC_GLOBALS, w, v, u);
+		if (x == NULL)
+			break;
+		POP_DECREF();
+		POP_DECREF();
+#endif
 		PUSH(x);
 		goto fine;
 	}

@@ -40,6 +40,7 @@
 #define HAVE_PyEval_EvalCodeEx     (PYTHON_API_VERSION>=1011)
 #define HAVE_PyString_FromFormatV  (PYTHON_API_VERSION>=1011)
 #define HAVE_arrayobject_allocated (PY_VERSION_HEX>=0x02040000)   /* 2.4 */
+#define VERYCONVOLUTED_IMPORT_NAME (PY_VERSION_HEX>=0x02050000)   /* 2.5 */
 
 #ifndef Py_TPFLAGS_HAVE_GC
 # define PyObject_GC_New(t,tp)     PyObject_New(t,tp)
@@ -89,6 +90,13 @@ PyString_FromFormatV(const char *format, va_list vargs);
 
 #ifndef PyMODINIT_FUNC
 # define PyMODINIT_FUNC void
+#endif
+
+#ifndef PyExceptionClass_Check    /* Python < 2.5 */
+# define PyExceptionClass_Check(x)	PyClass_Check(x)
+# define PyExceptionInstance_Check(x)	PyInstance_Check(x)
+# define PyExceptionInstance_Class(x)	\
+				(PyObject*)((PyInstanceObject*)(x))->in_class
 #endif
 
 
