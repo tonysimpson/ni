@@ -1273,15 +1273,9 @@ static vinfo_t* _PsycoEval_SliceIndex(PsycoObject* po, vinfo_t* v)
 			result = vinfo_new(CompileTime_New(x));
 		}
 	}
-#ifdef Py_TPFLAGS_HAVE_INDEX
-	else if (vtp->tp_as_number &&
-	       	 PyType_HasFeature(vtp, Py_TPFLAGS_HAVE_INDEX)
-		 && vtp->tp_as_number->nb_index) {
-		result = Psyco_META1(po, vtp->tp_as_number->nb_index,
-				     CfReturnNormal|CfPyErrCheckMinus1,
-				     "v", v);
+	else if (TYPE_HAS_INDEX(vtp)) {
+		result = TYPE_VINDEX(po, vtp, v);
 	}
-#endif
 	else {
 		/* no error set */
 		result = NULL;

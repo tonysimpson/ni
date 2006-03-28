@@ -87,7 +87,7 @@ def do_compile(python_version, psyco_mode):
         f.close()
         os.chdir(os.pardir)
         run(python_version, 'setup.py', 'build', '-f')
-        run(python_version, 'setup.py', 'install')
+        run(python_version, 'setup.py', 'install_lib')
     finally:
         os.chdir(cwd)
         f = open(preffile, 'w')

@@ -138,6 +138,15 @@ vinfo_t* PsycoObject_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key)
 			vinfo_decref(key_value, po);
 			return result;
 		}
+		if (TYPE_HAS_INDEX(ktp)) {
+			vinfo_t* result;
+			vinfo_t* key_value = TYPE_VINDEX(po, ktp, key);
+			if (key_value == NULL)
+				return NULL;
+			result = PsycoSequence_GetItem(po, o, key_value);
+			vinfo_decref(key_value, po);
+			return result;
+		}
 		type_error(po, "sequence index must be integer");
 		return false;
 	}
@@ -177,6 +186,15 @@ bool PsycoObject_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key,
 		if (PyType_TypeCheck(ktp, &PyLong_Type)) {
 			bool result;
 			vinfo_t* key_value = PsycoLong_AsLong(po, key);
+			if (key_value == NULL)
+				return false;
+			result = PsycoSequence_SetItem(po, o, key_value,value);
+			vinfo_decref(key_value, po);
+			return result;
+		}
+		if (TYPE_HAS_INDEX(ktp)) {
+			bool result;
+			vinfo_t* key_value = TYPE_VINDEX(po, ktp, key);
 			if (key_value == NULL)
 				return false;
 			result = PsycoSequence_SetItem(po, o, key_value,value);
@@ -704,6 +722,9 @@ static vinfo_t* psequence_repeat(PsycoObject* po, void *repeatfunc,
 	}
 	else if (PyType_TypeCheck(tp, &PyLong_Type)) {
 		vcount = PsycoLong_AsLong(po, vn);
+	}
+	else if (TYPE_HAS_INDEX(tp)) {
+		vcount = TYPE_VINDEX(po, tp, vn);
 	}
 	else {
 		return type_error(po,

@@ -99,5 +99,17 @@ PyString_FromFormatV(const char *format, va_list vargs);
 				(PyObject*)((PyInstanceObject*)(x))->in_class
 #endif
 
+#ifdef Py_TPFLAGS_HAVE_INDEX  /* Python >= 2.5 */
+# define TYPE_HAS_INDEX(tp)   ((tp)->tp_as_number &&			      \
+			       PyType_HasFeature((tp), Py_TPFLAGS_HAVE_INDEX) \
+			       && (tp)->tp_as_number->nb_index)
+# define TYPE_VINDEX(po, tp, v)	Psyco_META1(po, (tp)->tp_as_number->nb_index, \
+					    CfReturnNormal|CfPyErrCheckMinus1,\
+					    "v", (v))
+#else
+# define TYPE_HAS_INDEX(tp)	0
+# define TYPE_VINDEX(po, tp, v)	NULL
+#endif
+
 
 #endif /* _PYVER_H */
