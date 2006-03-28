@@ -403,6 +403,11 @@ def conditional_doubletest_fold():
     else:
         print "BUG"
 
+def importname(value):
+    for v in value:
+        import sys
+    print "Ok"
+
 if __name__ == '__main__':
     from test1 import go, print_results
     import time
