@@ -226,10 +226,10 @@ None
 >>> test3.f23(0.0)
 Catch!
 Catch!
-exceptions.NameError
+NameError
 
 >>> test3.f23(23)
-exceptions.NameError
+NameError
 
 >>> print [x.__name__ for x in test3.f26()]
 ['float', 'list', 'urllib', 'psyco.classes', 'full']
@@ -501,10 +501,10 @@ None
 100
 None
 100
-exceptions.IndexError
+IndexError
 
 >>> test5.f6("error")
-exceptions.TypeError
+TypeError
 
 >>> test5.f7(8)
 [8, 75, 121]

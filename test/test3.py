@@ -232,7 +232,7 @@ def f23(n):
         x = undefined_name
     except:
         f22(n)
-        print sys.exc_type
+        print sys.exc_type.__name__
 
 def f24(n):
     return 1/n

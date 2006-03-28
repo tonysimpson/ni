@@ -692,7 +692,7 @@ vinfo_t* PsycoNumber_Add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	return result;
 }
 
-static vinfo_t* psequence_repeat(PsycoObject* po, intargfunc repeatfunc,
+static vinfo_t* psequence_repeat(PsycoObject* po, void *repeatfunc,
 				 vinfo_t* vseq, vinfo_t* vn)
 {
 	PyTypeObject* tp = Psyco_FastType(vn);
@@ -904,7 +904,7 @@ vinfo_t* PsycoNumber_InPlaceMultiply(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	if (!IS_IMPLEMENTED(result)) {
 		PyTypeObject* vtp = Psyco_FastType(v);
 		PyTypeObject* wtp = Psyco_FastType(w);
-		intargfunc f = NULL;
+		void *f = NULL;
 		PySequenceMethods *mv = vtp->tp_as_sequence;
 		PySequenceMethods *mw = wtp->tp_as_sequence;
 		vinfo_decref(result, po);

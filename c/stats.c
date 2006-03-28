@@ -115,12 +115,12 @@ static int writeobj_with_ref(PyObject* obj, PyObject** target)
 DEFINEFN
 bool psyco_stats_write(PyObject* args, PyObject* kwds)
 {
-	static CONST_CHAR *kwlist[] = {"unit",
-				       "total",
-				       "watermark",
-				       "parent2",
-				       "callback",
-				       "logger", 0};
+	static char *kwlist[] = {"unit",
+				 "total",
+				 "watermark",
+				 "parent2",
+				 "callback",
+				 "logger", 0};
 	charge_prelimit = 0.0f;
 	return PyArg_ParseTupleAndKeywords(args, kwds, "|fdffO&O&", kwlist,
 					   &charge_unit,

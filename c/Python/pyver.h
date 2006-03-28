@@ -91,11 +91,5 @@ PyString_FromFormatV(const char *format, va_list vargs);
 # define PyMODINIT_FUNC void
 #endif
 
-#if PY_VERSION_HEX >= 0x02050000   /* Python >= 2.5 */
-# define CONST_CHAR	const char
-#else
-# define CONST_CHAR	char
-#endif
-
 
 #endif /* _PYVER_H */

@@ -96,7 +96,7 @@ def f6(n):
         print g6(x=n)
         print g6bis(n)
     except:
-        print sys.exc_type
+        print sys.exc_type.__name__
 
 def g7(x, *args):
     if not g7len(args):
