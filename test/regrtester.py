@@ -45,6 +45,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_linuxaudiodev': 'this /dev is absent or unreliable on a few machines of mine',
         'test_tcl': 'requires $DISPLAY',
         'test_pep352': 'no warning for string exceptions',
+        'test_ctypes': 'it is full of sys.getrefcount() assertions',
 	}
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'
