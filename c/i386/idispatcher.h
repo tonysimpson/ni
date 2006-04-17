@@ -73,14 +73,6 @@ PSY_INLINE void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promo
 #else
   xsource = fix->source;
 #endif
-  
-  if (PROMOTION_FAST_COMMON_CASE || !RSOURCE_REG_IS_NONE(xsource))
-    {
-      /* remove from 'po->regarray' this value which will soon no longer
-         be RUN_TIME */
-      REG_NUMBER(po, RSOURCE_REG(xsource)) = NULL;
-      SET_RUNTIME_REG_TO_NONE(fix);
-    }
 
   fs = (struct ipromotion_s*) psyco_call_code_builder(po, do_promotion,
                                                       PROMOTION_FAST_COMMON_CASE,

@@ -1042,7 +1042,7 @@ static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
       switch (gettime(a->source)) {
         
       case RunTime:
-        if ((diff & (RunTime_NoRef|RunTime_NonNeg)) != 0)
+        if ((diff & (RunTime_NoRef|RunTime_NonNeg|RunTime_Megamorphic)) != 0)
           {
             /* from 'with ref' to 'without ref' or vice-versa:
                a source in 'a' with reference cannot pass for
@@ -1055,6 +1055,11 @@ static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
                a source in 'b' which cannot */
             if ((a->source & RunTime_NonNeg) == 0 &&
                 (  bsource & RunTime_NonNeg) != 0)
+              return false;
+            /* a source in 'a' which is flagged as megamorphic should
+               not fall back to a source in 'b' which is not */
+            if ((a->source & RunTime_Megamorphic) != 0 &&
+                (  bsource & RunTime_Megamorphic) == 0)
               return false;
           }
         break;
@@ -1739,6 +1744,19 @@ static int quick_lookup_counter = 0;
       } while (0)
 #endif
 
+PSY_INLINE int lookup_count_previous_values(rt_promotion_t* fs,
+					    rt_local_buf_t** megabuf)
+{
+	int result = 0;
+	rt_local_buf_t* buf = fs->local_chained_list;
+	while (buf) {
+		if (buf->key == -1)   /* use (PyObject*)(-1) as a marker */
+			*megabuf = buf;
+		result++;
+		buf = buf->next;
+	}
+	return result;
+}
 #endif  /* PROMOTION_TACTIC == 1 */
 
 
@@ -1770,6 +1788,12 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
   
   /* fix the value of 'v' */
   CHKTIME(v->source, RunTime);   /* from run-time to compile-time */
+  if (!RSOURCE_REG_IS_NONE(v->source))
+    {
+      /* remove this value from 'po->regarray' */
+      REG_NUMBER(po, RSOURCE_REG(v->source)) = NULL;
+      SET_RUNTIME_REG_TO_NONE(v);
+    }
   v->source = CompileTime_NewSk(sk);
   /* compile from this new state, in which 'v' has been promoted to
      compile-time. */
@@ -1802,6 +1826,65 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
 # endif
     buf->next = fs->local_chained_list;
     buf->key = key;
+    fs->local_chained_list = buf;
+    
+    po->code = insn_code_label(result);
+    codeend = psyco_compile(po, mp, false);
+    psyco_shrink_code_buffer(codebuf, codeend);
+    /* XXX don't know what to do with reference to 'codebuf' */
+  }
+#endif
+
+  dump_code_buffers();
+  return result;
+}
+
+static code_t* detected_megamorphic_pyobj_site(rt_promotion_t* fs)
+{
+  CodeBufferObject* codebuf;
+  code_t* result;
+  vinfo_t* v;
+  PsycoObject* newpo;
+  PsycoObject* po = fs->po;
+  mergepoint_t* mp;
+
+  /* get a copy of the compiler state */
+  newpo = PsycoObject_Duplicate(po);
+  if (newpo == NULL)
+    OUT_OF_MEMORY();
+  /* store the copy back into 'fs' and use the old 'po' to compile.
+     We do so because in 'newpo' all 'tmp' fields are now NULL,
+     but no longer in 'po'. */
+  fs->po = newpo;
+  v = fs->fix;      /* get the variable we will mark as megamorphic... */
+  fs->fix = v->tmp; /*     ...and update 'fs' with its copy in 'newpo'     */
+  
+  /* mark 'v' as megamorphic */
+  CHKTIME(v->source, RunTime);
+  v->source |= RunTime_Megamorphic;
+  /* compile from this new state, in which 'v' has been flagged */
+  mp = psyco_exact_merge_point(po->pr.merge_points, po->pr.next_instr);
+
+#if PROMOTION_TACTIC == 0
+#  error "XXX reimplement"
+#endif
+
+#if PROMOTION_TACTIC == 1
+  codebuf = psyco_new_code_buffer(NULL, NULL, &po->codelimit);
+  {
+    code_t* codeend;
+    rt_local_buf_t* buf = (rt_local_buf_t*) codebuf->codestart;
+    code_t* code = (code_t*)(buf+1);
+    ALIGN_NO_FILL();
+    result = code;
+    buf = ((rt_local_buf_t*) code) - 1;
+    
+# if CODE_DUMP
+    memset(codebuf->codestart, 0xCC, ((char*) buf) - ((char*) codebuf->codestart));
+    buf->signature = 0x66666666;
+# endif
+    buf->next = fs->local_chained_list;
+    buf->key = -1;   /* use (PyObject*)(-1) as a marker */
     fs->local_chained_list = buf;
     
     po->code = insn_code_label(result);
@@ -1869,8 +1952,41 @@ static code_t* do_promotion_pyobj(rt_promotion_t* fs, PyObject* key)
   return fix_fast_common_case(fs, (long) key, result);
 }
 
+static code_t* do_promotion_pyobj_mega(rt_promotion_t* fs, PyObject* key)
+{
+  code_t* result;
+
+#ifdef NEED_PYOBJ_KEY
+  PyObject* key1 = key;
+#else
+  long key1 = (long) key;
+#endif
+
+  /* have we already seen this value? */
+  QUICK_LOOKUP_PROMOTION_VALUE(fs, key1, result);
+  if (result == NULL)
+    {
+      /* no -> did we already promote many objects here? */
+      rt_local_buf_t* megabuf = NULL;
+      if (lookup_count_previous_values(fs, &megabuf) >= MEGAMORPHIC_MAX)
+        {
+          /* yes -> stop specializing */
+          if (megabuf == NULL)
+            return detected_megamorphic_pyobj_site(fs);
+          else
+            return (code_t*)(megabuf+1);  /* mega version already compiled */
+        }
+      /* no -> we must build new code */
+      Py_INCREF(key);
+      result = do_promotion_internal(fs, key1, sk_new((long) key,
+                                                      SkFlagFixed|SkFlagPyObj));
+    }
+  /* done -> jump to the codebuf */
+  return fix_fast_common_case(fs, (long) key, result);
+}
+
 DEFINEFN
-code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
+code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, int pflags)
 {
   rt_promotion_t* fs;
   void* do_promotion;
@@ -1882,10 +1998,21 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, long kflags)
   TRACE_EXECUTION("PROMOTION");
 
   /* write the code that calls the proxy 'do_promotion' */
-  if ((kflags & SkFlagPyObj) == 0)
+  switch (pflags) {
+  case 0:
     do_promotion = &do_promotion_long;
-  else
+    break;
+  case PFlagPyObj:
     do_promotion = &do_promotion_pyobj;
+    break;
+  /*case PFlagMegamorphic: ... */
+  case PFlagPyObj | PFlagMegamorphic:
+    do_promotion = &do_promotion_pyobj_mega;
+    break;
+  default:
+    psyco_fatal_msg("bad pflags");
+    return NULL;
+  }
   fs = (rt_promotion_t*) ipromotion_finish(po, fix, do_promotion);
 
   /* fill in the constant structure that 'do_promotion' will get as parameter */

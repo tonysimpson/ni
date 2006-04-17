@@ -317,6 +317,48 @@ vinfo_t* Psyco_Meta3x(PsycoObject* po, void* c_function, int flags,
 			(po, a1, a2, a3);
 }
 
+#if 0
+DEFINEFN
+int psyco_atcompiletime_mega(PsycoObject* po, vinfo_t* vi, long* out)
+{
+	if (!compute_vinfo(vi, po))
+		return -1;
+	if (is_runtime(vi->source)) {
+		if (vi->source & RunTime_Megamorphic)
+			return 0;
+		PycException_Promote(po, vi, &psyco_nonfixed_promotion_mega);
+		return -1;
+	}
+	else {
+		source_known_t* sk = CompileTime_Get(vi->source);
+		sk->refcount1_flags |= SkFlagFixed;
+		*out = sk->value;
+		return 1;
+	}
+}
+#endif
+
+DEFINEFN
+int psyco_pyobj_atcompiletime_mega(PsycoObject* po,
+				   vinfo_t* vi, PyObject** out)
+{
+	if (!compute_vinfo(vi, po))
+		return -1;
+	if (is_runtime(vi->source)) {
+		if (vi->source & RunTime_Megamorphic)
+			return 0;
+		PycException_Promote(po, vi,
+				     &psyco_nonfixed_pyobj_promotion_mega);
+		return -1;
+	}
+	else {
+		source_known_t* sk = CompileTime_Get(vi->source);
+		sk->refcount1_flags |= SkFlagFixed;
+		*out = (PyObject*) sk->value;
+		return 1;
+	}
+}
+
 
 /***************************************************************/
  /***   pyc_data_t                                            ***/
@@ -3343,7 +3385,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
           if (promotion->fs == NULL)
 #endif
             code1 = psyco_finish_promotion(po, promote_me,
-                                           promotion->kflags);
+                                           promotion->pflags);
 #if USE_RUNTIME_SWITCHES
           else
             code1 = psyco_finish_fixed_switch(po, promote_me,

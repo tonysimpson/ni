@@ -278,15 +278,15 @@ code_t* psyco_emergency_jump(PsycoObject* po, code_t* code);
 /*****************************************************************/
  /***   run-time switches                                       ***/
 
-#define USE_RUNTIME_SWITCHES  0    /* DISABLED */
+#define USE_RUNTIME_SWITCHES  0    /* DISABLED, no longer maintained */
 
 typedef struct c_promotion_s {
   source_virtual_t header;
-#if USE_RUNTIME_SWITCHES
-  struct fixed_switch_s* fs;
-#endif
-  long kflags;
+  int pflags;
 } c_promotion_t;
+
+#define PFlagPyObj		1
+#define PFlagMegamorphic	2
 
 
 #if USE_RUNTIME_SWITCHES
@@ -335,6 +335,14 @@ PSY_INLINE bool known_to_be_default(vinfo_t* vi, fixed_switch_t* rts) {
    fixed_switch_t. The second one has the SkFlagPyObj flag. */
 EXTERNVAR c_promotion_t psyco_nonfixed_promotion;
 EXTERNVAR c_promotion_t psyco_nonfixed_pyobj_promotion;
+
+/* The same, but detecting megamorphic sites, where many different run-time
+   values keep showing up.  Promotion stop after MEGAMORPHIC_MAX different
+   values. */
+/*EXTERNVAR c_promotion_t psyco_nonfixed_promotion_mega;*/
+EXTERNVAR c_promotion_t psyco_nonfixed_pyobj_promotion_mega;
+
+#define MEGAMORPHIC_MAX    5
 
 /* Check if the given virtual source is a promotion exception */
 EXTERNFN bool psyco_vsource_is_promotion(VirtualTimeSource source);

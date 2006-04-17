@@ -162,43 +162,52 @@ DEFINEFN
 vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
                         vinfo_t* arg, vinfo_t* kw)
 {
-	if (psyco_knowntobe(kw, (long) NULL)) {
+	if (!psyco_knowntobe(kw, (long) NULL))
+		goto fallback;
 
-		if (!is_virtualtime(func->source)) {
-			/* run-time or compile-time values: promote the
-			   function object as a whole into compile-time */
-			PyObject* f = psyco_pyobj_atcompiletime(po, func);
-			if (f == NULL)
-				return NULL;
+	if (!is_virtualtime(func->source)) {
+		/* run-time or compile-time values: promote the
+		   function object as a whole into compile-time */
+		PyObject* f;
+		switch (psyco_pyobj_atcompiletime_mega(po, func, &f)) {
+
+		case 1: /* promotion ok */
 			return pfunction_simple_call(po, f, arg, true);
-		}
-		else {
-			/* virtual-time function objects: read the
-			   individual components */
-			PyCodeObject* co;
-			vinfo_t* fcode;
-			vinfo_t* fglobals;
-			vinfo_t* fdefaults;
 
-			fcode = vinfo_getitem(func, iFUNC_CODE);
-			if (fcode == NULL)
-				return NULL;
-			co = (PyCodeObject*)psyco_pyobj_atcompiletime(po, fcode);
-			if (co == NULL)
-				return NULL;
-			
-			fglobals = vinfo_getitem(func, iFUNC_GLOBALS);
-			if (fglobals == NULL)
-				return NULL;
-			
-			fdefaults = vinfo_getitem(func, iFUNC_DEFAULTS);
-			if (fdefaults == NULL)
-				return NULL;
+		case 0: /* megamorphic site */
+			goto fallback;   /* XXX could do better */
 
-			return psyco_call_pyfunc(po, co, fglobals, fdefaults,
-						 arg, po->pr.auto_recursion);
+		default:
+			return NULL;
 		}
 	}
+	else {	/* virtual-time function objects: read the
+		   individual components */
+		PyCodeObject* co;
+		vinfo_t* fcode;
+		vinfo_t* fglobals;
+		vinfo_t* fdefaults;
+
+		fcode = vinfo_getitem(func, iFUNC_CODE);
+		if (fcode == NULL)
+			return NULL;
+		co = (PyCodeObject*)psyco_pyobj_atcompiletime(po, fcode);
+		if (co == NULL)
+			return NULL;
+			
+		fglobals = vinfo_getitem(func, iFUNC_GLOBALS);
+		if (fglobals == NULL)
+			return NULL;
+			
+		fdefaults = vinfo_getitem(func, iFUNC_DEFAULTS);
+		if (fdefaults == NULL)
+			return NULL;
+
+		return psyco_call_pyfunc(po, co, fglobals, fdefaults,
+					 arg, po->pr.auto_recursion);
+	}
+
+ fallback:
 
 #if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	return psyco_generic_call(po, PyFunction_Type.tp_call,

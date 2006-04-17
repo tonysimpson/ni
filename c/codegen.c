@@ -189,8 +189,10 @@ static bool computed_promotion(PsycoObject* po, vinfo_t* v)
   return psyco_vsource_not_important.compute_fn(po, v);
 }
 
-DEFINEVAR struct c_promotion_s psyco_nonfixed_promotion;
-DEFINEVAR struct c_promotion_s psyco_nonfixed_pyobj_promotion;
+DEFINEVAR c_promotion_t psyco_nonfixed_promotion;
+DEFINEVAR c_promotion_t psyco_nonfixed_pyobj_promotion;
+/*DEFINEVAR c_promotion_t psyco_nonfixed_promotion_mega;*/
+DEFINEVAR c_promotion_t psyco_nonfixed_pyobj_promotion_mega;
 
 DEFINEFN
 bool psyco_vsource_is_promotion(VirtualTimeSource source)
@@ -1176,14 +1178,16 @@ void psyco_codegen_init(void)
       INIT_SVIRTUAL_NOCALL(cc_functions_table[i], generic_computed_cc, 0);
     }
 #endif
+
   psyco_nonfixed_promotion.header.compute_fn = &computed_promotion;
-#if USE_RUNTIME_SWITCHES
-  psyco_nonfixed_promotion.fs = NULL;
-#endif
-  psyco_nonfixed_promotion.kflags = SkFlagFixed;
+  psyco_nonfixed_promotion.pflags = 0;
+
   psyco_nonfixed_pyobj_promotion.header.compute_fn = &computed_promotion;
-#if USE_RUNTIME_SWITCHES
-  psyco_nonfixed_pyobj_promotion.fs = NULL;
-#endif
-  psyco_nonfixed_pyobj_promotion.kflags = SkFlagFixed | SkFlagPyObj;
+  psyco_nonfixed_pyobj_promotion.pflags = PFlagPyObj;
+
+/*psyco_nonfixed_promotion_mega.header.compute_fn = &computed_promotion;
+  psyco_nonfixed_promotion_mega.pflags = PFlagMegamorphic;*/
+
+  psyco_nonfixed_pyobj_promotion_mega.header.compute_fn = &computed_promotion;
+  psyco_nonfixed_pyobj_promotion_mega.pflags = PFlagPyObj | PFlagMegamorphic;
 }

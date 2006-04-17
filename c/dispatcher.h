@@ -197,7 +197,7 @@ PSY_INLINE bool psyco_forking(PsycoObject* po, vinfo_array_t* array) {
    Note: Releases 'po'.
 */
 EXTERNFN code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix,
-                                        long kflags);
+                                        int pflags);
 
 #if USE_RUNTIME_SWITCHES
 /* Promotion of certain run-time values into compile-time ones

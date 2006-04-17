@@ -151,7 +151,7 @@ PSY_INLINE long psyco_atcompiletime(PsycoObject* po, vinfo_t *vi) {
 }
 /* the same if the value to promote is itself a PyObject* which can be
    used as key in the look-up dictionary */
-PSY_INLINE PyObject* psyco_pyobj_atcompiletime(PsycoObject* po, vinfo_t *vi) {
+PSY_INLINE PyObject* psyco_pyobj_atcompiletime(PsycoObject* po, vinfo_t* vi) {
 	if (!compute_vinfo(vi, po))
 		return NULL;
 	if (is_runtime(vi->source)) {
@@ -164,6 +164,13 @@ PSY_INLINE PyObject* psyco_pyobj_atcompiletime(PsycoObject* po, vinfo_t *vi) {
 		return (PyObject*) sk->value;
 	}
 }
+/* the same again, detecting megamorphic sites: if many different run-time
+   values keep showing up, return 0.  If successfully promoted, return 1.
+   In case of exception, return -1. */
+/*EXTERNFN int psyco_atcompiletime_mega(PsycoObject* po, vinfo_t *vi,
+					long *out);*/
+EXTERNFN int psyco_pyobj_atcompiletime_mega(PsycoObject* po, vinfo_t* vi,
+					    PyObject** out);
 
 #if USE_RUNTIME_SWITCHES
 /* same as above, when the return value is used in a switch.
