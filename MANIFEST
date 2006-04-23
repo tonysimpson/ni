@@ -166,3 +166,4 @@ test/test3.py
 test/test5.py
 test/test_base.py
 test/test_compactobject.py
+test/test_misc.py

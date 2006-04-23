@@ -35,8 +35,18 @@ static void allocate_more_buffers(codemanager_buf_t** bb)
 {
   char* p = NULL;
   int num_bigblocks = 1;
-  
-#if defined(MAP_ANONYMOUS) && defined(MAP_PRIVATE)
+
+#ifdef MS_WINDOWS
+  p = (char*) VirtualAlloc(NULL, BIG_BUFFER_SIZE, MEM_COMMIT|MEM_RESERVE, 
+                           PAGE_EXECUTE_READWRITE);
+  if (p != NULL)
+    {
+      DWORD old;
+      VirtualProtect(p, BIG_BUFFER_SIZE, PAGE_EXECUTE_READWRITE, &old);
+      /* ignore errors, just try */
+    }
+
+#elif defined(MAP_ANONYMOUS) && defined(MAP_PRIVATE)
   /* if we have anonymous mmap's, try using that -- this is known
      to fail on some platforms */
   static int mmap_works = -1;
