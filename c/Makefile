@@ -80,7 +80,7 @@ build_ext: build_py
 	@echo -------------------------------------------
 	@echo ${BUILD_VERSION}
 	@echo -------------------------------------------
-	gcc ${LD_FLAGS} ${C_FLAGS} -DALL_STATIC=1 psyco.c -o ${OUTPUT}
+	gcc ${LD_FLAGS} ${C_FLAGS} -DALL_STATIC=1 psyco.c platform.c -o ${OUTPUT}
 	echo ${BUILD_VERSION} > ${OUTDIR}/build-version
 	cd ..; $(python) setup.py install
 

@@ -1,18 +1,8 @@
 #include "codemanager.h"
 #include <ipyencoding.h>
+#include "platform.h"
 
 /*** Allocators for Large Executable Blocks of Memory ***/
-
-#ifdef MS_WINDOWS
-#  include <Windows.h>
-#else
-/* Assume UNIX */
-#  include <sys/mman.h>
-#  if defined(MAP_ANON) && !defined(MAP_ANONYMOUS)
-#    define MAP_ANONYMOUS  MAP_ANON
-#  endif
-#endif
-
 
 #define BUFFER_SIGNATURE    0xE673B506   /* arbitrary */
 
@@ -35,52 +25,33 @@ PSY_INLINE void check_signature(codemanager_buf_t* b)
 
 static void allocate_more_buffers(codemanager_buf_t** bb)
 {
-  char* p = NULL;
-  int num_bigblocks = 1;
+  static char plat_ok = 0;
+  char* p;
+  long allocated;
+  int num_bigblocks = 0;
 
-#ifdef MS_WINDOWS
-  p = (char*) VirtualAlloc(NULL, BIG_BUFFER_SIZE, MEM_COMMIT|MEM_RESERVE, 
-                           PAGE_EXECUTE_READWRITE);
-  if (p != NULL)
+  if (plat_ok != 'n')
     {
-      DWORD old;
-      VirtualProtect(p, BIG_BUFFER_SIZE, PAGE_EXECUTE_READWRITE, &old);
-      /* ignore errors, just try */
-    }
-
-#elif defined(MAP_ANONYMOUS) && defined(MAP_PRIVATE)
-  /* if we have anonymous mmap's, try using that -- this is known
-     to fail on some platforms */
-  static int mmap_works = -1;
-  if (mmap_works != 0)
-    {
-      num_bigblocks = 32;    /* allocate 32MB at a time */
-      p = (char*) mmap(NULL, BIG_BUFFER_SIZE * num_bigblocks,
-                       PROT_EXEC|PROT_READ|PROT_WRITE,
-                       MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-      if (p == MAP_FAILED || p == NULL)
+      /* try the platform-specific allocator */
+      allocated = psyco_allocate_executable_buffer(BIG_BUFFER_SIZE, &p);
+      num_bigblocks = allocated / BIG_BUFFER_SIZE;
+      if (num_bigblocks <= 0)
         {
-          if (mmap_works == 1)
+          /* failed */
+          if (plat_ok == 0)
+            plat_ok = 'n';   /* doesn't work, don't try again */
+          else
             OUT_OF_MEMORY();
-          mmap_works = 0;   /* doesn't work */
-          p = NULL;
-          num_bigblocks = 1;
-          /* note that some platforms *require* the allocation to be performed
-             by mmap, because PyMem_MALLOC() doesn't set the PROT_EXEC flag.
-             On these platforms we just hope that the first allocation is
-             successful, which sets mmap_works to 1; a failure in a subsequent
-             allocation correctly signals the OUT_OF_MEMORY. */
         }
       else
-        mmap_works = 1;
+        plat_ok = 'y';   /* works */
     }
-#endif
-
-  if (p == NULL)
+  if (num_bigblocks <= 0)
     {
       p = (char*) PyMem_MALLOC(BIG_BUFFER_SIZE);
       if (p == NULL)
         OUT_OF_MEMORY();
+      num_bigblocks = 1;
     }
   while (--num_bigblocks >= 0)
     {

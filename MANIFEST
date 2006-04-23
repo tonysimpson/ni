@@ -112,6 +112,8 @@ c/mergepoints.c
 c/mergepoints.h
 c/mkincl.py
 c/mychecker.py
+c/platform.c
+c/platform.h
 c/processor.h
 c/profile.c
 c/profile.h

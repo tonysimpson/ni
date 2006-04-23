@@ -90,6 +90,7 @@ execfile(os.path.join(SOURCEDIR, 'files.py'), data)
 
 SRC = data['SRC']
 MAINFILE = data['MAINFILE']
+PLATFILE = data['PLATFILE']
 
 macros = []
 for name in ['PSYCO_DEBUG', 'VERBOSE_LEVEL',
@@ -112,7 +113,8 @@ if os.path.isfile(localsetup):
     execfile(localsetup, d)
 
 if ALL_STATIC:
-    sources = [SOURCEDIR + '/' + MAINFILE]
+    sources = [SOURCEDIR + '/' + MAINFILE,
+               SOURCEDIR + '/' + PLATFILE]
 else:
     sources = [SOURCEDIR + '/' + s.filename for s in SRC]
 

@@ -27,6 +27,7 @@ SRC = [
     Source('dispatcher.c'),
     Source('vcompiler.c',	'psyco_compiler_init'),
     Source('psyco.c'),
+    Source('platform.c'),
     Source('psyfunc.c'),
     Source('stats.c',		'psyco_stats_init'),
     Source('profile.c',         'psyco_profile_init'),
@@ -83,6 +84,7 @@ PROCESSOR_SRC = {
     }
 
 MAINFILE = 'psyco.c'
+PLATFILE = 'platform.c'
 
 
 def generate(processor=None):
@@ -117,8 +119,9 @@ def generate(processor=None):
         print >> f
         for s in src:
             if isinstance(s, Object):
-                assert s.filename.endswith(".c")
-                print >> f, '# include "%s"' % (s.filename[:-2] + ".h")
+                if processor or s.filename != PLATFILE:
+                    assert s.filename.endswith(".c")
+                    print >> f, '# include "%s"' % (s.filename[:-2] + ".h")
         print >> f
         print >> f, '#else /* if PSYCO_INITIALIZATION */'
         print >> f, '# undef PSYCO_INITIALIZATION'
@@ -128,7 +131,7 @@ def generate(processor=None):
     print >> f, '  /* internal part for psyco.c */'
     print >> f, '#if ALL_STATIC'
     for s in src:
-        if processor or s.filename != MAINFILE:
+        if processor or s.filename not in (MAINFILE, PLATFILE):
             print >> f, '# include "%s"' % s.filename
     print >> f, '#else /* if !ALL_STATIC */'
     for s in src:
