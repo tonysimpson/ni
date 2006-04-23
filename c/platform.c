@@ -9,7 +9,7 @@
  */
 
 /************************************************************/
-#ifdef MS_WINDOWS
+#ifdef _WIN32
 /************************************************************/
 
 #include <windows.h>
@@ -21,7 +21,7 @@ long psyco_allocate_executable_buffer(long basicsize, char **result)
                                  PAGE_EXECUTE_READWRITE);
   if (p == NULL)
     return 0;
-  VirtualProtect(p, BIG_BUFFER_SIZE, PAGE_EXECUTE_READWRITE, &old);
+  VirtualProtect(p, basicsize, PAGE_EXECUTE_READWRITE, &old);
   /* ignore errors, just try */
   *result = p;
   return basicsize;
