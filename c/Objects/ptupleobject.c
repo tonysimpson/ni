@@ -6,12 +6,22 @@
 
 static source_virtual_t psyco_computed_tuple;
 
+#if ALL_CHECKS
+static void check_ituple(vinfo_t* v)
+{
+	int tuple_end = v->array->count;
+	int l1 = CompileTime_Get(v->array->items[iFIX_SIZE]->source)->value;
+	psyco_assert(tuple_end == iTUPLE_OB_ITEM + l1);
+}
+#else
+# define check_ituple(v)    ;
+#endif
+
 static bool compute_tuple(PsycoObject* po, vinfo_t* v)
 {
 	int i, tuple_end;
+	check_ituple(v);
 	tuple_end = v->array->count;
-	extra_assert(tuple_end == iTUPLE_OB_ITEM +
-		CompileTime_Get(v->array->items[iFIX_SIZE]->source)->value);
 	
 	/* check whether all tuple objects are constant */
 	for (i=iTUPLE_OB_ITEM; i<tuple_end; i++) {
@@ -67,10 +77,9 @@ static PyObject* direct_compute_tuple(vinfo_t* v, char* data)
 {
 	int i, tuple_end;
 	PyObject* result;
-	
+
+	check_ituple(v);
 	tuple_end = v->array->count;
-	extra_assert(tuple_end == iTUPLE_OB_ITEM +
-		CompileTime_Get(v->array->items[iFIX_SIZE]->source)->value);
 
 	result = PyTuple_New(tuple_end - iTUPLE_OB_ITEM);
 	if (result == NULL)
