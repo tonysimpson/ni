@@ -3,7 +3,9 @@
 
 /*** Allocators for Large Executable Blocks of Memory ***/
 
-#ifndef MS_WINDOWS
+#ifdef MS_WINDOWS
+#  include <Windows.h>
+#else
 /* Assume UNIX */
 #  include <sys/mman.h>
 #  if defined(MAP_ANON) && !defined(MAP_ANONYMOUS)
