@@ -138,7 +138,12 @@
 # define INITIALIZATIONFN  DEFINEFN
 #endif
 
-#ifndef _MSC_VER
+#if defined(_MSC_VER)
+#  if _MSC_VER < 1310    /* not an exact number */
+#    define BROKEN_CPP
+#  endif
+#endif
+#ifndef BROKEN_CPP
 # define psyco_assert(x) ((void)((x) || psyco_fatal_msg(#x)))
 #else
 /* The VC++ preprocessor is not even able to produce from #x a C string that
