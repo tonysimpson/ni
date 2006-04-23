@@ -599,7 +599,7 @@ DEFINEFN
 vinfo_t* psyco_get_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
                                vinfo_t* vindex)
 {
-	long offset = FIELD_OFFSET(df);
+	long offset = FIELD_C_OFFSET(df);
 	if (!compute_vinfo(vindex, po))
 		return NULL;
 	
@@ -668,7 +668,7 @@ DEFINEFN
 bool psyco_put_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
 			   vinfo_t* vindex, vinfo_t* value)
 {
-	long offset = FIELD_OFFSET(df);
+	long offset = FIELD_C_OFFSET(df);
 	if (!compute_vinfo(vindex, po))
 		return false;
 	

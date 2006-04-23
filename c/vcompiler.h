@@ -532,11 +532,11 @@ EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
       defined so far, if 'df' is the defield_t of the last field;
     - FIELD_INDEX(df) returns the 0-based index of 'df' in vinfo->array;
     - 1<<FIELD_SIZE2(df) computes the size of the field 'df';
-    - FIELD_OFFSET(df) is the offset of 'df' in the C structure. */
+    - FIELD_C_OFFSET(df) is the offset of 'df' in the C structure. */
 #define FIELDS_TOTAL(lastdf)  (field_next_index(lastdf, false))
 #define FIELD_INDEX(df)    ((long)(df) & FIELD_INDEX_MASK)
 #define FIELD_SIZE2(df)   (((long)(df) >> FIELD_SIZE2_SHIFT) & 3)
-#define FIELD_OFFSET(df)   ((long)(df) >> FIELD_OFS_SHIFT)
+#define FIELD_C_OFFSET(df)   ((long)(df) >> FIELD_OFS_SHIFT)
 #define FIELD_HAS_REF(df)  ((long)(df) & FIELD_PYOBJ_REF)
 #define CHECK_FIELD_INDEX(n)  extra_assert((unsigned)FIELD_INDEX(n) <	\
 					   FIELD_RESERVED_INDEX)
@@ -545,32 +545,32 @@ EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
    pointed to by 'vi': */
 PSY_INLINE vinfo_t* psyco_get_field(PsycoObject* po, vinfo_t* vi, defield_t df) {
 	return psyco_internal_getfld(po, FIELD_INDEX(df), df,
-				     vi, FIELD_OFFSET(df));
+				     vi, FIELD_C_OFFSET(df));
 }
 PSY_INLINE vinfo_t* psyco_get_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df,
 				    int index) {
 	long ofs = index << FIELD_SIZE2(df);
 	return psyco_internal_getfld(po, FIELD_INDEX(df) + index, df,
-				     vi, FIELD_OFFSET(df) + ofs);
+				     vi, FIELD_C_OFFSET(df) + ofs);
 }
 PSY_INLINE vinfo_t* psyco_get_field_offset(PsycoObject* po, vinfo_t* vi,
 				       defield_t df, long offset) {
 	extra_assert((long)df & FIELD_MUTABLE);
 	return psyco_internal_getfld(po, FIELD_RESERVED_INDEX, df,
-				     vi, FIELD_OFFSET(df) + offset);
+				     vi, FIELD_C_OFFSET(df) + offset);
 }
 EXTERNFN vinfo_t* psyco_get_field_array(PsycoObject* po, vinfo_t* vi,
 					defield_t df, vinfo_t* vindex);
 PSY_INLINE bool psyco_put_field(PsycoObject* po, vinfo_t* vi, defield_t df,
 			    vinfo_t* value) {
 	return psyco_internal_putfld(po, FIELD_INDEX(df), df,
-				     vi, FIELD_OFFSET(df), value);
+				     vi, FIELD_C_OFFSET(df), value);
 }
 PSY_INLINE bool psyco_put_nth_field(PsycoObject* po, vinfo_t* vi, defield_t df, 
 				int index, vinfo_t* value) {
 	long ofs = index << FIELD_SIZE2(df);
 	return psyco_internal_putfld(po, FIELD_INDEX(df) + index, df,
-				     vi, FIELD_OFFSET(df) + ofs, value);
+				     vi, FIELD_C_OFFSET(df) + ofs, value);
 }
 EXTERNFN bool psyco_put_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
                                     vinfo_t* vindex, vinfo_t* value);
@@ -586,14 +586,14 @@ EXTERNFN bool psyco_put_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
 PSY_INLINE vinfo_t* psyco_get_const(PsycoObject* po, vinfo_t* vi, defield_t df) {
 	return psyco_internal_getfld(po, FIELD_INDEX(df),
                                      (defield_t) ((long)df | FIELD_INTL_NOREF),
-				     vi, FIELD_OFFSET(df));
+				     vi, FIELD_C_OFFSET(df));
 }
 PSY_INLINE vinfo_t* psyco_get_nth_const(PsycoObject* po, vinfo_t* vi, defield_t df,
 				    int index) {
 	long ofs = index << FIELD_SIZE2(df);
 	return psyco_internal_getfld(po, FIELD_INDEX(df) + index,
                                      (defield_t) ((long)df | FIELD_INTL_NOREF),
-				     vi, FIELD_OFFSET(df) + ofs);
+				     vi, FIELD_C_OFFSET(df) + ofs);
 }
 
 /* "forgets" the saved value for the field 'df' in 'vi'.  Used when an
