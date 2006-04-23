@@ -96,7 +96,7 @@ static bool compute_stv_never(PsycoObject* po, vinfo_t* vk)
 	return true;
 }
 
-inline struct source_tmp_virtual_s* malloc_stv(PyObject* ko)
+PSY_INLINE struct source_tmp_virtual_s* malloc_stv(PyObject* ko)
 {
 	/* this leaks, but we try to minimize the impact by alloc'ing
 	   blocks and doing some sharing */
