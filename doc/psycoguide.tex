@@ -1020,7 +1020,7 @@ Notes:
 \item[(4)]
   Using nested scopes (i.e.\ variables shared by a function and an inner sub-function) will prevent both the outer and the inner function to be accelerated.  This too could be worked around if there is enough interest, at least for accelerating the unrelated parts of the functions -- the accesses to the shared variables themselves might be difficult to optimize.
 \item[(5)]
-  These constructs can appear in class definitions or at the module top-level.  It is possible to enable support for module top-level code, but not recommended; instead, try to put all the code you want accelerated in function bodies.
+  These constructs can appear in class definitions (see (1)) or at the module top-level.  It is possible to enable support for module top-level code, but not recommended; instead, try to put all the code you want accelerated in function bodies.
 \end{description}
 
 
