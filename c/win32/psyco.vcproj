@@ -42,7 +42,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib ../../../PCbuild/python23.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ../../../PCbuild/python24.lib"
 				OutputFile="..\..\..\PCbuild/_psyco.pyd"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
