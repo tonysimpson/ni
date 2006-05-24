@@ -113,7 +113,7 @@ copy $(TargetDir)_psyco.map $(ProjectDir)..\..\py-utils\win32\
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib ../../../PCbuild/python23_d.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ../../../PCbuild/python24_d.lib"
 				OutputFile="..\..\..\PCbuild/_psyco_d.pyd"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
@@ -160,9 +160,6 @@ copy $(TargetDir)_psyco_d.map $(ProjectDir)..\..\py-utils\win32\
 		</Configuration>
 	</Configurations>
 	<References>
-		<ProjectReference
-			ReferencedProjectIdentifier="{5D2656CE-ACAA-4C58-9E39-2CA2F12F0A68}"
-			Name="pythoncore"/>
 	</References>
 	<Files>
 		<Filter
@@ -189,6 +186,9 @@ copy $(TargetDir)_psyco_d.map $(ProjectDir)..\..\py-utils\win32\
 			</File>
 			<File
 				RelativePath="..\..\c\Modules\pmath.c">
+			</File>
+			<File
+				RelativePath="..\Modules\ppsyco.c">
 			</File>
 		</Filter>
 		<Filter
@@ -288,6 +288,9 @@ copy $(TargetDir)_psyco_d.map $(ProjectDir)..\..\py-utils\win32\
 		</File>
 		<File
 			RelativePath="..\..\c\mergepoints.c">
+		</File>
+		<File
+			RelativePath="..\platform.c">
 		</File>
 		<File
 			RelativePath="..\..\c\profile.c">
