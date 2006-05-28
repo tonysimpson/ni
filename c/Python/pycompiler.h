@@ -111,7 +111,7 @@ PSY_INLINE bool PycException_IsPython(PsycoObject* po) {
 	}
 	else
 		return true;
-};
+}
 
 /* fetch a Python exception set at compile-time (that is, now) and turn into
    a pseudo-exception (typically to be re-raised at run-time). */

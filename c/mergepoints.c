@@ -705,7 +705,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
               }
             if (flags & MP_IS_MODULE)
               {
-                if (  /*!module*/  1)  // disabled, currently buggy
+                if (  /*!module*/  1)  /* disabled, currently buggy */
                   goto unsupported_instruction;
                 mp_flags |= MP_FLAGS_MODULE;
               }

@@ -1,12 +1,9 @@
 #include "../processor.h"
 #include "iencoding.h"
-//#include "../vcompiler.h"
 #include "../dispatcher.h"
 #include "../codemanager.h"
-//#include "../Python/pycompiler.h"  /* for exception handling stuff */
 #include "../Python/frames.h"
 #include "../timing.h"     /* for PENTIUM_TSC */
-//#include "ipyencoding.h"
 
 
 /* define to copy static machine code in the heap before running it.
