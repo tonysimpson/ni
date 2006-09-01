@@ -418,6 +418,22 @@ def sharedlists(n):
     a[0] = 8
     print b[0]
 
+def variousslices():
+    class X(object):
+        def __getitem__(self, x):
+            print x
+    class Y(object):
+        def __getitem__(self, x):
+            print x
+        def __getslice__(self, i, j):
+            print i, j
+    for o in [X(), Y()]:
+        o[4:]
+        o[:7]
+        o[9:'hello']
+        o['world':]
+        o[1:10:'hello']
+
 if __name__ == '__main__':
     from test1 import go, print_results
     import time

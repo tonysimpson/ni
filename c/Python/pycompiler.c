@@ -1315,9 +1315,13 @@ static vinfo_t* _PsycoEval_SliceIndex(PsycoObject* po, vinfo_t* v)
 			result = vinfo_new(CompileTime_New(x));
 		}
 	}
-	else if (TYPE_HAS_INDEX(vtp)) {
-		result = TYPE_VINDEX(po, vtp, v);
+#if HAVE_NB_INDEX
+	else if (PsycoIndex_Check(vtp)) {
+		result = psyco_generic_call(po, PyNumber_AsSsize_t,
+					    CfReturnNormal|CfPyErrCheckMinus1,
+					    "vl", v, (long) NULL);
 	}
+#endif
 	else {
 		/* no error set */
 		result = NULL;

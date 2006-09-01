@@ -693,6 +693,18 @@ Ok
 4
 8
 
+>>> test5.variousslices()
+slice(4, None, None)
+slice(None, 7, None)
+slice(9, 'hello', None)
+slice('world', None, None)
+slice(1, 10, 'hello')
+4 2147483647
+0 7
+slice(9, 'hello', None)
+slice('world', None, None)
+slice(1, 10, 'hello')
+
                          ###########################
                          ####   COMPACTOBJECT   ####
                          ###########################

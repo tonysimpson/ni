@@ -138,15 +138,20 @@ vinfo_t* PsycoObject_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key)
 			vinfo_decref(key_value, po);
 			return result;
 		}
-		if (TYPE_HAS_INDEX(ktp)) {
+#if HAVE_NB_INDEX
+		if (PsycoIndex_Check(ktp)) {
 			vinfo_t* result;
-			vinfo_t* key_value = TYPE_VINDEX(po, ktp, key);
+			vinfo_t* key_value;
+			key_value = psyco_generic_call(po, PyNumber_AsSsize_t,
+					    CfReturnNormal|CfPyErrCheckMinus1,
+					    "vl", key, (long) PyExc_IndexError);
 			if (key_value == NULL)
 				return NULL;
 			result = PsycoSequence_GetItem(po, o, key_value);
 			vinfo_decref(key_value, po);
 			return result;
 		}
+#endif
 		type_error(po, "sequence index must be integer");
 		return false;
 	}
@@ -192,15 +197,20 @@ bool PsycoObject_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key,
 			vinfo_decref(key_value, po);
 			return result;
 		}
-		if (TYPE_HAS_INDEX(ktp)) {
+#if HAVE_NB_INDEX
+		if (PsycoIndex_Check(ktp)) {
 			bool result;
-			vinfo_t* key_value = TYPE_VINDEX(po, ktp, key);
+			vinfo_t* key_value;
+			key_value = psyco_generic_call(po, PyNumber_AsSsize_t,
+					    CfReturnNormal|CfPyErrCheckMinus1,
+					    "vl", key, (long) PyExc_IndexError);
 			if (key_value == NULL)
 				return false;
 			result = PsycoSequence_SetItem(po, o, key_value,value);
 			vinfo_decref(key_value, po);
 			return result;
 		}
+#endif
 		if (tp->tp_as_sequence->sq_ass_item) {
 			type_error(po, "sequence index must be integer");
 			return false;
@@ -723,9 +733,14 @@ static vinfo_t* psequence_repeat(PsycoObject* po, void *repeatfunc,
 	else if (PyType_TypeCheck(tp, &PyLong_Type)) {
 		vcount = PsycoLong_AsLong(po, vn);
 	}
-	else if (TYPE_HAS_INDEX(tp)) {
-		vcount = TYPE_VINDEX(po, tp, vn);
+#if HAVE_NB_INDEX
+	else if (PsycoIndex_Check(tp)) {
+		vcount = psyco_generic_call(po, PyNumber_AsSsize_t,
+					    CfReturnNormal|CfPyErrCheckMinus1,
+					    "vl", vn,
+					    (long) PyExc_OverflowError);
 	}
+#endif
 	else {
 		return type_error(po,
 			"can't multiply sequence to non-int");

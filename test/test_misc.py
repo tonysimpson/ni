@@ -37,3 +37,17 @@ def test_index_slice():
 
     res = psyco.proxy(f)(Observer(), X(), Y())
     assert res == ("slice", 5, -2)
+
+def test_index_repeat():
+    if sys.version_info < (2, 5):
+        py.test.skip("for Python 2.5")
+
+    class X(object):
+        def __index__(self):
+            return 3
+
+    def f(x):
+        return (12, 23) * x
+
+    res = psyco.proxy(f)(X())
+    assert res == (12, 23, 12, 23, 12, 23)
