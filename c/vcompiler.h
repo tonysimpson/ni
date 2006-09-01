@@ -243,6 +243,7 @@ PSY_INLINE CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
 } while (0)
 #define INIT_SVIRTUAL_NOCALL(sv, fn, w_normal)                             \
 		INIT_SVIRTUAL(sv, fn, NULL, 0, w_normal, NW_FORCE)
+#define SVIRTUAL_MUTABLE(sv)	((sv)->nested_weight[NWI_FUNCALL] == NW_FORCE)
 
 /* some weights for common virtual-time objects, grouped here to better
    show their relative importance. A careful tuning is required to avoid

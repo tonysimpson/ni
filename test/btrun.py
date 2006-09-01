@@ -689,6 +689,10 @@ ok(2)
 >>> test5.importname(['ab', 'cd', 'ef'])
 Ok
 
+>>> test5.sharedlists(3); test5.sharedlists(12)
+4
+8
+
                          ###########################
                          ####   COMPACTOBJECT   ####
                          ###########################

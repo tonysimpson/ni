@@ -894,9 +894,21 @@ static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
               /* at this point, the graph 'aa' is not a quotient of the
                  graph 'bb', i.e. two nodes are shared in 'bb' but not
                  in 'aa'. This is not acceptable if it is a run-time
-                 value. */
-              if (is_runtime(b->source))
-		goto incompatible;
+                 value, or if it is a virtual-time value whose identity
+                 matters. */
+              switch (gettime(b->source))
+                {
+                case RunTime:
+                  goto incompatible;
+
+                case VirtualTime:
+                  if (SVIRTUAL_MUTABLE(VirtualTime_Get(b->source)))
+                    goto incompatible;
+                  break;
+
+                default:
+                  ;
+                }
 	    }
           
           /* A new 'b', let's check if its 'a' matches. */
@@ -939,7 +951,7 @@ static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
                       else {
                         /* approximative match, might un-promote 'a' from
                            compile-time to run-time. */
-                        //fprintf(stderr, "psyco: compatible_array() with vinfo_t* a=%p, b=%p\n", a, b);
+                        /*fprintf(stderr, "psyco: compatible_array() with vinfo_t* a=%p, b=%p\n", a, b);*/
                         int i, ocount = (*result)->count;
                         /* do not add several time the same value to the array */
                         for (i=0; i<ocount; i++)
@@ -1024,9 +1036,22 @@ static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
      as the two nodes 'a' and 'aref' are not shared in 'aa', but shared
      in 'bb', then they must not be run-time sources, because the
      compiler could have used this fact when compiling from 'bb'
-     (typically, this single value was in a single register). */
-  if (a != aref && is_runtime(bsource))
-    return false;
+     (typically, this single value was in a single register).  Nor can
+     they be mutable virtual-time values, for identity reasons. */
+  if (a != aref)
+    switch (gettime(bsource))
+      {
+      case RunTime:
+        return false;
+
+      case VirtualTime:
+        if (SVIRTUAL_MUTABLE(VirtualTime_Get(bsource)))
+          return false;
+        break;
+
+      default:
+        ;
+      }
 
   /* invariant */
   extra_assert(cmpinternal.tmp_counter <= cmpinternal.vcilink->time);

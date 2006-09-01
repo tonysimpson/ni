@@ -408,6 +408,16 @@ def importname(value):
         import sys
     print "Ok"
 
+def sharedlists(n):
+    if n > 5:
+        a = b = [4, 5]
+    else:
+        a = [4, 5]
+        b = [4, 5]
+    double2(21)
+    a[0] = 8
+    print b[0]
+
 if __name__ == '__main__':
     from test1 import go, print_results
     import time
