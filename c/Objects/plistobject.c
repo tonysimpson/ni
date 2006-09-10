@@ -134,7 +134,8 @@ int PsycoList_Load(vinfo_t* list)
  /***************************************************************/
   /*** list objects meta-implementation                        ***/
 
-static vinfo_t* plist_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
+DEFINEFN
+vinfo_t* plist_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
 {
 	condition_code_t cc;
 	vinfo_t* vlen;

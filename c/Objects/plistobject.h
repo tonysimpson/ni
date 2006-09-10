@@ -37,5 +37,8 @@ EXTERNFN int PsycoList_Load(vinfo_t* list);
 /* for pstringobject.c */
 EXTERNFN vinfo_t* psyco_plist_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b);
 
+/* for piterobject.c */
+EXTERNFN vinfo_t* plist_item(PsycoObject* po, vinfo_t* a, vinfo_t* i);
+
 
 #endif /* _PSY_LISTOBJECT_H */

@@ -434,6 +434,20 @@ def variousslices():
         o['world':]
         o[1:10:'hello']
 
+if sys.version_info < (2,2):
+    def listgetitem():
+        print "foobar"
+        print "Ok"
+else:
+    def listgetitem():
+        class X(list):
+            def __getitem__(self, key):
+                return key
+        x = X(["Ok"])
+        print x["foobar"]
+        for item in x:
+            print item
+
 if __name__ == '__main__':
     from test1 import go, print_results
     import time

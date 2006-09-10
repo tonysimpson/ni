@@ -27,21 +27,36 @@ static vinfo_t* piter_getiter(PsycoObject* po, vinfo_t* v)
 	return v;
 }
 
-static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
+static vinfo_t* piter_iternext(PsycoObject* po, vinfo_t* v)
 {
 	vinfo_t* seq;
 	vinfo_t* index;
 	vinfo_t* result;
-	
+	PyTypeObject* tp;
+
 	seq = psyco_get_const(po, v, SEQITER_it_seq);
 	if (seq == NULL)
+		return NULL;
+
+	tp = Psyco_NeedType(po, seq);
+	if (tp == NULL)
 		return NULL;
 
 	index = psyco_get_field(po, v, SEQITER_it_index);
 	if (index == NULL)
 		return NULL;
+	assert_nonneg(index);
 
-	result = PsycoSequence_GetItem(po, seq, index);
+	if (PyType_IsSubtype(tp, &PyList_Type)) {
+		/* If the sequence is a list, explicitly ignore a
+		   user-overridden __getitem__ slot.  This is what both
+		   Python 2.2 and >=2.3 do (although they use a
+		   different trick to reach that effect). */
+		result = plist_item(po, seq, index);
+	}
+	else {
+		result = PsycoSequence_GetItem(po, seq, index);
+	}
 	if (result == NULL) {
 		vinfo_t* matches = PycException_Matches(po, PyExc_IndexError);
 		if (runtime_NON_NULL_t(po, matches) == true) {
@@ -56,7 +71,9 @@ static vinfo_t* piter_next(PsycoObject* po, vinfo_t* v)
 		   issue if an iterator of a mutable object is not
 		   immediately deleted when exhausted. Well, I guess that
 		   muting an object we iterate over is generally considered
-		   as DDIWWY (Don't Do It -- We Warned You.) */
+		   as DDIWWY (Don't Do It -- We Warned You.)
+		   (Update: Python 2.5 is consistent, and does the same
+		   as Psyco.) */
 		vinfo_t* index_plus_1 = integer_add_i(po, index, 1, true);
 		if (index_plus_1 == NULL ||
 		    !psyco_put_field(po, v, SEQITER_it_index, index_plus_1)) {
@@ -117,7 +134,7 @@ INITIALIZATIONFN
 void psy_iterobject_init(void)
 {
         Psyco_DefineMeta(PySeqIter_Type.tp_iter, &piter_getiter);
-        Psyco_DefineMeta(PySeqIter_Type.tp_iternext, &piter_next);
+        Psyco_DefineMeta(PySeqIter_Type.tp_iternext, &piter_iternext);
 
         /* iterator object are mutable;
            they must be forced out of virtual-time across function calls */

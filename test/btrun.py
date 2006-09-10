@@ -705,6 +705,10 @@ slice(9, 'hello', None)
 slice('world', None, None)
 slice(1, 10, 'hello')
 
+>>> test5.listgetitem()
+foobar
+Ok
+
                          ###########################
                          ####   COMPACTOBJECT   ####
                          ###########################
