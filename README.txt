@@ -3,7 +3,7 @@
 ======================================================================
 
 
-                             VERSION 1.5.1
+                             VERSION 1.5.2
                              -------------
 
 Psyco is a Python extension module which can massively speed up the

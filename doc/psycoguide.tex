@@ -9,9 +9,9 @@
         Psyco Home page: \url{http://psyco.sourceforge.net/}
 }
 
-\date{updated Feb 28th, 2005}
+\date{updated Sep 25th, 2006}
 
-\release{1.5.1}                   % release version
+\release{1.5.2}                   % release version
 
 \makeindex
 
@@ -61,14 +61,15 @@ Psyco is not dependent on a particular OS.  Precompiled binaries are provided fo
 
 \section{Installing}\label{binaries}
 
-Binaries are now only available for Windows as installers for relatively recent Python versions.  You need to compile from the source in all other cases (it should be trivial on Linux, though).
+Binaries are now only available for Windows as installers for recent Python versions.  You need to compile from the source (see \ref{sources}) in all other cases (it is trivial on non-Windows platforms, though).
 
-Be sure to download the version of Psyco that corresponds to your Python version.  Binary releases are at \url{http://sourceforge.net/project/showfiles.php?group_id=41036}.  The following pre-compiled versions are currently distributed:
+Be sure to download the version of Psyco that corresponds to your Python version.  Binary releases are at \url{http://sourceforge.net/project/showfiles.php?group_id=41036}.  Only some pre-compiled versions are available (contributions for missing ones are welcome).
 
 \begin{tableiii}{l|l|l}{filenq}{File name}{Python versions}{Well-tested with}
   \lineiii{ psyco-x.y-win32-py2.2.2.exe  }{2.2.2 and up}   {2.2.2 and 2.2.3}
   \lineiii{ psyco-x.y-win32-py2.3.exe    }{2.3 and up}     {2.3 and 2.3.3}
-  \lineiii{ psyco-x.y-win32-py2.4.exe    }{2.4 and up}     {2.4}
+  \lineiii{ psyco-x.y-win32-py2.4.exe    }{2.4 and up}     {2.4.*}
+  \lineiii{ psyco-x.y-win32-py2.5.exe    }{2.5 and up}     {2.4}
 \end{tableiii}
 
 Note that the 2.2.2 version will **not** work on the 2.2 or 2.2.1 Pythons!
@@ -76,22 +77,26 @@ Note that the 2.2.2 version will **not** work on the 2.2 or 2.2.1 Pythons!
 
 \section{Installing from the sources}\label{sources}
 
-You should get the source code from its most current Subversion version at \url{http://codespeak.net/svn/psyco/dist/}.  (The command is ``svn co http://codespeak.net/svn/psyco/dist/ psyco-dist``)
+You should get the source code from its most current Subversion version at \url{http://codespeak.net/svn/psyco/dist/}.  The command is:
+        
+\begin{verbatim}
+    svn co http://codespeak.net/svn/psyco/dist/ psyco-dist
+\end{verbatim}
 
 People unfamiliar with Subversion or whose Subversion access is firewalled can use a web grabber (e.g.\ ``wget -r http://codespeak.net/svn/psyco/dist/ -I /svn/psyco/dist``).
 
-Note that the Subversion tree is considered the latest official release.  It evolves slowly and it is more stable than the packaged version.
+Note that the Subversion tree is considered the latest official release.  It evolves slowly and it is more stable than the packaged version.  But if you really really prefer official releases (though there is not much point, Psyco being stable and slow-changing nowadays), have a look at \url{http://sourceforge.net/project/showfiles.php?group_id=41036}.
 
 To install from the source, run the top-level installation script \file{setup.py}:
 
 \begin{verbatim}
-python setup.py install
+    python setup.py install
 \end{verbatim}
 
 As usual, other commands are available, e.g.\ 
 
 \begin{verbatim}
-python setup.py build_ext -i
+    python setup.py build_ext -i
 \end{verbatim}
 
 will compile the C source and put the result directly into the \file{py-support/} subdirectory (no administrator priviledge is required). After this step, the \file{py-support/} directory is a complete package (exactly as found in the binary distributions) that you can rename to \file{psyco} and copy around.
