@@ -1307,7 +1307,7 @@ static vinfo_t* _PsycoEval_SliceIndex(PsycoObject* po, vinfo_t* v)
 				x = INT_MAX;
 				break;
 			case false:
-				x = 0;
+				x = LARGE_NEG_LONG_AS_SLICE_INDEX;
 				break;
 			default:
 				return NULL;

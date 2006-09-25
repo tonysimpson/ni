@@ -110,5 +110,16 @@ PyString_FromFormatV(const char *format, va_list vargs);
 # define HAVE_NB_INDEX		0
 #endif
 
+/* for extra fun points, let's try to emulate Python's ever-changing behavior
+   (but not too hard; you can still tell the difference in Python < 2.5 if
+   you use -sys.maxint-1 as the lower bound of a slice, provided you inspect
+   it with a custom __getslice__() */
+#if PY_VERSION_HEX < 0x02030000
+#  define LARGE_NEG_LONG_AS_SLICE_INDEX		0		/* 2.1, 2.2 */
+#elif PY_VERSION_HEX < 0x02050000
+#  define LARGE_NEG_LONG_AS_SLICE_INDEX		(-INT_MAX)	/* 2.3, 2.4 */
+#else
+#  define LARGE_NEG_LONG_AS_SLICE_INDEX		(-INT_MAX-1)	/* 2.5 */
+#endif
 
 #endif /* _PYVER_H */

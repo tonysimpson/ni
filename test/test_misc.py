@@ -51,3 +51,15 @@ def test_index_repeat():
 
     res = psyco.proxy(f)(X())
     assert res == (12, 23, 12, 23, 12, 23)
+
+def test_slice_overflow():
+    class X(object):
+        def __len__(self):
+            return sys.maxint
+        def __getslice__(self, i, j):
+            return i, j
+    def f(X):
+        return X()[-(2**100):2**100]
+
+    res = psyco.proxy(f)(X)
+    assert res == f(X)
