@@ -38,6 +38,21 @@ PyObject* psyco_thread_dict()
   return result;
 }
 
+DEFINEFN
+void psyco_out_of_memory(char *filename, int lineno)
+{
+  char *msg;
+  if (PyErr_Occurred())
+    {
+      PyErr_Print();
+      msg = "psyco cannot recover from the error above";
+    }
+  else
+    msg = "psyco: out of memory";
+  fprintf(stderr, "%s:%d: ", filename, lineno);
+  Py_FatalError(msg);
+}
+
  /***************************************************************/
 /***   Implementation of the '_psyco' built-in module          ***/
  /***************************************************************/
@@ -141,7 +156,7 @@ void psyco_flog(char* msg, ...)
 DEFINEFN
 int psyco_fatal_error(char* msg, char* filename, int lineno)
 {
-  fprintf(stderr, "%s:%d: %s\n", filename, lineno, msg);
+  fprintf(stderr, "\n%s:%d: %s\n", filename, lineno, msg);
   Py_FatalError("Psyco assertion failed");
   return 0;
 }

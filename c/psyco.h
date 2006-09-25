@@ -277,7 +277,8 @@ EXTERNFN code_t* psyco_pycompiler_mainloop(PsycoObject* po);
    what should occur in various cases, like when we run out of memory in the
    middle of writing code, when the beginning is already executing. When
    should we report the exception? */
-#define OUT_OF_MEMORY()      Py_FatalError("psyco: out of memory")
+EXTERNFN void psyco_out_of_memory(char *filename, int lineno);
+#define OUT_OF_MEMORY()      psyco_out_of_memory(__FILE__, __LINE__)
 
 /* Thread-specific state */
 EXTERNFN PyObject* psyco_thread_dict(void);
