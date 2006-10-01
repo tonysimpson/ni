@@ -54,13 +54,16 @@ typedef struct {
 
 PSY_INLINE PyVMStack* vm_get_stack(PyObject* tdict)
 {
-	PyVMStack* st = (PyVMStack*) PyDict_GetItem(tdict, Py_None);
+	PyVMStack* st;
+	RECLIMIT_SAFE_ENTER();
+	st = (PyVMStack*) PyDict_GetItem(tdict, Py_None);
 	if (st == NULL) {
 		st = PyCStruct_NEW(PyVMStack, NULL);
 		st->topframe = NULL;
 		if (PyDict_SetItem(tdict, Py_None, (PyObject*) st))
 			OUT_OF_MEMORY();
 	}
+	RECLIMIT_SAFE_LEAVE();
 	return st;
 }
 

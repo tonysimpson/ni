@@ -92,6 +92,7 @@ static ceval_events_t* new_cevents(PyThreadState* tstate)
 	ceval_events_t* cev;
 	PyObject* dict = tstate->dict;
 
+        RECLIMIT_SAFE_ENTER();
 	if (dict == NULL) {
 		dict = tstate->dict = PyDict_New();
 		if (dict == NULL)
@@ -105,6 +106,7 @@ static ceval_events_t* new_cevents(PyThreadState* tstate)
 	cev->current_hook = 0;
 	if (PyDict_SetItem(dict, ceval_events_key, (PyObject*) cev))
 		OUT_OF_MEMORY();
+        RECLIMIT_SAFE_LEAVE();
 	Py_DECREF(cev);  /* one ref left in dict */
 	return cev;
 }

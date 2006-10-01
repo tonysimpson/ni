@@ -48,7 +48,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_ctypes': 'it is full of sys.getrefcount() assertions',
         'test_import': 'I hack my pythons to not import bare .pyc files any more',
         'test_runpy':  'I hack my pythons to not import bare .pyc files any more',
-        'test_coercion': 'Fatal error in 2.5: recursion depth exceeded in cmp',
+        'test_genexps': 'doctests checking the exact error message',
 	}
 if sys.version_info[:2] < (2,2):
     SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'

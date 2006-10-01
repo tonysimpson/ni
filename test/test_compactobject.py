@@ -150,11 +150,13 @@ def test_init_arguments():
     def f2(): psyco.compact(12)
     def f3(): ClassWithNoInit(21)
     py.test.raises(TypeError, f1)
-    py.test.raises(TypeError, f2)
-    py.test.raises(TypeError, f3)
+    if sys.version >= (2, 3):
+        py.test.raises(TypeError, f2)
+        py.test.raises(TypeError, f3)
     py.test.raises(TypeError, psyco.proxy(f1))
-    py.test.raises(TypeError, psyco.proxy(f2))
-    py.test.raises(TypeError, psyco.proxy(f3))
+    if sys.version >= (2, 3):
+        py.test.raises(TypeError, psyco.proxy(f2))
+        py.test.raises(TypeError, psyco.proxy(f3))
 
 def test_special_attributes():
     missing = object()

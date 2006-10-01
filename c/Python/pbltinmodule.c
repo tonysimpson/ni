@@ -200,7 +200,14 @@ static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 static vinfo_t* pbuiltin_id(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
 	METH_O_WRAPPER(id, vself, vobj);
+#if HAVE_NEGATIVE_IDS   /* Python < 2.5 */
 	return PsycoInt_FromLong(vobj);
+#else
+	/* XXX fall-back for now */
+	return psyco_generic_call(po, PyLong_FromVoidPtr,
+				  CfReturnRef|CfPyErrIfNull,
+				  "v", vobj);
+#endif
 }
 
 static vinfo_t* pbuiltin_len(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)

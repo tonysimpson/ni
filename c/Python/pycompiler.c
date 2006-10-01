@@ -1052,6 +1052,7 @@ void psyco_pycompiler_init(void)
 
 static void mark_varying(PsycoObject* po, PyObject* key)
 {
+	RECLIMIT_SAFE_ENTER();
 	if (po->pr.changing_globals == NULL) {
 		po->pr.changing_globals = PyDict_New();
 		if (po->pr.changing_globals == NULL)
@@ -1059,6 +1060,7 @@ static void mark_varying(PsycoObject* po, PyObject* key)
 	}
 	if (PyDict_SetItem(po->pr.changing_globals, key, Py_True))
 		OUT_OF_MEMORY();
+	RECLIMIT_SAFE_LEAVE();
 }
 
 /* closure for the do_changed_global call-back */
@@ -1098,6 +1100,7 @@ PyObject* psy_get_builtins(PyObject* globals)
 	static PyObject* minimal_builtins = NULL;
 	PyObject* builtins;
 	/* code copied from frameobject.c */
+	RECLIMIT_SAFE_ENTER();
 	builtins = PyDict_GetItem((PyObject*) globals, s_builtin_object);
 	if (builtins) {
 		if (PyDict_Check(builtins))
@@ -1119,6 +1122,7 @@ PyObject* psy_get_builtins(PyObject* globals)
 					 "None", Py_None) < 0)
 			OUT_OF_MEMORY();
 	}
+	RECLIMIT_SAFE_LEAVE();
 	return minimal_builtins;
 }
 
@@ -1190,6 +1194,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		static PyDictObject* dummy_dict = NULL;
 		static PyDictEntry* dummy_entry = NULL;
 		if (dummy_entry == NULL) {
+			RECLIMIT_SAFE_ENTER();
 			dummy_dict = (PyDictObject*) PyDict_New(); /* immortal */
 			if (!dummy_dict || PyDict_SetItem(
 			     (PyObject*) dummy_dict, Py_None, Py_None))
@@ -1197,6 +1202,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 			dummy_entry = (dummy_dict->ma_lookup)(
 				dummy_dict, Py_None, PyObject_Hash(Py_None));
 			extra_assert(dummy_entry != NULL);
+			RECLIMIT_SAFE_LEAVE();
 		}
 		dictitem_check_change(po, dummy_dict, dummy_entry);
 		/* end of respawning -- this dummy code will now be trashed */
@@ -1620,7 +1626,9 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 
 static PyObject* cimpl_load_global(PyObject* globals, PyObject* w)
 {
-	PyObject* x = PyDict_GetItem(globals, w);
+	PyObject* x;
+	RECLIMIT_SAFE_ENTER();
+	x = PyDict_GetItem(globals, w);
 	if (x == NULL) {
 		x = PyDict_GetItem(psy_get_builtins(globals), w);
 		if (x == NULL) {
@@ -1629,9 +1637,11 @@ static PyObject* cimpl_load_global(PyObject* globals, PyObject* w)
 				PyErr_Format(PyExc_NameError,
 					     GLOBAL_NAME_ERROR_MSG,
 					     obj_str);
+			RECLIMIT_SAFE_LEAVE();
 			return NULL;
 		}
 	}
+	RECLIMIT_SAFE_LEAVE();
 	Py_INCREF(x);
 	return x;
 }

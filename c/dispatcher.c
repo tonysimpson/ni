@@ -1828,8 +1828,10 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
   codebuf = psyco_compile_code(po, mp);
 
   /* store the new code buffer into the local cache */
+  RECLIMIT_SAFE_ENTER();
   if (PyDict_SetItem(fs->spec_dict, key, (PyObject*) codebuf))
     OUT_OF_MEMORY();
+  RECLIMIT_SAFE_LEAVE();
   Py_DECREF(codebuf);  /* there is a reference left
                           in the dictionary */
   result = (code_t*) codebuf->codestart;

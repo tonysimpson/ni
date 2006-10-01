@@ -63,3 +63,10 @@ def test_slice_overflow():
 
     res = psyco.proxy(f)(X)
     assert res == f(X)
+
+def test_id():
+    def f(x):
+        return id(x)
+    obj = []
+    res = psyco.proxy(f)(obj)
+    assert res == id(obj)

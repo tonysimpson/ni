@@ -122,4 +122,6 @@ PyString_FromFormatV(const char *format, va_list vargs);
 #  define LARGE_NEG_LONG_AS_SLICE_INDEX		(-INT_MAX-1)	/* 2.5 */
 #endif
 
+#define HAVE_NEGATIVE_IDS   (PY_VERSION_HEX < 0x02050000)   /* Python < 2.5 */
+
 #endif /* _PYVER_H */

@@ -196,6 +196,9 @@ EXTERNFN void psyco_trace_execution_noerr(char* msg, void* code_position);
 # define TRACE_EXECUTION_NOERR(msg)   do { } while (0) /* nothing */
 #endif
 
+#define RECLIMIT_SAFE_ENTER()  PyThreadState_GET()->recursion_depth--
+#define RECLIMIT_SAFE_LEAVE()  PyThreadState_GET()->recursion_depth++
+
 
 #if INLINE_COMMON_FUNCTIONS
 # define PSY_INLINE	__inline static

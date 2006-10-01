@@ -490,7 +490,8 @@ static PyObject* pvisitframes(PyObject*(*callback)(PyObject*,void*),
 	PyFrameRuntime* fstart;
 	PyObject* tdict = psyco_thread_dict();
 	PyFrameObject* f = PyThreadState_Get()->frame;
-	
+
+	RECLIMIT_SAFE_ENTER();
 	while (f != NULL) {
 		/* is this Python frame the starting point of a chained
 		   list of Psyco frames ? */
@@ -562,7 +563,7 @@ static PyObject* pvisitframes(PyObject*(*callback)(PyObject*,void*),
 				PyMem_FREE(p);
 			}
 			if (result != NULL)
-				return result;
+				break;
 
 			/* there is still the real Python frame
 			   which is shadowed by a Psyco frame, i.e. a
@@ -582,10 +583,11 @@ static PyObject* pvisitframes(PyObject*(*callback)(PyObject*,void*),
 			result = callback((PyObject*) f, data);
 		}
 		if (result != NULL)
-			return result;
+			break;
 		f = f->f_back;
 	}
-	return NULL;
+        RECLIMIT_SAFE_LEAVE();
+	return result;
 }
 
 

@@ -21,8 +21,9 @@ static void PyCodeStats_dealloc(PyCodeStats* cs)
 DEFINEFN
 PyCodeStats* PyCodeStats_Get(PyCodeObject* co)
 {
-	PyCodeStats* cs = (PyCodeStats*)
-		PyCStruct_DictGet(codestats_dict, (PyObject*) co);
+	PyCodeStats* cs;
+	RECLIMIT_SAFE_ENTER();
+	cs = (PyCodeStats*) PyCStruct_DictGet(codestats_dict, (PyObject*) co);
 	if (cs == NULL) {
 		cs = PyCStruct_NEW(PyCodeStats, PyCodeStats_dealloc);
 
@@ -34,12 +35,13 @@ PyCodeStats* PyCodeStats_Get(PyCodeObject* co)
                 cs->st_codebuf = NULL;
                 cs->st_globals = NULL;
 #endif
-		
+
 		if (PyDict_SetItem(codestats_dict, (PyObject*) cs,
 				   (PyObject*) cs) < 0)
 			OUT_OF_MEMORY();
 		Py_DECREF(cs);  /* two references left in codestats_dict */
 	}
+	RECLIMIT_SAFE_LEAVE();
 	return cs;
 }
 
@@ -47,7 +49,11 @@ PyCodeStats* PyCodeStats_Get(PyCodeObject* co)
 DEFINEFN
 PyCodeStats* PyCodeStats_MaybeGet(PyCodeObject* co)
 {
-	return (PyCodeStats*) PyCStruct_DictGet(codestats_dict, (PyObject*) co);
+	PyCodeStats* cs;
+	RECLIMIT_SAFE_ENTER();
+	cs = (PyCodeStats*) PyCStruct_DictGet(codestats_dict, (PyObject*) co);
+	RECLIMIT_SAFE_LEAVE();
+	return cs;
 }
 #endif
 
@@ -253,6 +259,7 @@ void psyco_stats_reset(void)
 	stats_printf(("stats: reset\n"));
 
 	/* reset the charge of all PyCodeStats, keep only the used ones */
+        RECLIMIT_SAFE_ENTER();
 	d = PyDict_New();
 	if (d == NULL)
 		OUT_OF_MEMORY();
@@ -265,6 +272,7 @@ void psyco_stats_reset(void)
 				OUT_OF_MEMORY();
 		}
 	}
+        RECLIMIT_SAFE_LEAVE();
 	Py_DECREF(codestats_dict);
 	codestats_dict = d;
 	charge_total = 0.0;
