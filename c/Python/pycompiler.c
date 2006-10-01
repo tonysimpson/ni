@@ -1104,12 +1104,12 @@ PyObject* psy_get_builtins(PyObject* globals)
 	builtins = PyDict_GetItem((PyObject*) globals, s_builtin_object);
 	if (builtins) {
 		if (PyDict_Check(builtins))
-			return builtins;
+			goto done;
 		if (PyModule_Check(builtins)) {
 			builtins = PyModule_GetDict(builtins);
 			if (builtins) {
 				psyco_assert(PyDict_Check(builtins));
-				return builtins;
+				goto done;
 			}
 		}
 	}
@@ -1122,8 +1122,10 @@ PyObject* psy_get_builtins(PyObject* globals)
 					 "None", Py_None) < 0)
 			OUT_OF_MEMORY();
 	}
+	builtins = minimal_builtins;
+ done:
 	RECLIMIT_SAFE_LEAVE();
-	return minimal_builtins;
+	return builtins;
 }
 
 
