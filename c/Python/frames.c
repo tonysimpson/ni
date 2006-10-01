@@ -428,11 +428,11 @@ void PyFrameRuntime_dealloc(PyFrameRuntime* self)
 	/* nothing */
 }
 
-PSY_INLINE PyFrameObject* psyco_build_pyframe(PyObject* co, PyObject* globals)
+PSY_INLINE PyFrameObject* psyco_build_pyframe(PyObject* co, PyObject* globals,
+					      PyThreadState* tstate)
 {
 	PyFrameObject* back;
 	PyFrameObject* result;
-	PyThreadState* tstate = PyThreadState_GET();
 	
 	/* frame objects are not created in stack order
 	   with Psyco, so it's probably better not to
@@ -461,7 +461,7 @@ PyFrameObject* psyco_emulate_frame(PyObject* o)
 		PyObject* globals = PyTuple_GetItem(o, 1);
 		extra_assert(co != NULL);
 		extra_assert(globals != NULL);
-		return psyco_build_pyframe(co, globals);
+		return psyco_build_pyframe(co, globals, PyThreadState_GET());
 	}
 }
 
@@ -680,7 +680,7 @@ PyObject* psyco_get_globals(void)
 
 #if HAVE_PYTHON_SUPPORT
 static PyFrameObject* cached_frame = NULL;
-static PyObject* visit_first_frame(PyObject* o, void* ignored)
+static PyObject* visit_first_frame(PyObject* o, void* ts)
 {
 	if (PyFrame_Check(o)) {
 		/* a real Python frame: don't return a new reference */
@@ -696,18 +696,22 @@ static PyObject* visit_first_frame(PyObject* o, void* ignored)
 		PyFrameObject* newf;
 		PyObject* co = PyTuple_GetItem(o, 0);
 		PyObject* globals = PyTuple_GetItem(o, 1);
+		PyThreadState* tstate = (PyThreadState*) ts;
 		extra_assert(co != NULL);
 		extra_assert(globals != NULL);
 		while (cached_frame != NULL) {
 			f = cached_frame;
 			if ((PyObject*) f->f_code == co
-			    && f->f_globals == globals)
-				return (PyObject*) f;  /* reuse it */
+			    && f->f_globals == globals) {
+				/* reuse the cached frame */
+				f->f_tstate = tstate;
+				return (PyObject*) f;
+			}
 			cached_frame = NULL;
 			Py_DECREF(f);  /* might set cached_frame again
 					  XXX could this loop never end? */
 		}
-		newf = psyco_build_pyframe(co, globals);
+		newf = psyco_build_pyframe(co, globals, tstate);
 		while (cached_frame != NULL) {
 			/* worst-case safe...  this is unlikely */
 			f = cached_frame;
@@ -720,7 +724,7 @@ static PyObject* visit_first_frame(PyObject* o, void* ignored)
 }
 static PyFrameObject* psyco_threadstate_getframe(PyThreadState* self)
 {
-	return (PyFrameObject*) pvisitframes(visit_first_frame, NULL);
+	return (PyFrameObject*) pvisitframes(visit_first_frame, (void*)self);
 }
 #endif
 
