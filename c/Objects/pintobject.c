@@ -7,7 +7,7 @@ static long cimpl_int_mod(long x, long y)
 {
 	long xmody;
 	/* (-sys.maxint-1)/-1 is the only overflow case. */
-	if (y == 0 || (y == -1 && x < 0 && x == -x)) {
+	if (y == 0 || (y == -1 && x == LONG_MIN)) {
 		/* the exception will be cleared by the caller */
 		PyErr_SetString(PyExc_ValueError, "punt and do this in python code");
 		return -1;
@@ -24,7 +24,7 @@ static long cimpl_int_div(long x, long y)
 	long xdivy;
 	long xmody;
 	/* (-sys.maxint-1)/-1 is the only overflow case. */
-	if (y == 0 || (y == -1 && x < 0 && x == -x)) {
+	if (y == 0 || (y == -1 && x == LONG_MIN)) {
 		/* the exception will be cleared by the caller */
 		PyErr_SetString(PyExc_ValueError, "punt and do this in python code");
 		return -1;
