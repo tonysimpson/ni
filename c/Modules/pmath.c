@@ -68,16 +68,16 @@ extern double modf (double, double *);
     vinfo_decref(v1, po);
 
 #define PMATH_FUNC1(funcname, func ) \
+    static PyCFunction fallback_##func; \
     static vinfo_t* pmath_##func(PsycoObject* po, vinfo_t* vself, vinfo_t* varg) { \
         vinfo_t *a1, *a2, *x; \
         vinfo_array_t* result; \
         vinfo_t *v; \
         int tuplesize = PsycoTuple_Load(varg); \
-        if (tuplesize != 1){ \
-            if (!PycException_Occurred(po)) \
-                PycException_SetFormat(po, PyExc_TypeError, \
-                                       funcname  "() takes exactly 1 argument (%d given)", tuplesize); \
-            return NULL; \
+        if (tuplesize != 1){ /* wrong or unknown number of arguments */ \
+          return psyco_generic_call(po, fallback_##func, \
+				    CfReturnRef|CfPyErrIfNull, \
+				    "lv", NULL, varg); \
         } \
         v = PsycoTuple_GET_ITEM(varg, 0); \
         PMATH_CONVERT_TO_DOUBLE(v,a1,a2,return NULL);      \
@@ -93,16 +93,16 @@ extern double modf (double, double *);
 
 
 #define PMATH_FUNC2(funcname, func ) \
+    static PyCFunction fallback_##func; \
     static vinfo_t* pmath_##func(PsycoObject* po, vinfo_t* vself, vinfo_t* varg) { \
         vinfo_t *a1, *a2, *b1, *b2, *x; \
         vinfo_array_t* result; \
         vinfo_t *v1, *v2; \
         int tuplesize = PsycoTuple_Load(varg); \
-        if (tuplesize != 2){ \
-            if (!PycException_Occurred(po)) \
-                PycException_SetFormat(po, PyExc_TypeError, \
-                               funcname  "() takes exactly 2 argument (%d given)", tuplesize); \
-            return NULL; \
+        if (tuplesize != 2){ /* wrong or unknown number of arguments */ \
+          return psyco_generic_call(po, fallback_##func, \
+				    CfReturnRef|CfPyErrIfNull, \
+				    "lv", NULL, varg); \
         } \
         v1 = PsycoTuple_GET_ITEM(varg, 0); \
         v2 = PsycoTuple_GET_ITEM(varg, 1); \
@@ -169,25 +169,25 @@ void psyco_initmath(void)
 {
     PyObject* md = Psyco_DefineMetaModule("math");
     
-    Psyco_DefineModuleFn(md, "acos", METH_VARARGS, pmath_acos);
-    Psyco_DefineModuleFn(md, "asin", METH_VARARGS, pmath_asin);
-    Psyco_DefineModuleFn(md, "atan", METH_VARARGS, pmath_atan);
-    Psyco_DefineModuleFn(md, "atan2", METH_VARARGS, pmath_atan2);
-    Psyco_DefineModuleFn(md, "ceil", METH_VARARGS, pmath_ceil);
-    Psyco_DefineModuleFn(md, "cos", METH_VARARGS, pmath_cos);
-    Psyco_DefineModuleFn(md, "cosh", METH_VARARGS, pmath_cosh);
-    Psyco_DefineModuleFn(md, "exp", METH_VARARGS, pmath_exp);
-    Psyco_DefineModuleFn(md, "fabs", METH_VARARGS, pmath_fabs);
-    Psyco_DefineModuleFn(md, "floor", METH_VARARGS, pmath_floor);
-    Psyco_DefineModuleFn(md, "fmod", METH_VARARGS, pmath_fmod);
-    Psyco_DefineModuleFn(md, "hypot", METH_VARARGS, pmath_hypot);
+    fallback_acos = Psyco_DefineModuleFn(md, "acos", METH_VARARGS, pmath_acos);
+    fallback_asin = Psyco_DefineModuleFn(md, "asin", METH_VARARGS, pmath_asin);
+    fallback_atan = Psyco_DefineModuleFn(md, "atan", METH_VARARGS, pmath_atan);
+    fallback_atan2= Psyco_DefineModuleFn(md, "atan2",METH_VARARGS, pmath_atan2);
+    fallback_ceil = Psyco_DefineModuleFn(md, "ceil", METH_VARARGS, pmath_ceil);
+    fallback_cos  = Psyco_DefineModuleFn(md, "cos",  METH_VARARGS, pmath_cos);
+    fallback_cosh = Psyco_DefineModuleFn(md, "cosh", METH_VARARGS, pmath_cosh);
+    fallback_exp  = Psyco_DefineModuleFn(md, "exp",  METH_VARARGS, pmath_exp);
+    fallback_fabs = Psyco_DefineModuleFn(md, "fabs", METH_VARARGS, pmath_fabs);
+    fallback_floor= Psyco_DefineModuleFn(md, "floor",METH_VARARGS, pmath_floor);
+    fallback_fmod = Psyco_DefineModuleFn(md, "fmod", METH_VARARGS, pmath_fmod);
+    fallback_hypot= Psyco_DefineModuleFn(md, "hypot",METH_VARARGS, pmath_hypot);
     /*Psyco_DefineModuleFn(md, "power", METH_VARARGS, pmath_power);*/
-    Psyco_DefineModuleFn(md, "pow", METH_VARARGS, pmath_pow);
-    Psyco_DefineModuleFn(md, "sin", METH_VARARGS, pmath_sin);
-    Psyco_DefineModuleFn(md, "sinh", METH_VARARGS, pmath_sinh);
-    Psyco_DefineModuleFn(md, "sqrt", METH_VARARGS, pmath_sqrt);
-    Psyco_DefineModuleFn(md, "tan", METH_VARARGS, pmath_tan);
-    Psyco_DefineModuleFn(md, "tanh", METH_VARARGS, pmath_tanh);
+    fallback_pow  = Psyco_DefineModuleFn(md, "pow",  METH_VARARGS, pmath_pow);
+    fallback_sin  = Psyco_DefineModuleFn(md, "sin",  METH_VARARGS, pmath_sin);
+    fallback_sinh = Psyco_DefineModuleFn(md, "sinh", METH_VARARGS, pmath_sinh);
+    fallback_sqrt = Psyco_DefineModuleFn(md, "sqrt", METH_VARARGS, pmath_sqrt);
+    fallback_tan  = Psyco_DefineModuleFn(md, "tan",  METH_VARARGS, pmath_tan);
+    fallback_tanh = Psyco_DefineModuleFn(md, "tanh", METH_VARARGS, pmath_tanh);
 
     Py_XDECREF(md);
 }

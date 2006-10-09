@@ -70,3 +70,33 @@ def test_id():
     obj = []
     res = psyco.proxy(f)(obj)
     assert res == id(obj)
+
+def test_math_module():
+    import math
+    global _operation
+    for name in ["acos", "asin", "atan", "ceil", "cos", "cosh", "exp",
+                 "fabs", "floor", "sin", "sinh", "sqrt", "tan", "tanh"]:
+        _operation = getattr(math, name)
+
+        def tester(a):
+            return _operation(a)
+        res = psyco.proxy(tester)(0.17)
+        assert abs(res - _operation(0.17)) < 1e6
+
+        def tester(a):
+            return _operation(*a)
+        res = psyco.proxy(tester)((0.71,))
+        assert abs(res - _operation(0.71)) < 1e6
+
+    for name in ["atan2", "fmod", "hypot", "pow"]:
+        _operation = getattr(math, name)
+
+        def tester(a, b):
+            return _operation(a, b)
+        res = psyco.proxy(tester)(0.17, 0.081)
+        assert abs(res - _operation(0.17, 0.081)) < 1e6
+
+        def tester(a):
+            return _operation(*a)
+        res = psyco.proxy(tester)((0.71, 0.2643))
+        assert abs(res - _operation(0.71, 0.2643)) < 1e6
