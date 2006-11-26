@@ -52,9 +52,4 @@ void psy_dictobject_init(void)
 {
 	PyMappingMethods *m = PyDict_Type.tp_as_mapping;
 	Psyco_DefineMeta(m->mp_length, psyco_dict_length);
-
-#if !HAVE_struct_dictobject
-        extra_assert(sizeof(struct _dictobject) + PyGC_HEAD_SIZE ==
-                     PyDict_Type.tp_basicsize);
-#endif
 }

@@ -36,8 +36,6 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_coercion': 'uses eval() with locals',
         'test_weakref': 'incompatible with early unused variable deletion',
         }
-if sys.version_info[:2] < (2,2):
-    SKIP['test_scope'] = 'The jit() uses the profiler, which is buggy with cell and free vars (PyFrame_LocalsToFast() bug)'
 #    SKIP['test_operator'] = NO_SYS_EXC
 #    SKIP['test_strop'] = NO_SYS_EXC
 if sys.version_info[:2] >= (2,3):

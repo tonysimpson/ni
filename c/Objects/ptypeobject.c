@@ -3,8 +3,6 @@
 #include "pfuncobject.h"
 
 
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
-
 static ternaryfunc	type_call;
 static initproc		object_init;
 static newfunc		object_new;
@@ -323,13 +321,10 @@ static bool pslot_tp_init(PsycoObject* po, vinfo_t* vself,
 				  "vvv", vself, vargs, vkwds) != NULL;
 }
 
-#endif  /* NEW_STYLE_TYPES */
-
 
 INITIALIZATIONFN
 void psy_typeobject_init(void)
 {
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	PyObject* d;
 	PyObject* tmp;
 
@@ -357,5 +352,4 @@ void psy_typeobject_init(void)
 		Py_DECREF(d);
 	}
 	PyErr_Clear();
-#endif
 }

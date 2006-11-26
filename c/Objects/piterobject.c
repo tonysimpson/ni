@@ -1,5 +1,4 @@
 #include "piterobject.h"
-#if HAVE_GENERATORS
 
 
 DEFINEFN vinfo_t* PsycoSeqIter_NEW(PsycoObject* po, vinfo_t* seq)
@@ -140,12 +139,3 @@ void psy_iterobject_init(void)
            they must be forced out of virtual-time across function calls */
         INIT_SVIRTUAL_NOCALL(psyco_computed_seqiter, compute_seqiter, 1);
 }
-
-#else /* !HAVE_GENERATORS */
-
-INITIALIZATIONFN
-void psy_iterobject_init(void)
-{
-}
-
-#endif /* HAVE_GENERATORS */

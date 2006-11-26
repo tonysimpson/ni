@@ -102,7 +102,7 @@ except ImportError:
 
 ###########################################################################
 
-from _psyco import compact   # Python 2.2 and above only
+from _psyco import compact
 
 
 class compactdictproxy(DictMixin):

@@ -291,14 +291,9 @@ EXTERNFN PyCFunction Psyco_DefineModuleFn(PyObject* module, char* meth_name,
 					  int meth_flags, void* meta_fn);
 /* Same as above, but also alternatively accepts a callable type object
    and maps it to meta_type_new. Returns NULL in this case. */
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 EXTERNFN PyCFunction Psyco_DefineModuleC(PyObject* module, char* meth_name,
 					 int meth_flags, void* meta_fn,
 					 void* meta_type_new);
-#else
-# define Psyco_DefineModuleC(mo, na, fl, fn, tn)  \
-		Psyco_DefineModuleFn(mo, na, fl, fn)
-#endif
 
 /* the general-purpose calling routine: it looks for a meta implementation of
    'c_function' and call it if found; if not found, it encode a run-time call

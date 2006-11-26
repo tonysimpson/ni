@@ -53,7 +53,6 @@ EXTERNFN vinfo_t* PsycoNumber_Remainder(PsycoObject* po, vinfo_t* v,vinfo_t* w);
 EXTERNFN vinfo_t* PsycoNumber_Power(PsycoObject* po, vinfo_t* v1, vinfo_t* v2,
                                     vinfo_t* v3);
 
-#ifdef BINARY_FLOOR_DIVIDE
 EXTERNFN
 vinfo_t* PsycoNumber_FloorDivide(PsycoObject* po, vinfo_t* v, vinfo_t* w);
 EXTERNFN
@@ -62,7 +61,6 @@ EXTERNFN
 vinfo_t* PsycoNumber_InPlaceFloorDivide(PsycoObject* po, vinfo_t* v, vinfo_t* w);
 EXTERNFN
 vinfo_t* PsycoNumber_InPlaceTrueDivide(PsycoObject* po, vinfo_t* v, vinfo_t* w);
-#endif
 
 EXTERNFN
 vinfo_t* PsycoNumber_InPlaceAdd(PsycoObject* po, vinfo_t* v, vinfo_t* w);
@@ -94,10 +92,8 @@ vinfo_t* PsycoNumber_InPlacePower(PsycoObject* po, vinfo_t* v1, vinfo_t* v2,
       the meta-level (because this is not time-consuming, the
       exceptions being virtualized and not really set at Python's
       eyes): */
-#if HAVE_GENERATORS
 EXTERNFN vinfo_t* PsycoIter_Next(PsycoObject* po, vinfo_t* iter);
 EXTERNFN vinfo_t* PsycoObject_GetIter(PsycoObject* po, vinfo_t* vi);
-#endif
 
 
 /* generic implementations of len() that reads the object's ob_size field

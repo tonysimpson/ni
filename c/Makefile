@@ -51,7 +51,7 @@ C_FLAGS_OO= -DNDEBUG -O3 -Wall -fomit-frame-pointer -mcpu=pentium4 -march=pentiu
 
 
 OPTS     = ${OPTS_${mode}}
-C_FLAGS  = -I${processor} -DNDEBUG ${C_FLAGS_${mode}} -Wall -Wstrict-prototypes -fPIC -fno-strict-aliasing ${OPTS} ${incl} -ansi -Wdeclaration-after-statement
+C_FLAGS  = -I${processor} -DNDEBUG ${C_FLAGS_${mode}} -Wall -Wstrict-prototypes -fPIC -fno-strict-aliasing ${OPTS} ${incl} -ansi -Wdeclaration-after-statement -Wundef
 LD_FLAGS = -shared
 BUILDDIR = ../build
 LIBDIR   = lib.linux-i686-${PY_VER}

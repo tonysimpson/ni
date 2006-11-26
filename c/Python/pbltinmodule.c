@@ -17,28 +17,6 @@ static PyCFunction cimpl_apply;
 static PyCFunction cimpl_divmod;
 
 
-#if HAVE_METH_O
-# define METH_O_WRAPPER(name, self, arg)    do { } while (0)  /* nothing */
-#else
-# define METH_O_WRAPPER(name, self, arg)    do {                                \
-    if (PsycoTuple_Load(arg) != 1)                                              \
-      return psyco_generic_call(po, cimpl_ ## name, CfReturnRef|CfPyErrIfNull,  \
-                                "vv", self, arg);                               \
-    arg = PsycoTuple_GET_ITEM(arg, 0);                                          \
-} while (0)
-#endif
-
-#if HAVE_METH_NOARGS
-# define METH_NOARGS_WRAPPER(name, self, arg)  do { } while (0)  /* nothing */
-#else
-# define METH_NOARGS_WRAPPER(name, self, arg)  do {                             \
-    if (PsycoTuple_Load(arg) != 0)                                              \
-      return psyco_generic_call(po, cimpl_ ## name, CfReturnRef|CfPyErrIfNull,  \
-                                "vv", self, arg);                               \
-} while (0)
-#endif
-
-
 static vinfo_t* get_len_of_range(PsycoObject* po, vinfo_t* lo, vinfo_t* hi
 				 /*, vinfo_t* step == 1 currently*/)
 {
@@ -130,7 +108,6 @@ static vinfo_t* pbuiltin_xrange(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 				  "lv", NULL, vargs);
 }
 
-#if NEW_STYLE_TYPES
 static vinfo_t* prange_new(PsycoObject* po, PyTypeObject* type,
 			   vinfo_t* vargs, vinfo_t* vkw)
 {
@@ -147,9 +124,6 @@ static vinfo_t* prange_new(PsycoObject* po, PyTypeObject* type,
 				  CfReturnRef|CfPyErrIfNull,
 				  "lvv", type, vargs, vkw);
 }
-#else
-# define prange_new  NULL
-#endif
 
 static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 {
@@ -185,8 +159,6 @@ static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
 	vinfo_t* result;
-	METH_O_WRAPPER(ord, vself, vobj);
-
 	if (!PsycoCharacter_Ord(po, vobj, &result))
 		return NULL;
 	
@@ -199,7 +171,6 @@ static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 
 static vinfo_t* pbuiltin_id(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
-	METH_O_WRAPPER(id, vself, vobj);
 #if HAVE_NEGATIVE_IDS   /* Python < 2.5 */
 	return PsycoInt_FromLong(vobj);
 #else
@@ -213,8 +184,6 @@ static vinfo_t* pbuiltin_id(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 static vinfo_t* pbuiltin_len(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
 	vinfo_t* result;
-	METH_O_WRAPPER(len, vself, vobj);
-	
 	result = PsycoObject_Size(po, vobj);
 	if (result != NULL)
 		result = PsycoInt_FROM_LONG(result);
@@ -223,7 +192,6 @@ static vinfo_t* pbuiltin_len(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 
 static vinfo_t* pbuiltin_abs(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 {
-	METH_O_WRAPPER(abs, vself, vobj);
 	return PsycoNumber_Absolute(po, vobj);
 }
 
@@ -300,10 +268,10 @@ void psyco_bltinmodule_init(void)
 
 	DEFMETA( range,		METH_VARARGS );
 	DEFMETA( chr,		METH_VARARGS );
-	DEFMETA( ord,		HAVE_METH_O ? METH_O : METH_VARARGS );
-	DEFMETA( id,		HAVE_METH_O ? METH_O : METH_VARARGS );
-	DEFMETA( len,		HAVE_METH_O ? METH_O : METH_VARARGS );
-	DEFMETA( abs,		HAVE_METH_O ? METH_O : METH_VARARGS );
+	DEFMETA( ord,		METH_O);
+	DEFMETA( id,		METH_O);
+	DEFMETA( len,		METH_O);
+	DEFMETA( abs,		METH_O);
 	DEFMETA( apply,		METH_VARARGS );
 	DEFMETA( divmod,	METH_VARARGS );
 	cimpl_xrange = Psyco_DefineModuleC(md, "xrange", METH_VARARGS,

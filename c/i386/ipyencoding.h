@@ -13,14 +13,6 @@
 #include "../Objects/pdictobject.h"
 
 
-#if HAVE_struct_dictobject
-# define ma_SIZE                 ma_mask
-# define MA_SIZE_TO_LAST_USED    0
-#else
-# define ma_SIZE                 ma_size
-# define MA_SIZE_TO_LAST_USED    (-1)
-#endif
-
 #define TRACE_START_COMPILING(c)    do { /* nothing */ } while (0)
 
 
@@ -28,14 +20,14 @@
    code, so that DICT_ITEM_UPDINDEX() can be called later
    to update an existing code buffer */
 #define DICT_ITEM_KEYVALUE(code, index, key, value, mprg)  do {                 \
-  extra_assert(0 < offsetof(PyDictObject, ma_SIZE) &&                           \
-                   offsetof(PyDictObject, ma_SIZE) < 128);                      \
+  extra_assert(0 < offsetof(PyDictObject, ma_mask) &&                           \
+                   offsetof(PyDictObject, ma_mask) < 128);                      \
   extra_assert(0 < offsetof(PyDictObject, ma_table) &&                          \
                    offsetof(PyDictObject, ma_table) < 128);                     \
   code[0] = 0x81;           /* CMP [...], imm32 */                              \
   code[1] = 0x40 | (7<<3) | mprg;   /* CMP [mpreg->ma_mask], ... */             \
-  code[2] = offsetof(PyDictObject, ma_SIZE);                                    \
-  *(long*)(code+3) = (index) - MA_SIZE_TO_LAST_USED;                            \
+  code[2] = offsetof(PyDictObject, ma_mask);                                    \
+  *(long*)(code+3) = (index);                                                   \
   /* perform the load before checking the CMP outcome */                        \
   code[7] = 0x8B;                                                               \
   code[8] = 0x40 | (mprg<<3) | mprg;   /* MOV mpreg, [mpreg->ma_table] */       \
@@ -62,7 +54,7 @@
 #define DICT_ITEM_CHECK_CC     CC_NE
 
 #define DICT_ITEM_UPDINDEX(index)        do {                           \
-  *(long*)(code+3) = (index) - MA_SIZE_TO_LAST_USED;                    \
+  *(long*)(code+3) = (index);                                           \
   *(long*)(code+14) = (index)*sizeof(PyDictEntry) +                     \
                                   offsetof(PyDictEntry, me_key);        \
   *(long*)(code+26) = (index)*sizeof(PyDictEntry) +                     \

@@ -1,5 +1,4 @@
 #include "plongobject.h"
-#include "../Python/pycinternal.h"  /* for BINARY_FLOOR_DIVIDE */
 
 
 DEFINEFN
@@ -64,10 +63,8 @@ RETLONG(2,	plong_rshift,		nb_rshift)
 RETLONG(2,	plong_and,		nb_and)
 RETLONG(2,	plong_xor,		nb_xor)
 RETLONG(2,	plong_or,		nb_or)
-#ifdef BINARY_FLOOR_DIVIDE
 RETLONG(2,	plong_div,		nb_floor_divide)
      /*RETFLOAT(2,	plong_true_divide,	nb_true_divide)  XXX-implement*/
-#endif
 
 #undef RETLONG
 
@@ -94,8 +91,6 @@ void psy_longobject_init(void)
 	Psyco_DefineMeta(m->nb_and,		plong_and);
 	Psyco_DefineMeta(m->nb_xor,		plong_xor);
 	Psyco_DefineMeta(m->nb_or,		plong_or);
-#ifdef BINARY_FLOOR_DIVIDE
 	Psyco_DefineMeta(m->nb_floor_divide,	plong_div);
 /* Psyco_DefineMeta(m->nb_true_divide,	plong_true_divide);  XXX-implement*/
-#endif
 }

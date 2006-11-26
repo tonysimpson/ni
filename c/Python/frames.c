@@ -10,8 +10,6 @@
 
  /***************************************************************/
 
-#if HAVE_DYN_COMPILE
-
 /* turn a running frame into its Psyco equivalent, a PsycoObject.
    Return Py_None if the frame cannot be turned into a PsycoObject.
    Never sets an exception. */
@@ -26,11 +24,7 @@ PSY_INLINE PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
 	PyObject* merge_points;
 
 	if (f->f_stacktop == NULL) {
-          /*#if version >= 2.2.2*/
 		/* cannot patch a frame other than the top (running) one */
-          /*#else*/
-		/* feature requires Python version 2.2.2 or later */
-          /*#endif*/
 		goto fail;
 	}
         module = f->f_globals == f->f_locals;
@@ -374,8 +368,6 @@ bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering)
 	}
 }
 
-#endif /* HAVE_DYN_COMPILE */
-
 
  /***************************************************************/
 
@@ -678,7 +670,6 @@ PyObject* psyco_get_globals(void)
 	return result;
 }
 
-#if HAVE_PYTHON_SUPPORT
 static PyFrameObject* cached_frame = NULL;
 static PyObject* visit_first_frame(PyObject* o, void* ts)
 {
@@ -726,7 +717,6 @@ static PyFrameObject* psyco_threadstate_getframe(PyThreadState* self)
 {
 	return (PyFrameObject*) pvisitframes(visit_first_frame, (void*)self);
 }
-#endif
 
 
  /***************************************************************/
@@ -734,11 +724,9 @@ static PyFrameObject* psyco_threadstate_getframe(PyThreadState* self)
 INITIALIZATIONFN
 void psyco_frames_init(void)
 {
-#if HAVE_PYTHON_SUPPORT
 	_PyThreadState_GetFrame =
 #  if PYTHON_API_VERSION < 1012
 		(unaryfunc)
 #  endif
 		psyco_threadstate_getframe;
-#endif
 }

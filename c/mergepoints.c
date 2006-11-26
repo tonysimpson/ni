@@ -49,8 +49,8 @@ static char* NoControlFlowIfBuiltin[] = {
 #define HAS_JREL_INSTR(op)   (op == JUMP_FORWARD ||   \
                               op == JUMP_IF_FALSE ||  \
                               op == JUMP_IF_TRUE ||   \
-                              op == FOR_OPCODE ||     \
-                              /*    SETUP_LOOP replaced by FOR_OPCODE */    \
+                              op == FOR_ITER ||     \
+                              /*    SETUP_LOOP replaced by FOR_ITER */    \
                               op == SETUP_EXCEPT ||   \
                               op == SETUP_FINALLY)
 
@@ -58,8 +58,8 @@ static char* NoControlFlowIfBuiltin[] = {
                               op == CONTINUE_LOOP)
 
 /* instructions whose target may be jumped to several times: */
-#define HAS_J_MULTIPLE(op)   (op == FOR_OPCODE ||     \
-                              /*    SETUP_LOOP replaced by FOR_OPCODE */    \
+#define HAS_J_MULTIPLE(op)   (op == FOR_ITER ||     \
+                              /*    SETUP_LOOP replaced by FOR_ITER */    \
                               op == SETUP_EXCEPT ||   \
                               op == SETUP_FINALLY)
 
@@ -120,7 +120,10 @@ static char* NoControlFlowIfBuiltin[] = {
                            op == BINARY_AND ||                \
                            op == BINARY_XOR ||                \
                            op == BINARY_OR ||                 \
-                           IS_NEW_DIVIDE(op) ||               \
+                           op == BINARY_FLOOR_DIVIDE ||       \
+                           op == BINARY_TRUE_DIVIDE ||        \
+                           op == INPLACE_FLOOR_DIVIDE ||      \
+                           op == INPLACE_TRUE_DIVIDE ||       \
                            IS_LIST_APPEND(op) ||              \
                            op == INPLACE_POWER ||             \
                            op == INPLACE_MULTIPLY ||          \
@@ -162,7 +165,7 @@ static char* NoControlFlowIfBuiltin[] = {
                            /* COMPARE_OP special-cased */     \
                            op == IMPORT_NAME ||               \
                            op == IMPORT_FROM ||               \
-                           IS_GET_ITER(op) ||                 \
+                           op == GET_ITER ||                  \
                            op == CALL_FUNCTION ||             \
                            op == CALL_FUNCTION_VAR ||         \
                            op == CALL_FUNCTION_KW ||          \
@@ -186,17 +189,6 @@ static char* NoControlFlowIfBuiltin[] = {
                               0)
 
  /***************************************************************/
-#ifdef FOR_ITER
-# define FOR_OPCODE              FOR_ITER
-#else
-# define FOR_OPCODE              FOR_LOOP
-#endif
-
-#ifdef GET_ITER
-# define IS_GET_ITER(op)        (op == GET_ITER)
-#else
-# define IS_GET_ITER(op)         0
-#endif
 
 #ifdef RETURN_NONE
 # define IS_EPILOGUE_INSTR(op)  (op == RETURN_NONE)
@@ -216,21 +208,13 @@ static char* NoControlFlowIfBuiltin[] = {
 # define IS_NOP(op)              0
 #endif
 
-#ifdef BINARY_FLOOR_DIVIDE
-# define IS_NEW_DIVIDE(op)      (op == BINARY_FLOOR_DIVIDE ||         \
-                                 op == BINARY_TRUE_DIVIDE ||          \
-                                 op == INPLACE_FLOOR_DIVIDE ||        \
-                                 op == INPLACE_TRUE_DIVIDE)
-#else
-# define IS_NEW_DIVIDE(op)       0
-#endif
-
 #ifdef LIST_APPEND
 # define IS_LIST_APPEND(op)  (op == LIST_APPEND)
 #else
 # define IS_LIST_APPEND(op)   0
 #endif
- /***************************************************************/
+
+/***************************************************************/
 
 
 #define MP_OTHER           0x01

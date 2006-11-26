@@ -22,12 +22,6 @@
 #define KNOWN_VAR(type, varname, loc)   \
     type varname = (type)(CompileTime_Get(loc->source)->value)
 
-#ifdef FOR_ITER
-# define OLD_STYLE_LOOP   0
-#else
-# define OLD_STYLE_LOOP   1
-#endif
-
 
 /*****************************************************************/
  /***   Meta functions                                          ***/
@@ -45,8 +39,7 @@ void Psyco_DefineMeta(void* c_function, void* psyco_function)
 			return;
 	}
 	if (c_function == NULL) {
-		/* known occurrences:
-		   in Python 2.1, PyString_Type.tp_richcompare == NULL */
+		/* should not occur */
 		debug_printf(1, ("init: C function pointer NULL in CPython\n"));
 		return;
 	}
@@ -126,7 +119,6 @@ PyCFunction Psyco_DefineModuleFn(PyObject* module, char* meth_name,
 	return f;
 }
 
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 DEFINEFN
 PyCFunction Psyco_DefineModuleC(PyObject* module, char* meth_name,
 				int meth_flags, void* meta_fn,
@@ -146,7 +138,6 @@ PyCFunction Psyco_DefineModuleC(PyObject* module, char* meth_name,
 		return Psyco_DefineModuleFn(module, meth_name,
 					    meth_flags, meta_fn);
 }
-#endif
 
 
 #define FORGET_REF     if (has_rtref(vi->source))			\
@@ -217,7 +208,6 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 		cc = integer_cmp_i(po, vi, 0, Py_EQ);
 		break;
 
-#if HAVE_GENERATORS
 	case CfPyErrIterNext:    /* specially for tp_iternext slots */
 		cc = integer_cmp_i(po, vi, 0, Py_NE);
 		if (cc == CC_ERROR)
@@ -235,7 +225,6 @@ vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi)
 		   iteration. Raise a pseudo PyErr_StopIteration. */
 		PycException_SetVInfo(po, PyExc_StopIteration, psyco_vi_None());
 		return NULL;
-#endif
 
 	case CfPyErrAlways:   /* always set an exception */
 		goto Error;
@@ -440,167 +429,6 @@ void PycException_Promote(PsycoObject* po, vinfo_t* vi, c_promotion_t* promotion
 	PycException_Raise(po, vinfo_new(VirtualTime_New(&promotion->header)),
 			   vi);
 }
-
-#if !HAVE_PyString_FromFormatV
-/* This code is copied from Python 2.2. */
-DEFINEFN PyObject *
-PyString_FromFormatV(const char *format, va_list vargs)
-{
-	va_list count;
-	int n = 0;
-	const char* f;
-	char *s;
-	PyObject* string;
-
-#ifdef VA_LIST_IS_ARRAY
-	memcpy(count, vargs, sizeof(va_list));
-#else
-	count = vargs;
-#endif
-	/* step 1: figure out how large a buffer we need */
-	for (f = format; *f; f++) {
-		if (*f == '%') {
-			const char* p = f;
-			while (*++f && *f != '%' && !isalpha(Py_CHARMASK(*f)))
-				;
-
-			/* skip the 'l' in %ld, since it doesn't change the
-			   width.  although only %d is supported (see
-			   "expand" section below), others can be easily
-			   added */
-			if (*f == 'l' && *(f+1) == 'd')
-				++f;
-			
-			switch (*f) {
-			case 'c':
-				(void)va_arg(count, int);
-				/* fall through... */
-			case '%':
-				n++;
-				break;
-			case 'd': case 'i': case 'x':
-				(void) va_arg(count, int);
-				/* 20 bytes is enough to hold a 64-bit
-				   integer.  Decimal takes the most space.
-				   This isn't enough for octal. */
-				n += 20;
-				break;
-			case 's':
-				s = va_arg(count, char*);
-				n += strlen(s);
-				break;
-			case 'p':
-				(void) va_arg(count, int);
-				/* maximum 64-bit pointer representation:
-				 * 0xffffffffffffffff
-				 * so 19 characters is enough.
-				 * XXX I count 18 -- what's the extra for?
-				 */
-				n += 19;
-				break;
-			default:
-				/* if we stumble upon an unknown
-				   formatting code, copy the rest of
-				   the format string to the output
-				   string. (we cannot just skip the
-				   code, since there's no way to know
-				   what's in the argument list) */ 
-				n += strlen(p);
-				goto expand;
-			}
-		} else
-			n++;
-	}
- expand:
-	/* step 2: fill the buffer */
-	/* Since we've analyzed how much space we need for the worst case,
-	   use sprintf directly instead of the slower PyOS_snprintf. */
-	string = PyString_FromStringAndSize(NULL, n);
-	if (!string)
-		return NULL;
-	
-	s = PyString_AsString(string);
-
-	for (f = format; *f; f++) {
-		if (*f == '%') {
-			const char* p = f++;
-			int i, longflag = 0;
-			/* parse the width.precision part (we're only
-			   interested in the precision value, if any) */
-			n = 0;
-			while (isdigit(Py_CHARMASK(*f)))
-				n = (n*10) + *f++ - '0';
-			if (*f == '.') {
-				f++;
-				n = 0;
-				while (isdigit(Py_CHARMASK(*f)))
-					n = (n*10) + *f++ - '0';
-			}
-			while (*f && *f != '%' && !isalpha(Py_CHARMASK(*f)))
-				f++;
-			/* handle the long flag, but only for %ld.  others
-			   can be added when necessary. */
-			if (*f == 'l' && *(f+1) == 'd') {
-				longflag = 1;
-				++f;
-			}
-			
-			switch (*f) {
-			case 'c':
-				*s++ = va_arg(vargs, int);
-				break;
-			case 'd':
-				if (longflag)
-					sprintf(s, "%ld", va_arg(vargs, long));
-				else
-					sprintf(s, "%d", va_arg(vargs, int));
-				s += strlen(s);
-				break;
-			case 'i':
-				sprintf(s, "%i", va_arg(vargs, int));
-				s += strlen(s);
-				break;
-			case 'x':
-				sprintf(s, "%x", va_arg(vargs, int));
-				s += strlen(s);
-				break;
-			case 's':
-				p = va_arg(vargs, char*);
-				i = strlen(p);
-				if (n > 0 && i > n)
-					i = n;
-				memcpy(s, p, i);
-				s += i;
-				break;
-			case 'p':
-				sprintf(s, "%p", va_arg(vargs, void*));
-				/* %p is ill-defined:  ensure leading 0x. */
-				if (s[1] == 'X')
-					s[1] = 'x';
-				else if (s[1] != 'x') {
-					memmove(s+2, s, strlen(s)+1);
-					s[0] = '0';
-					s[1] = 'x';
-				}
-				s += strlen(s);
-				break;
-			case '%':
-				*s++ = '%';
-				break;
-			default:
-				strcpy(s, p);
-				s += strlen(s);
-				goto end;
-			}
-		} else
-			*s++ = *f;
-	}
-	
- end:
-	_PyString_Resize(&string, s - PyString_AS_STRING(string));
-	return string;
-}
-#endif /* !HAVE_PyString_FromFormatV */
 
 DEFINEFN
 void PycException_SetFormat(PsycoObject* po, PyObject* e, const char* fmt, ...)
@@ -1466,29 +1294,6 @@ static bool psyco_assign_slice(PsycoObject* po, vinfo_t* u,
 	}
 }
 
-#if OLD_STYLE_LOOP
-static vinfo_t* psyco_loop_subscript(PsycoObject* po, vinfo_t* v, vinfo_t* w)
-{
-	PySequenceMethods* sq;
-	vinfo_t* vi;
-	PyTypeObject* vtp = Psyco_NeedType(po, v);
-	if (vtp == NULL)
-		return NULL;
-
-	sq = vtp->tp_as_sequence;
-	if (sq == NULL || sq->sq_item == NULL) {
-		PycException_SetString(po, PyExc_TypeError,
-				       "loop over non-sequence");
-		return NULL;
-	}
-	vi = PsycoInt_AS_LONG(po, w);
-	if (vi == NULL)
-		return NULL;
-	return Psyco_META2(po, sq->sq_item, CfReturnRef|CfPyErrIfNull,
-                           "vv", v, vi);
-}
-#endif
-
 #define CALL_FLAG_VAR 1
 #define CALL_FLAG_KW 2
 static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
@@ -1714,7 +1519,6 @@ static int cimpl_print_newline_to(PyObject* stream)
 
 static int cimpl_unpack_iterable(PyObject* v, int argcnt, PyObject** sp)
 {
-#if HAVE_GENERATORS
 	int i = 0;
 	PyObject *it;  /* iter(v) */
 	PyObject *w;
@@ -1757,48 +1561,6 @@ Error:
 	}
 	Py_XDECREF(it);
 	return -1;
-        
-#else /* !HAVE_GENERATORS */
-        if (PySequence_Check(v)) {
-		/* This is copied from Python 2.1's unpack_sequence() */
-		int i;
-		PyObject *w;
-
-		for (i = 0; i < argcnt; i++) {
-			if (! (w = PySequence_GetItem(v, i))) {
-				if (PyErr_ExceptionMatches(PyExc_IndexError))
-					PyErr_SetString(PyExc_ValueError,
-					      "unpack sequence of wrong size");
-				goto finally;
-			}
-			*sp++ = w;
-		}
-		/* we better get an IndexError now */
-		if (PySequence_GetItem(v, i) == NULL) {
-			if (PyErr_ExceptionMatches(PyExc_IndexError)) {
-				PyErr_Clear();
-				return 0;
-			}
-		     /* some other exception occurred. fall through to finally */
-		}
-		else
-			PyErr_SetString(PyExc_ValueError,
-					"unpack sequence of wrong size");
-		/* fall through */
-	   finally:
-		for (; i > 0; i--) {
-			--sp;
-			Py_DECREF(*sp);
-		}
-		return -1;
-	}
-	else {
-		PyErr_SetString(PyExc_TypeError,
-				"unpack non-sequence");
-		return -1;
-	}
-        
-#endif /* HAVE_GENERATORS */
 }
 
 static int cimpl_unpack_list(PyObject* listobject, int argcnt, PyObject** sp)
@@ -1926,36 +1688,11 @@ static void cimpl_do_raise(PyObject *type, PyObject *value, PyObject *tb)
 	/*return WHY_EXCEPTION;*/
 }
 
-#if HAVE_PYTHON_SUPPORT
-# define PyClass_NewInGlobals(g, bases, dict, name) \
-			PyClass_New(bases, dict, name)
-#else  /* !HAVE_PYTHON_SUPPORT */
-static PyObject*
-PyClass_NewInGlobals(PyObject* g,  /* globals */
-		     PyObject *bases, PyObject *dict, PyObject *name)
-{
-	/* workaround for the use of PyEval_GetGlobals() in
-	   PyClass_New() */
-	if (PyDict_GetItemString(dict, "__module__") == NULL) {
-		PyObject *modname = PyDict_GetItemString(g, "__name__");
-		if (modname != NULL) {
-			if (PyDict_SetItemString(dict, "__module__", modname)<0)
-				return NULL;
-		}
-	}
-	return PyClass_New(bases, dict, name);
-}
-#endif  /* !HAVE_PYTHON_SUPPORT */
-
 /* copied from ceval.c where it is private */
-/* added a workaround for PyClass_New(), which normally uses
-   PyEval_GetGlobals() to get the globals. */
 static PyObject*
 cimpl_build_class(PyObject* g,  /* globals */
 		  PyObject *methods, PyObject *bases, PyObject *name)
 {
-#if NEW_STYLE_TYPES
-	/* Python 2.2 version */
 	PyObject *metaclass = NULL, *result, *base;
 
 	if (PyDict_Check(methods))
@@ -1978,61 +1715,10 @@ cimpl_build_class(PyObject* g,  /* globals */
 			metaclass = (PyObject *) &PyClass_Type;
 		Py_INCREF(metaclass);
 	}
-	if (metaclass == (PyObject *) &PyClass_Type) {
-		/* special case, workaround for PyClass_New() */
-		result = PyClass_NewInGlobals(g, bases, methods, name);
-	}
-	else
-		result = PyObject_CallFunction(metaclass, "OOO",
-					       name, bases, methods);
+        result = PyObject_CallFunction(metaclass, "OOO",
+                                       name, bases, methods);
 	Py_DECREF(metaclass);
 	return result;
-	
-#else
-	/* Python 2.1 version */
-	int i, n;
-	n = PyTuple_Size(bases);
-	for (i = 0; i < n; i++) {
-		PyObject *base = PyTuple_GET_ITEM(bases, i);
-		if (!PyClass_Check(base)) {
-			/* Call the base's *type*, if it is callable.
-			   This code is a hook for Donald Beaudry's
-			   and Jim Fulton's type extensions.  In
-			   unextended Python it will never be triggered
-			   since its types are not callable.
-			   Ditto: call the bases's *class*, if it has
-			   one.  This makes the same thing possible
-			   without writing C code.  A true meta-object
-			   protocol! */
-			PyObject *basetype = (PyObject *)base->ob_type;
-			PyObject *callable = NULL;
-			if (PyCallable_Check(basetype))
-				callable = basetype;
-			else
-				callable = PyObject_GetAttrString(
-					base, "__class__");
-			if (callable) {
-				PyObject *args;
-				PyObject *newclass = NULL;
-				args = Py_BuildValue(
-					"(OOO)", name, bases, methods);
-				if (args != NULL) {
-					newclass = PyEval_CallObject(
-						callable, args);
-					Py_DECREF(args);
-				}
-				if (callable != basetype) {
-					Py_DECREF(callable);
-				}
-				return newclass;
-			}
-			PyErr_SetString(PyExc_TypeError,
-				"base is not a class object");
-			return NULL;
-		}
-	}
-	return PyClass_NewInGlobals(g, bases, methods, name);
-#endif
 }
 
 static PyObject* cimpl_import_name(PyObject* globals, PyObject* name,
@@ -2415,10 +2101,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	BINARY_OPCODE(BINARY_XOR, PsycoNumber_Xor);
 	BINARY_OPCODE(BINARY_OR, PsycoNumber_Or);
 
-#ifndef BINARY_FLOOR_DIVIDE
-	BINARY_OPCODE(BINARY_DIVIDE, PsycoNumber_Divide);
-	BINARY_OPCODE(INPLACE_DIVIDE, PsycoNumber_InPlaceDivide);
-#else
 	case BINARY_DIVIDE:
 		if (!_Py_QnewFlag) {
 			x = PsycoNumber_Divide(po, NTOP(2), NTOP(1));
@@ -2446,7 +2128,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	/* fall through to INPLACE_TRUE_DIVIDE */
         BINARY_OPCODE(INPLACE_TRUE_DIVIDE, PsycoNumber_InPlaceTrueDivide);
         BINARY_OPCODE(INPLACE_FLOOR_DIVIDE, PsycoNumber_InPlaceFloorDivide);
-#endif
 
 #ifdef LIST_APPEND
 	case LIST_APPEND:
@@ -3161,7 +2842,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		mp = psyco_next_merge_point(po->pr.merge_points, next_instr);
 		goto fine;
 
-#ifdef GET_ITER
 	case GET_ITER:
 		x = PsycoObject_GetIter(po, TOP());
 		if (x == NULL)
@@ -3169,9 +2849,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		POP_DECREF();
 		PUSH(x);
 		goto fine;
-#endif
 
-#ifdef FOR_ITER
 	case FOR_ITER:
 		v = PsycoIter_Next(po, TOP());
 		if (v != NULL) {
@@ -3196,39 +2874,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 					    runtime_NON_NULL_t() */
 		}
 		goto fine;
-#endif
-
-#if OLD_STYLE_LOOP
-	case FOR_LOOP:
-		w = TOP();
-		v = NTOP(2);
-		u = psyco_loop_subscript(po, v, w);
-		if (u != NULL) {
-			x = PsycoInt_AS_LONG(po, w);
-			x = integer_add_i(po, x, 1, true);
-			if (x == NULL)
-				break;
-			POP_DECREF();
-			PUSH(PsycoInt_FROM_LONG(x));
-			PUSH(u);
-		}
-		else {
-			extra_assert(PycException_Occurred(po));
-			v = PycException_Matches(po, PyExc_IndexError);
-			if (runtime_NON_NULL_t(po, v) == true) {
-				PycException_Clear(po);
-                                POP_DECREF();
-                                POP_DECREF();
-				JUMPBY(oparg);
-				mp = psyco_next_merge_point(po->pr.merge_points,
-							    next_instr);
-			}
-			else
-				break;   /* any other exception, or error in
-					    runtime_NON_NULL_t() */
-		}
-		goto fine;
-#endif
 
 	case SETUP_LOOP:
 	case SETUP_EXCEPT:
@@ -3354,15 +2999,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	/* mark merge points via a call to psyco_compile() */
 	if (mp->bytecode_position == next_instr) {
 		extra_assert(!is_respawning(po));
-#if OLD_STYLE_LOOP
-		/* hack to un-promote the loop index from compile-time
-		   (loaded by "LOAD_CONST 0") to run-time. This is not
-		   theoretically needed but it is a huge win. */
-		if (bytecode[next_instr] == FOR_LOOP &&
-		    is_compiletime(TOP()->source)) {
-			psyco_unfix(po, TOP());
-		}
-#endif
 		SAVE_NEXT_INSTR(next_instr);
                 /* simplify the po->vlocals array */
 		if (!psyco_limit_nested_weight(po, &po->vlocals, NWI_NORMAL,

@@ -10,8 +10,6 @@ Any class inheriting from it or using the metaclass '__metaclass__' might
 get optimized specifically for Psyco. It is equivalent to call
 psyco.bind() on the class object after its creation.
 
-Note that this module has no effect with Python version 2.1 or earlier.
-
 Importing everything from psyco.classes in a module will import the
 '__metaclass__' name, so all classes defined after a
 
@@ -24,30 +22,21 @@ will automatically use the Psyco-optimized metaclass.
 __all__ = ['psyobj', 'psymetaclass', '__metaclass__']
 
 
-# Python version check
-try:
-    from _psyco import compacttype
-except ImportError:
-    class psyobj:        # compatilibity
-        pass
-    psymetaclass = None
-else:
-    # version >= 2.2 only
+from _psyco import compacttype
+import core
+from types import FunctionType
 
-    import core
-    from types import FunctionType
+class psymetaclass(compacttype):
+    "Psyco-optimized meta-class. Turns all methods into Psyco proxies."
 
-    class psymetaclass(compacttype):
-        "Psyco-optimized meta-class. Turns all methods into Psyco proxies."
+    def __new__(cls, name, bases, dict):
+        bindlist = dict.get('__psyco__bind__')
+        if bindlist is None:
+            bindlist = [key for key, value in dict.items()
+                        if isinstance(value, FunctionType)]
+        for attr in bindlist:
+            dict[attr] = core.proxy(dict[attr])
+        return super(psymetaclass, cls).__new__(cls, name, bases, dict)
 
-        def __new__(cls, name, bases, dict):
-            bindlist = dict.get('__psyco__bind__')
-            if bindlist is None:
-                bindlist = [key for key, value in dict.items()
-                            if isinstance(value, FunctionType)]
-            for attr in bindlist:
-                dict[attr] = core.proxy(dict[attr])
-            return super(psymetaclass, cls).__new__(cls, name, bases, dict)
-    
-    psyobj = psymetaclass("psyobj", (), {})
+psyobj = psymetaclass("psyobj", (), {})
 __metaclass__ = psymetaclass

@@ -24,12 +24,8 @@
 /* common type checkers, rewritten because in Psyco we manipulate type
    objects directly and Python's usual macros insist on taking a regular
    PyObject* whose type is checked. */
-#if NEW_STYLE_TYPES
 # define PyType_TypeCheck(tp1, tp)  	\
 	((tp1) == (tp) || PyType_IsSubtype((tp1), (tp)))
-#else
-# define PyType_TypeCheck(tp1, tp)    ((tp1) == (tp))
-#endif
 
 #define PsycoIter_Check(tp) \
     (PyType_HasFeature(tp, Py_TPFLAGS_HAVE_ITER) && \
@@ -110,10 +106,8 @@ EXTERNFN vinfo_t* PsycoObject_GetAttr(PsycoObject* po, vinfo_t* o,
                                       vinfo_t* attr_name);
 EXTERNFN bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
                                   vinfo_t* attr_name, vinfo_t* v);
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 EXTERNFN vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
                                              vinfo_t* vname);
-#endif
 
 EXTERNFN vinfo_t* PsycoObject_RichCompare(PsycoObject* po, vinfo_t* v,
 					  vinfo_t* w, int op);

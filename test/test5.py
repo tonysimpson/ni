@@ -25,13 +25,7 @@ def double2(x):
     return x * 2
 
 def overflowtest():
-    import sys; PY21 = sys.hexversion < 0x02020000
-    try:
-        n = double2(-1925703681)
-        assert not PY21
-    except OverflowError:
-        n = -3851407362L
-        assert PY21
+    n = double2(-1925703681)
     return `n`
 
 def booltest():
@@ -217,10 +211,6 @@ def testslices(s):
     print `s[9999:]`
 
 def testovf(x, y):
-    import sys; PY21 = sys.hexversion < 0x02020000
-    if PY21:
-        x = long(x)  # don't really test promotion with Python 2.1
-        y = long(y)
     print x+y
     print 2000000000+y
     print x+2000000000
@@ -434,19 +424,14 @@ def variousslices():
         o['world':]
         o[1:10:'hello']
 
-if sys.version_info < (2,2):
-    def listgetitem():
-        print "foobar"
-        print "Ok"
-else:
-    def listgetitem():
-        class X(list):
-            def __getitem__(self, key):
-                return key
-        x = X(["Ok"])
-        print x["foobar"]
-        for item in x:
-            print item
+def listgetitem():
+    class X(list):
+        def __getitem__(self, key):
+            return key
+    x = X(["Ok"])
+    print x["foobar"]
+    for item in x:
+        print item
 
 if __name__ == '__main__':
     from test1 import go, print_results

@@ -723,10 +723,8 @@ static PyObject* Psyco_profiling(PyObject* self, PyObject* args)
 
   switch (mode) {
   case 'p':  rs = &psyco_rs_profile;      break;
-#if HAVE_DYN_COMPILE
   case 'f':  rs = &psyco_rs_fullcompile;  break;
   case 'n':  rs = &psyco_rs_nocompile;    break;
-#endif
   case '.':  rs = NULL;                   break;
   default:
     PyErr_SetString(PyExc_ValueError, "unknown or unsupported mode");
@@ -738,8 +736,6 @@ static PyObject* Psyco_profiling(PyObject* self, PyObject* args)
   Py_INCREF(Py_None);
   return Py_None;
 }
-
-#if HAVE_DYN_COMPILE
 
 /* turbo-mark a frame or all frames running a given code */
 static PyObject* Psyco_turbo_frame(PyObject* self, PyObject* args)
@@ -778,7 +774,6 @@ static PyObject* Psyco_turbo_code(PyObject* self, PyObject* args)
   Py_INCREF(Py_None);
   return Py_None;
 }
-#endif /* HAVE_DYN_COMPILE */
 
 /* update collected statistics */
 static PyObject* Psyco_statcollect(PyObject* self, PyObject* args)
@@ -983,10 +978,8 @@ static PyMethodDef PsycoMethods[] = {
 	{"dir",		&Psyco_dir,		METH_VARARGS,	gennolocals_doc},
 	{"input",	&Psyco_input,		METH_VARARGS,	gennolocals_doc},
 	{"profiling",	&Psyco_profiling,	METH_VARARGS},
-#if HAVE_DYN_COMPILE
 	{"turbo_frame",	&Psyco_turbo_frame,	METH_VARARGS},
 	{"turbo_code",	&Psyco_turbo_code,	METH_VARARGS},
-#endif
 	{"statcollect",	&Psyco_statcollect,	METH_VARARGS},
 	{"stattop",	&Psyco_stattop,		METH_VARARGS},
 	{"statreset",	&Psyco_statreset,	METH_VARARGS},

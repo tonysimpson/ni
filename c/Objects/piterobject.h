@@ -9,8 +9,6 @@
 #include "pobject.h"
 #include "pabstract.h"
 
-#if HAVE_GENERATORS
-
 
 /* this structure not exported by iterobject.h */
 typedef struct {
@@ -40,6 +38,4 @@ PSY_INLINE vinfo_t* PsycoSeqIter_New(PsycoObject* po, vinfo_t* seq)
 	return PsycoSeqIter_NEW(po, seq);
 }
 
-
-#endif /* HAVE_GENERATORS */
 #endif /* _PSY_ITEROBJECT_H */

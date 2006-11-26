@@ -3,7 +3,6 @@
 #include "../dispatcher.h"
 #include "../codemanager.h"
 #include "../Python/frames.h"
-#include "../timing.h"     /* for PENTIUM_TSC */
 
 
 /* define to copy static machine code in the heap before running it.
@@ -95,15 +94,6 @@ static code_t glue_int_mul[] = {
 };
 
 
-#ifdef PENTIUM_TSC  /* if itiming.h is included by timing.h */
-static code_t glue_pentium_tsc[] = {
-  0x0F, 0x31,                   /*   RDTSC   */
-  0xC3,                         /*   RET     */
-};
-DEFINEVAR psyco_pentium_tsc_fn psyco_pentium_tsc;
-#endif /* PENTIUM_TSC */
-
-
 #ifdef COPY_CODE_IN_HEAP
 static code_t* internal_copy_code(void* source, int size) {
 	CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL, NULL);
@@ -125,9 +115,6 @@ void psyco_processor_init(void)
 {
 #ifdef COPY_CODE_IN_HEAP
   COPY_CODE(glue_run_code_1,    glue_run_code,     glue_run_code_fn);
-#endif
-#ifdef PENTIUM_TSC
-  COPY_CODE(psyco_pentium_tsc,  glue_pentium_tsc,  psyco_pentium_tsc_fn);
 #endif
   COPY_CODE(psyco_int_mul_ovf,  glue_int_mul,      char(*)(long, long));
   COPY_CODE(psyco_call_var,     glue_call_var,     long(*)(void*, int, long[]));

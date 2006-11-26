@@ -16,15 +16,12 @@
 EXTERNFN bool psyco_set_profiler(void (*rs)(void*, int));
 /* where 'rs' may be: */
 EXTERNFN void psyco_rs_profile(void*, int);
-#if HAVE_DYN_COMPILE
 EXTERNFN void psyco_rs_fullcompile(void*, int);
 EXTERNFN void psyco_rs_nocompile(void*, int);
-#endif
 
 /* enable the same profiling feature on all threads */
 EXTERNFN void psyco_profile_threads(int start);
 
-#if HAVE_DYN_COMPILE
 /* call this when it is detected to be worthwhile to give a frame a
    little Psyco help */
 EXTERNFN bool psyco_turbo_frame(PyFrameObject* frame);
@@ -35,7 +32,6 @@ EXTERNFN void psyco_turbo_code(PyCodeObject* code, int recursion);
 
 /* call this to accelerate all frames currently executing the given code */
 EXTERNFN void psyco_turbo_frames(PyCodeObject* code);
-#endif /* HAVE_DYN_COMPILE */
 
 
 #endif /* _PROFILE_H */

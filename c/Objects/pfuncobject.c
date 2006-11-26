@@ -146,16 +146,9 @@ vinfo_t* pfunction_simple_call(PsycoObject* po, PyObject* f,
 	return result;
 
  fallback:
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	return psyco_generic_call(po, PyFunction_Type.tp_call,
 				  CfReturnRef|CfPyErrIfNull,
 				  "lvl", (long) f, arg, 0);
-#else
-	/* PyFunction_Type.tp_call == NULL... */
-	return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
-				  CfReturnRef|CfPyErrIfNull,
-				  "lvl", (long) f, arg, 0);
-#endif
 }
 
 DEFINEFN
@@ -209,20 +202,12 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
 
  fallback:
 
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	return psyco_generic_call(po, PyFunction_Type.tp_call,
 				  CfReturnRef|CfPyErrIfNull,
 				  "vvv", func, arg, kw);
-#else
-	/* PyFunction_Type.tp_call == NULL... */
-	return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
-				  CfReturnRef|CfPyErrIfNull,
-				  "vvv", func, arg, kw);
-#endif
 }
 
 
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 static vinfo_t* pfunc_descr_get(PsycoObject* po, PyObject* func,
 				vinfo_t* obj, PyObject* type)
 {
@@ -233,16 +218,14 @@ static vinfo_t* pfunc_descr_get(PsycoObject* po, PyObject* func,
 	   PsycoObject_GenericGetAttr(). */
 	return PsycoMethod_New(func, obj, type);
 }
-#endif /* NEW_STYLE_TYPES */
 
 
 INITIALIZATIONFN
 void psy_funcobject_init(void)
 {
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	Psyco_DefineMeta(PyFunction_Type.tp_call, pfunction_call);
 	Psyco_DefineMeta(PyFunction_Type.tp_descr_get, pfunc_descr_get);
-#endif
+
         /* function object are mutable;
            they must be forced out of virtual-time across function calls */
         INIT_SVIRTUAL_NOCALL(psyco_computed_function, compute_function, 1);

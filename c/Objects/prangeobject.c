@@ -221,10 +221,8 @@ void psy_rangeobject_init(void)
 	PySequenceMethods *m = PyRange_Type.tp_as_sequence;
 	Psyco_DefineMeta(m->sq_length, prange_length);
 	Psyco_DefineMeta(m->sq_item, prange_item);
-#if HAVE_GENERATORS
 	if (PyRange_Type.tp_iter != NULL)  /* Python >= 2.3 */
 		Psyco_DefineMeta(PyRange_Type.tp_iter, PsycoSeqIter_New);
-#endif
 	INIT_SVIRTUAL(psyco_computed_xrange, compute_xrange,
 		      direct_compute_xrange, 0, 0, 0);
 	INIT_SVIRTUAL_NOCALL(psyco_computed_listrange, compute_listrange, 0);

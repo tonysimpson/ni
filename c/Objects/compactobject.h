@@ -8,9 +8,6 @@
 
 #include "../psyco.h"
 #include "../Python/pyver.h"
-#define HAVE_COMPACT_OBJECT   NEW_STYLE_TYPES
-
-#if HAVE_COMPACT_OBJECT
 #include "../vcompiler.h"
 
 
@@ -68,5 +65,4 @@ EXTERNFN compact_impl_t* k_duplicate_impl(compact_impl_t* base,
                                           compact_impl_t* last,
                                           int shift_delta);
 
-#endif /* HAVE_COMPACT_OBJECT */
 #endif /* _COMPACTOBJECT_H */

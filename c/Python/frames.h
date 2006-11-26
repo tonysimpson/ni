@@ -14,12 +14,6 @@
 #include <frameobject.h>
 
 
-/*** the PsycoCode_Xxx interface requires Python >= 2.2.2 ***/
-#define HAVE_DYN_COMPILE     HAVE_PYTHON_SUPPORT
-
-#if HAVE_DYN_COMPILE
-
-
 /* Basic interface to compile the given code object.  Return the
    code buffer or Py_None if this code cannot be compiled.
    Never sets an exception. */
@@ -40,8 +34,6 @@ EXTERNFN PyObject* PsycoCode_CompileFrame(PyFrameObject* f, int recursion);
    PsycoCode_CompileFrame, the frame must be in the same state as when it
    was compiled. */
 EXTERNFN bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering);
-
-#endif /* HAVE_DYN_COMPILE */
 
 
 /* Find a frame. If 'o' is an integer, it is the 'o'th frame (0=top).

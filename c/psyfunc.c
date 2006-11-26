@@ -319,26 +319,12 @@ static PyObject* cimpl_call_pyfunc(PyCodeObject* co, PyObject* globals,
 {
   /* simple wrapper around PyEval_EvalCodeEx, for the fail_to_default
      case of psyco_call_pyfunc() */
-  
-#if HAVE_PyEval_EvalCodeEx
   int defcount = (defaults ? PyTuple_GET_SIZE(defaults) : 0);
   PyObject** defs = (defcount ? &PyTuple_GET_ITEM(defaults, 0) : NULL);
   return PyEval_EvalCodeEx(co, globals, (PyObject*)NULL,
                            &PyTuple_GET_ITEM(arg, 0), PyTuple_GET_SIZE(arg),
                            (PyObject**)NULL, 0,
                            defs, defcount, NULL);
-#else
-  /* No PyEval_EvalCodeEx()! Dummy work-around. */
-  PyObject* result = NULL;
-  PyObject* hack = PyFunction_New((PyObject*) co, globals);
-  if (hack != NULL)
-    {
-      if (defaults == NULL || !PyFunction_SetDefaults(hack, defaults))
-        result = PyEval_CallObject(hack, arg);
-      Py_DECREF(hack);
-    }
-  return result;
-#endif
 }
 
 #define COMPUTE_DEFCOUNT()    do {                              \
@@ -445,53 +431,6 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
   return result;
 
  fail_to_default:
-  
-#if !HAVE_PyEval_EvalCodeEx
-  /* Big hack. Without PyEval_EvalCodeEx(), there is no way I am aware
-     of to call an arbitrary code object with arguments apart from
-     building a temporary function object around it. So we try to build
-     it now if we have enough information to do so. */
-  if (is_compiletime(vglobals->source))
-    {
-      int i;
-      if (defcount == -2)   /* not computed yet */
-        COMPUTE_DEFCOUNT();
-      
-      for (i=0; i<defcount; i++)
-        if (!is_compiletime(PsycoTuple_GET_ITEM(vdefaults, i)->source))
-          defcount = -1;
-      
-      if (defcount != -1)
-        {
-          PyObject* hack = PyFunction_New((PyObject*) co,
-                         (PyObject*) CompileTime_Get(vglobals->source)->value);
-          if (hack == NULL)
-            goto pyerr;
-          if (defcount > 0)
-            {
-              PyObject* defaults = PyTuple_New(defcount);
-              if (defaults == NULL) {
-                Py_DECREF(hack);
-                goto pyerr;
-              }
-              for (i=0; i<defcount; i++)
-                PyTuple_SET_ITEM(defaults, i, (PyObject*) CompileTime_Get(
-                            PsycoTuple_GET_ITEM(vdefaults, i)->source)->value);
-              i = PyFunction_SetDefaults(hack, defaults);
-              Py_DECREF(defaults);
-              if (i) {
-                Py_DECREF(hack);
-                goto pyerr;
-              }
-            }
-          /* XXX lost ref to hack */
-          return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
-                                    CfReturnRef|CfPyErrIfNull,
-                                    "lvl", hack, arg_tuple, NULL);
-        }
-    }
-#endif /* !HAVE_PyEval_EvalCodeEx */
-    
   return psyco_generic_call(po, cimpl_call_pyfunc,
                             CfReturnRef|CfPyErrIfNull,
                             "lvvv", co, vglobals, vdefaults, arg_tuple);
@@ -836,8 +775,6 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 	return result;
 
    unsupported:
-
-#if HAVE_PyEval_EvalCodeEx   /* Python >= 2.2b1 */
 	{	/* Code copied from function_call() in funcobject.c */
 		PyObject **d, **k;
 		int nk, nd;
@@ -881,24 +818,8 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 
 		return result;
 	}
-#else /* !HAVE_PyEval_EvalCodeEx */
-	{	/* Work-around for the missing PyEval_EvalCodeEx() */
-		PyObject* result = NULL;
-		PyObject* hack = PyFunction_New((PyObject*) self->psy_code,
-						self->psy_globals);
-		if (hack != NULL) {
-			if (self->psy_defaults == NULL ||
-			    !PyFunction_SetDefaults(hack, self->psy_defaults))
-				result = PyEval_CallObjectWithKeywords(hack,
-								       arg, kw);
-			Py_DECREF(hack);
-		}
-		return result;
-	}
-#endif /* HAVE_PyEval_EvalCodeEx */
 }
 
-#ifdef Py_TPFLAGS_HAVE_GC
 static int psycofunction_traverse(PsycoFunctionObject *f,
 				  visitproc visit, void *arg)
 {
@@ -938,21 +859,6 @@ static int psycofunction_clear(PsycoFunctionObject *f)
 	Py_DECREF(o);
 	return 0;
 }
-#endif /* Py_TPFLAGS_HAVE_GC */
-
-#if 0
-/* Disabled. This used to wrap a Psyco proxy around a method object when
-   loaded from a class. Now Psyco proxies are only supposed to appear in
-   special code objects. */
-static PyObject *
-psy_descr_get(PyObject *self, PyObject *obj, PyObject *type)
-{
-	/* 'self' is actually a PsycoFunctionObject* */
-	if (obj == Py_None)
-		obj = NULL;
-	return PyMethod_New(self, obj, type);
-}
-#endif
 
 DEFINEVAR
 PyTypeObject PsycoFunction_Type = {
@@ -976,11 +882,9 @@ PyTypeObject PsycoFunction_Type = {
 	0,					/* tp_str */
 	0,					/* tp_getattro */
 	0,					/* tp_setattro */
-#ifdef Py_TPFLAGS_HAVE_GC
 	0,					/* tp_as_buffer */
 	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,/* tp_flags */
 	0,					/* tp_doc */
 	(traverseproc)psycofunction_traverse,	/* tp_traverse */
 	(inquiry)psycofunction_clear,		/* tp_clear */
-#endif /* Py_TPFLAGS_HAVE_GC */
 };

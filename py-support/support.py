@@ -38,16 +38,14 @@ version_info = (__version__ >> 24,
                 __version__ & 0xf)
 
 
-VERSION_LIMITS = [0x02010000,   # 2.1
-                  0x02020000,   # 2.2
-                  0x02020200,   # 2.2.2
+VERSION_LIMITS = [0x02020200,   # 2.2.2
                   0x02030000,   # 2.3
                   0x02040000]   # 2.4
 
 if ([v for v in VERSION_LIMITS if v <= sys.hexversion] !=
     [v for v in VERSION_LIMITS if v <= _psyco.PYVER  ]):
     if sys.hexversion < VERSION_LIMITS[0]:
-        warn("Psyco requires Python version 2.1 or later")
+        warn("Psyco requires Python version 2.2.2 or later")
     else:
         warn("Psyco version does not match Python version. "
              "Psyco must be updated or recompiled")
@@ -64,8 +62,7 @@ if hasattr(_psyco, 'ALL_CHECKS') and hasattr(_psyco, 'VERBOSE_LEVEL'):
 # sys._getframe() gives strange results on a mixed Psyco- and Python-style
 # stack frame. Psyco provides a replacement that partially emulates Python
 # frames from Psyco frames. The new sys._getframe() may return objects of
-# a custom "Psyco frame" type, which with Python >=2.2 is a subtype of the
-# normal frame type.
+# a custom "Psyco frame" type, which is a subtype of the normal frame type.
 #
 # The same problems require some other built-in functions to be replaced
 # as well. Note that the local variables are not available in any

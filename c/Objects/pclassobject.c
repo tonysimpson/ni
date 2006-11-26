@@ -140,16 +140,9 @@ vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,
 	return result;
 
   fallback:
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	return psyco_generic_call(po, PyMethod_Type.tp_call,
 				  CfReturnRef|CfPyErrIfNull,
 				  "vvv", methobj, arg, kw);
-#else
-        /* PyMethod_Type.tp_call == NULL... */
-        return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
-                                  CfReturnRef|CfPyErrIfNull,
-                                  "vvv", methobj, arg, kw);
-#endif
 }
 
  /***************************************************************/
@@ -162,9 +155,7 @@ DEF_KNOWN_RET_TYPE_3(pinstance_new, PyInstance_New,
 INITIALIZATIONFN
 void psy_classobject_init(void)
 {
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	Psyco_DefineMeta(PyMethod_Type.tp_call, pinstancemethod_call);
-#endif
 	Psyco_DefineMeta(PyInstance_New,	pinstance_new);
 
         INIT_SVIRTUAL(psyco_computed_method, compute_method,

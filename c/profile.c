@@ -9,13 +9,17 @@
 /* There are three profilers you can choose from:
 
    1) Profiling via Python's profiler hooks
-        (active profiling, slow with Python 2.1)
+        (active profiling)
    2) Have a parallel thread that peeks for info
         (passive profiling, rough precision, requires threads)
    3) Both
         (XXX test and compare all three choices)
 
-   XXX explain about Python 2.2.2's new tick_counter
+   We use the tick_counter field of the PyThreadState to
+   measure "execution time", on the basis that Psyco is
+   good at removing opcode dispatching and the inter-opcode
+   allocations, so the theory is that the more opcodes are
+   executed, the better Psyco will perform on that code.
 */
 
 /* Internal invariants in PyCodeStats:
@@ -41,21 +45,11 @@
  /***   Flexibly hooking routines into Python's profiler and  ***/
   /***   tracing hooks                                         ***/
 
-#ifdef PyTrace_CALL
-# define HAVE_PyEval_SetProfile    1
-#else
-# define HAVE_PyEval_SetProfile    0
-# define PyTrace_CALL 0
-# define PyTrace_EXCEPTION 1
-# define PyTrace_LINE 2
-# define PyTrace_RETURN 3
-#endif
-
 #define PyTrace_TOTAL 4
 
 
 /* a hook routine returns NULL or the code buffer object containing
-   the compiled code to run now.  (Ignored with Python < 2.2.2) */
+   the compiled code to run now. */
 typedef PyObject* (*ceval_event_fn) (PyFrameObject* frame, PyObject* arg);
 
 struct cevent_s {
@@ -194,9 +188,7 @@ PSY_INLINE bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f
 	bool r = true;
 	int n;
 	struct cevents_s* events;
-#if HAVE_DYN_COMPILE
 	PyObject* codebuf;
-#endif
 	PyObject* obj;
 	extra_assert(what >= 0);
 	if (what >= PyTrace_TOTAL)
@@ -206,7 +198,6 @@ PSY_INLINE bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f
 #endif
 	events = cev->events + what;
 	n = events->count;
-#if HAVE_DYN_COMPILE
 	do {
 		if (n == 0)
 			return true;  /* done */
@@ -217,7 +208,6 @@ PSY_INLINE bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f
 			events->items[n] = events->items[--events->count];
 		}
 	} while (codebuf == NULL);
-#endif
 
 	/* call the other hooks, if any */
 	while (n != 0) {
@@ -229,7 +219,6 @@ PSY_INLINE bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f
 			events->items[n] = events->items[--events->count];
 		}
 	}
-#if HAVE_DYN_COMPILE
 	/* enable recursive calls to call_ceval_hooks() */
 	f->f_tstate->use_tracing = 1;
 	f->f_tstate->tracing--;
@@ -237,7 +226,6 @@ PSY_INLINE bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f
 	r = PsycoCode_Run(codebuf, f, what == PyTrace_CALL);
 	f->f_tstate->tracing++;
 	Py_DECREF(codebuf);
-#endif
 #if (PY_VERSION_HEX >= 0x02030000) && (PY_VERSION_HEX < 0x020300f0)
 	if (!r) f->f_stacktop = NULL;  /* work around a bug in Python 2.3b1 */
 #endif
@@ -245,7 +233,6 @@ PSY_INLINE bool call_ceval_hooks(ceval_events_t* cev, int what, PyFrameObject* f
 }
 
 
-#if HAVE_PyEval_SetProfile
 static int do_trace_or_profile(PyObject *v, PyFrameObject *frame,
 			       int what, PyObject *arg)
 {
@@ -314,93 +301,6 @@ PSY_INLINE void pstoptrace(PyThreadState* tstate)
 		extended_SetTrace(tstate, NULL, NULL);
 	}
 }
-#else /* if !HAVE_PyEval_SetProfile, we must use a work-around */
-static PyObject* obj_pwrapper = NULL;
-static PyObject* trace_or_profile_wrapper(PyObject* self, PyObject* args)
-{
-	char* s;
-	int what;
-	PyFrameObject* frame;
-	extra_assert(PyTuple_Check(args) && PyTuple_Size(args) == 3);
-	extra_assert(PyString_Check(PyTuple_GET_ITEM(args, 1)));
-	s = PyString_AS_STRING(PyTuple_GET_ITEM(args, 1));
-	
-	switch (s[0]) {
-		
-	case 'c':  /* "call" */
-		what = PyTrace_CALL;
-		break;
-		
-	case 'e':  /* "exception" */
-		what = PyTrace_EXCEPTION;
-		break;
-		
-	case 'r':  /* "return" */
-		what = PyTrace_RETURN;
-		break;
-
-	case 'l':  /* "line" */
-		what = PyTrace_LINE;
-		break;
-
-	default:
-		goto leave;
-	}
-	frame = (PyFrameObject*) PyTuple_GET_ITEM(args, 0);
-	if (!call_ceval_hooks(get_cevents(frame->f_tstate), what, frame))
-		return NULL;
-
- leave:
-	Py_INCREF(obj_pwrapper);
-	return obj_pwrapper;
-}
-static PyMethodDef def_profile_wrapper = { "wrapper", &trace_or_profile_wrapper,
-                                           METH_VARARGS };
-#define SET_PYTHON_HOOKS(name, fn)  {			\
-	PyObject* fun = tstate->sys_ ## name ## func;	\
-	tstate->sys_ ## name ## func = (fn);		\
-	Py_XDECREF(fun);				\
-}
-PSY_INLINE bool pstartprofile(PyThreadState* tstate)
-{
-	if (obj_pwrapper == NULL) {
-	 	obj_pwrapper = PyCFunction_New(&def_profile_wrapper, NULL);
-		if (obj_pwrapper == NULL)
-			OUT_OF_MEMORY();
-	}
-	if (tstate->sys_profilefunc == NULL) {
-		Py_INCREF(obj_pwrapper);
-		SET_PYTHON_HOOKS(profile, obj_pwrapper)
-	}
-	return tstate->sys_profilefunc == obj_pwrapper;
-}
-PSY_INLINE void pstopprofile(PyThreadState* tstate)
-{
-	if (tstate->sys_profilefunc == obj_pwrapper) {
-		SET_PYTHON_HOOKS(profile, NULL)
-	}
-}
-PSY_INLINE bool pstarttrace(PyThreadState* tstate)
-{
-	if (obj_pwrapper == NULL) {
-	 	obj_pwrapper = PyCFunction_New(&def_profile_wrapper, NULL);
-		if (obj_pwrapper == NULL)
-			OUT_OF_MEMORY();
-	}
-	if (tstate->sys_tracefunc == NULL) {
-		Py_INCREF(obj_pwrapper);
-		SET_PYTHON_HOOKS(trace, obj_pwrapper)
-	}
-	return tstate->sys_tracefunc == obj_pwrapper;
-}
-PSY_INLINE void pstoptrace(PyThreadState* tstate)
-{
-	if (tstate->sys_tracefunc == obj_pwrapper) {
-		SET_PYTHON_HOOKS(trace, NULL)
-	}
-}
-#undef SET_PYTHON_HOOKS
-#endif /* !HAVE_PyEval_SetProfile */
 
 
 static bool update_ceval_hooks(ceval_events_t* cev)
@@ -505,48 +405,43 @@ DEFINEFN bool psyco_set_profiler(void (*rs)(void*, int))
 
 static PyObject* profile_call(PyFrameObject* frame, PyObject* arg)
 {
+	PyCodeStats* cs;
 	psyco_stats_append(frame->f_tstate, frame->f_back);
-        
-#if HAVE_DYN_COMPILE
-	{
-		PyCodeStats* cs;
-		cs = PyCodeStats_Get(frame->f_code);
-		if (cs->st_globals != NULL) {
-			/* we want to accelerate this code object */
-			if (cs->st_codebuf == NULL) {
-				/* not already compiled, compile it now */
-				PyObject* g = frame->f_globals;
-				int rec, module;
-				stats_printf(("stats: compile code:  %s\n",
-					      PyCodeObject_NAME(frame->f_code)));
-				if (PyInt_Check(cs->st_globals))
-					rec = PyInt_AS_LONG(cs->st_globals);
-				else
-					rec = DEFAULT_RECURSION;
-                                module = frame->f_globals == frame->f_locals;
-				cs->st_codebuf = PsycoCode_CompileCode(
-								frame->f_code,
-								g, rec, module);
-				if (cs->st_codebuf == Py_None)
-					g = NULL;  /* failed */
-				else {
-					Py_INCREF(g);
-					extra_assert
-					    (CodeBuffer_Check(cs->st_codebuf));
-				}
-				Py_DECREF(cs->st_globals);
-				cs->st_globals = g;
+
+	cs = PyCodeStats_Get(frame->f_code);
+	if (cs->st_globals != NULL) {
+		/* we want to accelerate this code object */
+		if (cs->st_codebuf == NULL) {
+			/* not already compiled, compile it now */
+			PyObject* g = frame->f_globals;
+			int rec, module;
+			stats_printf(("stats: compile code:  %s\n",
+				      PyCodeObject_NAME(frame->f_code)));
+			if (PyInt_Check(cs->st_globals))
+				rec = PyInt_AS_LONG(cs->st_globals);
+			else
+				rec = DEFAULT_RECURSION;
+			module = frame->f_globals == frame->f_locals;
+			cs->st_codebuf = PsycoCode_CompileCode(frame->f_code,
+							       g, rec, module);
+			if (cs->st_codebuf == Py_None)
+				g = NULL;  /* failed */
+			else {
+				Py_INCREF(g);
+				extra_assert
+					(CodeBuffer_Check(cs->st_codebuf));
 			}
-			/* already compiled a Psyco version, run it
-			   if the globals match */
-			extra_assert(frame->f_globals != NULL);
-			if (cs->st_globals == frame->f_globals) {
-				Py_INCREF(cs->st_codebuf);
-				return cs->st_codebuf;
-			}
+			Py_DECREF(cs->st_globals);
+			cs->st_globals = g;
+		}
+		/* already compiled a Psyco version, run it
+		   if the globals match */
+		extra_assert(frame->f_globals != NULL);
+		if (cs->st_globals == frame->f_globals) {
+			Py_INCREF(cs->st_codebuf);
+			return cs->st_codebuf;
 		}
 	}
-#endif /* HAVE_DYN_COMPILE */
 	return NULL;
 }
 
@@ -573,8 +468,6 @@ void psyco_rs_profile(void* cev_raw, int start)
 
 /***************************************************************/
  /***   Full compiling via Python's profiler hooks            ***/
-
-#if HAVE_DYN_COMPILE
 
 static PyObject* do_fullcompile(PyFrameObject* frame, PyObject* arg)
 {
@@ -623,13 +516,9 @@ void psyco_rs_fullcompile(void* cev_raw, int start)
 	}
 }
 
-#endif /* HAVE_DYN_COMPILE */
-
 
 /***************************************************************/
  /***   No compiling, but execution of already compiled code  ***/
-
-#if HAVE_DYN_COMPILE
 
 static PyObject* do_nocompile(PyFrameObject* frame, PyObject* arg)
 {
@@ -657,20 +546,13 @@ void psyco_rs_nocompile(void* cev_raw, int start)
 	}
 }
 
-#endif /* HAVE_DYN_COMPILE */
-
 
 /***************************************************************/
  /***   Turbo-ing a frame via Python's tracing hooks          ***/
 
-#if HAVE_DYN_COMPILE
-
-/* The problem here is that we cannot just change the fields of
-   a Python frame and hope ceval.c's interpreter will go on
-   seamlessly.  We can only do so in Python 2.2.2 when hitting
-   a line-trace step.  With older Python version we just cannot
-   do it at all, so we should just mark the code object as
-   interesting to optimize for the next time. */
+/* Careful when changing the fields of a Python frame: ceval.c's
+   interpreter will reload the changes and go on seamlessly only
+   when hitting a line-trace step. */
 
 static PyObject* turbo_wait(PyFrameObject* frame, PyObject* target_frame);
 
@@ -780,8 +662,6 @@ void psyco_turbo_frames(PyCodeObject* code)
 		}
 	}
 }
-
-#endif /* HAVE_DYN_COMPILE */
 
 
  /***************************************************************/

@@ -153,14 +153,9 @@ py_modules = ['psyco.%s' % os.path.splitext(fn)[0]
               for fn in os.listdir('py-support')
               if os.path.splitext(fn)[1].lower() == '.py']
 py_modules.remove('psyco.__init__')
-if sys.version_info < (2, 2):
-    print 'skipping psyco/kdictproxy.py (Python >= 2.2 only)'
-    py_modules.remove('psyco.kdictproxy')
 
 if sys.version_info < (2, 2, 2):
-    print
-    print '*** NOTE: it is recommended to use Psyco with Python 2.2.2 or above ***'
-    print
+    raise Exception("Psyco >= 1.5.3 requires Python >= 2.2.2")
 
 
 setup (	name             = "psyco",

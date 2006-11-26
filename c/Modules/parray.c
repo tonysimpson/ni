@@ -407,7 +407,6 @@ static bool parray_ass_item(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,vinfo_t* v
 /* array creation: we know the result is of type ArrayType. */
 DEF_KNOWN_RET_TYPE_2(pa_array, cimpl_array, CfReturnRef|CfPyErrIfNull, arraytype)
 
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 static vinfo_t* parray_new(PsycoObject* po, PyTypeObject* type,
 			   vinfo_t* varg, vinfo_t* vkw)
 {
@@ -447,7 +446,6 @@ static vinfo_t* parray_new(PsycoObject* po, PyTypeObject* type,
 	}
 	return result;
 }
-#endif
 
 /***************************************************************/
 

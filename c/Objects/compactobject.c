@@ -1,5 +1,4 @@
 #include "compactobject.h"
-#if HAVE_COMPACT_OBJECT
 #include "../blockalloc.h"
 #include "../dispatcher.h"
 #include "../Python/pycompiler.h"
@@ -1032,8 +1031,3 @@ void psyco_compact_init(void)
 	PyModule_AddObject(CPsycoModule, "compacttype",
 			   (PyObject*) &PyCompactType_Type);
 }
-
-#else  /* !HAVE_COMPACT_OBJECT */
-INITIALIZATIONFN
-void psyco_compact_init(void) { }
-#endif /* !HAVE_COMPACT_OBJECT */

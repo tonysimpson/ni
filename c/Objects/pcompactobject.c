@@ -1,5 +1,4 @@
 #include "compactobject.h"
-#if HAVE_COMPACT_OBJECT
 #include "pcompactobject.h"
 #include "../Python/pycompiler.h"
 #include "ptupleobject.h"
@@ -652,8 +651,3 @@ void psy_compactobject_init(void)
 	Psyco_DefineMeta(PyCompact_Type.tp_setattro, pcompact_setattro);
 	Psyco_DefineMeta(PyCompact_Type.tp_new,      pcompact_new);
 }
-
-#else  /* !HAVE_COMPACT_OBJECT */
-INITIALIZATIONFN
-void psy_compactobject_init(void) { }
-#endif /* !HAVE_COMPACT_OBJECT */

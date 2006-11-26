@@ -28,18 +28,14 @@ typedef struct {
   PyCStruct_HEAD             /* cs_key is the code object */
   float st_charge;           /* usage statistics */
   PyObject* st_mergepoints;
-#if HAVE_DYN_COMPILE
   PyObject* st_codebuf;      /* as compiled from PsycoCode_CompileCode() */
   PyObject* st_globals;      /* globals used in st_codebuf */
-#endif
 } PyCodeStats;
 
 
 /* return the PyCodeStats for 'co' */
 EXTERNFN PyCodeStats* PyCodeStats_Get(PyCodeObject* co);
-#if HAVE_DYN_COMPILE
 EXTERNFN PyCodeStats* PyCodeStats_MaybeGet(PyCodeObject* co);
-#endif
 
 /* compute and return a Borrowed reference to st_mergepoints */
 PSY_INLINE PyObject* PyCodeStats_MergePoints(PyCodeStats* cs, int module) {

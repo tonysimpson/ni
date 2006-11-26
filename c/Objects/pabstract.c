@@ -34,29 +34,10 @@ vinfo_t* PsycoObject_Call(PsycoObject* po, vinfo_t* callable_object,
 		return Psyco_META3(po, call, CfReturnRef|CfPyErrIfNull,
 				   "vvv", callable_object, args, kw);
 	}
-
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 	PycException_SetFormat(po, PyExc_TypeError,
 			       "object of type '%.100s' is not callable",
 			       tp->tp_name);
 	return NULL;
-
-#else /* !NEW_STYLE_TYPES */
-	/* In older Python versions, the common callable types have no
-           tp_call slot! See these versions' call_object() function in
-           ceval.c. */
-
-	if (tp == &PyMethod_Type)
-		return pinstancemethod_call(po, callable_object, args, kw);
-	if (tp == &PyFunction_Type)
-		return pfunction_call(po, callable_object, args, kw);
-	if (tp == &PyCFunction_Type)
-		return PsycoCFunction_Call(po, callable_object, args, kw);
-	
-	return psyco_generic_call(po, PyEval_CallObjectWithKeywords,
-				  CfReturnRef|CfPyErrIfNull,
-				  "vvv", callable_object, args, kw);
-#endif /* NEW_STYLE_TYPES */
 }
 
 DEFINEFN
@@ -445,15 +426,9 @@ vinfo_t* PsycoSequence_Contains(PsycoObject* po, vinfo_t* seq, vinfo_t* ob)
 	}
 
 	/* XXX implement me */
-#if HAVE_GENERATORS
 	return psyco_generic_call(po, _PySequence_IterSearch,
 				  CfReturnNormal|CfPyErrIfNeg,
 				  "vvl", seq, ob, PY_ITERSEARCH_CONTAINS);
-#else
-	return psyco_generic_call(po, PySequence_Contains,
-				  CfReturnNormal|CfPyErrIfNeg,
-				  "vv", seq, ob);
-#endif
 }
 
 DEFINEFN
@@ -605,7 +580,6 @@ static vinfo_t* binary_op1(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 			slotw = NULL;
 	}
 	if (slotv) {
-#if NEW_STYLE_TYPES   /* Python >= 2.2b1 */
 		if (slotw && PyType_IsSubtype(wtp, vtp)) {
 			x = Psyco_META2(po, slotw,
 					CfReturnRef|CfPyErrNotImplemented,
@@ -615,7 +589,6 @@ static vinfo_t* binary_op1(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 			vinfo_decref(x, po); /* can't do it */
 			slotw = NULL;
 		}
-#endif
 		x = Psyco_META2(po, slotv,
 				CfReturnRef|CfPyErrNotImplemented, "vv", v, w);
 		if (IS_IMPLEMENTED(x))
@@ -693,11 +666,9 @@ BINARY_FUNC(PsycoNumber_Subtract, nb_subtract, "-")
 BINARY_FUNC(PsycoNumber_Divide, nb_divide, "/")
 BINARY_FUNC(PsycoNumber_Divmod, nb_divmod, "divmod()")
 
-#ifdef BINARY_FLOOR_DIVIDE
      /* XXX tp_flags test -- not done in Python either, check future releases */
 BINARY_FUNC(PsycoNumber_FloorDivide, nb_floor_divide, "//")
 BINARY_FUNC(PsycoNumber_TrueDivide, nb_true_divide, "/")
-#endif
 
 
 DEFINEFN
@@ -899,13 +870,11 @@ INPLACE_BINOP(PsycoNumber_InPlaceRshift, nb_inplace_rshift, nb_rshift, ">>=")
 INPLACE_BINOP(PsycoNumber_InPlaceSubtract, nb_inplace_subtract, nb_subtract,"-=")
 INPLACE_BINOP(PsycoNumber_InPlaceDivide, nb_inplace_divide, nb_divide, "/=")
 
-#ifdef BINARY_FLOOR_DIVIDE
      /* XXX tp_flags test -- not done in Python either, check future releases */
 INPLACE_BINOP(PsycoNumber_InPlaceFloorDivide, nb_inplace_floor_divide,
               nb_floor_divide, "//=")
 INPLACE_BINOP(PsycoNumber_InPlaceTrueDivide, nb_inplace_true_divide,
               nb_true_divide, "/=")
-#endif
 
 DEFINEFN
 vinfo_t* PsycoNumber_InPlaceAdd(PsycoObject* po, vinfo_t* v, vinfo_t* w)
@@ -1003,7 +972,6 @@ vinfo_t* PsycoNumber_InPlacePower(PsycoObject* po, vinfo_t* v1, vinfo_t* v2,
 }
 
 
-#if HAVE_GENERATORS
 DEFINEFN
 vinfo_t* PsycoObject_GetIter(PsycoObject* po, vinfo_t* vi)
 {
@@ -1043,7 +1011,6 @@ vinfo_t* PsycoIter_Next(PsycoObject* po, vinfo_t* iter)
 	return Psyco_META1(po, tp->tp_iternext, CfReturnRef|CfPyErrIterNext,
 			   "v", iter);
 }
-#endif /* HAVE_GENERATORS */
 
 
 DEFINEFN

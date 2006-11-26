@@ -324,7 +324,6 @@ void psy_listobject_init(void)
 				 psyco_generic_ass_subscript);
 	}
 
-#if HAVE_GENERATORS
 	/* In Python 2.3, lists have their own iterator type for
 	   performance, because generic sequence iterators have an
 	   extra overhead -- which is however completely removed by
@@ -332,7 +331,6 @@ void psy_listobject_init(void)
 	   (thus in Psyco, iter(l) never returns a listiterator) */
 	if (PyList_Type.tp_iter != NULL)  /* Python >= 2.3 */
 		Psyco_DefineMeta(PyList_Type.tp_iter, &PsycoSeqIter_New);
-#endif
 
         /* list object are mutable;
            they must be forced out of virtual-time across function calls */

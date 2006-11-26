@@ -11,10 +11,8 @@ static PyObject* codestats_dict;  /* dict of {cs: cs} */
 
 static void PyCodeStats_dealloc(PyCodeStats* cs)
 {
-#if HAVE_DYN_COMPILE
 	Py_XDECREF(cs->st_codebuf);
 	Py_XDECREF(cs->st_globals);
-#endif
 	Py_XDECREF(cs->st_mergepoints);
 }
 
@@ -31,10 +29,8 @@ PyCodeStats* PyCodeStats_Get(PyCodeObject* co)
 		cs->cs_key = (PyObject*) co;
 		cs->st_charge = 0.0f;
 		cs->st_mergepoints = NULL;
-#if HAVE_DYN_COMPILE
                 cs->st_codebuf = NULL;
                 cs->st_globals = NULL;
-#endif
 
 		if (PyDict_SetItem(codestats_dict, (PyObject*) cs,
 				   (PyObject*) cs) < 0)
@@ -45,7 +41,6 @@ PyCodeStats* PyCodeStats_Get(PyCodeObject* co)
 	return cs;
 }
 
-#if HAVE_DYN_COMPILE
 DEFINEFN
 PyCodeStats* PyCodeStats_MaybeGet(PyCodeObject* co)
 {
@@ -55,7 +50,6 @@ PyCodeStats* PyCodeStats_MaybeGet(PyCodeObject* co)
 	RECLIMIT_SAFE_LEAVE();
 	return cs;
 }
-#endif
 
 
 /***************************************************************/
