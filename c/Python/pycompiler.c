@@ -2340,6 +2340,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		break;
 
         /*MISSING_OPCODE(LOAD_LOCALS);*/
+        /*MISSING_OPCODE(WITH_CLEANUP);*/
 
 	case RETURN_VALUE:
 		POP(v);
