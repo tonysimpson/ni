@@ -342,8 +342,12 @@ bool PsycoCode_Run(PyObject* codebuf, PyFrameObject* f, bool entering)
 		   last instruction of any code object is a RETURN_VALUE. */
 		PyObject** p;
 		int new_i = PyString_GET_SIZE(co->co_code) - 1;
-		psyco_assert(PyString_AS_STRING(co->co_code)[new_i]
-                             == RETURN_VALUE);
+		/* Python 2.5: the bytecode doesn't always end with a
+		   RETURN_VALUE, but surely there must be one *somewhere* */
+		while (PyString_AS_STRING(co->co_code)[new_i] != RETURN_VALUE){
+			--new_i;
+			psyco_assert(new_i >= 0);
+		}
 #if PY_VERSION_HEX >= 0x02030000   /* 2.3 */
 		/* dubious compatibility hack for Python 2.3, in which f_lasti
 		   no longer always refer to the instruction that will be
