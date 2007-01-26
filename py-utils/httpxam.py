@@ -88,6 +88,7 @@ def cache_load(filename, codename, cache={}):
     try:
         modulecode = cache[filename]
     except KeyError:
+        source = None
         try:
             f = open(filename, 'rU')
             source = f.read()
