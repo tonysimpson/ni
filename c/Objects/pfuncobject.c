@@ -118,6 +118,8 @@ vinfo_t* pfunction_simple_call(PsycoObject* po, PyObject* f,
 	vinfo_t* result;
 	int saved_inlining;
 
+	/* XXX we capture the code object, so this breaks if someone
+	   changes the .func_code attribute of the function later */
 	co = (PyCodeObject*) PyFunction_GET_CODE(f);
 	if (PyCode_GetNumFree(co) > 0)
 		goto fallback;
