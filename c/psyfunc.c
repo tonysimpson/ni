@@ -568,7 +568,7 @@ PyObject* psyco_proxycode(PyFunctionObject* func, int rec)
         goto error;
     }
 
-  proxy_cobj = PyString_FromStringAndSize(proxy_bytecode,
+  proxy_cobj = PyString_FromStringAndSize((char*)proxy_bytecode,
 					  sizeof(proxy_bytecode));
   if (proxy_cobj == NULL)
     goto error;
