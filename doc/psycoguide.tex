@@ -49,6 +49,8 @@ Psyco currently requires:
 \begin{itemize}
   
 \item \strong{A 32-bit Pentium or any other Intel 386 compatible processor.}  Sorry, no other processor is supported.  Psyco does not support the 64-bit x86 architecture, unless you have a Python compiled in 32-bit compatibility mode.
+
+\item \strong{Linux, Windows, BSD} are known to work.  Mac OS/X support should be easy but no one bothered so far (see below).
   
 \item \strong{A regular Python installation, version 2.1 or up.}  Psyco is not a replacement for the Python interpreter and libraries, it works on top of them.
   
@@ -56,7 +58,9 @@ Psyco currently requires:
   
 \end{itemize}
 
-Psyco is not dependent on a particular OS.  Precompiled binaries are provided for Windows.  Compiling on Linux (or other Unixes) should be easy.
+Psyco is not strongly dependent on a particular OS.  Precompiled binaries are provided for Windows.  Compiling on Linux (or other Unixes) should be easy.
+
+Mac OS/X is not supported because of a difference in the calling convention.  If you want to help, see \url{http://mail.python.org/pipermail/pythonmac-sig/2006-June/017533.html} for instructions about how to fix it.
 
 
 \section{Installing}\label{binaries}
