@@ -3,8 +3,8 @@
 ======================================================================
 
 
-                             VERSION 1.5.2
-                             -------------
+                             VERSION 1.5.2+SVN
+                             -----------------
 
 Psyco is a Python extension module which can massively speed up the
 execution of any Python code.
@@ -13,8 +13,8 @@ execution of any Python code.
 REQUIREMENTS
 ------------
 
-Psyco works on almost any version of Python (currently 2.1 to
-2.5).  At present it *requires* a *32-bit* *PC* (i.e. a
+Psyco works on almost any version of Python (currently 2.2.2
+to 2.5).  At present it *requires* a *32-bit* *PC* (i.e. a
 386-compatible processor), but it is OS-independant.
 
 This program is still and will always be incomplete, but it
@@ -26,9 +26,8 @@ maintained, not further developed.  The development efforts of
 the author are now focused on PyPy, which will include
 Psyco-like techniques.  (http://codespeak.net/pypy)
 
-Note that Psyco works better with Python versions starting
-from 2.2.2, and support for older versions may be dropped in
-the future as they become really out-of-date.
+Psyco requires Python >= 2.2.2.  Support for older versions
+has been dropped after Psyco 1.5.2.
 
 
 QUICK INTRODUCTION

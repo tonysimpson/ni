@@ -9,9 +9,9 @@
         Psyco Home page: \url{http://psyco.sourceforge.net/}
 }
 
-\date{updated Sep 25th, 2006}
+\date{updated June 10th, 2007}
 
-\release{1.5.2}                   % release version
+\release{1.5.2+SVN}                   % release version
 
 \makeindex
 
@@ -52,9 +52,7 @@ Psyco currently requires:
 
 \item \strong{Linux, Windows, BSD} are known to work.  Mac OS/X support should be easy but no one bothered so far (see below).
   
-\item \strong{A regular Python installation, version 2.1 or up.}  Psyco is not a replacement for the Python interpreter and libraries, it works on top of them.
-  
-\item \strong{It is recommended to use a Python version at least as recent as 2.2.2,} which introduced a few minor ``hooks'' into which Psyco can plug additional features.
+\item \strong{A regular Python installation, version 2.2.2 or up.}  Psyco is not a replacement for the Python interpreter and libraries, it works on top of them.
   
 \end{itemize}
 
@@ -302,7 +300,7 @@ Results:
 
 Here you can see that only the TAL test is accelerated.  If you have a Zope server using TAL, you could try to add the above two lines to it.  You may get very interesting speed-ups for a very reasonable memory overweight!  (untested: please tell me about it --- there is no real Zope server I can play with myself.)
 
-Another ceveat of Psyco is that it is not always easy to know which module or class Psyco has just acclerated in \code{psyco.full()} mode.  It took me some time to discover what I should bind to accelerate specifically the ZPT test.  Here is how: I ran Psyco in \code{psyco.log();psyco.profile()} mode, running only the ZPT test, and inspected the log file.  Indeed, when a function is about to be accelerated, Psyco writes a line \samp{tag function: xxx} (with Python 2.2.2 and up) or \samp{bind function: xxx} (with previous versions of Python).  In this case I figured out from the \file{markbench.log-psyco} file that I had to write this:
+Another ceveat of Psyco is that it is not always easy to know which module or class Psyco has just acclerated in \code{psyco.full()} mode.  It took me some time to discover what I should bind to accelerate specifically the ZPT test.  Here is how: I ran Psyco in \code{psyco.log();psyco.profile()} mode, running only the ZPT test, and inspected the log file.  Indeed, when a function is about to be accelerated, Psyco writes a line \samp{tag function: xxx}.  In this case I figured out from the \file{markbench.log-psyco} file that I had to write this:
 
 \begin{verbatim}
 import TAL.TALInterpreter
@@ -330,9 +328,9 @@ Results:
 
 \section{Old-style classes vs. Built-in types}\label{metaclass}
 
-Althought Psyco can plug itself over various versions of the interpreter, there are some features that depend on specific extensions.  Extra features only available from Python 2.2.2 and up (not in 2.2) are depending on new hooks that the core interpreter offers.  While minor, these hooks are crucial for some features and they are the reason I recommend to upgrade your Python installation to 2.2.3.  On the other hand, differences between Python 2.1 and the 2.2 series are due to the general-purpose enhancements done by the Python team between these releases.
+Althought Psyco can plug itself over various versions of the interpreter, there are some features that depend on specific extensions.
 
-A major introduction of Python 2.2 are the so-called new-style classes, which have a (positive) performance impact on Psyco.  So \strong{with Python 2.2} you should, as much as possible, let your classes be built-in types and not old-style classes (which is done by inheriting from another new-style class, or from \class{object} for root classes).
+A major introduction of Python 2.2 are the so-called new-style classes, which have a (positive) performance impact on Psyco.  So you should, as much as possible, let your classes be built-in types and not old-style classes (which is done by inheriting from another new-style class, or from \class{object} for root classes).
 
 In addition, Psyco 1.4 provides a compact alternative to Python's new-style instances: the \class{psyco.compact} root class.  Currently, you have to use or inherit from \class{psyco.compact} explicitely.  This lets Psyco produce faster code and reduces the memory used by your instances.  Even better, if you add the line
 
@@ -343,8 +341,6 @@ from psyco.classes import *
 at the top of the module(s) that define the classes, then not only will all your classes automatically inherit from \class{psyco.compact}, but all the methods defined in your classes will automatically be compiled as if you had called \function{psyco.bind()} on them.
 
 \warning{In Python, instances of classes that inherit from a built-in type are subject to some semantic differences that you should know about.  These are described in \url{http://www.python.org/2.2.2/descrintro.html}.  An immediate difference is that if \var{x} contains an instance of such a new-style class, then \code{type(x)} will be \code{x.__class__} instead of \constant{types.InstanceType}.}
-
-\strong{In Python 2.1} there are no user-defined built-in types.  The statement \samp{from psyco.classes import *} has no effect but does not hurt.
 
 For more information see sections \ref{psycodotclasses} and \ref{psycocompact}.
 
@@ -438,16 +434,10 @@ The same function will never be compiled over and over again, so that you can fr
 
 This section lists the functions that use the Python profiler and line tracer to discover which functions it should compile.  These routines are best to use if your application doesn't have a clear "slow spot" where a lot of time is spent algorithmically.  If it does, the previous section is all you need.
 
-\strong{In Python 2.1} the profiler hooks add a considerable overhead to Python's normal execution.  This has been fixed in Python 2.2.  The extra cost will easily overweight Psyco's benefits.  The function \function{background} does not suffer from this (nor do the functions decribed in the other sections of this user guide).
-
-\strong{With Python older than 2.2.2} the profiler will only collect data about the main thread in multi-threaded applications.
-
 \begin{funcdesc}{full}{memory=None, time=None, memorymax=None, timemax=None}
   Compile as much as possible.
 
   Very efficient for small scripts and applications.  Might be overkill for large applications: the memory blow-up and the time spent compiling a large amount of code could outweight the benefits.
-
-  With a Python older than 2.2.2, each function will only be compiled and run the second time it is entered.  A function running a complex algorithm only once will sadly never be accelerated.
 
   The (optional) arguments are described in the next sections.
 \end{funcdesc}
@@ -455,7 +445,7 @@ This section lists the functions that use the Python profiler and line tracer to
 \begin{funcdesc}{profile}{watermark=0.09, halflife=0.5, pollfreq=20, parentframe=0.25, memory=None, time=None, memorymax=None, timemax=None}
   Do profiling to detect the functions that consume a lot of interpretation time, and only compile those.
 
-  As far as I can tell, the best solution for large applications.  With Python 2.2.2 and up, if a function takes a long time to run, it will be detected and compiled \emph{while it is still running,} in the middle of its execution.  Psyco takes it away from the standard interpreter.
+  As far as I can tell, the best solution for large applications.  If a function takes a long time to run, it will be detected and compiled \emph{while it is still running,} in the middle of its execution.  Psyco takes it away from the standard interpreter.
 
   The (optional) arguments are used for fine-tuning.  They are described in the next sections.
 \end{funcdesc}
@@ -465,13 +455,13 @@ This section lists the functions that use the Python profiler and line tracer to
 
   While quite less accurate, this method has the advantage of adding only a very small overhead to the standard execution and might be suited to large applications with an occasional algorithmically-intensive function.
 
-  The (optional) arguments are used for fine-tuning.  They are described in the next sections.  Try putting a \samp{psyco.background()} call in your \file{site.py} file, with a larger \var{watermark}.  Psyco will stay in the shadow and you should not notice it at all until you do some heavy work in Python.  This feature may be less useful with Python older than 2.2.2, because Psyco cannot compile a function while it is running, but only the next time it is entered.
+  The (optional) arguments are used for fine-tuning.  They are described in the next sections.  Try putting a \samp{psyco.background()} call in your \file{site.py} file, with a larger \var{watermark}.  Psyco will stay in the shadow and you should not notice it at all until you do some heavy work in Python.
 \end{funcdesc}
 
 \begin{funcdesc}{runonly}{memory=None, time=None, memorymax=None, timemax=None}
   Run the compiled functions but don't compile new ones.
 
-  Python 2.2.2 and up only.  The usefulness of this routine is unknown.  See below.
+  The usefulness of this routine is unknown.  See below.
 \end{funcdesc}
 
 \begin{funcdesc}{stop}{}
@@ -487,17 +477,7 @@ This section lists the functions that use the Python profiler and line tracer to
 
 The ``profilers'' invoked by the above functions \function{profile} or \function{background} work on the following principles.  During the regular execution of your application, Psyco measures the time spent by your functions.  Individual functions are selected for compilation based on these data.
 
-The ``time measure'' is done using one of three methods, depending on availability.
-
-\begin{itemize}
-  
-\item Python 2.2.2 (and up) maintains a counter of executed bytecode instructions; this number is the most accurate (well, the least inaccurate) method I found out to guess how much a function could benefit from being run by Psyco.  By ``time measure'' we mean in this case the number of bytecode instructions (or elementary steps) taken during the interpretation.  This ``time'' does not include things like time spent waiting for data to be read or written to a file, for example, which is a good thing because Psyco cannot optimize this anyway.
-
-\item Without Python 2.2.2, under Linux, we measure the CPU time spent by the Python process.  This does not allow us to tell apart multiple threads; Psyco will charge all the time to the main thread.  Time spent waiting for a disk I/O is correctly not counted, but time working on (say) multiplying two very long integers will be (althought Psyco cannot do anything about it).
-  
-\item Without Python 2.2.2, under Windows, as no equivalent function is available (at least not unless you have Windows NT), we revert to the elapsed real time.  It is a very rough measure of how much Psyco could help.  It is implemented by reading the Pentium's time stamp counter register, which means that it will fail on a 486.  The only advantage of this method over the previous one is that the measure itself is very fast.
-
-\end{itemize}
+Python 2.2.2 (and up) maintains a counter of executed bytecode instructions; this number is the most accurate (well, the least inaccurate) method I found out to guess how much a function could benefit from being run by Psyco.  This number counts the number of bytecode instructions (or elementary steps) taken during the interpretation, which gives a ``time'' estimate.  This ``time'' does not include things like time spent waiting for data to be read or written to a file, for example, which is a good thing because Psyco cannot optimize this anyway.
 
 The ``time'' thus charged to various functions is accumulated, until some limit is reached.  To favour functions that have recently be seen running over old-timers, the charge of each function ``decays'' with time, following an exponential law as if the amount of time was stored as a dissipating electric charge.  The limit at which a function is compiled is given as a fraction of the total charge; in other words, when a function's charge reaches at least xx percents of the total current charge, it is compiled.  As all the charges decay with time, reaching such a limit is easier than it may seem; for example, if the limit is set at 10\%, and if the execution stays for several seconds within the same 10 functions, then at least one of them will eventually reach the limit.  In practice, it seems to be a very good way to measure the charge; a few CPU-intensive functions will very quickly reach the limit, even if the program has already been running for a long time.
 
@@ -579,7 +559,7 @@ causes Psyco to compile everything until it takes 100 kilobytes of memory, and t
 
 If all profilers reach their limits, profiling is stopped.  Already-compiled functions will continue to run faster.
 
-With Python 2.2.2 (or up) you may try to add a line \samp{psyco.runonly()} after the last profiler, if all your profilers may stop (i.e.\ all of them have limits).  It might help, or it might not.  Feedback appreciated.
+You may try to add a line \samp{psyco.runonly()} after the last profiler, if all your profilers may stop (i.e.\ all of them have limits).  It might help, or it might not.  Feedback appreciated.
 
 \note{Besides the limits, external events may prevent a specific profiler from running.  When this occurs, Psyco falls back to the next profiler but may come back later when the external condition changes again.  This occurs if some other program (e.g.\ the \module{pdb} debugger) sets a profiling or line-by-line tracing hook.  Psyco always gracefully leaves the priority to other programs when they want to occupy Python's hooks.}
 
@@ -597,7 +577,7 @@ With Python 2.2.2 (or up) you may try to add a line \samp{psyco.runonly()} after
 
 \section{The \module{psyco.classes} module}\label{psycodotclasses}
 
-The \module{psyco.classes} module defines a practical metaclass that you can use in your applications.  [Metaclasses were introduced in Python 2.2 only; this module contains no-op placeholders if you import it under Python 2.1.]
+The \module{psyco.classes} module defines a practical metaclass that you can use in your applications.
 
 A metaclass is the type of a class.  Just like a class controls how its instances behave, a metaclass controls how its classes behave.  The purpose of the present metaclass is to make your classes more Psyco-friendly.
 
@@ -778,16 +758,16 @@ The most common lines you will find in logs are:
   The function \var{y} cannot be compiled.  Look up the opcode number \var{x} in the table of appendix \ref{unsupported}.
 
 \item[tag function: \var{x}]
-  The function charge has reached the watermark.  Its code object is compiled.  Execution of the function goes on in the compiled version.  (Python 2.2.2 and later only.)
+  The function charge has reached the watermark.  Its code object is compiled.  Execution of the function goes on in the compiled version.
 
 \item[bind function: \var{x}]
-  The function charge has reached the watermark and it is bound (with \function{psyco.bind}).  Only when function tagging is impossible (either Python is older than 2.2.2 or we are doing passive profiling only).  Bound functions are only compiled the next time the function is called, which means that any work that is still done before the current call returns will be done uncompiled.  The profiler will continue to charge the function for that work and possibly bind the same function several times (with no bad consequences).
+  The function charge has reached the watermark and it is bound (with \function{psyco.bind}).  Only when function tagging is impossible (when doing passive profiling only).  Bound functions are only compiled the next time the function is called, which means that any work that is still done before the current call returns will be done uncompiled.  The profiler will continue to charge the function for that work and possibly bind the same function several times (with no bad consequences).
 
 \item[cannot find function \var{x} in \var{y}]
   The profiler's attempt to use \function{psyco.bind} failed because the function object could not be found.  Indeed, the profiler charges code objects, and \function{psyco.bind} only applies to function objects.  Looking for a function when we only have the code object is difficult (not to mention that some code objects may have been created by \function{compile} or \function{execfile} and are not owned by any function whatsoever).  Psyco currently only locates the functions defined at the module top-level and the methods of top-level classes.  (This is one reason why profilers tag and don't bind if they can.)
 
 \item[profiling stopped, binding \var{n} functions]
-  When active profiling stops, the profiler calls \function{psyco.bind} on all currently tagged functions.  If you feel that this operation is too heavy (e.g.\ makes a visible pause in your real-time application) use the \function{psyco.runonly} profiler to prevent this from occuring.  Normally it only applies if you have set limits on all the profilers queued so far.  Python 2.2.2 and up only.
+  When active profiling stops, the profiler calls \function{psyco.bind} on all currently tagged functions.  If you feel that this operation is too heavy (e.g.\ makes a visible pause in your real-time application) use the \function{psyco.runonly} profiler to prevent this from occuring.  Normally it only applies if you have set limits on all the profilers queued so far.
 
 \item[disabled (\var{L} limit reached)]
   The profiler is stopped because it reached the limit \var{L}.  The next queued profiler can start.
@@ -877,7 +857,7 @@ At other points, Psyco makes assumptions that may be wrong (and will cause damag
   
 \item \strong{Built-ins} are assumed never to change.  Global variables can change, of course, but you must not add or remove a global variable to shadow or expose a built-in (at least not after a module is initialized).
 
-\item Python 2.2 and later only: do not \strong{dynamically change the methods} of the new-style classes (classes that inherit from a built-in type).
+\item Do not \strong{dynamically change the methods} of the new-style classes (classes that inherit from a built-in type).
 
 \item Psyco assumes that \strong{types never change}.  This is basically wrong (you can assign to \code{__class__}).  This might cause Psyco to randomly believe that instances are still of their previous type.
 
@@ -1051,9 +1031,9 @@ A \strong{performance killer} is the usage of the built-in functions \function{m
 
 \begin{tableiii}{c|ll}{textrm}{Type}{Operations}{Notes}
 
-  \lineiii{Any built-in type}{reading members and methods}{(1) (py2.2)}
+  \lineiii{Any built-in type}{reading members and methods}{(1)}
 
-  \lineiii{Built-in function and method}{call}{(1) (py2.2)}
+  \lineiii{Built-in function and method}{call}{(1)}
 
   \lineiii{Integer}{truth testing, unary \code{+} \code{-} \code{\~} \code{abs()}, binary \code{+} \code{-} \code{*} \code{|} \code{\&} \code{<{}<} \code{>{}>} \code{\^}, comparison}{(2)}
 
@@ -1069,13 +1049,13 @@ A \strong{performance killer} is the usage of the built-in functions \function{m
 
   \lineiii{Long}{all arithmetic operations}{(9)}
 
-  \lineiii{Instance method}{call}{(1) (py2.2)}
+  \lineiii{Instance method}{call}{(1)}
 
   \lineiii{String}{\code{len()}, item get, slicing, concatenation}{(10)}
 
   \lineiii{Tuple}{\code{len()}, item get, concatenation}{(11)}
 
-  \lineiii{Type}{call}{(py2.2)}
+  \lineiii{Type}{call}{}
 
   \lineiii{array.array}{item get, item set}{(15)}
 
@@ -1086,7 +1066,7 @@ A \strong{performance killer} is the usage of the built-in functions \function{m
   \lineii{\function{xrange}}{(13)}
   \lineii{\function{chr}, \function{ord}}{(10)}
   \lineii{\function{id}}{}
-  \lineii{\function{type}}{(py2.2)}
+  \lineii{\function{type}}{}
   \lineii{\function{len}, \function{abs}, \function{divmod}}{}
   \lineii{\function{apply}}{(14)}
   \lineii{the whole \module{math} module}{(16)}
@@ -1098,9 +1078,6 @@ Notes:
 %
 \begin{description}
 
-\item[(py2.2)]
-  Python 2.2 and up.
-  
 \item[(1)]
   In the common \samp{object.method(args)} the intermediate bound method object is never built; it is translated into a direct call to the function that implements the method.  For C methods, the underlying \ctype{PyMethodDef} structure is decoded at compile-time.  Algorithms doing repetitive calls to methods of e.g.\ lists or strings can see huge benefits.
   
