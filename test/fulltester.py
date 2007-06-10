@@ -8,7 +8,7 @@ import sys, os, time
 # This script should do the following:
 #
 #  for interpreter-executable-path in file('fulltester.local'):
-#      for mode in (debug, optimized):
+#      for mode in (debug, optimized, ivm-debug, ivm-optimized):
 #          compile Psyco for 'mode' and 'interpreter'
 #          for testset in testset_list:
 #              start 'interpreter' running 'testset'
@@ -39,6 +39,12 @@ PSYCO_MODES = [
     {'PSYCO_DEBUG': 1, 'VERBOSE_LEVEL': 1, 'CODE_DUMP': 1, 'ALL_STATIC': 1},
     # optimized mode, static compiling
     {'PSYCO_DEBUG': 0, 'VERBOSE_LEVEL': 0, 'CODE_DUMP': 0, 'ALL_STATIC': 1},
+    # debugging mode, IVM virtual processor
+    {'PSYCO_DEBUG': 1, 'VERBOSE_LEVEL': 1, 'CODE_DUMP': 1, 'ALL_STATIC': 1,
+     'PROCESSOR': 'ivm'},
+    # optimized mode, IVM virtual processor
+    {'PSYCO_DEBUG': 0, 'VERBOSE_LEVEL': 0, 'CODE_DUMP': 0, 'ALL_STATIC': 1,
+     'PROCESSOR': 'ivm'},
     ]
 
 FRACTION = 10
@@ -84,7 +90,7 @@ def do_compile(python_version, psyco_mode):
     try:
         f = open(preffile, 'w')
         for varvalue in psyco_mode.items():
-            f.write('%s = %s\n' % varvalue)
+            f.write('%s = %r\n' % varvalue)
         f.close()
         os.chdir(os.pardir)
         run(python_version, 'setup.py', 'build', '-f')

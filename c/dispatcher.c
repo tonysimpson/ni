@@ -1813,12 +1813,14 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
   
   /* fix the value of 'v' */
   CHKTIME(v->source, RunTime);   /* from run-time to compile-time */
+#if REG_TOTAL > 0
   if (!RSOURCE_REG_IS_NONE(v->source))
     {
       /* remove this value from 'po->regarray' */
       REG_NUMBER(po, RSOURCE_REG(v->source)) = NULL;
       SET_RUNTIME_REG_TO_NONE(v);
     }
+#endif
   v->source = CompileTime_NewSk(sk);
   /* compile from this new state, in which 'v' has been promoted to
      compile-time. */
