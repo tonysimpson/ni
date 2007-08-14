@@ -342,7 +342,7 @@ static vinfo_t* pint_pow(PsycoObject* po, vinfo_t* v, vinfo_t* w, vinfo_t* z)
 	}
 	CONVERT_TO_LONG(v, a);
 	CONVERT_TO_LONG(w, b);
-	if (is_nonneg(w->source))
+	if (is_nonneg(b->source))
 		cimpl = cimpl_int_pow2_nonneg;
 	else
 		cimpl = cimpl_int_pow2;
