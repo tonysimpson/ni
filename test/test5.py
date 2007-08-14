@@ -433,6 +433,9 @@ def listgetitem():
     for item in x:
         print item
 
+def negintpow(x):
+    print x ** -2
+
 if __name__ == '__main__':
     from test1 import go, print_results
     import time
@@ -445,6 +448,6 @@ if __name__ == '__main__':
     #go(power_int)
     #go(power_int_long)
     #go(power_float)
-    psyco.proxy(conditional_doubletest_fold)()
+    psyco.proxy(negintpow)(8)
     psyco.dumpcodebuf()
     print_results()
