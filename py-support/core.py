@@ -37,10 +37,7 @@ def full(memory=None, time=None, memorymax=None, timemax=None):
 Typical use is for small scripts performing intensive computations
 or string handling."""
     import profiler
-    if PYTHON_SUPPORT:
-        p = profiler.FullCompiler()
-    else:
-        p = profiler.ActiveProfiler(0.0, 0.5)
+    p = profiler.FullCompiler()
     p.run(memory, time, memorymax, timemax)
 
 
@@ -78,10 +75,9 @@ def runonly(memory=None, time=None, memorymax=None, timemax=None):
     """Nonprofiler.
 
 XXX check if this is useful and document."""
-    if PYTHON_SUPPORT:
-        import profiler
-        p = profiler.RunOnly()
-        p.run(memory, time, memorymax, timemax)
+    import profiler
+    p = profiler.RunOnly()
+    p.run(memory, time, memorymax, timemax)
 
 
 def stop():

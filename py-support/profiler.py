@@ -103,44 +103,36 @@ def trytobind(co, globals, log=1):
     f.func_code = _psyco.proxycode(f)
 
 
-if PYTHON_SUPPORT:
-    # the list of code objects that have been tagged
-    tagged_codes = []
-    
-    def tag(co, globals):
-        if logger:
+# the list of code objects that have been tagged
+tagged_codes = []
+
+def tag(co, globals):
+    if logger:
+        try:
+            f, clsname = function_cache[co]
+        except KeyError:
+            buildfncache(globals, function_cache)
             try:
                 f, clsname = function_cache[co]
             except KeyError:
-                buildfncache(globals, function_cache)
-                try:
-                    f, clsname = function_cache[co]
-                except KeyError:
-                    clsname = ''  # give up
-            modulename = globals.get('__name__', '?')
-            if clsname:
-                modulename += '.' + clsname
-            logger.write('tag function: %s.%s' % (modulename, co.co_name), 1)
-        tagged_codes.append((co, globals))
-        _psyco.turbo_frame(co)
-        _psyco.turbo_code(co)
+                clsname = ''  # give up
+        modulename = globals.get('__name__', '?')
+        if clsname:
+            modulename += '.' + clsname
+        logger.write('tag function: %s.%s' % (modulename, co.co_name), 1)
+    tagged_codes.append((co, globals))
+    _psyco.turbo_frame(co)
+    _psyco.turbo_code(co)
 
-    def tag2bind():
-        if tagged_codes:
-            if logger:
-                logger.write('profiling stopped, binding %d functions' %
-                             len(tagged_codes), 2)
-            for co, globals in tagged_codes:
-                trytobind(co, globals, 0)
-            function_cache.clear()
-            del tagged_codes[:]
-
-else:
-    # tagging is impossible, always bind
-    tag = trytobind
-    def tag2bind():
-        pass
-
+def tag2bind():
+    if tagged_codes:
+        if logger:
+            logger.write('profiling stopped, binding %d functions' %
+                         len(tagged_codes), 2)
+        for co, globals in tagged_codes:
+            trytobind(co, globals, 0)
+        function_cache.clear()
+        del tagged_codes[:]
 
 
 class Profiler:
@@ -379,10 +371,9 @@ original_setprofile       = sys.setprofile
 original_start_new_thread = thread.start_new_thread
 sys.settrace            = psyco_settrace
 sys.setprofile          = psyco_setprofile
-if PYTHON_SUPPORT:
-    thread.start_new_thread = psyco_start_new_thread
-    # hack to patch threading._start_new_thread if the module is
-    # already loaded
-    if (sys.modules.has_key('threading') and
-        hasattr(sys.modules['threading'], '_start_new_thread')):
-        sys.modules['threading']._start_new_thread = psyco_start_new_thread
+thread.start_new_thread = psyco_start_new_thread
+# hack to patch threading._start_new_thread if the module is
+# already loaded
+if (sys.modules.has_key('threading') and
+    hasattr(sys.modules['threading'], '_start_new_thread')):
+    sys.modules['threading']._start_new_thread = psyco_start_new_thread

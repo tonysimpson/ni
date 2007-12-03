@@ -50,8 +50,6 @@ if ([v for v in VERSION_LIMITS if v <= sys.hexversion] !=
         warn("Psyco version does not match Python version. "
              "Psyco must be updated or recompiled")
 
-PYTHON_SUPPORT = hasattr(_psyco, 'turbo_code')
-
 
 if hasattr(_psyco, 'ALL_CHECKS') and hasattr(_psyco, 'VERBOSE_LEVEL'):
     print >> sys.stderr, ('psyco: running in debugging mode on %s' %
