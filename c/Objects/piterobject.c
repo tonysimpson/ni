@@ -111,7 +111,7 @@ static bool compute_seqiter(PsycoObject* po, vinfo_t* v)
 	   PyIter_Next() n times but obviously that's not too
 	   good a solution */
 	if (!psyco_knowntobe(index, 0)) {
-		if (!psyco_put_field(po, v, SEQITER_it_index, index)) {
+		if (!psyco_put_field(po, newobj, SEQITER_it_index, index)) {
 			vinfo_decref(newobj, po);
 			return false;
 		}
