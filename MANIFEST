@@ -75,7 +75,6 @@ c/i386/iinitialize.h
 c/i386/iprocessor.c
 c/i386/ipyencoding.c
 c/i386/ipyencoding.h
-c/i386/itiming.h
 c/initialize.h
 c/ivm/idispatcher.c
 c/ivm/idispatcher.h
@@ -85,7 +84,6 @@ c/ivm/iinitialize.h
 c/ivm/iprocessor.c
 c/ivm/ipyencoding.c
 c/ivm/ipyencoding.h
-c/ivm/itiming.h
 c/ivm/ivm-insns.c
 c/ivm/ivm-insns.h
 c/ivm/localsetup.py

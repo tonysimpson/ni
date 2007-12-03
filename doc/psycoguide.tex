@@ -9,9 +9,9 @@
         Psyco Home page: \url{http://psyco.sourceforge.net/}
 }
 
-\date{updated June 10th, 2007}
+\date{updated December 3rd, 2007}
 
-\release{1.5.2+SVN}                   % release version
+\release{1.6}                   % release version
 
 \makeindex
 
@@ -44,21 +44,28 @@ Psyco is a Python extension module which can massively speed up the execution of
 
 \section{Requirements}\label{req}
 
-Psyco currently requires:
+Psyco requires:
 
 \begin{itemize}
   
-\item \strong{A 32-bit Pentium or any other Intel 386 compatible processor.}  Sorry, no other processor is supported.  Psyco does not support the 64-bit x86 architecture, unless you have a Python compiled in 32-bit compatibility mode.
+\item \strong{A 32-bit architecture.}  A Pentium or any other Intel 386 compatible processor is recommended.
 
-\item \strong{Linux, Windows, BSD} are known to work.  Mac OS/X support should be easy but no one bothered so far (see below).
+\item \strong{Linux, Mac OS/X, Windows, BSD} are known to work.
   
 \item \strong{A regular Python installation, version 2.2.2 or up.}  Psyco is not a replacement for the Python interpreter and libraries, it works on top of them.
   
 \end{itemize}
 
-Psyco is not strongly dependent on a particular OS.  Precompiled binaries are provided for Windows.  Compiling on Linux (or other Unixes) should be easy.
+Psyco is not strongly dependent on a particular OS.  Precompiled binaries for Windows are contributed by users.  Compiling on Linux, Mac OS/X and other Unixes should be easy.
 
-Mac OS/X is not supported because of a difference in the calling convention.  If you want to help, see \url{http://mail.python.org/pipermail/pythonmac-sig/2006-June/017533.html} for instructions about how to fix it.
+Psyco has an emulation mode that allows it to run on other 32-bit
+processors but the speed benefits are not big in that case.  Psyco does
+not support the 64-bit x86 architecture, unless you have a Python
+compiled in 32-bit compatibility mode.  \strong{There are no plans to
+port Psyco to 64-bit architectures.}  This would be rather involved.
+Psyco is only being maintained, not further developed.  The development
+efforts of the author are now focused on PyPy, which includes
+Psyco-like techniques.  \url{http://codespeak.net/pypy/}
 
 
 \section{Installing}\label{binaries}

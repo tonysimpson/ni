@@ -157,11 +157,11 @@ py_modules = ['psyco.%s' % os.path.splitext(fn)[0]
 py_modules.remove('psyco.__init__')
 
 if sys.version_info < (2, 2, 2):
-    raise Exception("Psyco >= 1.5.3 requires Python >= 2.2.2")
+    raise Exception("Psyco >= 1.6 requires Python >= 2.2.2")
 
 
 setup (	name             = "psyco",
-      	version          = "1.5.2",
+      	version          = "1.6",
       	description      = "Psyco, the Python specializing compiler",
       	author           = "Armin Rigo",
         author_email     = "arigo@users.sourceforge.net",

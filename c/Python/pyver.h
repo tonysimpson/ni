@@ -8,7 +8,7 @@
 
 #include <Python.h>
 
-#define PSYCO_VERSION_HEX          0x010502f0   /* 1.5.2 */
+#define PSYCO_VERSION_HEX          0x010600f0   /* 1.6 */
 
 
 /*****************************************************************/
