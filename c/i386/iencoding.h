@@ -20,7 +20,12 @@
     (a quite minor overhead). Set to 0 to disable. No effect on real
     optimizations. */
 #ifndef COMPACT_ENCODING
+#ifdef __APPLE__
+/* COMPACT_ENCODING not yet supported on MacOS X */
+# define COMPACT_ENCODING   0
+#else
 # define COMPACT_ENCODING   1
+#endif
 #endif
 
 /* Define to 0 to use EBP as any other register, or to 1 to reserve it */
@@ -652,6 +657,31 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
   JUMP_TO((code_t*)(target));                                           \
 } while (0)
 
+#ifdef __APPLE__
+/* Stack alignment for MacOS X IA-32 ABI */
+#define CALL_STACK_ALIGN_DELTA(nbargs, delta) do { \
+	int sp = po->stack_depth-INITIAL_STACK_DEPTH+(nbargs)*4;	\
+	delta = ((sp+15)&~15)-sp; \
+	po->stack_depth += delta; \
+	STACK_CORRECTION(delta); \
+} while (0)
+
+#define CALL_STACK_ALIGN(nbargs) do { \
+	int delta; \
+	CALL_STACK_ALIGN_DELTA(nbargs, delta); \
+} while (0)
+
+#define CALL_STACK_ALIGN_RESTORE(delta) do { \
+	po->stack_depth -= delta; \
+	STACK_CORRECTION(-delta); \
+} while (0)
+#else
+/* Dummy stack alignment for non-MacOS X */
+#define CALL_STACK_ALIGN_DELTA(nbargs, delta)
+#define CALL_STACK_ALIGN(nbargs)
+#define CALL_STACK_ALIGN_RESTORE(delta)
+#endif
+	
 /* load the 'dst' register with the run-time address of 'source'
    which must be in the stack */
 #define LOAD_ADDRESS_FROM_RT(source, dst)    do {                               \

@@ -21,6 +21,10 @@ static code_t glue_run_code[] = {
   PUSH_REG_INSTR(REG_386_ESI),  /*   PUSH ESI        */
   PUSH_REG_INSTR(REG_386_EDI),  /*   PUSH EDI        */
   0x8B, 0x5C, 0x24, 32,         /*   MOV EBX, [ESP+32] (finfo frame stack ptr) */
+#ifdef __APPLE__
+  /* Align stack on 16-byte boundary for MacOS X */
+  0x83, 0xEC, 8,                /*   SUB ESP, 8      */
+#endif
   0x6A, -1,                     /*   PUSH -1         */
   0x89, 0x23,                   /*   MOV [EBX], ESP  */
   0xEB, +5,                     /*   JMP Label2      */
@@ -31,6 +35,10 @@ static code_t glue_run_code[] = {
   0x39, 0xCA,                   /*   CMP EDX, ECX    */
   0x75, -9,                     /*   JNE Label1      */
   0xFF, 0xD0,                   /*   CALL *EAX     (callee removes args)  */
+#ifdef __APPLE__
+  /* Restore stack from 16-byte alignment on MacOS X */
+  0x83, 0xC4, 8,                /*   ADD ESP, 8      */
+#endif
   POP_REG_INSTR(REG_386_EDI),   /*   POP EDI         */
   POP_REG_INSTR(REG_386_ESI),   /*   POP ESI         */
   POP_REG_INSTR(REG_386_EBX),   /*   POP EBX         */
@@ -67,9 +75,21 @@ static code_t glue_call_var[] = {
 	0x53,			/*   PUSH EBX                      */
 	0x8B, 0x5C, 0x24, 12,	/*   MOV EBX, [ESP+12]  (argcount) */
 	0x8B, 0x44, 0x24, 8,	/*   MOV EAX, [ESP+8]   (c_func)   */
+#ifdef __APPLE__
+	/* Adjust # of arguments for MacOS 16-byte stack alignment */
+	0x83, 0xC3, 3,		/*   ADD EBX, 3                    */
+	0x83, 0xE3, ~3,		/*   AND EBX, ~3                   */
+	/* Align stack on 16-byte boundary for MacOS X */
+	0x83, 0xEC, 8,		/*   SUB ESP, 8                    */
+#endif
 	0x09, 0xDB,		/*   OR EBX, EBX                   */
 	0x74, +16,		/*   JZ Label1                     */
+#ifdef __APPLE__
+	/* Arguments are 8 bytes further up stack on MacOS X */
+	0x8B, 0x54, 0x24, 24,	/*   MOV EDX, [ESP+24] (arguments) */
+#else
 	0x8B, 0x54, 0x24, 16,	/*   MOV EDX, [ESP+16] (arguments) */
+#endif
 	0x8D, 0x0C, 0x9A,	/*   LEA ECX, [EDX+4*EBX]          */
 				/* Label2:                         */
 	0x83, 0xE9, 4,		/*   SUB ECX, 4                    */
@@ -78,6 +98,10 @@ static code_t glue_call_var[] = {
 	0x75, -9,		/*   JNE Label2                    */
 				/* Label1:                         */
 	0xFF, 0xD0,		/*   CALL *EAX                     */
+#ifdef __APPLE__
+	/* Restore stack from 16-byte alignment on MacOS X */
+	0x83, 0xC4, 8,		/*   ADD ESP, 8                    */
+#endif
 	0x8D, 0x24, 0x9C,	/*   LEA ESP, [ESP+4*EBX]          */
 	0x5B,			/*   POP EBX                       */
 	0xC3,			/*   RET                           */

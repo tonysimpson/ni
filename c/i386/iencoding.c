@@ -48,12 +48,17 @@ void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
   code_t* code = po->code;
   void* result;
   code_t* fixvalue;
+#ifdef __APPLE__
+  int aligndelta;
+#endif
 
   if (restore)
     TEMP_SAVE_REGS_FN_CALLS;
   else
     SAVE_REGS_FN_CALLS(true);
 
+  CALL_STACK_ALIGN_DELTA(1+(extraarg != SOURCE_DUMMY), aligndelta);
+  
   /* first pushed argument */
   if (extraarg != SOURCE_DUMMY)
     CALL_SET_ARG_FROM_RT(extraarg, 1, 2);  /* argument index 1 out of total 2 */
@@ -79,6 +84,7 @@ void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
                       4*nb_args,  /*           4*nb_args  */
                       0);         /* not used             */
       code += 3;
+      CALL_STACK_ALIGN_RESTORE(aligndelta);
       TEMP_RESTORE_REGS_FN_CALLS_AND_JUMP;
     }
   else
@@ -109,10 +115,25 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	int i, initial_depth;
 	Source* p;
 	bool ccflags;
+#ifdef __APPLE__
+	int aligncount=0;
+#endif
 	BEGIN_CODE
 	/* cannot use NEED_CC(): it might clobber one of the registers
 	   mentioned in argsources */
-        ccflags = HAS_CCREG(po);
+	ccflags = HAS_CCREG(po);
+#ifdef __APPLE__
+	/* Calculate number of registers that will be pushed by
+	   NEED_REGISTER */
+	for (i=0; i<REG_TOTAL; i++)
+	{
+		vinfo_t* _content = REG_NUMBER(po, i);
+		if (_content != NULL)
+			if (RUNTIME_STACK(_content) == RUNTIME_STACK_NONE)
+				aligncount++;
+	}
+#endif
+	CALL_STACK_ALIGN(1+(ccflags!=0)+aligncount);
 	if (ccflags)
 		PUSH_CC_FLAGS();
 	for (i=0; i<REG_TOTAL; i++)

@@ -248,6 +248,10 @@ EXTERNFN void psyco_inverted_cc(PsycoObject* po);
   else if (_stackcorr > 0)                              \
     INSN_pushn(_stackcorr / sizeof(long));              \
 } while (0)
+/* Dummy stack alignment for non-MacOS X */
+#define CALL_STACK_ALIGN_DELTA(nbargs, delta)
+#define CALL_STACK_ALIGN(nbargs)
+#define CALL_STACK_ALIGN_RESTORE(delta)
 
 #define FUNCTION_RET(popbytes)      do {                                        \
   INSN_ret((popbytes) / sizeof(long) + 1);   /* +1 for the retaddr itself */    \
