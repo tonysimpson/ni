@@ -2,7 +2,9 @@
 #include "pstringobject.h"
 #include "pintobject.h"
 #include "pfloatobject.h"
+#include "plongobject.h"
 #include "../pycodegen.h"
+#include "../Python/pyver.h"
 
 
 DEFINEFN
@@ -155,8 +157,16 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 	
 	/* for integer fields of any size */
 	v = psyco_get_field_offset(po, addr, rdf, l->offset);
-	if (v != NULL)
-		v = PsycoInt_FROM_LONG(v);
+	if (v != NULL) {
+		if (!T_UINT_READS_AS_SIGNED && (l->type == T_UINT ||
+						l->type == T_ULONG)) {
+			vinfo_t* result = PsycoLong_FromUnsignedLong(po, v);
+			vinfo_decref(v, po);
+			v = result;
+		}
+		else
+			v = PsycoInt_FROM_LONG(v);
+	}
 	return v;
 
   fallback:

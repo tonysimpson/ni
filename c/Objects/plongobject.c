@@ -33,6 +33,17 @@ bool PsycoLong_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd1, vinfo_t** vd
 	return true;
 }
 
+DEFINEFN
+vinfo_t* PsycoLong_FromUnsignedLong(PsycoObject* po, vinfo_t* v)
+{
+	vinfo_t* result = psyco_generic_call(po, PyLong_FromUnsignedLong,
+					     CfReturnRef|CfPyErrIfNull,
+					     "v", v);
+	if (result != NULL)
+		Psyco_AssertType(po, result, &PyLong_Type);
+	return result;
+}
+
 
 /* XXX this assumes that operations between longs always return a long.
    There are hints that this might change in future releases of Python. */

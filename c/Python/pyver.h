@@ -80,4 +80,6 @@
 
 #define MATHMODULE_USES_METH_O (PY_VERSION_HEX >= 0x02060000)  /* Py >= 2.6 */
 
+#define T_UINT_READS_AS_SIGNED (PY_VERSION_HEX < 0x02050000) /* Python < 2.5 */
+
 #endif /* _PYVER_H */
