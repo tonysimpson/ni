@@ -9,9 +9,12 @@
  *   - log()
  *   - log10()
  *   - modf()
+ *   - degrees()
+ *   - radians()
  */
 
 #include "../initialize.h"
+#include "../Python/pyver.h"
 #if HAVE_FP_FN_CALLS    /* disable float optimizations if functions with
                            float/double arguments are not implemented
                            in the back-end */
@@ -67,7 +70,24 @@ extern double modf (double, double *);
     vinfo_decref(v2, po); \
     vinfo_decref(v1, po);
 
-#define PMATH_FUNC1(funcname, func ) \
+#if MATHMODULE_USES_METH_O    /* Python >= 2.6 */
+# define PMATH_FUNC1(funcname, func ) \
+    static PyCFunction fallback_##func; \
+    static vinfo_t* pmath_##func(PsycoObject* po, vinfo_t* vself, vinfo_t* v) { \
+        vinfo_t *a1, *a2, *x; \
+        vinfo_array_t* result; \
+        PMATH_CONVERT_TO_DOUBLE(v,a1,a2,return NULL);      \
+        result = array_new(2); \
+        x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfNoReturnValue|CfPyErrIfNonNull, \
+                                  "vva",a1,a2,result); \
+        PMATH_RELEASE_DOUBLE(a1,a2); \
+        if (x != NULL) \
+            x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]); \
+        array_release(result); \
+        return x; \
+    }
+#else
+# define PMATH_FUNC1(funcname, func ) \
     static PyCFunction fallback_##func; \
     static vinfo_t* pmath_##func(PsycoObject* po, vinfo_t* vself, vinfo_t* varg) { \
         vinfo_t *a1, *a2, *x; \
@@ -90,7 +110,7 @@ extern double modf (double, double *);
         array_release(result); \
         return x; \
     }
-
+#endif
 
 #define PMATH_FUNC2(funcname, func ) \
     static PyCFunction fallback_##func; \
@@ -163,31 +183,39 @@ PMATH_FUNC1("sinh", sinh)
 PMATH_FUNC1("sqrt", sqrt)
 PMATH_FUNC1("tan", tan)
 PMATH_FUNC1("tanh", tanh)
-      
+
 INITIALIZATIONFN
 void psyco_initmath(void)
 {
     PyObject* md = Psyco_DefineMetaModule("math");
-    
-    fallback_acos = Psyco_DefineModuleFn(md, "acos", METH_VARARGS, pmath_acos);
-    fallback_asin = Psyco_DefineModuleFn(md, "asin", METH_VARARGS, pmath_asin);
-    fallback_atan = Psyco_DefineModuleFn(md, "atan", METH_VARARGS, pmath_atan);
+
+#if MATHMODULE_USES_METH_O    /* Python >= 2.6 */
+#  define METH1 METH_O
+#else
+#  define METH1 METH_VARARGS
+#endif
+
+    fallback_acos = Psyco_DefineModuleFn(md, "acos", METH1,        pmath_acos);
+    fallback_asin = Psyco_DefineModuleFn(md, "asin", METH1,        pmath_asin);
+    fallback_atan = Psyco_DefineModuleFn(md, "atan", METH1,        pmath_atan);
     fallback_atan2= Psyco_DefineModuleFn(md, "atan2",METH_VARARGS, pmath_atan2);
-    fallback_ceil = Psyco_DefineModuleFn(md, "ceil", METH_VARARGS, pmath_ceil);
-    fallback_cos  = Psyco_DefineModuleFn(md, "cos",  METH_VARARGS, pmath_cos);
-    fallback_cosh = Psyco_DefineModuleFn(md, "cosh", METH_VARARGS, pmath_cosh);
-    fallback_exp  = Psyco_DefineModuleFn(md, "exp",  METH_VARARGS, pmath_exp);
-    fallback_fabs = Psyco_DefineModuleFn(md, "fabs", METH_VARARGS, pmath_fabs);
-    fallback_floor= Psyco_DefineModuleFn(md, "floor",METH_VARARGS, pmath_floor);
+    fallback_ceil = Psyco_DefineModuleFn(md, "ceil", METH1,        pmath_ceil);
+    fallback_cos  = Psyco_DefineModuleFn(md, "cos",  METH1,        pmath_cos);
+    fallback_cosh = Psyco_DefineModuleFn(md, "cosh", METH1,        pmath_cosh);
+    fallback_exp  = Psyco_DefineModuleFn(md, "exp",  METH1,        pmath_exp);
+    fallback_fabs = Psyco_DefineModuleFn(md, "fabs", METH1,        pmath_fabs);
+    fallback_floor= Psyco_DefineModuleFn(md, "floor",METH1,        pmath_floor);
     fallback_fmod = Psyco_DefineModuleFn(md, "fmod", METH_VARARGS, pmath_fmod);
     fallback_hypot= Psyco_DefineModuleFn(md, "hypot",METH_VARARGS, pmath_hypot);
     /*Psyco_DefineModuleFn(md, "power", METH_VARARGS, pmath_power);*/
     fallback_pow  = Psyco_DefineModuleFn(md, "pow",  METH_VARARGS, pmath_pow);
-    fallback_sin  = Psyco_DefineModuleFn(md, "sin",  METH_VARARGS, pmath_sin);
-    fallback_sinh = Psyco_DefineModuleFn(md, "sinh", METH_VARARGS, pmath_sinh);
-    fallback_sqrt = Psyco_DefineModuleFn(md, "sqrt", METH_VARARGS, pmath_sqrt);
-    fallback_tan  = Psyco_DefineModuleFn(md, "tan",  METH_VARARGS, pmath_tan);
-    fallback_tanh = Psyco_DefineModuleFn(md, "tanh", METH_VARARGS, pmath_tanh);
+    fallback_sin  = Psyco_DefineModuleFn(md, "sin",  METH1,        pmath_sin);
+    fallback_sinh = Psyco_DefineModuleFn(md, "sinh", METH1,        pmath_sinh);
+    fallback_sqrt = Psyco_DefineModuleFn(md, "sqrt", METH1,        pmath_sqrt);
+    fallback_tan  = Psyco_DefineModuleFn(md, "tan",  METH1,        pmath_tan);
+    fallback_tanh = Psyco_DefineModuleFn(md, "tanh", METH1,        pmath_tanh);
+
+#undef METH1
 
     Py_XDECREF(md);
 }
