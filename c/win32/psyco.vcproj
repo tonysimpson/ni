@@ -113,7 +113,7 @@ copy $(TargetDir)_psyco.map $(ProjectDir)..\..\py-utils\win32\
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib ../../../PCbuild/python24_d.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ../../../PCbuild/python25_d.lib"
 				OutputFile="..\..\..\PCbuild/_psyco_d.pyd"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
