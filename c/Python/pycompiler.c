@@ -1896,7 +1896,7 @@ static code_t* exit_function(PsycoObject* po)
 /***************************************************************/
  /***   the main loop of the interpreter/compiler.            ***/
 
-/* psyco_pycompiler_mainloop() compiles the function using psyco_core_mainloop()
+/* psyco_pycompiler_mainloop() compiles the function,
    writing function entry and exit points if needed, and destroys 'po' when
    it is done */
 DEFINEFN
@@ -3219,7 +3219,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
   /* function return (either by RETURN or by exception). */
   while ((code1 = exit_function(po)) == NULL) {
     /* If LOC_EXCEPTION is still set after exit_function(), it
-       means an exception was raised while handling the functn
+       means an exception was raised while handling the function
        return... In this case, we do a function return again,
        this time with the newly raised exception. XXX make sure
        this loop cannot be endless */
