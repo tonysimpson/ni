@@ -1,4 +1,6 @@
 #include "piterobject.h"
+#include "plistobject.h"
+/* for plist_getitem */
 
 
 DEFINEFN vinfo_t* PsycoSeqIter_NEW(PsycoObject* po, vinfo_t* seq)
