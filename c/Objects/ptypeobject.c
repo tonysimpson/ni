@@ -7,7 +7,6 @@ static ternaryfunc	type_call;
 static initproc		object_init;
 static newfunc		object_new;
 static initproc		slot_tp_init = NULL;
-static descrgetfunc	slot_tp_descr_get = NULL;
 
 /***************************************************************/
   /*** type objects meta-implementation                        ***/
@@ -322,40 +321,6 @@ static bool pslot_tp_init(PsycoObject* po, vinfo_t* vself,
 				  "vvv", vself, vargs, vkwds) != NULL;
 }
 
-static vinfo_t*
-pslot_tp_descr_get(PsycoObject* po, PyObject *self, vinfo_t* v_obj, PyObject *type)
-{
-	static PyObject *get_str;
-    	PyTypeObject* tp = self->ob_type;
-	vinfo_t *v_kwds = vinfo_new(CompileTime_NewSk(sk_new(0, SkFlagPyObj)));
-	vinfo_t *v_args = PsycoTuple_New(2, 0);
-	vinfo_t *v_self = vinfo_new(CompileTime_NewSk(sk_new((long) self, SkFlagPyObj)));
-	vinfo_t *v_type = vinfo_new(CompileTime_NewSk(sk_new((long) type, SkFlagPyObj)));
-	vinfo_t *v_res;
-
-	vinfo_incref(v_obj);
-	PsycoTuple_GET_ITEM(v_args, 0) = v_obj;
-	PsycoTuple_GET_ITEM(v_args, 1) = v_type;
-
-	v_res = soft_method_call(po, tp, v_self, "__get__", &get_str,
-				 v_args, v_kwds);
-	vinfo_decref(v_self, po);
-	vinfo_decref(v_args, po);
-	if (v_res == NULL) {
-		if (PycException_Occurred(po))
-			return false;
-		else
-			goto fallback;
-	}
-
-	return v_res;
-
- fallback:
-	return psyco_generic_call(po, slot_tp_descr_get,
-				  CfReturnRef|CfPyErrIfNull,
-				  "lvl", self, v_obj, type);
-}
-
 
 INITIALIZATIONFN
 void psy_typeobject_init(void)
@@ -377,14 +342,11 @@ void psy_typeobject_init(void)
 		return;
 	d = PyDict_New();
 	if (d != NULL) {
-		char* expr = "type('X', (object,), {'__init__': lambda self: None,"
-		     				   "'__get__' : lambda self: None,})";
+		char* expr = "type('X', (object,), {'__init__': lambda self: None})";
 		tmp = PyRun_String(expr, Py_eval_input, PyEval_GetBuiltins(), d);
 		if (tmp && PyType_Check(tmp)) {
 			slot_tp_init = ((PyTypeObject*) tmp)->tp_init;
 			Psyco_DefineMeta(slot_tp_init, pslot_tp_init);
-			slot_tp_descr_get = ((PyTypeObject*) tmp)->tp_descr_get;
-			Psyco_DefineMeta(slot_tp_descr_get, pslot_tp_descr_get);
 		}
 		Py_XDECREF(tmp);
 		Py_DECREF(d);
