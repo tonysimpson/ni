@@ -100,3 +100,27 @@ def test_math_module():
             return _operation(*a)
         res = psyco.proxy(tester)((0.71, 0.2643))
         assert abs(res - _operation(0.71, 0.2643)) < 1e6
+
+def test_circular_list():
+    def f():
+        l = [None]
+        l[0] = l
+        return l
+    lst = psyco.proxy(f)()
+    assert type(lst) is list
+    assert len(lst) == 1
+    assert lst[0] is lst
+
+    def g():
+        a = [None]
+        b = [None]
+        a[0] = b
+        b[0] = a
+        return b
+    lst = psyco.proxy(g)()
+    assert type(lst) is list
+    assert len(lst) == 1
+    assert lst[0] is not lst
+    assert type(lst[0]) is list
+    assert len(lst[0]) == 1
+    assert lst[0][0] is lst

@@ -184,6 +184,22 @@ void vinfo_move(PsycoObject* po, vinfo_t* vtarget, vinfo_t* vsource)
   psyco_simplify_array(vtarget->array, po);
 }
 
+DEFINEFN
+bool vinfo_would_be_recursive(vinfo_t* vi, vinfo_t* newitem)
+{
+  vinfo_array_t* array;
+  int i;
+  if (newitem == vi)
+    return true;
+  array = newitem->array;
+  i = array->count;
+  while (i--)
+    if (array->items[i] != NULL)
+      if (vinfo_would_be_recursive(vi, array->items[i]))
+        return true;
+  return false;
+}
+
 
 DEFINEFN
 void clear_tmp_marks(vinfo_array_t* array)

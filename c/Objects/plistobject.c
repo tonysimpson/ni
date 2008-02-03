@@ -225,7 +225,8 @@ static bool plist_ass_item(PsycoObject* po, vinfo_t* a, vinfo_t* i, vinfo_t* v)
         assert_nonneg(i);
 
 	if (a->source == VirtualTime_New(&psyco_computed_vlist) &&
-	    is_compiletime(i->source)) {
+	    is_compiletime(i->source) &&
+            !vinfo_would_be_recursive(a, v)) {
 		/* optimize virtual lists */
 		vlist_length(a);  /* for the assert()s */
 		vinfo_incref(v);

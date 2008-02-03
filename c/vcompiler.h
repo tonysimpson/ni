@@ -420,6 +420,7 @@ PSY_INLINE void vinfo_setitem(PsycoObject* po, vinfo_t* vi, int index,
 	vinfo_xdecref(vi->array->items[index], po);
 	vi->array->items[index] = newitem;
 }
+EXTERNFN bool vinfo_would_be_recursive(vinfo_t* vi, vinfo_t* newitem);
 
 
 /* array management */
