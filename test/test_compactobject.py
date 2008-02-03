@@ -265,6 +265,15 @@ def test_constant_obj():
     res = f1()
     assert res == 3.5
 
+def test_circular_obj():
+    def f1():
+        x = Rect(5, 6)
+        x.foo = x
+        return x
+    psyco.bind(f1)
+    x = f1()
+    assert x.foo is x
+
 # ____________________________________________________________
 
 if __name__ == '__main__':
