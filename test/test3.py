@@ -337,6 +337,13 @@ def f27_b1():
     c = f28_b1()
     return a,b,c
 
+def whoIsCaller():
+    return sys._getframe(2).f_code.co_name
+def g():
+    return 'the caller of g() is: ' + whoIsCaller()
+def test_whoIsCaller():
+    print g()
+
 def f29(lst):
     lst = lst[:]
     del lst[2]
