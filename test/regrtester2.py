@@ -11,7 +11,7 @@ match = re.match(r"(\d+)[/](\d+)", sys.argv[1])
 assert match, "syntax: regrtester2.py n/m [-nodump] [seed]"
 n = int(match.group(1))
 m = int(match.group(2))
-assert 1 <= n <= m
+assert 0 <= n < m
 
 
 import test.regrtest
@@ -21,7 +21,7 @@ def confirm_still_in_psyco():
     return __in_psyco__
 
 tests = [s for s in test.regrtest.findtests()
-         if hash(s) % m < n and s not in test.regrtest.NOTTESTS]
+         if hash(s) % m == n and s not in test.regrtest.NOTTESTS]
 if __name__ == '__main__':
     if len(sys.argv) > 2 and sys.argv[2] == '-nodump':
         dump = 0
