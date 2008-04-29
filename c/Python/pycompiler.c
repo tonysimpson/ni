@@ -880,7 +880,6 @@ void psyco_pycompiler_init(void)
 
 static void mark_varying(PsycoObject* po, PyObject* key)
 {
-	RECLIMIT_SAFE_ENTER();
 	if (po->pr.changing_globals == NULL) {
 		po->pr.changing_globals = PyDict_New();
 		if (po->pr.changing_globals == NULL)
@@ -888,7 +887,6 @@ static void mark_varying(PsycoObject* po, PyObject* key)
 	}
 	if (PyDict_SetItem(po->pr.changing_globals, key, Py_True))
 		OUT_OF_MEMORY();
-	RECLIMIT_SAFE_LEAVE();
 }
 
 /* closure for the do_changed_global call-back */
@@ -928,7 +926,6 @@ PyObject* psy_get_builtins(PyObject* globals)
 	static PyObject* minimal_builtins = NULL;
 	PyObject* builtins;
 	/* code copied from frameobject.c */
-	RECLIMIT_SAFE_ENTER();
 	builtins = PyDict_GetItem((PyObject*) globals, s_builtin_object);
 	if (builtins) {
 		if (PyDict_Check(builtins))
@@ -952,7 +949,6 @@ PyObject* psy_get_builtins(PyObject* globals)
 	}
 	builtins = minimal_builtins;
  done:
-	RECLIMIT_SAFE_LEAVE();
 	return builtins;
 }
 
@@ -1024,7 +1020,6 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		static PyDictObject* dummy_dict = NULL;
 		static PyDictEntry* dummy_entry = NULL;
 		if (dummy_entry == NULL) {
-			RECLIMIT_SAFE_ENTER();
 			dummy_dict = (PyDictObject*) PyDict_New(); /* immortal */
 			if (!dummy_dict || PyDict_SetItem(
 			     (PyObject*) dummy_dict, Py_None, Py_None))
@@ -1032,7 +1027,6 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 			dummy_entry = (dummy_dict->ma_lookup)(
 				dummy_dict, Py_None, PyObject_Hash(Py_None));
 			extra_assert(dummy_entry != NULL);
-			RECLIMIT_SAFE_LEAVE();
 		}
 		dictitem_check_change(po, dummy_dict, dummy_entry);
 		/* end of respawning -- this dummy code will now be trashed */
@@ -1907,10 +1901,16 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
   int opcode=0;	/* Current opcode */
   int oparg=0;	/* Current opcode argument, if any */
   code_t* code1;
+  int saved_rec_limit;
   
   /* save and restore the current Python exception throughout compilation */
   PyObject *old_py_exc, *old_py_val, *old_py_tb;
   PyErr_Fetch(&old_py_exc, &old_py_val, &old_py_tb);
+
+  /* hack: protection against obscure failures during compilation caused by
+     the CPython recursion depth being very close to the limit */
+  saved_rec_limit = Py_GetRecursionLimit();
+  Py_SetRecursionLimit(saved_rec_limit + 50);
 
   if ((psyco_mp_flags(po->pr.merge_points) & MP_FLAGS_HAS_EXCEPT) != 0 &&
       (LOC_CONTINUATION->array == NullArray)) {
@@ -3232,6 +3232,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
     PyErr_WriteUnraisable(Py_None);
   }
 #endif
+
+  Py_SetRecursionLimit(saved_rec_limit);
+
   PyErr_Restore(old_py_exc, old_py_val, old_py_tb);
   return code1;
 }
