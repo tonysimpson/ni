@@ -164,6 +164,7 @@ int psyco_fatal_error(char* msg, char* filename, int lineno)
 #if CODE_DUMP
 static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
 {
+  int err;
   int i = array->count;
   fprintf(f, "%d\n", i);
   while (i--)
@@ -189,7 +190,8 @@ static void vinfo_array_dump(vinfo_array_t* array, FILE* f, PyObject* d)
           default:
             psyco_fatal_msg("gettime() corrupted");
           }
-          PyDict_SetItem(d, key, Py_None);
+          err = PyDict_SetItem(d, key, Py_None);
+          psyco_assert(!err);
           vinfo_array_dump(vi->array, f, d);
         }
       Py_DECREF(key);
@@ -254,6 +256,7 @@ void psyco_dump_code_buffers(void)
 {
   static int is_dumping = 0;
   FILE* f;
+  int saved_rec_limit;
 
 #if CODE_DUMP >= 3
   static int alt = 1;
@@ -270,6 +273,12 @@ void psyco_dump_code_buffers(void)
   
   if (is_dumping) return;
   is_dumping = 1;
+
+  /* protection against obscure failures during this debug dumping
+     caused by RuntimeErrors */
+  saved_rec_limit = Py_GetRecursionLimit();
+  Py_SetRecursionLimit(saved_rec_limit + 50);
+
   f = fopen(filename, "wb");
   if (f != NULL)
     {
@@ -365,6 +374,7 @@ void psyco_dump_code_buffers(void)
       fclose(f);
       PyErr_Restore(exc, val, tb);
     }
+  Py_SetRecursionLimit(saved_rec_limit);
   is_dumping = 0;
 }
 static PyObject* Psyco_dumpcodebuf(PyObject* self, PyObject* args)
