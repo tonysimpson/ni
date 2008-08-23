@@ -329,6 +329,23 @@ static vinfo_t* pint_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 				  "vv", v, w);
 }
 
+static vinfo_t* pint_floor_div(PsycoObject* po, vinfo_t* v, vinfo_t* w) 
+{
+	vinfo_t* a;
+	vinfo_t* b;
+	vinfo_t* x;
+	CONVERT_TO_LONG(v, a);
+	CONVERT_TO_LONG(w, b);
+	x = psyco_generic_call(po, cimpl_int_div, CfPure|CfReturnNormal|CfPyErrCheckMinus1, "vv", a, b);
+	if (x != NULL)
+		return PsycoInt_FROM_LONG(x);
+	/* Either an error occured or it overflowed. In either case let python deal with it */
+	PycException_Clear(po);
+	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_floor_divide,
+				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  "vv", v, w);
+}
+
 static vinfo_t* pint_pow(PsycoObject* po, vinfo_t* v, vinfo_t* w, vinfo_t* z)
 {
 	vinfo_t* a;
@@ -531,6 +548,7 @@ void psy_intobject_init(void)
 
         /* partial implementations not emitting machine code */
         Psyco_DefineMeta(m->nb_divide,   pint_div);
+        Psyco_DefineMeta(m->nb_floor_divide, pint_floor_div);
 	Psyco_DefineMeta(m->nb_remainder,pint_mod);
 	Psyco_DefineMeta(m->nb_power,    pint_pow);
 
