@@ -82,4 +82,6 @@
 
 #define T_UINT_READS_AS_SIGNED (PY_VERSION_HEX < 0x02050000) /* Python < 2.5 */
 
+#define HAVE_DICT_NEWPRESIZED (PY_VERSION_HEX >= 0x02060000)  /* Py >= 2.6 */
+
 #endif /* _PYVER_H */

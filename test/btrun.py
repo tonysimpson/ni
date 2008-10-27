@@ -741,7 +741,7 @@ Ok
 hello
 None
 
->>> compactobject.pcompact_creat('hel' + 'lo')
+>>> x='hel'; compactobject.pcompact_creat(x + 'lo')
 (0, 0, 0) 3 None hello
 (0, 1, 2) 4 None hello
 (0, 2, 4) 5 None hello
@@ -756,7 +756,7 @@ None
 11
 0
 
->>> compactobject.pcompact_modif('hel' + 'lo')
+>>> x='hel'; compactobject.pcompact_modif(x + 'lo')
 hello 1 0 1
 hello 1 0 2
 hello 1 0 3

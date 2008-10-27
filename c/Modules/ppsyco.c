@@ -43,7 +43,7 @@ static vinfo_t* psyco_fast_to_locals(PsycoObject* po)
 		   value is known to be (PyObject*)NULL. A run-time
 		   or virtual value is always non-NULL. */
 		if (!psyco_knowntobe(vvalue, 0)) {
-			if (!PsycoDict_SetItem(po, vlocals, key, vvalue)) {
+			if (!PsycoDict_SetItemC(po, vlocals, key, vvalue)) {
 				vinfo_decref(vlocals, po);
 				return NULL;
 			}

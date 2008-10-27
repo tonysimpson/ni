@@ -149,6 +149,7 @@ static char* NoControlFlowIfBuiltin[] = {
                            op == DELETE_SLICE+2 ||            \
                            op == DELETE_SLICE+3 ||            \
                            op == STORE_SUBSCR ||              \
+                           IS_STORE_MAP(op) ||                \
                            op == DELETE_SUBSCR ||             \
                            op == PRINT_EXPR ||                \
                            op == PRINT_ITEM ||                \
@@ -212,6 +213,12 @@ static char* NoControlFlowIfBuiltin[] = {
 # define IS_LIST_APPEND(op)  (op == LIST_APPEND)
 #else
 # define IS_LIST_APPEND(op)   0
+#endif
+
+#ifdef STORE_MAP
+# define IS_STORE_MAP(op)    (op == STORE_MAP)
+#else
+# define IS_STORE_MAP(op)     0
 #endif
 
 /***************************************************************/

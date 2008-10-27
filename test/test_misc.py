@@ -124,3 +124,10 @@ def test_circular_list():
     assert type(lst[0]) is list
     assert len(lst[0]) == 1
     assert lst[0][0] is lst
+
+def test_big_dict_constructor():
+    def f(x):
+        return {1: 2, 3: 4, x: 6, 7: 8, 9: x,
+                'a': 'a', 'b': 'c', 'd': 'e', 'f': 'g'}
+    assert psyco.proxy(f)(5) == f(5)
+    assert psyco.proxy(f)('b') == f('b')

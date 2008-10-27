@@ -18,6 +18,25 @@ vinfo_t* PsycoDict_New(PsycoObject* po)
 	return v;
 }
 
+#if HAVE_DICT_NEWPRESIZED
+DEFINEFN
+vinfo_t* PsycoDict_NewPresized(PsycoObject* po, long minused)
+{
+	if (minused > 5) {
+		vinfo_t* v = psyco_generic_call(po, _PyDict_NewPresized,
+						CfReturnRef|CfPyErrIfNull,
+						"l", minused);
+		if (v == NULL)
+			return NULL;
+		/* the result is a dict */
+		Psyco_AssertType(po, v, &PyDict_Type);
+		return v;
+	}
+	else
+		return PsycoDict_New(po);
+}
+#endif
+
 DEFINEFN
 vinfo_t* PsycoDict_Copy(PsycoObject* po, vinfo_t* orig)
 {
@@ -34,7 +53,16 @@ vinfo_t* PsycoDict_Copy(PsycoObject* po, vinfo_t* orig)
 
 DEFINEFN
 bool PsycoDict_SetItem(PsycoObject* po, vinfo_t* vdict,
-			   PyObject* key, vinfo_t* vvalue)
+		       vinfo_t* key, vinfo_t* vvalue)
+{
+	return psyco_generic_call(po, PyDict_SetItem,
+				  CfNoReturnValue|CfPyErrIfNeg,
+				  "vvv", vdict, key, vvalue) != NULL;
+}
+
+DEFINEFN
+bool PsycoDict_SetItemC(PsycoObject* po, vinfo_t* vdict,
+			PyObject* key, vinfo_t* vvalue)
 {
 	return psyco_generic_call(po, PyDict_SetItem,
 				  CfNoReturnValue|CfPyErrIfNeg,

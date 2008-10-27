@@ -1358,7 +1358,7 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 			}
 		}
 		else
-			wdict = PsycoDict_New(po);
+			wdict = PsycoDict_NewPresized(po, nk);
 		
 		if (wdict == NULL)
 			goto fail;
@@ -2672,11 +2672,23 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 
 	case BUILD_MAP:
-		v = PsycoDict_New(po);
+		v = PsycoDict_NewPresized(po, oparg);
 		if (v == NULL)
 			break;
 		PUSH(v);
 		goto fine;
+
+#ifdef STORE_MAP
+	case STORE_MAP:
+		w = NTOP(1);   /* key */
+		u = NTOP(2);   /* value */
+		v = NTOP(3);   /* dict */
+		if (!PsycoDict_SetItem(po, v, w, u))  /* v[w] = u */
+			break;
+		POP_DECREF();
+		POP_DECREF();
+		goto fine;
+#endif
 
 	case LOAD_ATTR:
 		w = vinfo_new(CompileTime_New(((long) GETNAMEV(oparg))));
