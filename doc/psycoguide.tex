@@ -853,6 +853,8 @@ Apart from speed, functions are supposed to run identically under Psyco and unde
 
 \item Infinite recursions are not correctly detected. They are likely to result in segmentation faults (or whatever a stack overflow triggers on your system) instead of Python's nice \exception{RuntimeError}. Similarily, circularities among data structures can cause troubles (e.g.\ printing or comparing lists that contain themselves).
 
+\item In Python 2.6 parts of the \module{warnings} module were rewritten in C.  As a result, the reported warnings may be misplaced (they cannot show a Psyco-compiled frame).
+
 \end{itemize}
 
 At other points, Psyco makes assumptions that may be wrong (and will cause damage if they turn out to be):

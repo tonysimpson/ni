@@ -49,6 +49,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_import': 'I hack my pythons to not import bare .pyc files any more',
         'test_runpy':  'I hack my pythons to not import bare .pyc files any more',
         'test_genexps': 'doctests checking the exact error message',
+        'test_warnings': 'stackdepth no longer work in 2.6 because it was rewritten in C',
 	}
 #    SKIP['test_operator'] = NO_SYS_EXC
 #    SKIP['test_strop'] = NO_SYS_EXC
