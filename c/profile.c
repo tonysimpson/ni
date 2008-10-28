@@ -413,6 +413,7 @@ static PyObject* profile_call(PyFrameObject* frame, PyObject* arg)
 		/* we want to accelerate this code object */
 		if (cs->st_codebuf == NULL) {
 			/* not already compiled, compile it now */
+			PyObject* codebuf;
 			PyObject* g = frame->f_globals;
 			int rec, module;
 			stats_printf(("stats: compile code:  %s\n",
@@ -422,8 +423,14 @@ static PyObject* profile_call(PyFrameObject* frame, PyObject* arg)
 			else
 				rec = DEFAULT_RECURSION;
 			module = frame->f_globals == frame->f_locals;
-			cs->st_codebuf = PsycoCode_CompileCode(frame->f_code,
-							       g, rec, module);
+			codebuf = PsycoCode_CompileCode(frame->f_code,
+							g, rec, module);
+			/* rare race condition: 'cs' might have been mutated
+			   during the call to PsycoCode_CompileCode(), so
+			   cs->st_codebuf might no longer be NULL, or
+			   cs->st_globals might be NULL again */
+			Py_XDECREF(cs->st_codebuf);
+			cs->st_codebuf = codebuf;
 			if (cs->st_codebuf == Py_None)
 				g = NULL;  /* failed */
 			else {
@@ -431,7 +438,7 @@ static PyObject* profile_call(PyFrameObject* frame, PyObject* arg)
 				extra_assert
 					(CodeBuffer_Check(cs->st_codebuf));
 			}
-			Py_DECREF(cs->st_globals);
+			Py_XDECREF(cs->st_globals);
 			cs->st_globals = g;
 		}
 		/* already compiled a Psyco version, run it
