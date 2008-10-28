@@ -1711,7 +1711,7 @@ PSY_INLINE
 #  endif
 code_t* lookup_old_promotion_values(rt_promotion_t* fs, long value)
 {
-  rt_local_buf_t** ppbuf;
+  rt_local_buf_t* prevbuf;
   if (fs->local_chained_list == NULL)
     return NULL;  /* not found (list is empty) */
 
@@ -1720,28 +1720,39 @@ code_t* lookup_old_promotion_values(rt_promotion_t* fs, long value)
      of the list, which we know is not what we are looking
      for because otherwise the CMP/JE instructions
      would have found it and we would not be here */
-  extra_assert(fs->local_chained_list->key != value);
+  /* XXX However, I've actually seen this failing once.  I couldn't make
+     sense of the failure except by assuming that the CPU instruction
+     cache was somehow out of date.  To cope for that case, see
+     the XXX below... */
+  /*extra_assert(fs->local_chained_list->key != value);*/
 #else
   if (fs->local_chained_list->key == value)
     return (code_t*)(fs->local_chained_list+1);  /* it is the head of the list */
 #endif
 
-  ppbuf = &fs->local_chained_list->next;
+  prevbuf = fs->local_chained_list;
   while (1)
     {
-      rt_local_buf_t* buf = *ppbuf;
+      rt_local_buf_t* buf = prevbuf->next;
       if (buf == NULL)
-        return NULL;  /* not found (list exhausted) */
+        break;    /* not found (list exhausted) */
       if (buf->key == value)
         {
           /* found inside the list, put it at the head */
-          *ppbuf = buf->next;
+          prevbuf->next = buf->next;
           buf->next = fs->local_chained_list;
           fs->local_chained_list = buf;
           return (code_t*)(buf+1);
         }
-      ppbuf = &buf->next;
+      prevbuf = buf;
     }
+#if PROMOTION_FAST_COMMON_CASE
+  /* XXX the following condition is normally impossible,
+     but see the XXX above. */
+  if (fs->local_chained_list->key == value)
+    return (code_t*)(fs->local_chained_list+1);
+#endif
+  return NULL;
 }
 
 #if PROMOTION_FAST_COMMON_CASE
@@ -1757,6 +1768,9 @@ static int quick_lookup_counter = 0;
             if (buf->key == (value))                            \
               return (code_t*)(buf+1);                          \
           }                                                     \
+          /* XXX workaround, see notes above about CPU cache */ \
+          if ((fs)->local_chained_list->key == (value))         \
+            return (code_t*)((fs)->local_chained_list+1);       \
           res = NULL;  /* not found */                          \
         }                                                       \
         else {                                                  \
