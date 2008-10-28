@@ -54,16 +54,14 @@ extern double modf (double, double *);
  * version in pfloatobject.c. The error handling 
  * on invalid args is different
  */
-#define PMATH_CONVERT_TO_DOUBLE(vobj, v1, v2, ERRORACTION)	\
+#define PMATH_CONVERT_TO_DOUBLE(vobj, v1, v2)			\
     switch (psyco_convert_to_double(po, vobj, &v1, &v2)) {	\
     case true:							\
         break;   /* fine */					\
     case false:							\
-        ERRORACTION;  /* error or promotion */			\
+        goto error;  /* error or promotion */			\
     default:							\
-        PycException_SetString(po, PyExc_TypeError,		\
-            "bad argument type for built-in operation");	\
-        ERRORACTION;						\
+        goto fallback;  /* e.g. not a float object */		\
     }
 
 #define PMATH_RELEASE_DOUBLE(v1, v2) \
@@ -76,7 +74,7 @@ extern double modf (double, double *);
     static vinfo_t* pmath_##func(PsycoObject* po, vinfo_t* vself, vinfo_t* v) { \
         vinfo_t *a1, *a2, *x; \
         vinfo_array_t* result; \
-        PMATH_CONVERT_TO_DOUBLE(v,a1,a2,return NULL);      \
+        PMATH_CONVERT_TO_DOUBLE(v,a1,a2); \
         result = array_new(2); \
         x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfNoReturnValue|CfPyErrIfNonNull, \
                                   "vva",a1,a2,result); \
@@ -85,6 +83,12 @@ extern double modf (double, double *);
             x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]); \
         array_release(result); \
         return x; \
+    fallback:                                                   \
+        return psyco_generic_call(po, fallback_##func,          \
+                                  CfReturnRef|CfPyErrIfNull,    \
+                                  "lv", NULL, v);               \
+    error:                                                      \
+        return NULL;                                            \
     }
 #else
 # define PMATH_FUNC1(funcname, func ) \
@@ -94,13 +98,10 @@ extern double modf (double, double *);
         vinfo_array_t* result; \
         vinfo_t *v; \
         int tuplesize = PsycoTuple_Load(varg); \
-        if (tuplesize != 1){ /* wrong or unknown number of arguments */ \
-          return psyco_generic_call(po, fallback_##func, \
-				    CfReturnRef|CfPyErrIfNull, \
-				    "lv", NULL, varg); \
-        } \
+        if (tuplesize != 1) /* wrong or unknown number of arguments */ \
+          goto fallback; \
         v = PsycoTuple_GET_ITEM(varg, 0); \
-        PMATH_CONVERT_TO_DOUBLE(v,a1,a2,return NULL);      \
+        PMATH_CONVERT_TO_DOUBLE(v,a1,a2); \
         result = array_new(2); \
         x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfNoReturnValue|CfPyErrIfNonNull, \
                                   "vva",a1,a2,result); \
@@ -109,25 +110,28 @@ extern double modf (double, double *);
             x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]); \
         array_release(result); \
         return x; \
+    fallback:                                                   \
+        return psyco_generic_call(po, fallback_##func,          \
+                                  CfReturnRef|CfPyErrIfNull,    \
+                                  "lv", NULL, varg);            \
+    error:                                                      \
+        return NULL;                                            \
     }
 #endif
 
 #define PMATH_FUNC2(funcname, func ) \
     static PyCFunction fallback_##func; \
     static vinfo_t* pmath_##func(PsycoObject* po, vinfo_t* vself, vinfo_t* varg) { \
-        vinfo_t *a1, *a2, *b1, *b2, *x; \
+        vinfo_t *a1 = NULL, *a2 = NULL, *b1, *b2, *x; \
         vinfo_array_t* result; \
         vinfo_t *v1, *v2; \
         int tuplesize = PsycoTuple_Load(varg); \
-        if (tuplesize != 2){ /* wrong or unknown number of arguments */ \
-          return psyco_generic_call(po, fallback_##func, \
-				    CfReturnRef|CfPyErrIfNull, \
-				    "lv", NULL, varg); \
-        } \
+        if (tuplesize != 2) /* wrong or unknown number of arguments */ \
+          goto fallback; \
         v1 = PsycoTuple_GET_ITEM(varg, 0); \
         v2 = PsycoTuple_GET_ITEM(varg, 1); \
-        PMATH_CONVERT_TO_DOUBLE(v1,a1,a2,return NULL);     \
-        PMATH_CONVERT_TO_DOUBLE(v2,b1,b2,goto cleanup);                \
+        PMATH_CONVERT_TO_DOUBLE(v1,a1,a2); \
+        PMATH_CONVERT_TO_DOUBLE(v2,b1,b2); \
         result = array_new(2); \
         x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfNoReturnValue|CfPyErrIfNonNull, \
                                "vvvva",a1,a2,b1,b2,result); \
@@ -137,9 +141,15 @@ extern double modf (double, double *);
             x = PsycoFloat_FROM_DOUBLE(result->items[0], result->items[1]); \
         array_release(result); \
         return x; \
-    cleanup:\
-        PMATH_RELEASE_DOUBLE(a1,a2); \
-        return NULL; \
+    fallback:                                                   \
+        return psyco_generic_call(po, fallback_##func,          \
+                                  CfReturnRef|CfPyErrIfNull,    \
+                                  "lv", NULL, varg);            \
+    error:                                                      \
+        if (a2 != NULL) {                                       \
+          PMATH_RELEASE_DOUBLE(a1,a2);                          \
+        }                                                       \
+        return NULL;                                            \
     }
 
 /* the functions cimpl_math_sin() etc */

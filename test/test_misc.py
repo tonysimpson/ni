@@ -1,4 +1,5 @@
 import py, sys, psyco
+import math
 
 
 def test_index():
@@ -131,3 +132,11 @@ def test_big_dict_constructor():
                 'a': 'a', 'b': 'c', 'd': 'e', 'f': 'g'}
     assert psyco.proxy(f)(5) == f(5)
     assert psyco.proxy(f)('b') == f('b')
+
+def test_nonfloat_in_math():
+    class X(object):
+        def __float__(self):
+            return -123.45
+    def f(x):
+        return math.ceil(x), math.floor(x)
+    assert psyco.proxy(f)(X()) == (-123.0, -124.0)
