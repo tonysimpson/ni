@@ -855,6 +855,8 @@ Apart from speed, functions are supposed to run identically under Psyco and unde
 
 \item In Python 2.6 parts of the \module{warnings} module were rewritten in C.  As a result, the reported warnings may be misplaced (they cannot show a Psyco-compiled frame).
 
+\item In Python 2.6, creating namedtuple classes (not instances) in a Psyco-optimized function gives the class the wrong \member{__module__} attribute, for the same reason as above: it is created by C code, so it ignores the Psyco frame hooks.
+
 \end{itemize}
 
 At other points, Psyco makes assumptions that may be wrong (and will cause damage if they turn out to be):
