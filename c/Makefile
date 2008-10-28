@@ -82,7 +82,7 @@ build_ext: build_py
 	@echo -------------------------------------------
 	gcc ${LD_FLAGS} ${C_FLAGS} -DALL_STATIC=1 psyco.c platform.c -o ${OUTPUT}
 	echo ${BUILD_VERSION} > ${OUTDIR}/build-version
-	cd ..; $(python) setup.py install
+	cd ..; $(python) setup.py install -f --install-lib=test/tmp
 
 build_py:
 	cd ..; $(python) setup.py build_py
