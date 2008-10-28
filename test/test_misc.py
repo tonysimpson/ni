@@ -140,3 +140,9 @@ def test_nonfloat_in_math():
     def f(x):
         return math.ceil(x), math.floor(x)
     assert psyco.proxy(f)(X()) == (-123.0, -124.0)
+
+def test_power_error_case():
+    def f(x, y):
+        return x ** y
+    py.test.raises(ValueError, f, -4.5, 0.9)
+    py.test.raises(ValueError, psyco.proxy(f), -4.5, 0.9)

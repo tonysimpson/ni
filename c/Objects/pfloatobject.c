@@ -4,6 +4,7 @@
 
 #if HAVE_FP_FN_CALLS
 
+#define CF_NONPURE_FP_HELPER    (CfPure|CfNoReturnValue|CfPyErrIfNonNull)
 #ifdef WANT_SIGFPE_HANDLER
 # define CF_PURE_FP_HELPER	(CfPure|CfNoReturnValue|CfPyErrIfNonNull)
 #else
@@ -532,7 +533,7 @@ static vinfo_t* pfloat_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
     vinfo_array_t* result;
     CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_div, CfPure|CfNoReturnValue|CfPyErrIfNonNull,
+    x = psyco_generic_call(po, cimpl_fp_div, CF_NONPURE_FP_HELPER,
                            "vvvva", a1, a2, b1, b2, result);
     RELEASE_DOUBLE2(a1, a2, b1, b2);
     if (x != NULL) {
@@ -550,7 +551,7 @@ static vinfo_t* pfloat_pow(PsycoObject* po, vinfo_t* v, vinfo_t* w, vinfo_t* z)
 	    goto fallback;
     CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
     result = array_new(2);
-    x = psyco_generic_call(po, cimpl_fp_pow, CF_PURE_FP_HELPER,
+    x = psyco_generic_call(po, cimpl_fp_pow, CF_NONPURE_FP_HELPER,
                            "vvvva", a1, a2, b1, b2, result);
     RELEASE_DOUBLE2(a1, a2, b1, b2);
     if (x != NULL) {
