@@ -39,12 +39,12 @@ PSYCO_MODES = [
     {'PSYCO_DEBUG': 1, 'VERBOSE_LEVEL': 1, 'CODE_DUMP': 1, 'ALL_STATIC': 1},
     # optimized mode, static compiling
     {'PSYCO_DEBUG': 0, 'VERBOSE_LEVEL': 0, 'CODE_DUMP': 0, 'ALL_STATIC': 1},
-    # debugging mode, IVM virtual processor
-    {'PSYCO_DEBUG': 1, 'VERBOSE_LEVEL': 1, 'CODE_DUMP': 1, 'ALL_STATIC': 1,
-     'PROCESSOR': 'ivm'},
-    # optimized mode, IVM virtual processor
-    {'PSYCO_DEBUG': 0, 'VERBOSE_LEVEL': 0, 'CODE_DUMP': 0, 'ALL_STATIC': 1,
-     'PROCESSOR': 'ivm'},
+##    # debugging mode, IVM virtual processor
+##    {'PSYCO_DEBUG': 1, 'VERBOSE_LEVEL': 1, 'CODE_DUMP': 1, 'ALL_STATIC': 1,
+##     'PROCESSOR': 'ivm'},
+##    # optimized mode, IVM virtual processor
+##    {'PSYCO_DEBUG': 0, 'VERBOSE_LEVEL': 0, 'CODE_DUMP': 0, 'ALL_STATIC': 1,
+##     'PROCESSOR': 'ivm'},
     ]
 
 FRACTION = 10
@@ -94,7 +94,7 @@ def do_compile(python_version, psyco_mode):
         f.close()
         os.chdir(os.pardir)
         run(python_version, 'setup.py', 'build', '-f')
-        run(python_version, 'setup.py', 'install_lib')
+        run(python_version, 'setup.py', 'install', '-f', '--install-lib', tmpdir)
     finally:
         os.chdir(cwd)
         f = open(preffile, 'w')
@@ -138,8 +138,12 @@ def test_with(python_version, psyco_mode, running_mode):
 
 
 def test():
-    global tests_passed, passed_filename
-    passed_filename = "tmp_fulltests_passed"
+    global tests_passed, passed_filename, tmpdir
+    tmpdir = os.path.abspath('tmp')
+    if not os.path.isdir(tmpdir):
+        os.mkdir(tmpdir)
+    os.environ['PYTHONPATH'] = tmpdir
+    passed_filename = os.path.join(tmpdir, 'fulltests_passed')
     try:
         f = open(passed_filename)
         tests_passed = eval(f.read())
