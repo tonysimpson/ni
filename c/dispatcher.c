@@ -1428,7 +1428,7 @@ DEFINEFN
 vcompatible_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns)
 {
   static vcompatible_t result;  /* argh, a global variable -- well, the rest of
-                                   the implementation is not re-entrent anyway */
+                                   the implementation is not re-entrant anyway */
   vinfo_array_t* bestresult = NULL;   /* best result so far */
   CodeBufferObject* bestbuf = NULL;
   int i;
@@ -2242,7 +2242,7 @@ void psyco_unfix(PsycoObject* po, vinfo_t* vi)
       vi->array = NullArray;
     }
 
-  /* A particular case that *do* occur:
+  /* A particular case that *does* occur:
      'vi' was always selected as a compile-time vinfo_t not within
      another compile-time vinfo_t's subarray; but it could
      actually appear more than once in po->vlocals, and another
