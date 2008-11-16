@@ -178,7 +178,7 @@ def print_results():
 def go1(arg=2117):
     go(f1, arg)
 
-FILEPATH = '../c'
+FILEPATH = os.path.join('..','c')
 FILELIST = [os.path.join(FILEPATH, s) for s in os.listdir(FILEPATH)]
 FILELIST = [s for s in FILELIST if os.path.isfile(s) and s!='psyco.dump']
 
