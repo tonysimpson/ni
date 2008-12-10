@@ -139,7 +139,7 @@ def test_with(python_version, psyco_mode, running_mode):
 
 def test():
     global tests_passed, passed_filename, tmpdir
-    tmpdir = os.path.abspath('tmp')
+    tmpdir = os.path.abspath('tmpd')
     if not os.path.isdir(tmpdir):
         os.mkdir(tmpdir)
     os.environ['PYTHONPATH'] = tmpdir
