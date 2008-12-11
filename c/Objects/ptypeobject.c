@@ -117,6 +117,14 @@ vinfo_t* psyco_pobject_new(PsycoObject* po, PyTypeObject* type,
 						 "vv", varg, vkw))
 			return NULL;
 	}
+#ifdef Py_TPFLAGS_IS_ABSTRACT
+	if (type->tp_flags & Py_TPFLAGS_IS_ABSTRACT) {
+		/* fall back to object_new for error handling */
+		return psyco_generic_call(po, object_new,
+					  CfReturnRef|CfPyErrIfNull,
+					  "lvv", type, varg, vkw);
+	}
+#endif
 	return Psyco_META2(po, type->tp_alloc,
 			   CfReturnRef|CfPyErrIfNull, "ll",
 			   type, 0);
