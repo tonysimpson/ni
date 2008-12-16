@@ -806,6 +806,7 @@ vinfo_t* PsycoNumber_Power(PsycoObject* po, vinfo_t* v1, vinfo_t* v2, vinfo_t*v3
 		f = PyFloat_Type.tp_as_number->nb_power;
 	else if (vtp == &PyLong_Type || wtp == &PyLong_Type)
 		f = PyLong_Type.tp_as_number->nb_power;
+		/* note this subpath had an error since 2001 */
 	else
 		f = PyInt_Type.tp_as_number->nb_power;
 	x = Psyco_META3(po, f, CfReturnRef|CfPyErrIfNull,

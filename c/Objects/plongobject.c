@@ -64,7 +64,15 @@ RETLONG(2,	plong_mul,		nb_multiply)
 #endif
 RETLONG(2,	plong_classic_div,	nb_divide)
 RETLONG(2,	plong_mod,		nb_remainder)
-RETLONG(3,	plong_pow,		nb_power)
+
+/*
+    note that psyco's assumption about the return type of long_pow
+    was wrong from the beginning. Since Python 2.2, or even more exact
+    since rev. 21646, July 12 2001 by Guido, long_pow can return
+    a float for negative exponents.
+    RETLONG(3,	plong_pow,		nb_power)
+ */
+
 RETLONG(1,	plong_neg,		nb_negative)
 RETLONG(1,	plong_pos,		nb_positive)
 RETLONG(1,	plong_abs,		nb_absolute)
@@ -79,6 +87,16 @@ RETLONG(2,	plong_div,		nb_floor_divide)
 
 #undef RETLONG
 
+static vinfo_t* plong_pow(PsycoObject *po, vinfo_t* v1, vinfo_t* v2,
+			  vinfo_t* v3)
+{
+	/* this version is identical to the macros above, but
+	   does not assert the return type. (cf. DEF_KNOWN_RET_TYPE_internal
+	   in pobject.h) */
+	return psyco_generic_call(po, PyLong_Type.tp_as_number->nb_power,
+				  CfReturnRef|CfPyErrNotImplemented,
+				  "vvv", v1, v2, v3);
+}
 
 INITIALIZATIONFN
 void psy_longobject_init(void)
