@@ -19,8 +19,11 @@ You can use these functions from the 'psyco' module instead of
 ###########################################################################
 
 import _psyco
-import types, new
+import types
 from support import *
+
+newfunction = types.FunctionType
+newinstancemethod = types.MethodType
 
 
 # Default charge profiler values
@@ -178,10 +181,10 @@ up to the given depth of indirection."""
             code = _psyco.proxycode(x)
         else:
             code = _psyco.proxycode(x, rec)
-        return new.function(code, x.func_globals, x.func_name)
+        return newfunction(code, x.func_globals, x.func_name)
     if isinstance(x, types.MethodType):
         p = proxy(x.im_func, rec)
-        return new.instancemethod(p, x.im_self, x.im_class)
+        return newinstancemethod(p, x.im_self, x.im_class)
     raise TypeError, "cannot proxy %s objects" % type(x).__name__
 
 
@@ -193,7 +196,7 @@ does not trigger compilation nor execution of any compiled code."""
         return _psyco.unproxycode(proxy.func_code)
     if isinstance(proxy, types.MethodType):
         f = unproxy(proxy.im_func)
-        return new.instancemethod(f, proxy.im_self, proxy.im_class)
+        return newinstancemethod(f, proxy.im_self, proxy.im_class)
     raise TypeError, "%s objects cannot be proxies" % type(proxy).__name__
 
 

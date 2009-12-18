@@ -374,6 +374,6 @@ sys.setprofile          = psyco_setprofile
 thread.start_new_thread = psyco_start_new_thread
 # hack to patch threading._start_new_thread if the module is
 # already loaded
-if (sys.modules.has_key('threading') and
+if ('threading' in sys.modules and
     hasattr(sys.modules['threading'], '_start_new_thread')):
     sys.modules['threading']._start_new_thread = psyco_start_new_thread
