@@ -47,7 +47,8 @@ static char* NoControlFlowIfBuiltin[] = {
 
 /* instructions with a target: */
 #define HAS_JREL_INSTR(op)   (op == JUMP_FORWARD ||   \
-                              IS_JCOND_INSTR(op) ||   \
+                              op == JUMP_IF_FALSE ||  \
+                              op == JUMP_IF_TRUE ||   \
                               op == FOR_ITER ||     \
                               /*    SETUP_LOOP replaced by FOR_ITER */    \
                               op == SETUP_EXCEPT ||   \
@@ -218,16 +219,6 @@ static char* NoControlFlowIfBuiltin[] = {
 # define IS_STORE_MAP(op)    (op == STORE_MAP)
 #else
 # define IS_STORE_MAP(op)     0
-#endif
-
-#ifdef JUMP_IF_FALSE_OR_POP   /* Python 2.7 */
-# define IS_JCOND_INSTR(op)  (op == JUMP_IF_FALSE_OR_POP ||  \
-                              op == JUMP_IF_TRUE_OR_POP ||   \
-                              op == POP_JUMP_IF_FALSE ||     \
-                              op == POP_JUMP_IF_TRUE)
-#else
-# define IS_JCOND_INSTR(op)  (op == JUMP_IF_FALSE ||  \
-                              op == JUMP_IF_TRUE)
 #endif
 
 /***************************************************************/
