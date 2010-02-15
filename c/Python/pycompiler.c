@@ -2818,20 +2818,44 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		mp = psyco_next_merge_point(po->pr.merge_points, next_instr);
 		goto fine;
 
+#ifdef JUMP_IF_FALSE_OR_POP   /* Python 2.7 */
+	case JUMP_IF_TRUE_OR_POP:
+	case JUMP_IF_FALSE_OR_POP:
+	case POP_JUMP_IF_FALSE:
+	case POP_JUMP_IF_TRUE:
+#else
 	case JUMP_IF_TRUE:
 	case JUMP_IF_FALSE:
+#endif
 		/* This code is very different from the original
 		   interpreter's, because we generally do not know the
 		   outcome of PyObject_IsTrue(). In the case of JUMP_IF_xxx
 		   we must be prepared to have to compile the two possible
 		   paths. */
-		cc = integer_NON_NULL(po, PsycoObject_IsTrue(po, TOP()));
+		x = PsycoObject_IsTrue(po, TOP());
+#ifdef JUMP_IF_FALSE_OR_POP   /* Python 2.7 */
+		if (opcode == POP_JUMP_IF_FALSE ||
+		    opcode == POP_JUMP_IF_TRUE) {
+			/* XXX should work but is suboptimal, because the
+			   DECREF will usually save the current cc.  It would
+			   be much better to somehow obtain the same effect as
+			   in Python <= 2.6, e.g. by DECREFing in both
+			   branches after the conditional jump. */
+			POP_DECREF();
+		}
+#endif
+		cc = integer_NON_NULL(po, x);
 		if (cc == CC_ERROR)
 			break;
+#ifdef JUMP_IF_FALSE_OR_POP   /* Python 2.7 */
+		if (opcode == JUMP_IF_FALSE_OR_POP ||
+		    opcode == POP_JUMP_IF_FALSE)
+#else
 		if (opcode == JUMP_IF_FALSE)
+#endif
 			cc = INVERT_CC(cc);
 		if ((int)cc < CC_TOTAL) {
-			/* compile the beginning of the "if true" path */
+			/* compile the beginning of the "jump" path */
 			int current_instr = next_instr;
 			JUMPBY(oparg);
 			SAVE_NEXT_INSTR(next_instr);
@@ -2839,15 +2863,23 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 				psyco_exact_merge_point(po->pr.merge_points,
 							next_instr),
                                            cc);
+			/* proceed now to compile the rest of the
+			   "non-jump" path */
 			next_instr = current_instr;
 		}
 		else if (cc == CC_ALWAYS_TRUE) {
 			JUMPBY(oparg);   /* always jump */
 			mp = psyco_next_merge_point(po->pr.merge_points,
 						    next_instr);
+			goto fine;
                 }
 		else
 			;                  /* never jump */
+#ifdef JUMP_IF_FALSE_OR_POP   /* Python 2.7 */
+		if (opcode == JUMP_IF_FALSE_OR_POP ||
+		    opcode == JUMP_IF_TRUE_OR_POP)
+			POP_DECREF();
+#endif
 		goto fine;
 
 	case JUMP_ABSOLUTE:
