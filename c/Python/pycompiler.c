@@ -1920,7 +1920,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
        PyFrameObject::f_exc_xxx fields. */
     psyco_emit_header(po, 3);
   }
-  
+
+#if HAVE_NEXT_INSTR_POP
+  if (po->pr.next_instr < -1) {
+    /* there is a pending POP operation to be done */
+    POP_DECREF();
+    po->pr.next_instr &= ~NEXT_INSTR_POP;
+  }
+#endif
+
   while (po->pr.next_instr != -1)
     {
       /* 'co' is the code object we are interpreting/compiling */
@@ -1950,7 +1958,10 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	SAVE_NEXT_INSTR(next_instr);  /* could be optimized, not needed in the
 					 case of an opcode that cannot set
 					 run-time conditions */
-	
+
+	fprintf(stderr, "%s: %d [%x]\n", PyString_AS_STRING(co->co_name),
+		next_instr,
+		GETLOCAL(0)->source);
 	opcode = NEXTOP();
 	if (HAS_ARG(opcode))
 		oparg = NEXTARG();
@@ -2818,8 +2829,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		mp = psyco_next_merge_point(po->pr.merge_points, next_instr);
 		goto fine;
 
+#if HAVE_NEXT_INSTR_POP   /* Python >= 2.7 */
+	case JUMP_IF_TRUE_OR_POP:
+	case JUMP_IF_FALSE_OR_POP:
+	case POP_JUMP_IF_FALSE:
+	case POP_JUMP_IF_TRUE:
+#else
 	case JUMP_IF_TRUE:
 	case JUMP_IF_FALSE:
+#endif
 		/* This code is very different from the original
 		   interpreter's, because we generally do not know the
 		   outcome of PyObject_IsTrue(). In the case of JUMP_IF_xxx
@@ -2828,12 +2846,25 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		cc = integer_NON_NULL(po, PsycoObject_IsTrue(po, TOP()));
 		if (cc == CC_ERROR)
 			break;
+#if HAVE_NEXT_INSTR_POP
+		if (opcode == JUMP_IF_FALSE_OR_POP ||
+		    opcode == POP_JUMP_IF_FALSE)
+#else
 		if (opcode == JUMP_IF_FALSE)
+#endif
 			cc = INVERT_CC(cc);
 		if ((int)cc < CC_TOTAL) {
 			/* compile the beginning of the "if true" path */
 			int current_instr = next_instr;
+#if HAVE_NEXT_INSTR_POP
+			JUMPTO(oparg);
+			/* this is the case where we jump */
+			if (opcode == POP_JUMP_IF_FALSE ||
+			    opcode == POP_JUMP_IF_TRUE)
+				next_instr |= NEXT_INSTR_POP;
+#else
 			JUMPBY(oparg);
+#endif
 			SAVE_NEXT_INSTR(next_instr);
 			psyco_compile_cond(po,
 				psyco_exact_merge_point(po->pr.merge_points,
@@ -2842,12 +2873,25 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			next_instr = current_instr;
 		}
 		else if (cc == CC_ALWAYS_TRUE) {
+#if HAVE_NEXT_INSTR_POP
+			JUMPTO(oparg);   /* always jump */
+			/* this is the case where we jump */
+			if (opcode == POP_JUMP_IF_FALSE ||
+			    opcode == POP_JUMP_IF_TRUE)
+				POP_DECREF();
+#else
 			JUMPBY(oparg);   /* always jump */
+#endif
 			mp = psyco_next_merge_point(po->pr.merge_points,
 						    next_instr);
+			goto fine;
                 }
 		else
 			;                  /* never jump */
+#if HAVE_NEXT_INSTR_POP
+		/* this is the case where we don't jump */
+		POP_DECREF();
+#endif
 		goto fine;
 
 	case JUMP_ABSOLUTE:
