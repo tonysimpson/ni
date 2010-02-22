@@ -52,6 +52,9 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_warnings': 'stackdepth no longer work in 2.6 because it was rewritten in C',
         'test_signal': 'contains tight loops where Psyco does not handle signals',
         'test_collections': 'namedtuple() gets the wrong __module__',
+        'test_capi': 'threads with a busy loop',
+        'test_zipimport_support': 'sees psyco.profiler.go() in pdb',
+        'test_deque': 'uses too much memory: "pop=d.pop" keeps d alive forever',
 	}
 #    SKIP['test_operator'] = NO_SYS_EXC
 #    SKIP['test_strop'] = NO_SYS_EXC

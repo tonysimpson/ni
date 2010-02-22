@@ -524,7 +524,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
   unsigned char* source = (unsigned char*) PyString_AS_STRING(co->co_code);
   size_t ibytes = (length+1) * sizeof(struct instrnode_s);
   struct instrnode_s* instrnodes;
-  int i, lasti, count;
+  int i, lasti, count, op1;
   bool modif;
   PyTryBlock blockstack[CO_MAXBLOCKS];
   int iblock, bytecodeweight, iblockmax = 0;
@@ -610,7 +610,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
 #ifdef SETUP_WITH
         case SETUP_WITH:
           i = i0;
-          /* op = SETUP_WITH; */
+          op1 = SETUP_WITH;
           goto unsupported_instruction;
 #endif
 
@@ -685,19 +685,15 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
             if (flags == 0)
               if (op != COMPARE_OP || !SUPPORTED_COMPARE_ARG(oparg))
                 {
-                unsupported_instruction:
-                  debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
-                               ("unsupported opcode %d at %s:%d\n",
-                                (int) op, PyCodeObject_NAME(co), i));
-                  s = Py_None;
-                  Py_INCREF(s);
-                  goto done;
+                  op1 = op;
+                  goto unsupported_instruction;
                 }
             if (flags & (MP_HAS_JREL|MP_HAS_JABS))
               {
                 int jtarget = oparg;
                 if (flags & MP_HAS_JREL)
                   jtarget += nextinstr;
+                psyco_assert(jtarget < length);
                 if (flags & MP_HAS_J_MULTIPLE || !++instrnodes[jtarget].inpaths)
                   instrnodes[jtarget].inpaths = 99;
                 instrnodes[i].next2 = instrnodes + jtarget;
@@ -723,7 +719,10 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
             if (flags & MP_IS_MODULE)
               {
                 if (  /*!module*/  1)  /* disabled, currently buggy */
-                  goto unsupported_instruction;
+                  {
+                    op1 = op;
+                    goto unsupported_instruction;
+                  }
                 mp_flags |= MP_FLAGS_MODULE;
               }
             
@@ -941,6 +940,15 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
   PyMem_FREE(instrnodes);
   PyErr_Restore(etype, evalue, etb);
   return s;
+
+ unsupported_instruction:
+  debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
+               ("unsupported opcode %d at %s:%d\n",
+                op1, PyCodeObject_NAME(co), i));
+  psyco_assert(op1 != 0);
+  s = Py_None;
+  Py_INCREF(s);
+  goto done;
 }
 
 DEFINEFN

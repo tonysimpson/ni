@@ -36,7 +36,7 @@ f.close()
 
 PSYCO_MODES = [
     # debugging mode, static compiling
-##    {'PSYCO_DEBUG': 1, 'VERBOSE_LEVEL': 1, 'CODE_DUMP': 1, 'ALL_STATIC': 1},
+    {'PSYCO_DEBUG': 1, 'VERBOSE_LEVEL': 1, 'CODE_DUMP': 1, 'ALL_STATIC': 1},
     # optimized mode, static compiling
     {'PSYCO_DEBUG': 0, 'VERBOSE_LEVEL': 0, 'CODE_DUMP': 0, 'ALL_STATIC': 1},
 ##    # debugging mode, IVM virtual processor
