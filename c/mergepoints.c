@@ -607,6 +607,13 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
           if (iblock > iblockmax) iblockmax = iblock;
           break;
 
+#ifdef SETUP_WITH
+        case SETUP_WITH:
+          i = i0;
+          /* op = SETUP_WITH; */
+          goto unsupported_instruction;
+#endif
+
         case POP_BLOCK:
           psyco_assert(iblock > 0);
           iblock--;
