@@ -1959,9 +1959,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 					 case of an opcode that cannot set
 					 run-time conditions */
 
-	fprintf(stderr, "%s: %d [%x]\n", PyString_AS_STRING(co->co_name),
-		next_instr,
-		GETLOCAL(0)->source);
+	/*fprintf(stderr, "%s: %d\n", PyString_AS_STRING(co->co_name),
+	  next_instr);*/
 	opcode = NEXTOP();
 	if (HAS_ARG(opcode))
 		oparg = NEXTARG();
@@ -2141,6 +2140,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
         BINARY_OPCODE(INPLACE_FLOOR_DIVIDE, PsycoNumber_InPlaceFloorDivide);
 
 #ifdef LIST_APPEND
+# if HAVE_PEEK_LIST_APPEND
+	case LIST_APPEND:
+		w = NTOP(1);
+		v = NTOP(oparg+1);
+		if (!PsycoList_Append(po, v, w))
+			break;
+		POP_DECREF();
+		goto fine;
+# else
 	case LIST_APPEND:
 		w = NTOP(1);
 		v = NTOP(2);
@@ -2149,6 +2157,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		POP_DECREF();
 		POP_DECREF();
 		goto fine;
+# endif
 #endif
 
 	case INPLACE_POWER:
