@@ -72,6 +72,7 @@ if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
     ERR = 'gets confused by Psyco debugging output to stderr'
     SKIP['test_popen2'] = ERR
     SKIP['test_unittest'] = ERR   # probably
+    SKIP['test_pty'] = ERR
 
 if os.path.exists('regrtester.skip'):
     execfile('regrtester.skip')
