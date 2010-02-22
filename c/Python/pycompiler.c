@@ -1288,6 +1288,23 @@ static bool psyco_assign_slice(PsycoObject* po, vinfo_t* u,
 	}
 }
 
+static int
+cimpl_pydict_setitem_new(PyObject *mp, PyObject *key, PyObject *item)
+{
+	if (PyDict_GetItem(mp, key) != NULL) {
+		char *argname;
+		if (PyString_Check(key))
+			argname = PyString_AS_STRING(key);
+		else
+			argname = "?";
+		PyErr_Format(PyExc_TypeError,
+			     "got multiple values for keyword argument '%s'",
+			     argname);
+		return -1;
+	}
+	return PyDict_SetItem(mp, key, item);
+}
+
 #define CALL_FLAG_VAR 1
 #define CALL_FLAG_KW 2
 static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
@@ -1332,6 +1349,8 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 		wdict = psyco_vi_Zero();	/* no keyword arguments */
 	else {
 		int i;
+		int(*setter)(PyObject*, PyObject*, PyObject*);
+		setter = PyDict_SetItem;
 		if (flags & CALL_FLAG_KW) {   /*  '**kw' call syntax */
 			vinfo_t* w = args[--n];  /* pop keyword dictionary */
 			/* check that it is a dictionary */
@@ -1351,6 +1370,7 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 				/* make a copy of the dictionary;
 				   the original one must not be modified */
 				wdict = PsycoDict_Copy(po, w);
+				setter = cimpl_pydict_setitem_new;
 			}
 			else {
 				wdict = w;
@@ -1369,10 +1389,10 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 		   check for duplicate keywords */
 		for (i = na + 2*nk; i > na; ) {
 			i -= 2;
-			if (!psyco_generic_call(po, PyDict_SetItem,
+			if (!psyco_generic_call(po, setter,
 					CfNoReturnValue|CfPyErrIfNonNull,
 					"vvv", wdict, args[i], args[i+1]))
-				break;
+				goto fail;
 		}
 	}
 

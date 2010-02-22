@@ -430,11 +430,23 @@ def listgetitem():
             return key
     x = X(["Ok"])
     print x["foobar"]
+    count = 0
     for item in x:
         print item
+        count += 1
+        if count > 10:
+            break
 
 def negintpow(x):
     print x ** -2
+
+def duplicatekwarg():
+    try:
+        double2(x=5, **{'x': 6})
+    except TypeError:
+        print 'correctly detected'
+    else:
+        print 'missing TypeError!'
 
 if __name__ == '__main__':
     from test1 import go, print_results
