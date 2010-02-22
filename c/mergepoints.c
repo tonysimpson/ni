@@ -47,13 +47,14 @@ static char* NoControlFlowIfBuiltin[] = {
 
 /* instructions with a target: */
 #define HAS_JREL_INSTR(op)   (op == JUMP_FORWARD ||   \
-                              IS_JCOND_INSTR(op) ||   \
+                              IS_JCONDREL_INSTR(op) ||   \
                               op == FOR_ITER ||     \
                               /*    SETUP_LOOP replaced by FOR_ITER */    \
                               op == SETUP_EXCEPT ||   \
                               op == SETUP_FINALLY)
 
 #define HAS_JABS_INSTR(op)   (op == JUMP_ABSOLUTE ||  \
+                              IS_JCONDABS_INSTR(op) ||   \
                               op == CONTINUE_LOOP)
 
 /* instructions whose target may be jumped to several times: */
@@ -221,13 +222,15 @@ static char* NoControlFlowIfBuiltin[] = {
 #endif
 
 #ifdef JUMP_IF_FALSE_OR_POP   /* Python 2.7 */
-# define IS_JCOND_INSTR(op)  (op == JUMP_IF_FALSE_OR_POP ||  \
-                              op == JUMP_IF_TRUE_OR_POP ||   \
-                              op == POP_JUMP_IF_FALSE ||     \
-                              op == POP_JUMP_IF_TRUE)
+# define IS_JCONDREL_INSTR(op)   0
+# define IS_JCONDABS_INSTR(op)  (op == JUMP_IF_FALSE_OR_POP ||  \
+                                 op == JUMP_IF_TRUE_OR_POP ||   \
+                                 op == POP_JUMP_IF_FALSE ||     \
+                                 op == POP_JUMP_IF_TRUE)
 #else
-# define IS_JCOND_INSTR(op)  (op == JUMP_IF_FALSE ||  \
-                              op == JUMP_IF_TRUE)
+# define IS_JCONDREL_INSTR(op)  (op == JUMP_IF_FALSE ||  \
+                                 op == JUMP_IF_TRUE)
+# define IS_JCONDABS_INSTR(op)   0
 #endif
 
 /***************************************************************/
