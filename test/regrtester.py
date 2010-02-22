@@ -58,6 +58,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_tuple': 'gc.is_tracked() on tuples',
         'test_pdb': 'pdb stuff',
         'test_lib2to3': 'mutates a new-style class to install another method',
+        'test_cprofile': 'exits psyco',
 	}
 #    SKIP['test_operator'] = NO_SYS_EXC
 #    SKIP['test_strop'] = NO_SYS_EXC
