@@ -67,7 +67,9 @@ if sys.version_info[:3] == (2,4,0):
     SKIP['test_distutils'] = 'distutils/tests/* not copied by the installer'
 
 if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
-    SKIP['test_popen2'] = 'gets confused by Psyco debugging output to stderr'
+    ERR = 'gets confused by Psyco debugging output to stderr'
+    SKIP['test_popen2'] = ERR
+    SKIP['test_unittest'] = ERR   # probably
 
 if os.path.exists('regrtester.skip'):
     execfile('regrtester.skip')
