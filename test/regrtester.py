@@ -55,6 +55,7 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_capi': 'threads with a busy loop',
         'test_zipimport_support': 'sees psyco.profiler.go() in pdb',
         'test_deque': 'uses too much memory: "pop=d.pop" keeps d alive forever',
+        'test_tuple': 'gc.is_tracked() on tuples',
 	}
 #    SKIP['test_operator'] = NO_SYS_EXC
 #    SKIP['test_strop'] = NO_SYS_EXC
