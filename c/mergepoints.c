@@ -150,6 +150,7 @@ static char* NoControlFlowIfBuiltin[] = {
                            op == DELETE_SLICE+3 ||            \
                            op == STORE_SUBSCR ||              \
                            IS_STORE_MAP(op) ||                \
+                           IS_MAP_ADD(op) ||                  \
                            op == DELETE_SUBSCR ||             \
                            op == PRINT_EXPR ||                \
                            op == PRINT_ITEM ||                \
@@ -219,6 +220,12 @@ static char* NoControlFlowIfBuiltin[] = {
 # define IS_STORE_MAP(op)    (op == STORE_MAP)
 #else
 # define IS_STORE_MAP(op)     0
+#endif
+
+#ifdef MAP_ADD
+# define IS_MAP_ADD(op)    (op == MAP_ADD)
+#else
+# define IS_MAP_ADD(op)     0
 #endif
 
 #ifdef JUMP_IF_FALSE_OR_POP   /* Python 2.7 */

@@ -2710,6 +2710,21 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 #endif
 
+#ifdef MAP_ADD
+	case MAP_ADD:
+		w = NTOP(1);   /* key */
+		u = NTOP(2);   /* value */
+		v = NTOP(2+oparg);   /* dict */
+		if (!PsycoDict_SetItem(po, v, w, u))  /* v[w] = u */
+			break;
+		POP_DECREF();
+		POP_DECREF();
+		goto fine;
+#endif
+
+	/*MISSING_OPCODE(BUILD_SET);
+	  MISSING_OPCODE(SET_ADD);*/
+
 	case LOAD_ATTR:
 		w = vinfo_new(CompileTime_New(((long) GETNAMEV(oparg))));
 		x = PsycoObject_GetAttr(po, TOP(), w);  /* v.w */
@@ -2947,6 +2962,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		block_setup(po, opcode, INSTR_OFFSET() + oparg,
 			    STACK_LEVEL());
 		goto fine;
+
+	/*MISSING_OPCODE(SETUP_WITH);*/
 
 #ifdef SET_LINENO
 	case SET_LINENO:
