@@ -108,7 +108,7 @@ if PROCESSOR is None:
     except ProcessorAutodetectError:
         PROCESSOR = 'ivm'  # fall back to the generic virtual machine
 PROCESSOR = 'ivm'
-    print "PROCESSOR = %r" % PROCESSOR
+print "PROCESSOR = %r" % PROCESSOR
 processor_dir = os.path.join('c', PROCESSOR)
 localsetup = os.path.join(processor_dir, 'localsetup.py')
 if os.path.isfile(localsetup):
