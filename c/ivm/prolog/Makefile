@@ -30,7 +30,7 @@ empty_mode_combine:
 
 
 $(GENERATED): insns.pl $(VMWRITER)
-	pl -f insns.pl -g main_emit -t halt
+	swipl -f insns.pl -g main_emit -t halt
 
 %.default: %
 	cp $< $@

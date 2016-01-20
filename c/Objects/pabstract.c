@@ -719,9 +719,6 @@ static vinfo_t* psequence_repeat(PsycoObject* po, void *repeatfunc,
 	if (vcount == NULL)
 		return NULL;
 
-#if LONG_MAX != INT_MAX
-# error "omitted code from Python 2.3 here"
-#endif
 	result = Psyco_META2(po, repeatfunc, CfReturnRef|CfPyErrIfNull,
 			     "vv", vseq, vcount);
 	vinfo_decref(vcount, po);

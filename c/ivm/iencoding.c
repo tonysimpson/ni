@@ -124,8 +124,14 @@ vinfo_t* psyco_memory_read(PsycoObject* po, vinfo_t* nv_ptr,
 		else
 			INSN_load2();
 		break;
-	default: /* load 4 bytes */
+	case 2: /* load 4 bytes */
 		INSN_load4();
+		break;
+	case 3:/* load 8 bytes */
+		INSN_load8();
+		break;
+	default:
+		assert(false);
 	}
 	END_CODE
 	return vinfo_new(RunTime_TOS());
@@ -147,8 +153,14 @@ bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr,
 	case 1:  /* store 2 bytes */
 		INSN_store2();
 		break;
-	default: /* store 4 bytes */
+	case 2: /* store 4 bytes */
 		INSN_store4();
+		break;
+	case 3: /* store 8 bytes */
+		INSN_store8();
+		break;
+	default:
+		assert(false);
 	}
 	INSNPOPPED(1);
 	END_CODE

@@ -671,8 +671,8 @@ struct PsycoObject_s {
 };
 
 #define PSYCOOBJECT_SIZE(arraycnt)                                      \
-	(sizeof(PsycoObject)-sizeof(vinfo_array_t) + sizeof(int) +      \
-         (arraycnt)*sizeof(vinfo_t*))
+	offsetof(PsycoObject, vlocals) + offsetof(vinfo_array_t, items) \
+	+ (arraycnt) * sizeof(vinfo_t*)
 
 /* move 'vsource->source' into 'vtarget->source'. Must be the last reference
    to 'vsource', which is freed. 'vsource' must have no array, and

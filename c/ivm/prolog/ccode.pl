@@ -11,7 +11,8 @@ unary_prolog_to_C(mem1,  '*(char*)').
 unary_prolog_to_C(mem1u, '*(unsigned char*)').
 unary_prolog_to_C(mem2,  '*(short*)').
 unary_prolog_to_C(mem2u, '*(unsigned short*)').
-unary_prolog_to_C(mem4,  '*(long*)').
+unary_prolog_to_C(mem4,  '*(int*)').
+unary_prolog_to_C(mem8,  '*(int64_t*)').
 unary_prolog_to_C(cast1, '(char)').
 unary_prolog_to_C(cast2, '(short)').
 
@@ -78,7 +79,7 @@ remove_paren(C, C).
 
 % C structures
 declare_local(Type, (V, Index), var(Type, V)) :-
-        int_to_atom(Index, Suffix),
+        atom_number(Suffix, Index),
         atom_concat(local, Suffix, V).
 
 block_locals(CodeL1, Type, block(DeclList, CodeL1)) :-

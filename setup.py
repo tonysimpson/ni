@@ -78,6 +78,7 @@ def autodetect():
                 'i686': 'i386',
                 'i86pc': 'i386',    # Solaris/Intel
                 'x86':   'i386',    # Apple
+                'x86_64': 'x86_64',
                 }[mach]
     except KeyError:
         raise ProcessorAutodetectError, "unsupported processor '%s'" % mach
@@ -106,6 +107,7 @@ if PROCESSOR is None:
         PROCESSOR = autodetect()
     except ProcessorAutodetectError:
         PROCESSOR = 'ivm'  # fall back to the generic virtual machine
+PROCESSOR = 'ivm'
     print "PROCESSOR = %r" % PROCESSOR
 processor_dir = os.path.join('c', PROCESSOR)
 localsetup = os.path.join(processor_dir, 'localsetup.py')
@@ -177,5 +179,6 @@ setup (	name             = "psyco",
                                extra_compile_args = extra_compile_args,
                                extra_link_args = extra_link_args,
                                define_macros = macros,
+                               debug = True,
                                include_dirs = [processor_dir])],
         **kwds )

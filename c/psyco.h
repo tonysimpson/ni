@@ -9,10 +9,6 @@
 #include <Python.h>
 #include <structmember.h>   /* for offsetof() */
 
-#if LONG_MAX != 2147483647
-# error "64-bit systems not supported at all.  See help on psyco.sf.net"
-#endif
-
 
 /*****************************************************************/
  /***   Various customizable parameters (use your compilers'    ***/
