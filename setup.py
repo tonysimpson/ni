@@ -78,7 +78,7 @@ def autodetect():
                 'i686': 'i386',
                 'i86pc': 'i386',    # Solaris/Intel
                 'x86':   'i386',    # Apple
-                'x86_64': 'x86_64',
+                'x86_64': 'ivm',
                 }[mach]
     except KeyError:
         raise ProcessorAutodetectError, "unsupported processor '%s'" % mach
@@ -162,19 +162,19 @@ if sys.version_info < (2, 2, 2):
     raise Exception("Psyco >= 1.6 requires Python >= 2.2.2")
 
 
-setup (	name             = "psyco",
-      	version          = "1.6",
-      	description      = "Psyco, the Python specializing compiler",
-      	author           = "Armin Rigo",
+setup ( name             = "psyco",
+        version          = "1.6",
+        description      = "Psyco, the Python specializing compiler",
+        author           = "Armin Rigo",
         author_email     = "arigo@users.sourceforge.net",
-      	url              = "http://psyco.sourceforge.net/",
+        url              = "http://psyco.sourceforge.net/",
         download_url     = "http://wyvern.cs.uni-duesseldorf.de/psyco/psyco-snapshot.tar.gz",
         license          = "MIT License",
         long_description = __doc__,
         platforms        = ["i386"],
         py_modules       = py_modules,
         package_dir      = {'psyco': 'py-support'},
-      	ext_modules=[Extension(name = 'psyco._psyco',
+        ext_modules=[Extension(name = 'psyco._psyco',
                                sources = sources,
                                extra_compile_args = extra_compile_args,
                                extra_link_args = extra_link_args,
