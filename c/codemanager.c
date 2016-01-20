@@ -232,7 +232,7 @@ void psyco_shrink_code_buffer(CodeBufferObject* obj, code_t* codeend)
   debug_printf(3, ("disassemble %p %p    (%d bytes)\n", obj->codestart,
                    codeend, codeend - ((code_t*)obj->codestart)));
   if (VERBOSE_LEVEL == 2)
-    fprintf(stderr, "[%d]", codeend - ((code_t*)obj->codestart));
+    fprintf(stderr, "[%ld]", codeend - ((code_t*)obj->codestart));
   
   close_buffer_use(codeend);
   SET_CODEMODE(obj, "normal");

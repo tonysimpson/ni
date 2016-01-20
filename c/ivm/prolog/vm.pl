@@ -460,7 +460,7 @@ mode_unify((S1,F1), (S2,F2), Code) :-
 
 % instruction emitters
 insn_inputargname((_, Index), Name) :-
-        int_to_atom(Index, Suffix),
+        atom_number(Suffix, Index),
         atom_concat(arg, Suffix, Name).
 
 insn_inputargtype(s, 'int') :- !.

@@ -715,6 +715,9 @@ Ok
 >>> test5.negintpow(8)
 0.015625
 
+>>> test5.duplicatekwarg()
+correctly detected
+
                          ###########################
                          ####   COMPACTOBJECT   ####
                          ###########################

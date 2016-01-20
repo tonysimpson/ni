@@ -84,4 +84,13 @@
 
 #define HAVE_DICT_NEWPRESIZED (PY_VERSION_HEX >= 0x02060000)  /* Py >= 2.6 */
 
+#if (PY_VERSION_HEX >= 0x02070000)   /* Python >= 2.7 */
+#  define HAVE_NEXT_INSTR_POP     1
+#  define NEXT_INSTR_POP          (-INT_MAX-1)
+#else
+#  define HAVE_NEXT_INSTR_POP     0
+#endif
+
+#define HAVE_PEEK_LIST_APPEND (PY_VERSION_HEX >= 0x02070000)  /* Py >= 2.7 */
+
 #endif /* _PYVER_H */

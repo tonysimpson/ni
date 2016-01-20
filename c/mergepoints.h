@@ -53,7 +53,10 @@ PSY_INLINE mergepoint_t* psyco_first_merge_point(PyObject* mergepoints)
 PSY_INLINE mergepoint_t* psyco_exact_merge_point(PyObject* mergepoints,
                                              int position)
 {
-  mergepoint_t* mp = psyco_next_merge_point(mergepoints, position);
+  mergepoint_t* mp;
+  if (position < 0)   /* Python 2.7: position is |NEXT_INSTR_POP */
+    return NULL;
+  mp = psyco_next_merge_point(mergepoints, position);
   if (mp->bytecode_position != position)
     mp = NULL;
   return mp;

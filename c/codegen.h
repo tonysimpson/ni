@@ -12,22 +12,9 @@
 #if SIZEOF_LONG == 4
 # define SIZE_OF_LONG_BITS   2
 #else
-# error "-----------------------------------------------------"
-# error "Sorry, non-32-bit platforms are not supported at all."
-# error "You may try with a Python compiled in 32-bit         "
-# error "compatibility mode.  Note that Psyco will probably   "
-# error "never support non-32-bit platforms, as it is no      "
-# error "longer actively developed.  Instead, the PyPy group  "
-# error "plans to replace it with a more flexible and easily  "
-# error "retargettable Psyco-for-PyPy during the year 2006.   "
-# error "See http://codespeak.net/pypy/                       "
-# error "-----------------------------------------------------"
+# define SIZE_OF_LONG_BITS   2
 #endif
 
-#if SIZEOF_LONG != SIZEOF_VOID_P
-# error "Sorry, your platform is not supported at all."
-# error "Psyco currently requires sizeof(long)==sizeof(void*)."
-#endif
 
 #define INITIAL_STACK_DEPTH  4 /* anything >0 and a multiple of 4 */
 

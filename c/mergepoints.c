@@ -47,14 +47,14 @@ static char* NoControlFlowIfBuiltin[] = {
 
 /* instructions with a target: */
 #define HAS_JREL_INSTR(op)   (op == JUMP_FORWARD ||   \
-                              op == JUMP_IF_FALSE ||  \
-                              op == JUMP_IF_TRUE ||   \
+                              IS_JCONDREL_INSTR(op) ||   \
                               op == FOR_ITER ||     \
                               /*    SETUP_LOOP replaced by FOR_ITER */    \
                               op == SETUP_EXCEPT ||   \
                               op == SETUP_FINALLY)
 
 #define HAS_JABS_INSTR(op)   (op == JUMP_ABSOLUTE ||  \
+                              IS_JCONDABS_INSTR(op) ||   \
                               op == CONTINUE_LOOP)
 
 /* instructions whose target may be jumped to several times: */
@@ -150,6 +150,7 @@ static char* NoControlFlowIfBuiltin[] = {
                            op == DELETE_SLICE+3 ||            \
                            op == STORE_SUBSCR ||              \
                            IS_STORE_MAP(op) ||                \
+                           IS_MAP_ADD(op) ||                  \
                            op == DELETE_SUBSCR ||             \
                            op == PRINT_EXPR ||                \
                            op == PRINT_ITEM ||                \
@@ -219,6 +220,24 @@ static char* NoControlFlowIfBuiltin[] = {
 # define IS_STORE_MAP(op)    (op == STORE_MAP)
 #else
 # define IS_STORE_MAP(op)     0
+#endif
+
+#ifdef MAP_ADD
+# define IS_MAP_ADD(op)    (op == MAP_ADD)
+#else
+# define IS_MAP_ADD(op)     0
+#endif
+
+#ifdef JUMP_IF_FALSE_OR_POP   /* Python 2.7 */
+# define IS_JCONDREL_INSTR(op)   0
+# define IS_JCONDABS_INSTR(op)  (op == JUMP_IF_FALSE_OR_POP ||  \
+                                 op == JUMP_IF_TRUE_OR_POP ||   \
+                                 op == POP_JUMP_IF_FALSE ||     \
+                                 op == POP_JUMP_IF_TRUE)
+#else
+# define IS_JCONDREL_INSTR(op)  (op == JUMP_IF_FALSE ||  \
+                                 op == JUMP_IF_TRUE)
+# define IS_JCONDABS_INSTR(op)   0
 #endif
 
 /***************************************************************/
@@ -505,7 +524,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
   unsigned char* source = (unsigned char*) PyString_AS_STRING(co->co_code);
   size_t ibytes = (length+1) * sizeof(struct instrnode_s);
   struct instrnode_s* instrnodes;
-  int i, lasti, count;
+  int i, lasti, count, op1;
   bool modif;
   PyTryBlock blockstack[CO_MAXBLOCKS];
   int iblock, bytecodeweight, iblockmax = 0;
@@ -588,6 +607,13 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
           if (iblock > iblockmax) iblockmax = iblock;
           break;
 
+#ifdef SETUP_WITH
+        case SETUP_WITH:
+          i = i0;
+          op1 = SETUP_WITH;
+          goto unsupported_instruction;
+#endif
+
         case POP_BLOCK:
           psyco_assert(iblock > 0);
           iblock--;
@@ -659,19 +685,15 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
             if (flags == 0)
               if (op != COMPARE_OP || !SUPPORTED_COMPARE_ARG(oparg))
                 {
-                unsupported_instruction:
-                  debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
-                               ("unsupported opcode %d at %s:%d\n",
-                                (int) op, PyCodeObject_NAME(co), i));
-                  s = Py_None;
-                  Py_INCREF(s);
-                  goto done;
+                  op1 = op;
+                  goto unsupported_instruction;
                 }
             if (flags & (MP_HAS_JREL|MP_HAS_JABS))
               {
                 int jtarget = oparg;
                 if (flags & MP_HAS_JREL)
                   jtarget += nextinstr;
+                psyco_assert(jtarget < length);
                 if (flags & MP_HAS_J_MULTIPLE || !++instrnodes[jtarget].inpaths)
                   instrnodes[jtarget].inpaths = 99;
                 instrnodes[i].next2 = instrnodes + jtarget;
@@ -697,7 +719,10 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
             if (flags & MP_IS_MODULE)
               {
                 if (  /*!module*/  1)  /* disabled, currently buggy */
-                  goto unsupported_instruction;
+                  {
+                    op1 = op;
+                    goto unsupported_instruction;
+                  }
                 mp_flags |= MP_FLAGS_MODULE;
               }
             
@@ -915,6 +940,15 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
   PyMem_FREE(instrnodes);
   PyErr_Restore(etype, evalue, etb);
   return s;
+
+ unsupported_instruction:
+  debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
+               ("unsupported opcode %d at %s:%d\n",
+                op1, PyCodeObject_NAME(co), i));
+  psyco_assert(op1 != 0);
+  s = Py_None;
+  Py_INCREF(s);
+  goto done;
 }
 
 DEFINEFN

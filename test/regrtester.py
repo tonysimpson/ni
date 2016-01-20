@@ -52,6 +52,13 @@ SKIP = {'test_gc': "test_gc.test_frame() does not create a cycle with Psyco's li
         'test_warnings': 'stackdepth no longer work in 2.6 because it was rewritten in C',
         'test_signal': 'contains tight loops where Psyco does not handle signals',
         'test_collections': 'namedtuple() gets the wrong __module__',
+        'test_capi': 'threads with a busy loop',
+        'test_zipimport_support': 'sees psyco.profiler.go() in pdb',
+        'test_deque': 'uses too much memory: "pop=d.pop" keeps d alive forever',
+        'test_tuple': 'gc.is_tracked() on tuples',
+        'test_pdb': 'pdb stuff',
+        'test_lib2to3': 'mutates a new-style class to install another method',
+        'test_cprofile': 'exits psyco',
 	}
 #    SKIP['test_operator'] = NO_SYS_EXC
 #    SKIP['test_strop'] = NO_SYS_EXC
@@ -62,7 +69,10 @@ if sys.version_info[:3] == (2,4,0):
     SKIP['test_distutils'] = 'distutils/tests/* not copied by the installer'
 
 if hasattr(psyco._psyco, 'VERBOSE_LEVEL'):
-    SKIP['test_popen2'] = 'gets confused by Psyco debugging output to stderr'
+    ERR = 'gets confused by Psyco debugging output to stderr'
+    SKIP['test_popen2'] = ERR
+    SKIP['test_unittest'] = ERR   # probably
+    SKIP['test_pty'] = ERR
 
 if os.path.exists('regrtester.skip'):
     execfile('regrtester.skip')

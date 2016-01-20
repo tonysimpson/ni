@@ -996,6 +996,7 @@ def f(some_expr):
 In addition, inside a function, some syntactic constructs are not supported by Psyco.  It does not mean that a function using them will fail; it merely means that the whole function will not be accelerated.  The following table lists the unsupported constructs, along with the corresponding bytecode instruction name and number.  Log files only report the bytecode instruction number, which you need to look up here.
 
 \begin{tableiii}{cl|l}{code}{Bytecode}{Instruction name}{Appears in}
+  \lineiii{ 81}{\code{WITH_CLEANUP }}{(6) with statements}
   \lineiii{ 82}{\code{LOAD_LOCALS  }}{(1) class definitions}
   \lineiii{ 84}{\code{IMPORT_STAR  }}{(5) \code{from xx import *}}
   \lineiii{ 85}{\code{EXEC_STMT    }}{(2) \code{exec xx}}
@@ -1003,10 +1004,13 @@ In addition, inside a function, some syntactic constructs are not supported by P
   \lineiii{ 90}{\code{STORE_NAME   }}{(5) outside functions}
   \lineiii{ 91}{\code{DELETE_NAME  }}{(5) outside functions}
   \lineiii{101}{\code{LOAD_NAME    }}{(5) outside functions}
+  \lineiii{104}{\code{BUILD_SET    }}{(7) sets syntax}
   \lineiii{134}{\code{MAKE_CLOSURE }}{(4) nested scopes}
   \lineiii{135}{\code{LOAD_CLOSURE }}{(4) nested scopes}
   \lineiii{136}{\code{LOAD_DEREF   }}{(4) nested scopes}
   \lineiii{137}{\code{STORE_DEREF  }}{(4) nested scopes}
+  \lineiii{143}{\code{SETUP_WITH   }}{(6) with statements}
+  \lineiii{146}{\code{SET_ADD      }}{(7) sets syntax}
 \end{tableiii}
 
 \noindent
@@ -1023,6 +1027,10 @@ Notes:
   Using nested scopes (i.e.\ variables shared by a function and an inner sub-function) will prevent both the outer and the inner function to be accelerated.  This too could be worked around if there is enough interest, at least for accelerating the unrelated parts of the functions -- the accesses to the shared variables themselves might be difficult to optimize.
 \item[(5)]
   These constructs can appear in class definitions (see (1)) or at the module top-level.  It is possible to enable support for module top-level code, but not recommended; instead, try to put all the code you want accelerated in function bodies.
+\item[(6)]
+  The \code{with} statement is not supported.
+\item[(7)]
+  The syntax for sets is not supported.  Note that you can still use sets and have them accelerated as long as you don't use the special syntax to make them, introduced in Python 2.7.
 \end{description}
 
 

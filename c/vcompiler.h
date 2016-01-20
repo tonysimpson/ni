@@ -451,7 +451,7 @@ PSY_INLINE void array_delete(vinfo_array_t* array, PsycoObject* po) {
 /* [This is internal stuff: see comments below for an introduction.] */
 /* type is defined by its size (given as the nth power of two)
    and a handful of flags */
-typedef struct undefined_fld_s* defield_t;
+typedef long defield_t;
 EXTERNFN vinfo_t* psyco_internal_getfld(PsycoObject* po, int findex,
 					defield_t df, vinfo_t* vi, long offset);
 EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
@@ -671,8 +671,8 @@ struct PsycoObject_s {
 };
 
 #define PSYCOOBJECT_SIZE(arraycnt)                                      \
-	(sizeof(PsycoObject)-sizeof(vinfo_array_t) + sizeof(int) +      \
-         (arraycnt)*sizeof(vinfo_t*))
+	offsetof(PsycoObject, vlocals) + offsetof(vinfo_array_t, items) \
+	+ (arraycnt) * sizeof(vinfo_t*)
 
 /* move 'vsource->source' into 'vtarget->source'. Must be the last reference
    to 'vsource', which is freed. 'vsource' must have no array, and

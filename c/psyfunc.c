@@ -777,7 +777,7 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
    unsupported:
 	{	/* Code copied from function_call() in funcobject.c */
 		PyObject **d, **k;
-		int nk, nd;
+        Py_ssize_t nk, nd;
 
 		PyObject* argdefs = self->psy_defaults;
 		if (argdefs != NULL) {
@@ -790,7 +790,7 @@ static PyObject* psycofunction_call(PsycoFunctionObject* self,
 		}
 
 		if (kw != NULL && PyDict_Check(kw)) {
-			int pos, i;
+            Py_ssize_t pos, i;
 			nk = PyDict_Size(kw);
 			k = PyMem_NEW(PyObject *, 2*nk);
 			if (k == NULL) {

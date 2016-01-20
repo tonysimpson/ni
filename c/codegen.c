@@ -17,7 +17,7 @@ void psyco_emit_header(PsycoObject* po, int nframelocal)
 
   BEGIN_CODE
   INITIALIZE_FRAME_LOCALS(nframelocal);
-  po->stack_depth += 4*nframelocal;
+  po->stack_depth += sizeof(long)*nframelocal;
   END_CODE
 
   array = LOC_CONTINUATION->array = array_new(nframelocal);

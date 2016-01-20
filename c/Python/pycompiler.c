@@ -1288,6 +1288,23 @@ static bool psyco_assign_slice(PsycoObject* po, vinfo_t* u,
 	}
 }
 
+static int
+cimpl_pydict_setitem_new(PyObject *mp, PyObject *key, PyObject *item)
+{
+	if (PyDict_GetItem(mp, key) != NULL) {
+		char *argname;
+		if (PyString_Check(key))
+			argname = PyString_AS_STRING(key);
+		else
+			argname = "?";
+		PyErr_Format(PyExc_TypeError,
+			     "got multiple values for keyword argument '%s'",
+			     argname);
+		return -1;
+	}
+	return PyDict_SetItem(mp, key, item);
+}
+
 #define CALL_FLAG_VAR 1
 #define CALL_FLAG_KW 2
 static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
@@ -1332,6 +1349,8 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 		wdict = psyco_vi_Zero();	/* no keyword arguments */
 	else {
 		int i;
+		int(*setter)(PyObject*, PyObject*, PyObject*);
+		setter = PyDict_SetItem;
 		if (flags & CALL_FLAG_KW) {   /*  '**kw' call syntax */
 			vinfo_t* w = args[--n];  /* pop keyword dictionary */
 			/* check that it is a dictionary */
@@ -1351,6 +1370,7 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 				/* make a copy of the dictionary;
 				   the original one must not be modified */
 				wdict = PsycoDict_Copy(po, w);
+				setter = cimpl_pydict_setitem_new;
 			}
 			else {
 				wdict = w;
@@ -1369,10 +1389,10 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 		   check for duplicate keywords */
 		for (i = na + 2*nk; i > na; ) {
 			i -= 2;
-			if (!psyco_generic_call(po, PyDict_SetItem,
+			if (!psyco_generic_call(po, setter,
 					CfNoReturnValue|CfPyErrIfNonNull,
 					"vvv", wdict, args[i], args[i+1]))
-				break;
+				goto fail;
 		}
 	}
 
@@ -1920,7 +1940,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
        PyFrameObject::f_exc_xxx fields. */
     psyco_emit_header(po, 3);
   }
-  
+
+#if HAVE_NEXT_INSTR_POP
+  if (po->pr.next_instr < -1) {
+    /* there is a pending POP operation to be done */
+    POP_DECREF();
+    po->pr.next_instr &= ~NEXT_INSTR_POP;
+  }
+#endif
+
   while (po->pr.next_instr != -1)
     {
       /* 'co' is the code object we are interpreting/compiling */
@@ -1950,7 +1978,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	SAVE_NEXT_INSTR(next_instr);  /* could be optimized, not needed in the
 					 case of an opcode that cannot set
 					 run-time conditions */
-	
+
+	/*fprintf(stderr, "%s: %d\n", PyString_AS_STRING(co->co_name),
+	  next_instr);*/
 	opcode = NEXTOP();
 	if (HAS_ARG(opcode))
 		oparg = NEXTARG();
@@ -2130,6 +2160,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
         BINARY_OPCODE(INPLACE_FLOOR_DIVIDE, PsycoNumber_InPlaceFloorDivide);
 
 #ifdef LIST_APPEND
+# if HAVE_PEEK_LIST_APPEND
+	case LIST_APPEND:
+		w = NTOP(1);
+		v = NTOP(oparg+1);
+		if (!PsycoList_Append(po, v, w))
+			break;
+		POP_DECREF();
+		goto fine;
+# else
 	case LIST_APPEND:
 		w = NTOP(1);
 		v = NTOP(2);
@@ -2138,6 +2177,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		POP_DECREF();
 		POP_DECREF();
 		goto fine;
+# endif
 #endif
 
 	case INPLACE_POWER:
@@ -2690,6 +2730,21 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		goto fine;
 #endif
 
+#ifdef MAP_ADD
+	case MAP_ADD:
+		w = NTOP(1);   /* key */
+		u = NTOP(2);   /* value */
+		v = NTOP(2+oparg);   /* dict */
+		if (!PsycoDict_SetItem(po, v, w, u))  /* v[w] = u */
+			break;
+		POP_DECREF();
+		POP_DECREF();
+		goto fine;
+#endif
+
+	/*MISSING_OPCODE(BUILD_SET);
+	  MISSING_OPCODE(SET_ADD);*/
+
 	case LOAD_ATTR:
 		w = vinfo_new(CompileTime_New(((long) GETNAMEV(oparg))));
 		x = PsycoObject_GetAttr(po, TOP(), w);  /* v.w */
@@ -2818,8 +2873,15 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		mp = psyco_next_merge_point(po->pr.merge_points, next_instr);
 		goto fine;
 
+#if HAVE_NEXT_INSTR_POP   /* Python >= 2.7 */
+	case JUMP_IF_TRUE_OR_POP:
+	case JUMP_IF_FALSE_OR_POP:
+	case POP_JUMP_IF_FALSE:
+	case POP_JUMP_IF_TRUE:
+#else
 	case JUMP_IF_TRUE:
 	case JUMP_IF_FALSE:
+#endif
 		/* This code is very different from the original
 		   interpreter's, because we generally do not know the
 		   outcome of PyObject_IsTrue(). In the case of JUMP_IF_xxx
@@ -2828,12 +2890,25 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		cc = integer_NON_NULL(po, PsycoObject_IsTrue(po, TOP()));
 		if (cc == CC_ERROR)
 			break;
+#if HAVE_NEXT_INSTR_POP
+		if (opcode == JUMP_IF_FALSE_OR_POP ||
+		    opcode == POP_JUMP_IF_FALSE)
+#else
 		if (opcode == JUMP_IF_FALSE)
+#endif
 			cc = INVERT_CC(cc);
 		if ((int)cc < CC_TOTAL) {
 			/* compile the beginning of the "if true" path */
 			int current_instr = next_instr;
+#if HAVE_NEXT_INSTR_POP
+			JUMPTO(oparg);
+			/* this is the case where we jump */
+			if (opcode == POP_JUMP_IF_FALSE ||
+			    opcode == POP_JUMP_IF_TRUE)
+				next_instr |= NEXT_INSTR_POP;
+#else
 			JUMPBY(oparg);
+#endif
 			SAVE_NEXT_INSTR(next_instr);
 			psyco_compile_cond(po,
 				psyco_exact_merge_point(po->pr.merge_points,
@@ -2842,12 +2917,25 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			next_instr = current_instr;
 		}
 		else if (cc == CC_ALWAYS_TRUE) {
+#if HAVE_NEXT_INSTR_POP
+			JUMPTO(oparg);   /* always jump */
+			/* this is the case where we jump */
+			if (opcode == POP_JUMP_IF_FALSE ||
+			    opcode == POP_JUMP_IF_TRUE)
+				POP_DECREF();
+#else
 			JUMPBY(oparg);   /* always jump */
+#endif
 			mp = psyco_next_merge_point(po->pr.merge_points,
 						    next_instr);
+			goto fine;
                 }
 		else
 			;                  /* never jump */
+#if HAVE_NEXT_INSTR_POP
+		/* this is the case where we don't jump */
+		POP_DECREF();
+#endif
 		goto fine;
 
 	case JUMP_ABSOLUTE:
@@ -2894,6 +2982,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		block_setup(po, opcode, INSTR_OFFSET() + oparg,
 			    STACK_LEVEL());
 		goto fine;
+
+	/*MISSING_OPCODE(SETUP_WITH);*/
 
 #ifdef SET_LINENO
 	case SET_LINENO:

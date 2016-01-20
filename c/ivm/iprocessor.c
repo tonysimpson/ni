@@ -79,6 +79,8 @@ PSY_INLINE PyVMStack* vm_get_stack(PyObject* tdict)
 #define bytecode_nx_char()      ((char)(*nextip++))
 #define bytecode_next(T)        (bytecode_nx_##T())
 
+#define stack_pop()             (*(sp++))
+#define stack_push(V)           (*(--sp) = V)
 #define stack_nth(N)            sp[N]
 #define stack_shift(N)          (sp += (N),                     \
                                  extra_assert((char*)sp >= frame->limit))
@@ -89,6 +91,7 @@ PSY_INLINE PyVMStack* vm_get_stack(PyObject* tdict)
 #define macro_noarg             ()  /* macro call with no argument */
 
 PSY_INLINE long abs_o(long a) { return a < 0 ? -a : a; }
+
 #define ovf_checkabs_o(a)       (a == LONG_MIN)
 #define ovf_checkneg_o(a)       (a == LONG_MIN)
 #define ovf_checkadd_o(a, b)    (((a+b)^a) < 0 && (a^b) >= 0)
@@ -96,10 +99,12 @@ PSY_INLINE long abs_o(long a) { return a < 0 ? -a : a; }
 #define ovf_checkmul_o(a, b)    psyco_int_mul_ovf(a, b)
 #define ovf_check(INSN, ARGS)   ovf_check##INSN ARGS
 
+#define impl_jcond(test, newip) if (test) nextip = (code_t*) newip
+
 #define impl_stackgrow(sz)      if ((char*)sp - frame->limit <		\
 				    (sz) + VM_STACK_SIZE_MARGIN)	\
 				    sp = vm_stackgrow(frame, sp)
-#define impl_jcond(test, newip) if (test) nextip = (code_t*) newip
+
 #define impl_jump(newip)        nextip = (code_t*) newip
 typedef code_t* (*cbuild1_fn) (char*);
 typedef code_t* (*cbuild2_fn) (char*, word_t extra);
@@ -107,6 +112,7 @@ typedef code_t* (*cbuild2_fn) (char*, word_t extra);
                                 nextip = ((cbuild1_fn) fn) (			\
                                     (char*)((((long)nextip) + PSYCO_DEBUG +	\
 					    ALIGN_CODE_MASK)&~ALIGN_CODE_MASK))
+
 #define impl_cbuild2(fn, extra) stack_savesp();					\
                                 nextip = ((cbuild2_fn) fn) (			\
                                     (char*)((((long)nextip) + PSYCO_DEBUG +	\
@@ -122,6 +128,7 @@ EXTERNFN void cimpl_finalize_frame_locals(PyObject*, PyObject*, PyObject*);
                                                    (PyObject*) exc,		\
                                                    (PyObject*) val,		\
                                                    (PyObject*) tb)
+
 #define impl_pyenter(finfo)     frame = vm_pyenter(vmst, frame, finfo, sp)
 #define impl_pyleave            frame = vm_pyleave(vmst, frame, sp);	        \
                                 sp = (word_t*) frame->sp;
@@ -268,6 +275,7 @@ static word_t* vm_stackgrow(vmstackframe_t* frame, word_t* currentsp)
 
 
 #define retval  flag   /* same ivm register */
+
 
 static word_t vm_interpreter_main_loop(PyVMStack* vmst)
 {

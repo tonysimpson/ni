@@ -24,9 +24,11 @@ vinfo_array_t* array_grow1(vinfo_array_t* array, int ncount)
   int i = array->count;
   extra_assert(ncount > i);
   if (i == 0)
-    array = PyMem_MALLOC(sizeof(int) + ncount * sizeof(vinfo_t*));
+    array = PyMem_MALLOC(offsetof(vinfo_array_t, items) + ncount * 
+						 sizeof(vinfo_t*));
   else
-    array = PyMem_REALLOC(array, sizeof(int) + ncount * sizeof(vinfo_t*));
+    array = PyMem_REALLOC(array, offsetof(vinfo_array_t, items) + 
+						  ncount * sizeof(vinfo_t*));
   if (array == NULL)
     OUT_OF_MEMORY();
   array->count = ncount;
@@ -56,7 +58,7 @@ void vinfo_array_shrink(PsycoObject* po, vinfo_t* vi, int ncount)
     array = NullArray;
   else
     {
-      array = PyMem_REALLOC(array, sizeof(int) + ncount * sizeof(vinfo_t*));
+      array = PyMem_REALLOC(array, offsetof(vinfo_array_t, items) + ncount * sizeof(vinfo_t*));
       if (array == NULL)
         OUT_OF_MEMORY();
       array->count = ncount;
