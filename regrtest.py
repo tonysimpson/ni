@@ -1160,7 +1160,7 @@ def dash_R_cleanup(fs, ps, pic, zdc, abcs):
     gc.collect()
 
 def findtestdir(path=None):
-    return path or os.path.dirname(__file__) or os.curdir
+    return path or os.path.join(os.path.dirname(__file__) or os.curdir, 'test')
 
 def removepy(names):
     if not names:
