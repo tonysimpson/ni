@@ -1,10 +1,15 @@
 #! /usr/bin/env python
 
-"""Psyco shows that it is possible to execute Python code at speeds
-approaching that of fully compiled languages, by "specialization".
-This extension module for the unmodified interpreter accelerates
-user programs with little or not change in their sources, by a
-factor that can be very interesting (2-10 times is common)."""
+"""
+Ni aims to provide a module that just makes Python faster.
+
+Ni is based on a fork of Armin Rigo's Psyco, Armin and the other Psyco
+developers moved onto PyPy so go check that out if you want a high performance
+implementation of Pythoni (http://pypy.org).
+
+Ni is not currently alpha software and not fit for use. It will be several
+months before it is ready to release.
+"""
 
 import os, sys
 from distutils.core import setup
@@ -107,8 +112,6 @@ if PROCESSOR is None:
         PROCESSOR = autodetect()
     except ProcessorAutodetectError:
         PROCESSOR = 'ivm'  # fall back to the generic virtual machine
-PROCESSOR = 'ivm'
-print "PROCESSOR = %r" % PROCESSOR
 processor_dir = os.path.join('c', PROCESSOR)
 localsetup = os.path.join(processor_dir, 'localsetup.py')
 if os.path.isfile(localsetup):
@@ -136,7 +139,7 @@ if sys.platform == 'win32':
 
 
 CLASSIFIERS = [
-    'Development Status :: 5 - Production/Stable',
+    'Development Status :: 2 - Pre-Alpha',
     'Intended Audience :: Developers',
     'License :: OSI Approved :: MIT License',
     'Operating System :: OS Independent',
@@ -153,27 +156,16 @@ except ImportError:
 else:
     kwds = {'classifiers': CLASSIFIERS}
 
-py_modules = ['psyco.%s' % os.path.splitext(fn)[0]
-              for fn in os.listdir('py-support')
-              if os.path.splitext(fn)[1].lower() == '.py']
-py_modules.remove('psyco.__init__')
 
-if sys.version_info < (2, 2, 2):
-    raise Exception("Psyco >= 1.6 requires Python >= 2.2.2")
-
-
-setup ( name             = "psyco",
-        version          = "1.6",
-        description      = "Psyco, the Python specializing compiler",
-        author           = "Armin Rigo",
-        author_email     = "arigo@users.sourceforge.net",
-        url              = "http://psyco.sourceforge.net/",
-        download_url     = "http://wyvern.cs.uni-duesseldorf.de/psyco/psyco-snapshot.tar.gz",
+setup ( name             = "ni",
+        version          = "0.1alpha1",
+        description      = "Plugin JIT for CPython",
+        maintainer       = "Tony Simpson",
+        maintainer_email = "agjasimpson@gmail.com",
+        url              = "http://github.com/tonysimpson/ni",
         license          = "MIT License",
         long_description = __doc__,
-        platforms        = ["i386"],
-        py_modules       = py_modules,
-        package_dir      = {'psyco': 'py-support'},
+        packages         = ['ni', 'psyco'],
         ext_modules=[Extension(name = 'psyco._psyco',
                                sources = sources,
                                extra_compile_args = extra_compile_args,
