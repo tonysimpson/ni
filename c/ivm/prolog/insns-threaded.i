@@ -1,3 +1,11 @@
+
+#ifdef TRACE
+#define VM_TRACE(name)          \
+        fprintf(stderr, "VM_TRACE %s %ld\n", name, accum)
+#else
+#define VM_TRACE(name)
+#endif
+
 static const void* opcodetable[] = {
   &&lblorigin,    /* 0 */
   &&lblopcode1,  /* [inv] */
@@ -270,6 +278,7 @@ word_t local2;
 local1 = ~accum;
 local2 = local1;
 accum = local2;
+VM_TRACE("inv");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -283,6 +292,7 @@ local2 = ovf_check(abs_o,macro_args(accum));
 local3 = local1;
 accum = local3;
 flag = local2;
+VM_TRACE("abs_o");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -296,6 +306,7 @@ local2 = ovf_check(neg_o,macro_args(accum));
 local3 = local1;
 accum = local3;
 flag = local2;
+VM_TRACE("neg_o");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -306,6 +317,7 @@ word_t local2;
 local1 = *(char*)accum;
 local2 = local1;
 accum = local2;
+VM_TRACE("load1");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -316,6 +328,7 @@ word_t local2;
 local1 = *(unsigned char*)accum;
 local2 = local1;
 accum = local2;
+VM_TRACE("load1u");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -326,6 +339,7 @@ word_t local2;
 local1 = *(short*)accum;
 local2 = local1;
 accum = local2;
+VM_TRACE("load2");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -336,6 +350,7 @@ word_t local2;
 local1 = *(unsigned short*)accum;
 local2 = local1;
 accum = local2;
+VM_TRACE("load2u");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -346,6 +361,7 @@ word_t local2;
 local1 = *(int*)accum;
 local2 = local1;
 accum = local2;
+VM_TRACE("load4");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -353,9 +369,10 @@ lblopcode9:  /* [load8] */
 {
 word_t local1;
 word_t local2;
-local1 = *(int64_t*)accum;
+local1 = *(word_t*)accum;
 local2 = local1;
 accum = local2;
+VM_TRACE("load8");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -367,6 +384,7 @@ local1 = stack_nth(0) | accum;
 local2 = local1;
 accum = local2;
 stack_shift_pos(1);
+VM_TRACE("or");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -378,6 +396,7 @@ local1 = stack_nth(0) & accum;
 local2 = local1;
 accum = local2;
 stack_shift_pos(1);
+VM_TRACE("and");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -389,17 +408,14 @@ local1 = stack_nth(0) ^ accum;
 local2 = local1;
 accum = local2;
 stack_shift_pos(1);
+VM_TRACE("xor");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
 lblopcode13:  /* [add] */
 {
-word_t local1;
-word_t local2;
-local1 = stack_nth(0)+accum;
-local2 = local1;
-accum = local2;
-stack_shift_pos(1);
+accum = stack_pop() + accum;
+VM_TRACE("add");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -414,6 +430,7 @@ local3 = local1;
 accum = local3;
 stack_shift_pos(1);
 flag = local2;
+VM_TRACE("add_o");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -428,6 +445,7 @@ local3 = local1;
 accum = local3;
 stack_shift_pos(1);
 flag = local2;
+VM_TRACE("sub_o");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -442,6 +460,7 @@ local3 = local1;
 accum = local3;
 stack_shift_pos(1);
 flag = local2;
+VM_TRACE("mul_o");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -452,6 +471,7 @@ word_t local2;
 local1 = stack_nth(0) << accum;
 local2 = local1;
 accum = local2;
+VM_TRACE("lshift");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -463,6 +483,7 @@ word_t local2;
 local1 = stack_nth(0) >> accum;
 local2 = local1;
 accum = local2;
+VM_TRACE("rshift");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -474,6 +495,7 @@ word_t local2;
 local1 = ((unsigned)stack_nth(0)) >> accum;
 local2 = local1;
 accum = local2;
+VM_TRACE("urshift");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -487,6 +509,7 @@ local2 = stack_nth(1);
 accum = local2;
 stack_shift_pos(2);
 flag = local1;
+VM_TRACE("cmpeq");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -499,6 +522,7 @@ local2 = stack_nth(1);
 accum = local2;
 stack_shift_pos(2);
 flag = local1;
+VM_TRACE("cmplt");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -511,11 +535,13 @@ local2 = stack_nth(1);
 accum = local2;
 stack_shift_pos(2);
 flag = local1;
+VM_TRACE("cmpltu");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
 lblopcode23:  /* [settos(0)] */
 {
+VM_TRACE("settos(0)");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -527,6 +553,7 @@ local1 = bytecode_next(code_t);
 stack_shift(local1-1);
 local2 = stack_nth(0);
 accum = local2;
+VM_TRACE("settos(1:255)");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -539,6 +566,7 @@ local1 = bytecode_next(word_t);
 stack_shift(local1-1);
 local2 = stack_nth(0);
 accum = local2;
+VM_TRACE("settos(1:maxint)");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -555,6 +583,7 @@ stack_shift(-1);
 stack_shift((-local1));
 local3 = stack_nth(0);
 accum = local3;
+VM_TRACE("pushn(char)");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -571,77 +600,47 @@ stack_shift(-1);
 stack_shift((-local1));
 local3 = stack_nth(0);
 accum = local3;
+VM_TRACE("pushn(int)");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
 
 lblopcode28:  /* [immed(0)] */
 {
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = 0;
-local2 = local1;
-local3 = accum;
-stack_nth(-1) = local3;
-accum = local2;
-stack_shift(-1);
+stack_push(accum);
+accum = 0;
+VM_TRACE("immed(0)");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
 lblopcode29:  /* [immed(1)] */
 {
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = 1;
-local2 = local1;
-local3 = accum;
-stack_nth(-1) = local3;
-accum = local2;
-stack_shift(-1);
+stack_push(accum);
+accum = 1;
+VM_TRACE("immed(1)");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
 lblopcode30:  /* [immed(char)] */
 {
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(char);
-local2 = local1;
-local3 = accum;
-stack_nth(-1) = local3;
-accum = local2;
-stack_shift(-1);
+stack_push(accum);
+accum = bytecode_next(char);
+VM_TRACE("immed(char)");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
-lblopcode31:  /* [immed(int)] */
+lblopcode31:  /* [immed(word_t)] */
 {
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = bytecode_next(word_t);
-local2 = local1;
-local3 = accum;
-stack_nth(-1) = local3;
-accum = local2;
-stack_shift(-1);
+stack_push(accum);
+accum = bytecode_next(word_t);
+VM_TRACE("immed(int)");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
 lblopcode32:  /* [s_push(0)] */
 {
-word_t local1;
-word_t local2;
-word_t local3;
-local1 = accum;
-local2 = local1;
-local3 = accum;
-stack_nth(-1) = local3;
-accum = local2;
-stack_shift(-1);
+stack_push(accum);
+VM_TRACE("s_push(0)");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -657,6 +656,7 @@ local3 = local2;
 local4 = accum;
 stack_nth(-1) = local4;
 accum = local3;
+VM_TRACE("s_push(1:255)");
 stack_shift(-1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -673,6 +673,7 @@ local3 = local2;
 local4 = accum;
 stack_nth(-1) = local4;
 accum = local3;
+VM_TRACE("s_push(1:maxint)");
 stack_shift(-1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -683,6 +684,7 @@ word_t local1;
 accum = accum;
 local1 = stack_nth(0);
 accum = local1;
+VM_TRACE("s_pop(0)");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -695,6 +697,7 @@ local1 = bytecode_next(code_t);
 stack_nth(local1-1) = accum;
 local2 = stack_nth(0);
 accum = local2;
+VM_TRACE("s_pop(1:255)");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -707,6 +710,7 @@ local1 = bytecode_next(word_t);
 stack_nth(local1-1) = accum;
 local2 = stack_nth(0);
 accum = local2;
+VM_TRACE("s_pop(1:maxint)");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -723,6 +727,7 @@ local3 = local2;
 local4 = accum;
 stack_nth(-1) = local4;
 accum = local3;
+VM_TRACE("ref_push(char)");
 stack_shift(-1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -737,6 +742,7 @@ local1 = bytecode_next(word_t);
 local2 = (word_t) &stack_nth(local1-1);
 local3 = local2;
 local4 = accum;
+VM_TRACE("ref_push(int)");
 stack_nth(-1) = local4;
 accum = local3;
 stack_shift(-1);
@@ -745,6 +751,7 @@ goto *opcodetable[bytecode_nextopcode()];
 
 lblopcode40:  /* [stackgrow] */
 {
+VM_TRACE("stackgrow");
 impl_stackgrow(VM_EXTRA_STACK_SIZE);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -753,6 +760,7 @@ lblopcode41:  /* [assertdepth(char)] */
 {
 word_t local1;
 local1 = bytecode_next(char);
+VM_TRACE("assertdepth");
 /* debugging assertion */
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -761,6 +769,7 @@ lblopcode42:  /* [assertdepth(int)] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
+VM_TRACE("assertdepth");
 /* debugging assertion */
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -769,6 +778,7 @@ lblopcode43:  /* [dynamicfreq(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
+VM_TRACE("dynamicfreq");
 impl_dynamicfreq;
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -785,6 +795,7 @@ local2 = local1;
 local3 = accum;
 stack_nth(-1) = local3;
 accum = local2;
+VM_TRACE("flag_push");
 stack_shift(-1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -796,6 +807,7 @@ word_t local2;
 local1 = !accum;
 local2 = stack_nth(0);
 accum = local2;
+VM_TRACE("cmpz");
 stack_shift_pos(1);
 flag = local1;
 }
@@ -805,6 +817,7 @@ lblopcode46:  /* [jcondnear(indirect(code_t))] */
 {
 word_t local1;
 local1 = bytecode_next(code_t);
+VM_TRACE("jcondnear");
 impl_debug_check_flag(flag);
 impl_jcond(flag,nextip+local1);
 impl_debug_forget_flag(flag);
@@ -815,6 +828,7 @@ lblopcode47:  /* [jcondfar(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
+VM_TRACE("jcondfar");
 impl_debug_check_flag(flag);
 impl_jcond(flag,local1);
 impl_debug_forget_flag(flag);
@@ -825,17 +839,21 @@ lblopcode48:  /* [jumpfar(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
+VM_TRACE("jumpfar");
 impl_jump(local1);
 }
 goto *opcodetable[bytecode_nextopcode()];
+
 
 lblopcode49:  /* [cbuild1(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
+VM_TRACE("cbuild1");
 impl_cbuild1(local1);
 }
 goto *opcodetable[bytecode_nextopcode()];
+
 
 lblopcode50:  /* [cbuild2(indirect(word_t))] */
 {
@@ -845,6 +863,7 @@ local1 = bytecode_next(word_t);
 impl_cbuild2(local1,accum);
 local2 = stack_nth(0);
 accum = local2;
+VM_TRACE("cbuild2");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -855,6 +874,7 @@ word_t local1;
 *(char*)stack_nth(0) = (char)accum;
 local1 = stack_nth(1);
 accum = local1;
+VM_TRACE("store1");
 stack_shift_pos(2);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -865,6 +885,7 @@ word_t local1;
 *(short*)stack_nth(0) = (short)accum;
 local1 = stack_nth(1);
 accum = local1;
+VM_TRACE("store2");
 stack_shift_pos(2);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -875,6 +896,7 @@ word_t local1;
 *(int*)stack_nth(0) = accum;
 local1 = stack_nth(1);
 accum = local1;
+VM_TRACE("store4");
 stack_shift_pos(2);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -885,6 +907,7 @@ word_t local1;
 *(int64_t*)stack_nth(0) = accum;
 local1 = stack_nth(1);
 accum = local1;
+VM_TRACE("store8");
 stack_shift_pos(2);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -895,6 +918,7 @@ word_t local1;
 impl_incref(accum);
 local1 = stack_nth(0);
 accum = local1;
+VM_TRACE("incref");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -905,6 +929,7 @@ word_t local1;
 impl_decref(accum);
 local1 = stack_nth(0);
 accum = local1;
+VM_TRACE("decref");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -913,22 +938,40 @@ lblopcode57:  /* [decrefnz(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
+VM_TRACE("decrefnz");
 impl_decrefnz(local1);
 }
 goto *opcodetable[bytecode_nextopcode()];
 
 lblopcode58:  /* [exitframe] */
 {
-word_t local1;
 impl_exitframe(stack_nth(1),stack_nth(0),accum);
-local1 = stack_nth(2);
-accum = local1;
+accum = stack_nth(2);
 stack_shift_pos(3);
+VM_TRACE("exitframe");
+/*
+#define impl_exitframe(tb, val, exc)  stack_savesp();               \
+                                      if (exc) cimpl_finalize_frame_locals( \
+                                                   (PyObject*) exc,     \
+                                                   (PyObject*) val,     \
+                                                   (PyObject*) tb)
+
+    PyObject* exception = accum;
+    stack_savesp();
+    if (exception) {
+        PyObject* val = stack_pop();
+        PyObject* tb = stack_pop();
+        cimpl_finalize_frame_locals(exception, val, tb);
+    }
+    accum = stack_pop();
+    VM_TRACE("exitframe");
+*/
 }
 goto *opcodetable[bytecode_nextopcode()];
 
 lblopcode59:  /* [ret(0)] */
 {
+VM_TRACE("ret(0)");
 impl_ret(accum);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -942,6 +985,7 @@ impl_ret(accum);
 stack_shift(local1-1);
 local2 = stack_nth(0);
 accum = local2;
+VM_TRACE("ret(1:255)");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -955,6 +999,7 @@ impl_ret(accum);
 stack_shift(local1-1);
 local2 = stack_nth(0);
 accum = local2;
+VM_TRACE("ret(1:maxint)");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -965,6 +1010,7 @@ word_t local1;
 retval = accum;
 local1 = stack_nth(0);
 accum = local1;
+VM_TRACE("retval");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -979,6 +1025,7 @@ local2 = local1;
 local3 = accum;
 stack_nth(-1) = local3;
 accum = local2;
+VM_TRACE("pushretval");
 stack_shift(-1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -987,12 +1034,14 @@ lblopcode64:  /* [pyenter(indirect(word_t))] */
 {
 word_t local1;
 local1 = bytecode_next(word_t);
+VM_TRACE("pyenter");
 impl_pyenter(local1);
 }
 goto *opcodetable[bytecode_nextopcode()];
 
 lblopcode65:  /* [pyleave] */
 {
+VM_TRACE("pyleave");
 impl_pyleave;
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -1010,6 +1059,7 @@ local3 = local2;
 local4 = accum;
 stack_nth(-1) = local4;
 accum = local3;
+VM_TRACE("vmcall");
 stack_shift(-1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -1026,6 +1076,7 @@ local3 = local2;
 local4 = accum;
 stack_nth(-1) = local4;
 accum = local3;
+VM_TRACE("ccall0");
 stack_shift(-1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -1039,6 +1090,7 @@ local1 = bytecode_next(word_t);
 local2 = impl_ccall(1,local1,macro_args(accum));
 local3 = local2;
 accum = local3;
+VM_TRACE("ccall1");
 }
 goto *opcodetable[bytecode_nextopcode()];
 
@@ -1051,6 +1103,7 @@ local1 = bytecode_next(word_t);
 local2 = impl_ccall(2,local1,macro_args(accum,stack_nth(0)));
 local3 = local2;
 accum = local3;
+VM_TRACE("ccall2");
 stack_shift_pos(1);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -1064,6 +1117,7 @@ local1 = bytecode_next(word_t);
 local2 = impl_ccall(3,local1,macro_args(accum,stack_nth(0),stack_nth(1)));
 local3 = local2;
 accum = local3;
+VM_TRACE("ccall3");
 stack_shift_pos(2);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -1077,6 +1131,7 @@ local1 = bytecode_next(word_t);
 local2 = impl_ccall(4,local1,macro_args(accum,stack_nth(0),stack_nth(1),stack_nth(2)));
 local3 = local2;
 accum = local3;
+VM_TRACE("ccall4");
 stack_shift_pos(3);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -1090,6 +1145,7 @@ local1 = bytecode_next(word_t);
 local2 = impl_ccall(5,local1,macro_args(accum,stack_nth(0),stack_nth(1),stack_nth(2),stack_nth(3)));
 local3 = local2;
 accum = local3;
+VM_TRACE("ccall5");
 stack_shift_pos(4);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -1103,6 +1159,7 @@ local1 = bytecode_next(word_t);
 local2 = impl_ccall(6,local1,macro_args(accum,stack_nth(0),stack_nth(1),stack_nth(2),stack_nth(3),stack_nth(4)));
 local3 = local2;
 accum = local3;
+VM_TRACE("ccall6");
 stack_shift_pos(5);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -1116,6 +1173,7 @@ local1 = bytecode_next(word_t);
 local2 = impl_ccall(7,local1,macro_args(accum,stack_nth(0),stack_nth(1),stack_nth(2),stack_nth(3),stack_nth(4),stack_nth(5)));
 local3 = local2;
 accum = local3;
+VM_TRACE("ccall7");
 stack_shift_pos(6);
 }
 goto *opcodetable[bytecode_nextopcode()];
@@ -1133,6 +1191,7 @@ local3 = bytecode_next(word_t);
 local4 = bytecode_next(word_t);
 local5 = impl_checkdict(local1,local2,local3,local4);
 flag = local5;
+VM_TRACE("checkdict");
 }
 goto *opcodetable[bytecode_nextopcode()];
 

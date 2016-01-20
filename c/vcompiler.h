@@ -451,7 +451,7 @@ PSY_INLINE void array_delete(vinfo_array_t* array, PsycoObject* po) {
 /* [This is internal stuff: see comments below for an introduction.] */
 /* type is defined by its size (given as the nth power of two)
    and a handful of flags */
-typedef struct undefined_fld_s* defield_t;
+typedef long defield_t;
 EXTERNFN vinfo_t* psyco_internal_getfld(PsycoObject* po, int findex,
 					defield_t df, vinfo_t* vi, long offset);
 EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
