@@ -47,7 +47,7 @@ PROCESSOR = None  # autodetect
 # symbol is init_psyco(). It also seems that the GDB debugger doesn't locate
 # too well non-static symbols in shared libraries. Recompiling after minor
 # changes is faster if ALL_STATIC=0.
-ALL_STATIC = 1
+ALL_STATIC = 0
 
 # Be careful with ALL_STATIC=0, because I am not sure the distutils can
 # correctly detect all the dependencies. In case of doubt always compile
@@ -89,17 +89,6 @@ def autodetect():
         raise ProcessorAutodetectError, "unsupported processor '%s'" % mach
 
 
-# loads the list of source files from SOURCEDIR/files.py
-# and make the appropriate options for the Extension class.
-SOURCEDIR = 'c'
-
-data = {}
-execfile(os.path.join(SOURCEDIR, 'files.py'), data)
-
-SRC = data['SRC']
-MAINFILE = data['MAINFILE']
-PLATFILE = data['PLATFILE']
-
 macros = []
 for name in ['PSYCO_DEBUG', 'VERBOSE_LEVEL',
              'CODE_DUMP', 'HEAVY_MEM_CHECK', 'ALL_STATIC',
@@ -112,30 +101,25 @@ if PROCESSOR is None:
         PROCESSOR = autodetect()
     except ProcessorAutodetectError:
         PROCESSOR = 'ivm'  # fall back to the generic virtual machine
-processor_dir = os.path.join('c', PROCESSOR)
-localsetup = os.path.join(processor_dir, 'localsetup.py')
-if os.path.isfile(localsetup):
-    d = globals().copy()
-    d['__file__'] = localsetup
-    execfile(localsetup, d)
+print "Processor", PROCESSOR
 
-if ALL_STATIC:
-    sources = [SOURCEDIR + '/' + MAINFILE,
-               SOURCEDIR + '/' + PLATFILE]
-else:
-    sources = [SOURCEDIR + '/' + s.filename for s in SRC]
+def find_sources(processor):
+    for root, dirs, filenames in os.walk('./c'):
+        skip = any(
+            [processor_prefix != processor and processor_prefix in root
+            for processor_prefix in ['ivm', 'i386', 'x86_64']]
+        )
+        if skip:
+            continue
+        for filename in filenames:
+            if filename.endswith('.c'):
+                yield os.path.join(root, filename)
+
 
 extra_compile_args = []
 extra_link_args = []
-if sys.platform == 'win32':
-    if globals().get('PSYCO_DEBUG'):
-        # how do we know if distutils will use the MS compilers ???
-        # these are just hacks that I really need to compile psyco debug versions
-        # on Windows
-        extra_compile_args.append('/Od')   # no optimizations, override the default /Ox
-        extra_compile_args.append('/ZI')   # debugging info
-        extra_link_args.append('/debug')   # debugging info
-    macros.insert(0, ('NDEBUG', '1'))  # prevents from being linked against python2x_d.lib
+sources = list(find_sources(PROCESSOR))
+processor_dir = os.path.join('./c', PROCESSOR)
 
 
 CLASSIFIERS = [
