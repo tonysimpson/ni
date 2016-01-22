@@ -942,7 +942,7 @@ static stringlike_t* cimpl_cb_new(stringlike_t* a, stringlike_t* b,
 		PyObject_MALLOC(sizeof(stringlike_t) + size * sizeof(char));
 	if (op == NULL)
 		return (stringlike_t*) PyErr_NoMemory();
-	PyObject_INIT_VAR(op, &PsycoBufStr_Type, size);
+	op = PyObject_INIT_VAR(op, &PsycoBufStr_Type, size);
 	op->ob_shash = a_size + b_size;
 	memcpy(op->ob_sval, a->ob_sval, a_size);
 	memcpy(op->ob_sval + a_size, b->ob_sval, b_size);

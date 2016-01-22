@@ -13,7 +13,9 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 	condition_code_t cc;
 	vinfo_t* v;
 	vinfo_t* w1;
+#if HAVE_FP_FN_CALLS
 	vinfo_t* w2;
+#endif
 	defield_t rdf;
 	if (l->flags & READ_RESTRICTED)
 		goto fallback;

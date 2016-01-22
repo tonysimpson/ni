@@ -155,7 +155,7 @@ static PyObject* cimpl_alloc_gc_heap(PyTypeObject* type)
 		return PyErr_NoMemory();
 	memset(obj, '\0', size);
 	Py_INCREF(type);
-	PyObject_INIT(obj, type);
+	obj = PyObject_INIT(obj, type);
 	PyObject_GC_Track(obj);
 	return obj;
 }
@@ -167,7 +167,7 @@ static PyObject* cimpl_alloc_gc_nonheap(PyTypeObject* type)
 	if (obj == NULL)
 		return PyErr_NoMemory();
 	memset(obj, '\0', size);
-	PyObject_INIT(obj, type);
+    obj = PyObject_INIT(obj, type);
 	PyObject_GC_Track(obj);
 	return obj;
 }
@@ -180,8 +180,7 @@ static PyObject* cimpl_alloc_nongc_heap(PyTypeObject* type)
 		return PyErr_NoMemory();
 	memset(obj, '\0', size);
 	Py_INCREF(type);
-	PyObject_INIT(obj, type);
-	return obj;
+	return PyObject_INIT(obj, type);
 }
 
 static PyObject* cimpl_alloc_nongc_nonheap(PyTypeObject* type)
@@ -191,8 +190,7 @@ static PyObject* cimpl_alloc_nongc_nonheap(PyTypeObject* type)
 	if (obj == NULL)
 		return PyErr_NoMemory();
 	memset(obj, '\0', size);
-	PyObject_INIT(obj, type);
-	return obj;
+	return PyObject_INIT(obj, type);
 }
 #endif  /* INLINE_GENERIC_ALLOC */
 

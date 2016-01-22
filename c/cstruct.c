@@ -8,7 +8,7 @@ PyObject* PyCStruct_New(size_t size, destructor d)
 	cs = (cstruct_header_t*) PyObject_Malloc(size);
 	if (cs == NULL)
 		OUT_OF_MEMORY();
-	PyObject_INIT(cs, &PyCStruct_Type);
+	cs = PyObject_INIT(cs, &PyCStruct_Type);
 	cs->cs_destructor = d;
 	cs->cs_key = NULL;
 	return (PyObject*) cs;
