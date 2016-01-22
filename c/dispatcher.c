@@ -1630,29 +1630,32 @@ static void remove_non_compiletime(vinfo_t* v, PsycoObject* po)
 }
 
 
- /***************************************************************/
+/*****************************************************************/
 /***                Promotion and un-promotion                 ***/
- /***************************************************************/
-
+/*****************************************************************/
 
 /*****************************************************************/
- /***   Promotion of a run-time variable into a fixed           ***/
-  /***   compile-time one                                        ***/
+/***   Promotion of a run-time variable into a fixed           ***/
+/***   compile-time one                                        ***/
+/*****************************************************************/
 
 
 /* Implementation tactics */
 
-/* 0 -- use a plain Python dictionary whose keys
+/* 
+ There used to be 2 different promotion algorythems implemented here
+ but I removed [0] in order to make the code simpler - see VC history
+ if you want to reimplment it. [2] was not implemented but looks 
+ interesting. Original notes:
+ 
+   0 -- use a plain Python dictionary whose keys
         are the value to promote and values the code objects.
    1 -- put code buffers in a chained list,
         with the most used items moving forward in the list.
    2 -- order the code buffers as a binary search tree,
         with the most used nodes moving up in the tree (not implemented)
 */
-#define PROMOTION_TACTIC             1
 
-
-#if PROMOTION_TACTIC == 1
 typedef struct rt_local_buf_s {
 # if CODE_DUMP
   long signature;
@@ -1660,27 +1663,17 @@ typedef struct rt_local_buf_s {
   struct rt_local_buf_s* next;
   long key;
 } rt_local_buf_t;
-#endif
 
 typedef struct { /* produced at compile time and read by the dispatcher */
   INTERNAL_PROMOTION_FIELDS
   
   PsycoObject* po;        /* state before promotion */
   vinfo_t* fix;           /* variable to promote */
-  
-#if PROMOTION_TACTIC == 0
-  PyObject* spec_dict;    /* local cache (promotions to already-seen values) */
-# if CODE_DUMP
-  void** chained_list;    /* must be last, with spec_dict just before */
-# endif
-#endif
 
-#if PROMOTION_TACTIC == 1
   rt_local_buf_t* local_chained_list;
 # if CODE_DUMP
   long zero_tag;
 # endif
-#endif
 } rt_promotion_t;
 
 
@@ -1689,21 +1682,6 @@ typedef struct { /* produced at compile time and read by the dispatcher */
                 result = lookup_old_promotion_values(fs, value)
 
 
-#if PROMOTION_TACTIC == 0
-#define NEED_PYOBJ_KEY
-PSY_INLINE code_t* lookup_old_promotion_values(rt_promotion_t* fs,
-                                           PyObject* key)
-{
-  /* have we already seen this value? */
-  CodeBufferObject* codebuf;
-  codebuf = (CodeBufferObject*) PyDict_GetItem(fs->spec_dict, key);
-  if (codebuf != NULL)   /* yes */
-    return (code_t*) codebuf->codestart;
-  return NULL;  /* no */
-}
-#endif  /* PROMOTION_TACTIC == 0 */
-
-#if PROMOTION_TACTIC == 1
 #  if PROMOTION_FAST_COMMON_CASE
 static
 #  else
@@ -1796,15 +1774,10 @@ PSY_INLINE int lookup_count_previous_values(rt_promotion_t* fs,
 	}
 	return result;
 }
-#endif  /* PROMOTION_TACTIC == 1 */
 
 
 static code_t* do_promotion_internal(rt_promotion_t* fs,
-#ifdef NEED_PYOBJ_KEY
-                                     PyObject* key,
-#else
                                      long key,
-#endif
                                      source_known_t* sk)
 {
   CodeBufferObject* codebuf;
@@ -1840,20 +1813,6 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
      compile-time. */
   mp = psyco_exact_merge_point(po->pr.merge_points, po->pr.next_instr);
 
-#if PROMOTION_TACTIC == 0
-  codebuf = psyco_compile_code(po, mp);
-
-  /* store the new code buffer into the local cache */
-  RECLIMIT_SAFE_ENTER();
-  if (PyDict_SetItem(fs->spec_dict, key, (PyObject*) codebuf))
-    OUT_OF_MEMORY();
-  RECLIMIT_SAFE_LEAVE();
-  Py_DECREF(codebuf);  /* there is a reference left
-                          in the dictionary */
-  result = (code_t*) codebuf->codestart;
-#endif
-
-#if PROMOTION_TACTIC == 1
   codebuf = psyco_new_code_buffer(NULL, NULL, &po->codelimit);
   {
     code_t* codeend;
@@ -1863,10 +1822,10 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
     result = code;
     buf = ((rt_local_buf_t*) code) - 1;
     
-# if CODE_DUMP
+#if CODE_DUMP
     memset(codebuf->codestart, 0xCC, ((char*) buf) - ((char*) codebuf->codestart));
     buf->signature = 0x66666666;
-# endif
+#endif
     buf->next = fs->local_chained_list;
     buf->key = key;
     fs->local_chained_list = buf;
@@ -1876,7 +1835,6 @@ static code_t* do_promotion_internal(rt_promotion_t* fs,
     psyco_shrink_code_buffer(codebuf, codeend);
     /* XXX don't know what to do with reference to 'codebuf' */
   }
-#endif
 
   dump_code_buffers();
   return result;
@@ -1908,11 +1866,6 @@ static code_t* detected_megamorphic_pyobj_site(rt_promotion_t* fs)
   /* compile from this new state, in which 'v' has been flagged */
   mp = psyco_exact_merge_point(po->pr.merge_points, po->pr.next_instr);
 
-#if PROMOTION_TACTIC == 0
-#  error "XXX reimplement"
-#endif
-
-#if PROMOTION_TACTIC == 1
   codebuf = psyco_new_code_buffer(NULL, NULL, &po->codelimit);
   {
     code_t* codeend;
@@ -1922,10 +1875,10 @@ static code_t* detected_megamorphic_pyobj_site(rt_promotion_t* fs)
     result = code;
     buf = ((rt_local_buf_t*) code) - 1;
     
-# if CODE_DUMP
+#if CODE_DUMP
     memset(codebuf->codestart, 0xCC, ((char*) buf) - ((char*) codebuf->codestart));
     buf->signature = 0x66666666;
-# endif
+#endif
     buf->next = fs->local_chained_list;
     buf->key = -1;   /* use (PyObject*)(-1) as a marker */
     fs->local_chained_list = buf;
@@ -1935,7 +1888,6 @@ static code_t* detected_megamorphic_pyobj_site(rt_promotion_t* fs)
     psyco_shrink_code_buffer(codebuf, codeend);
     /* XXX don't know what to do with reference to 'codebuf' */
   }
-#endif
 
   dump_code_buffers();
   return result;
@@ -1949,14 +1901,7 @@ static code_t* do_promotion_long(rt_promotion_t* fs, long value)
 {
   /* need a PyObject* key for the local cache dictionary */
   code_t* result;
-
-#ifdef NEED_PYOBJ_KEY
-  PyObject* key1 = PyInt_FromLong(value);
-  if (key1 == NULL)
-    OUT_OF_MEMORY();
-#else
   long key1 = value;
-#endif
 
   /* have we already seen this value? */
   QUICK_LOOKUP_PROMOTION_VALUE(fs, key1, result);
@@ -1965,9 +1910,6 @@ static code_t* do_promotion_long(rt_promotion_t* fs, long value)
       /* no -> we must build new code */
       result = do_promotion_internal(fs, key1, sk_new(value, SkFlagFixed));
     }
-#ifdef NEED_PYOBJ_KEY
-  Py_DECREF(key1);
-#endif
   /* done -> jump to the codebuf */
   return fix_fast_common_case(fs, value, result);
 }
@@ -1975,12 +1917,7 @@ static code_t* do_promotion_long(rt_promotion_t* fs, long value)
 static code_t* do_promotion_pyobj(rt_promotion_t* fs, PyObject* key)
 {
   code_t* result;
-
-#ifdef NEED_PYOBJ_KEY
-  PyObject* key1 = key;
-#else
   long key1 = (long) key;
-#endif
 
   /* have we already seen this value? */
   QUICK_LOOKUP_PROMOTION_VALUE(fs, key1, result);
@@ -1998,12 +1935,7 @@ static code_t* do_promotion_pyobj(rt_promotion_t* fs, PyObject* key)
 static code_t* do_promotion_pyobj_mega(rt_promotion_t* fs, PyObject* key)
 {
   code_t* result;
-
-#ifdef NEED_PYOBJ_KEY
-  PyObject* key1 = key;
-#else
   long key1 = (long) key;
-#endif
 
   /* have we already seen this value? */
   QUICK_LOOKUP_PROMOTION_VALUE(fs, key1, result);
@@ -2063,22 +1995,9 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, int pflags)
   psyco_assert_coherent(po);
   fs->po = po;    /* don't release 'po' */
   fs->fix = fix;
-  
-#if PROMOTION_TACTIC == 0
-  fs->spec_dict = PyDict_New();
-  if (fs->spec_dict == NULL)
-    OUT_OF_MEMORY();
-# if CODE_DUMP
-  fs->chained_list = psyco_codebuf_spec_dict_list;
-  psyco_codebuf_spec_dict_list = (void**)&fs->chained_list;
-# endif
-#endif
-
-#if PROMOTION_TACTIC == 1
   fs->local_chained_list = NULL;
-# if CODE_DUMP
+#if CODE_DUMP
   fs->zero_tag = 0;
-# endif
 #endif
   
   return (code_t*)(fs+1);  /* end of code == end of 'fs' structure */
