@@ -490,9 +490,9 @@ static PyObject* do_fullcompile(PyFrameObject* frame, PyObject* arg)
 			rec = PyInt_AS_LONG(cs->st_globals);
 		else
 			rec = DEFAULT_RECURSION;
-                module = frame->f_globals == frame->f_locals;
-		cs->st_codebuf = PsycoCode_CompileCode(frame->f_code,
-						       g, rec, module);
+        module = frame->f_globals == frame->f_locals;
+        cs->st_codebuf = PsycoCode_CompileCode(frame->f_code, g, rec, 
+                                               module);
 		if (cs->st_codebuf == Py_None)
 			g = NULL;  /* failed */
 		else {
