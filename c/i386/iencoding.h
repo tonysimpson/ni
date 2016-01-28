@@ -30,7 +30,7 @@
 
 /* Define to 0 to use EBP as any other register, or to 1 to reserve it */
 #ifndef EBP_IS_RESERVED
-# define EBP_IS_RESERVED    0
+# define EBP_IS_RESERVED    1
 #endif
 
 
