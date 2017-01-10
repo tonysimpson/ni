@@ -435,11 +435,20 @@ PsycoObject* psyco_duplicate(PsycoObject* po)
   return result;
 }
 
-DEFINEFN void PsycoObject_Delete(PsycoObject* po)
+void PsycoObject_Delete(PsycoObject* po)
 {
   pyc_data_release(&po->pr);
   deallocate_array(&po->vlocals, NULL);
   PyMem_FREE(po);
+}
+
+PsycoObject* PsycoObject_New(int vlocalscnt) {
+	int psize = PSYCOOBJECT_SIZE(vlocalscnt);
+	PsycoObject* po = (PsycoObject*) PyMem_MALLOC(psize);
+	if (po == NULL)
+		OUT_OF_MEMORY();
+	memset(po, 0, psize);
+	return po;
 }
 
 DEFINEFN
@@ -1020,3 +1029,4 @@ void psyco_compiler_init(void)
 
 
 /*****************************************************************/
+

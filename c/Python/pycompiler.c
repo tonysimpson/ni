@@ -5,6 +5,7 @@
 #include "../codemanager.h"
 #include "../psyfunc.h"
 #include "../pycodegen.h"
+#include "../debug_info/debug_info.h"
 
 #include "../Objects/pabstract.h"
 #include "../Objects/pintobject.h"
@@ -1922,6 +1923,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
   int oparg=0;	/* Current opcode argument, if any */
   code_t* code1;
   int saved_rec_limit;
+  struct ni_debug_info_t * debug_info;
+  struct ni_debug_info_t * outer_debug_info;
   
   /* save and restore the current Python exception throughout compilation */
   PyObject *old_py_exc, *old_py_val, *old_py_tb;
@@ -1948,7 +1951,14 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
     po->pr.next_instr &= ~NEXT_INSTR_POP;
   }
 #endif
-
+    debug_info = ni_debug_info_create();
+    ni_debug_info_compiler_begin(debug_info, 
+                               PyString_AS_STRING(po->pr.co->co_filename),
+                               PyString_AS_STRING(po->pr.co->co_name), 
+                               (char*)po->code, (int)po->pr.is_inlining,
+                               po->pr.is_inlining ? 0 : 
+                               getstack(LOC_CONTINUATION->source));
+    
   while (po->pr.next_instr != -1)
     {
       /* 'co' is the code object we are interpreting/compiling */
@@ -1964,6 +1974,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
       /* trace each code block entry point */
       TRACE_EXECUTION_NOERR("ENTER_MAINLOOP");
+      
+
   
       /* main loop */
       while (1) {
@@ -1978,7 +1990,10 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	SAVE_NEXT_INSTR(next_instr);  /* could be optimized, not needed in the
 					 case of an opcode that cannot set
 					 run-time conditions */
-
+        ni_debug_info_compiler_at_line_number(debug_info, po->code, 
+                            PyCode_Addr2Line(po->pr.co, next_instr));
+        ni_debug_info_compiler_at_stack_depth(debug_info, po->code, 
+                                              po->stack_depth);
 	/*fprintf(stderr, "%s: %d\n", PyString_AS_STRING(co->co_name),
 	  next_instr);*/
 	opcode = NEXTOP();
@@ -3338,5 +3353,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
   Py_SetRecursionLimit(saved_rec_limit);
 
   PyErr_Restore(old_py_exc, old_py_val, old_py_tb);
+    ni_debug_info_compiler_end(debug_info, code1);
+    ni_debug_info_destroy(debug_info);
   return code1;
 }

@@ -30,11 +30,12 @@ typedef long VirtualTimeSource;
 #define CompileTime     1    /* a.k.a. "Known value" */
 #define VirtualTime     2
 #define TimeMask        (CompileTime | VirtualTime)
+#define SOURCE_GET_MASK 0xFFFFFFFC
 
-PSY_INLINE bool is_runtime(Source s)     { return (s & TimeMask) == RunTime; }
-PSY_INLINE bool is_compiletime(Source s) { return (s & CompileTime) != 0; }
-PSY_INLINE bool is_virtualtime(Source s) { return (s & VirtualTime) != 0; }
-PSY_INLINE long gettime(Source s)        { return s & TimeMask; }
+#define is_runtime(s) ((s & TimeMask) == 0)
+#define is_compiletime(s) ((s & CompileTime) != 0)
+#define is_virtualtime(s) ((s & VirtualTime) != 0)
+#define gettime(s) (s & TimeMask)
 #define CHKTIME(src, time)           extra_assert(gettime(src) == (time))
 
 
@@ -184,11 +185,18 @@ PSY_INLINE CompileTimeSource CompileTime_New(long value) {
 	return CompileTime_NewSk(sk_new(value, 0));
 }
 
+
+#define CompileTime_Get(s)\
+    (CHKTIME(s, CompileTime), (source_known_t*)(s & SOURCE_GET_MASK))
+    
 /* inspection */
+/*
 PSY_INLINE source_known_t* CompileTime_Get(CompileTimeSource s) {
 	CHKTIME(s, CompileTime);
 	return (source_known_t*)(((char*) s) - CompileTime);
 }
+*/
+
 PSY_INLINE CompileTimeSource set_ct_value(CompileTimeSource s, long v) {
 	source_known_t* sk = CompileTime_Get(s);
         extra_assert((sk->refcount1_flags & SkFlagPyObj) == 0);
@@ -265,11 +273,16 @@ PSY_INLINE VirtualTimeSource VirtualTime_New(source_virtual_t* sv) {
 	return (VirtualTimeSource) (((char*) sv) + VirtualTime);
 }
 
+#define VirtualTime_Get(s)\
+    (CHKTIME(s, VirtualTime), (source_virtual_t*)(s & SOURCE_GET_MASK))
+
 /* inspection */
+/*
 PSY_INLINE source_virtual_t* VirtualTime_Get(VirtualTimeSource s) {
 	CHKTIME(s, VirtualTime);
 	return (source_virtual_t*)(((char*) s) - VirtualTime);
 }
+*/
 
 
 EXTERNVAR source_virtual_t psyco_vsource_not_important;
@@ -658,12 +671,12 @@ struct PsycoObject_s {
   code_t* code;                /* where the emitted code goes                */
   code_t* codelimit;           /* do not write code past this limit          */
 
+  
   /* compiler private variables for producing and optimizing code */
   PROCESSOR_PSYCOOBJECT_FIELDS      /* processor state                       */
   int respawn_cnt;                  /* see psyco_prepare_respawn()           */
   CodeBufferObject* respawn_proxy;  /* see psyco_prepare_respawn()           */
   pyc_data_t pr;                    /* private language-dependent data       */
-
   /* finally, the description of variable stages. This is the data against
      which state matches and synchronizations are performed. */
   vinfo_array_t vlocals;          /* all the 'vinfo_t' variables             */
@@ -738,14 +751,8 @@ EXTERNFN void psyco_assert_coherent1(PsycoObject* po, bool full);
 #define psyco_assert_coherent(po)    psyco_assert_coherent1(po, true)
 
 /* construction */
-PSY_INLINE PsycoObject* PsycoObject_New(int vlocalscnt) {
-	int psize = PSYCOOBJECT_SIZE(vlocalscnt);
-	PsycoObject* po = (PsycoObject*) PyMem_MALLOC(psize);
-	if (po == NULL)
-		OUT_OF_MEMORY();
-	memset(po, 0, psize);
-	return po;
-}
+PsycoObject* PsycoObject_New(int vlocalscnt);
+
 EXTERNFN PsycoObject* psyco_duplicate(PsycoObject* po);  /* internal */
 PSY_INLINE PsycoObject* PsycoObject_Duplicate(PsycoObject* po) {
 	clear_tmp_marks(&po->vlocals);

@@ -29,7 +29,7 @@ PROCESSOR = None  # autodetect
 
 # level of debugging outputs: 0 = none, 1 = a few, 2 = more,
 #   3 = detailled, 4 = full execution trace
-#VERBOSE_LEVEL = 0
+VERBOSE_LEVEL = 1
 
 # write produced blocks of code into a file; see 'xam.py'
 #  0 = off, 1 = only manually (from a debugger or with _psyco.dumpcodebuf()),
@@ -112,7 +112,7 @@ def find_sources(processor):
         if skip:
             continue
         for filename in filenames:
-            if filename.endswith('.c'):
+            if filename.endswith('.c') and not filename.startswith('test_'):
                 yield os.path.join(root, filename)
 
 

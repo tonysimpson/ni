@@ -1,0 +1,4 @@
+set breakpoint pending on 
+jit-reader-load /home/tsimpson/work/psyco/gdb_jit_reader/ni_gdb_jit_reader.so
+break run
+r
