@@ -13,37 +13,24 @@
 
 /* glue code for psyco_processor_run(). */
 static code_t glue_run_code[] = {
-  0x8B, 0x44, 0x24, 4,          /*   MOV EAX, [ESP+4]  (code target)   */
-  0x8B, 0x4C, 0x24, 8,          /*   MOV ECX, [ESP+8]  (stack end)     */
-  0x8B, 0x54, 0x24, 12,         /*   MOV EDX, [ESP+12] (initial stack) */
-  PUSH_REG_INSTR(REG_386_EBP),  /*   PUSH EBP        */
-  PUSH_REG_INSTR(REG_386_EBX),  /*   PUSH EBX        */
-  PUSH_REG_INSTR(REG_386_ESI),  /*   PUSH ESI        */
-  PUSH_REG_INSTR(REG_386_EDI),  /*   PUSH EDI        */
-  0x8B, 0x5C, 0x24, 32,         /*   MOV EBX, [ESP+32] (finfo frame stack ptr) */
-#ifdef __APPLE__
-  /* Align stack on 16-byte boundary for MacOS X */
-  0x83, 0xEC, 8,                /*   SUB ESP, 8      */
-#endif
-  0x6A, -1,                     /*   PUSH -1         */
-  0x89, 0x23,                   /*   MOV [EBX], ESP  */
-  0xEB, +5,                     /*   JMP Label2      */
-                                /* Label1:           */
-  0x83, 0xE9, 4,                /*   SUB ECX, 4      */
-  0xFF, 0x31,                   /*   PUSH [ECX]      */
-                                /* Label2:           */
-  0x39, 0xCA,                   /*   CMP EDX, ECX    */
-  0x75, -9,                     /*   JNE Label1      */
-  0xFF, 0xD0,                   /*   CALL *EAX     (callee removes args)  */
-#ifdef __APPLE__
-  /* Restore stack from 16-byte alignment on MacOS X */
-  0x83, 0xC4, 8,                /*   ADD ESP, 8      */
-#endif
-  POP_REG_INSTR(REG_386_EDI),   /*   POP EDI         */
-  POP_REG_INSTR(REG_386_ESI),   /*   POP ESI         */
-  POP_REG_INSTR(REG_386_EBX),   /*   POP EBX         */
-  POP_REG_INSTR(REG_386_EBP),   /*   POP EBP         */
-  0xC3,                         /*   RET             */
+                                      /*   RDI - code_t* code_target
+                                       *   RSI - long* stack_end
+                                       *   RDX - long* initial_stack
+                                       *   RCX - struct stack_frame_info_s*** finfo
+                                       */
+  PUSH_REG_INSTR(REG_386_EBP),        /*   PUSH RBP        */
+  0x6A, -1,                           /*   PUSH -1        (stack should be 16 byte aligned now) */
+  0x48, 0x89, 0x21,                   /*   MOV [RCX], RSP  (set finfo to stack pointer) */ 
+  0xEB, +6,                           /*   JMP Label2      */
+                                      /* Label1:          (push item from initial_stack onto real stack in reverse order) */
+  0x48, 0x83, 0xEE, 16,               /*   SUB RSI, 16     */
+  0xFF, 0x36,                         /*   PUSH [RSI]      */
+                                      /* Label2:           */
+  0x48, 0x39, 0xF2,                   /*   CMP RDX, RSI    */
+  0x75, -11,                          /*   JNE Label1      */
+  0xFF, 0xD7,                         /*   CALL *RDI      (callee removes args)  */
+  POP_REG_INSTR(REG_386_EBP),         /*   POP EBP         */
+  0xC3,                               /*   RET             */
 };
 
 typedef PyObject* (*glue_run_code_fn) (code_t* code_target,

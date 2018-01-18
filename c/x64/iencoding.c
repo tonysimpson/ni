@@ -46,6 +46,7 @@ void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
                               RunTimeSource extraarg)
 {
   code_t* code = po->code;
+  DEBUG_BEGIN_CODE_LOCATION
   void* result;
   code_t* fixvalue;
 #ifdef __APPLE__
@@ -62,20 +63,24 @@ void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
   /* first pushed argument */
   if (extraarg != SOURCE_DUMMY)
     CALL_SET_ARG_FROM_RT(extraarg, 1, 2);  /* argument index 1 out of total 2 */
-  
+    
   /* last pushed argument (will be the first argument of 'fn') */
-  code[0] = 0x68;     /* PUSH IMM32	*/
-  fixvalue = code+1;    /* will be filled below */
-  code[5] = 0xE8;     /* CALL fn	*/
-  code += 10;
-  *(long*)(code-4) = ((code_t*)fn) - code;
+  NEED_REGISTER(REG_386_EDI);
+
+  code[0] = 0x48; /* LEA RDI, RIP+OFFSET32 set below to argument to respawn function */
+  code[1] = 0x8D;
+  code[2] = 0x3D;
+  fixvalue = code+3;
+  code[7] = 0xE8;     /* CALL fn	*/
+  code += 12;
+  *(dword_t*)(code-4) = ((code_t*)fn) - code;
 
   if (restore)
     {
       /* cancel the effect of CALL_SET_ARG_FROM_RT on po->stack_depth,
          to match the 'ADD ESP' instruction below */
       int nb_args = 1 + (extraarg != SOURCE_DUMMY);
-      po->stack_depth -= 4*(nb_args-1);
+      po->stack_depth -= 8*(nb_args-1);
       
       extra_assert(4*nb_args < 128);   /* trivially true */
       CODE_FOUR_BYTES(code,
@@ -89,7 +94,7 @@ void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
     }
   else
     {
-      po->stack_depth += 4;  /* for the PUSH IMM32 above */
+      po->stack_depth += 8;  /* for the PUSH IMM32 above */
       code[0] = 0xFF;      /* JMP *EAX */
       code[1] = 0xE0;
       code += 2;
@@ -101,7 +106,8 @@ void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
   while (code != (code_t*) result)
     *code++ = (code_t) 0xCC;   /* fill with INT 3 (debugger trap) instructions */
 #endif
-  *(void**)fixvalue = result;    /* set value at code+1 above */
+  *(dword_t*)fixvalue = ((code_t*)result) - (fixvalue+4);    /* set value at code+1 above */
+  DEBUG_END_CODE_LOCATION
   return result;
 }
 
@@ -163,9 +169,7 @@ PSY_INLINE vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonne
 	return vi;
 }
 
-PSY_INLINE code_t* write_modrm(code_t* code, code_t middle,
-                           reg_t base, reg_t index, int shift,
-                           unsigned long offset)
+code_t* write_modrm(code_t* code, code_t middle, reg_t base, reg_t index, int shift, unsigned long offset)
 {
   /* write a mod/rm encoding. */
   extra_assert(index != REG_386_ESP);

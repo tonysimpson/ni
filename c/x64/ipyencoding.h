@@ -24,40 +24,52 @@
                    offsetof(PyDictObject, ma_mask) < 128);                      \
   extra_assert(0 < offsetof(PyDictObject, ma_table) &&                          \
                    offsetof(PyDictObject, ma_table) < 128);                     \
-  code[0] = 0x81;           /* CMP [...], imm32 */                              \
-  code[1] = 0x40 | (7<<3) | mprg;   /* CMP [mpreg->ma_mask], ... */             \
-  code[2] = offsetof(PyDictObject, ma_mask);                                    \
-  *(long*)(code+3) = (index);                                                   \
+  code[0] = 0x48;                                                               \
+  code[1] = 0x81;           /* CMP [...], imm32 */                              \
+  code[2] = 0x40 | (7<<3) | mprg;   /* CMP [mpreg->ma_mask], ... */             \
+  code[3] = offsetof(PyDictObject, ma_mask);                                    \
+  code += 4; \
+  *(dword_t*)(code) = (index);                                                  \
+  code += 4; \
   /* perform the load before checking the CMP outcome */                        \
-  code[7] = 0x8B;                                                               \
-  code[8] = 0x40 | (mprg<<3) | mprg;   /* MOV mpreg, [mpreg->ma_table] */       \
-  CODE_FOUR_BYTES(code+9,                                                       \
-            offsetof(PyDictObject, ma_table),                                   \
-            0x70 | CC_L,                 /* JL +22 (skip rest of macro) */      \
-            34 - 12,                                                            \
-            0x81);       /* CMP [mpreg+dictentry*index+me_key], key */          \
-  code[13] = 0x80 | (7<<3) | mprg;                                              \
-  *(long*)(code+14) = (index)*sizeof(PyDictEntry) +                             \
-                                  offsetof(PyDictEntry, me_key);                \
-  *(long*)(code+18) = (long)(key);                                              \
-  CODE_FOUR_BYTES(code+22,                                                      \
-            0x70 | CC_NE,              /* JNE +10 (skip rest of macro) */       \
-            34 - 24,                                                            \
-            0x81,        /* CMP [mpreg+dictentry*index+me_value], value */      \
-            0x80 | (7<<3) | mprg);                                              \
-  *(long*)(code+26) = (index)*sizeof(PyDictEntry) +                             \
-                                  offsetof(PyDictEntry, me_value);              \
-  *(long*)(code+30) = (long)(value);                                            \
-  code += 34;                                                                   \
+  code[0] = 0x48; \
+  code[1] = 0x8B;                                                               \
+  code[2] = 0x40 | (mprg<<3) | mprg;   /* MOV mpreg, [mpreg->ma_table] */       \
+  code[3] = offsetof(PyDictObject, ma_table); \
+  code += 4; \
+  code[0] = 0x70 | CC_L; \
+  code_t *jmp_origin_1 = code + 1; \
+  code[2] = 0x48; \
+  code[3] = 0x81; \
+  code[4] = 0x80 | (7<<3) | mprg; \
+  code += 5; \
+  *(dword_t*)(code) = (index)*sizeof(PyDictEntry) +                             \
+                                      offsetof(PyDictEntry, me_key);            \
+  code += 4; \
+  *(dword_t*)(code) = (qword_t)(key); \
+  code += 4; \
+  code[0] = 0x70 | CC_NE; \
+  code_t *jmp_origin_2 = code +1; \
+  code[2] = 0x48; \
+  code[3] = 0x81; \
+  code[4] = 0x80 | (7<<3) | mprg; \
+  code += 5; \
+  *(dword_t*)(code) = (index)*sizeof(PyDictEntry) +                             \
+                                          offsetof(PyDictEntry, me_value);      \
+  code += 4; \
+  *(dword_t*)(code) = (qword_t)(value); \
+  code += 4; \
+  *jmp_origin_1 = (code - jmp_origin_1) - 1; \
+  *jmp_origin_2 = (code - jmp_origin_2) - 1; \
 } while (0)
 
 #define DICT_ITEM_CHECK_CC     CC_NE
 
 #define DICT_ITEM_UPDINDEX(index)        do {                           \
-  *(long*)(code+3) = (index);                                           \
-  *(long*)(code+14) = (index)*sizeof(PyDictEntry) +                     \
+  *(dword_t*)(code+4) = (index);                                           \
+  *(dword_t*)(code+17) = (index)*sizeof(PyDictEntry) +                     \
                                   offsetof(PyDictEntry, me_key);        \
-  *(long*)(code+26) = (index)*sizeof(PyDictEntry) +                     \
+  *(dword_t*)(code+30) = (index)*sizeof(PyDictEntry) +                     \
                                   offsetof(PyDictEntry, me_value);      \
 } while (0)
 
@@ -83,7 +95,7 @@ PSY_INLINE void* dictitem_check_change(PsycoObject* po,
   NEED_FREE_REG(mprg);
   /* write code that quickly checks that the same
      object is still in place in the dictionary */
-  LOAD_REG_FROM_IMMED(mprg, (long) dict);
+  LOAD_REG_FROM_IMMED(mprg, (qword_t)dict);
   codebase = code;
   DICT_ITEM_KEYVALUE(code, index, key, result, mprg);
   END_CODE
@@ -272,7 +284,7 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
 
 /* called by psyco_emit_header() */
 #define INITIALIZE_FRAME_LOCALS(nframelocal)   do {     \
-  STACK_CORRECTION(4*((nframelocal)-1));                \
+  STACK_CORRECTION(sizeof(int)*((nframelocal)-1));                \
   PUSH_IMMED(0);    /* f_exc_type, initially NULL */    \
 } while (0)
 

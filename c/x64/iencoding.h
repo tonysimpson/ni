@@ -547,12 +547,15 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
   }                                                     \
 } while (0)
 
-#define LOAD_REG_FROM_IMMED(dst, immed) (               \
-  code[0] = 0xB8 | (dst),       /* MOV dst, immed */    \
-  *(long*)(code+1) = (immed),                           \
-  code += 5                                             \
-)
-#define SIZE_OF_LOAD_REG_FROM_IMMED    5
+#define LOAD_REG_FROM_IMMED(dst, immed) do {            \
+  code[0] = 0x48;                                       \
+  code[1] = 0xB8 | (dst);       /* MOV dst, immed */    \
+  code += 2;                                            \
+  *(qword_t*)(code) = (immed);                          \
+  code += 8;                                            \
+} while (0)    
+
+#define SIZE_OF_LOAD_REG_FROM_IMMED    10
 
 /* loads 0 in a register. The macro name reminds you that this
    clobbers po->ccreg (use NEED_CC() to save it first). */
@@ -988,25 +991,28 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
  /***   conditional jumps                                       ***/
 
 #define JUMP_TO(addr)   do {                    \
-  code[0] = 0xE9;   /* JMP rel32 */             \
-  code += 5;                                    \
-  *(long*)(code-4) = (addr) - code;             \
+  code[0] = 0x48;                               \
+  code[1] = 0xE9;   /* JMP rel32 */             \
+  *(dword_t*)(code+2) = (addr) - (code+6);      \
+  code += 6;                                    \
 } while (0)
 
 #define IS_A_JUMP(code, targetaddr)                             \
-  (code[0]==(code_t)0xE9 && (targetaddr=code+5+*(long*)(code+1), 1))
+  (code[1]==(code_t)0xE9 && (targetaddr=code+6+*(dword_t*)(code+2), 1))
 
 #define IS_A_SINGLE_JUMP(code, codeend, targetaddr)             \
   ((codeend)-(code) == SIZE_OF_FAR_JUMP && IS_A_JUMP(code, targetaddr))
 
 #define FAR_COND_JUMP_TO(addr, condition)   do {        \
-  code[0] = 0x0F;    /* Jcond rel32 */                  \
-  code[1] = 0x80 | (code_t)(condition);                 \
-  code += 6;                                            \
-  *(long*)(code-4) = (addr) - code;                     \
+  code[0] = 0x48;                                       \
+  code[1] = 0x0F;    /* Jcond rel32 */                  \
+  code[2] = 0x80 | (code_t)(condition);                 \
+  *(dword_t*)(code+3) = (addr) - (code+7);              \
+  code += 7;                                            \
 } while (0)
+
 #define CHANGE_JUMP_TO(addr)                do {        \
-  *(long*)(code-4) = (addr) - code;                     \
+  *(dword_t*)(code-4) = (addr) - code;                  \
 } while (0)
 
 #define SIZE_OF_FAR_JUMP                   5
@@ -1051,17 +1057,19 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   if ((stack_correction) != 0) {                                        \
     if (COMPACT_ENCODING && !HAS_CCREG(po) &&                           \
         -128 <= (stack_correction) && (stack_correction) < 128) {       \
-      code[0] = 0x83;   /* SUB			*/                      \
-      code[1] = 0xEC;   /*     ESP, imm8	*/                      \
-      code[2] = (stack_correction);                                     \
-      code += 3;                                                        \
+      code[0] = 0x48; /* SUB RSP, imm8 */                               \
+      code[1] = 0x83;                                                   \
+      code[2] = 0xEC;                                                   \
+      code[3] = (byte_t)(stack_correction);                             \
+      code += 4;                                                        \
     }                                                                   \
     else {                                                              \
-      code[0] = 0x8D;				/* LEA		   */   \
-      code[1] = 0x84 | ((code_t)REG_386_ESP)<<3;/*   ESP,	   */   \
-      code[2] = 0x24;				/*     [ESP+imm32] */   \
-      *(long*)(code+3) = -(stack_correction);                           \
-      code += 7;                                                        \
+      code[0] = 0x48; /* SUB RSP, imm32 */                              \
+      code[1] = 0x81;                                                   \
+      code[2] = 0xEC;                                                   \
+      code += 3;                                                        \
+      *(dword_t*)(code) = (dword_t)(stack_correction);                  \
+      code += 4;                                                        \
     }                                                                   \
   }                                                                     \
 } while (0)
