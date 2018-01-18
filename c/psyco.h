@@ -8,6 +8,22 @@
 
 #include <Python.h>
 #include <structmember.h>   /* for offsetof() */
+#include <stdint.h>
+
+typedef int8_t byte_t;
+typedef int16_t word_t;
+typedef int32_t dword_t;
+typedef int64_t qword_t;
+
+#if INTPTR_MAX == INT32_MAX
+    typedef dword_t stackitem_t;
+#elif INTPTR_MAX == INT64_MAX
+    typedef int64_t qword_t;
+    typedef qword_t stackitem_t;
+#else
+    #error "Environment not 32 or 64-bit."
+#endif
+
 
 
 /*****************************************************************/
@@ -293,8 +309,13 @@ EXTERNFN PyObject* need_cpsyco_obj(char* name);
 EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 
 /* Convenience macros to start/end a code-emitting instruction block: */
-#define BEGIN_CODE         { code_t* code = po->code;
+#define DEBUG_BEGIN_CODE_LOCATION                fprintf(stderr, "BEGIN_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code);
+#define DEBUG_END_CODE_LOCATION                  fprintf(stderr, "END_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code);
+#define BEGIN_CODE         { code_t* code = po->code;\
+                             DEBUG_BEGIN_CODE_LOCATION
+
 #define END_CODE             po->code = code;                           \
+                             DEBUG_END_CODE_LOCATION\
                              if (code >= po->codelimit)                 \
                                PsycoObject_EmergencyCodeRoom(po);       \
                            }

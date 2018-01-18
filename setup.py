@@ -10,6 +10,7 @@ implementation of Pythoni (http://pypy.org).
 Ni is not currently alpha software and not fit for use. It will be several
 months before it is ready to release.
 """
+from __future__ import print_function
 
 import os, sys
 from distutils.core import setup
@@ -56,11 +57,6 @@ ALL_STATIC = 0
 
 ####################################################################
 
-# override options with the ones from preferences.py, if the file exists.
-try:
-    execfile('preferences.py')
-except IOError:
-    pass
 
 
 # processor auto-detection
@@ -73,7 +69,7 @@ def autodetect():
     # assume we have 'uname'
     mach = os.popen('uname -m', 'r').read().strip()
     if not mach:
-        raise ProcessorAutodetectError, "cannot run 'uname -m'"
+        raise ProcessorAutodetectError("cannot run 'uname -m'")
     if mach == 'x86_64' and sys.maxint == 2147483647:
         mach = 'x86'     # it's a 64-bit processor but in 32-bits mode, maybe
     try:
@@ -83,17 +79,17 @@ def autodetect():
                 'i686': 'i386',
                 'i86pc': 'i386',    # Solaris/Intel
                 'x86':   'i386',    # Apple
-                'x86_64': 'ivm',
+                'x86_64': 'x64',
                 }[mach]
     except KeyError:
-        raise ProcessorAutodetectError, "unsupported processor '%s'" % mach
+        raise ProcessorAutodetectError("unsupported processor '%s'" % mach)
 
 
 macros = []
 for name in ['PSYCO_DEBUG', 'VERBOSE_LEVEL',
              'CODE_DUMP', 'HEAVY_MEM_CHECK', 'ALL_STATIC',
              'PSYCO_NO_LINKED_LISTS']:
-    if globals().has_key(name):
+    if name in globals():
         macros.append((name, str(globals()[name])))
 
 if PROCESSOR is None:
@@ -101,13 +97,13 @@ if PROCESSOR is None:
         PROCESSOR = autodetect()
     except ProcessorAutodetectError:
         PROCESSOR = 'ivm'  # fall back to the generic virtual machine
-print "Processor", PROCESSOR
+print("Processor", PROCESSOR)
 
 def find_sources(processor):
     for root, dirs, filenames in os.walk('./c'):
         skip = any(
             [processor_prefix != processor and processor_prefix in root
-            for processor_prefix in ['ivm', 'i386', 'x86_64']]
+            for processor_prefix in ['ivm', 'i386', 'x64', 'dummybackend']]
         )
         if skip:
             continue
@@ -116,7 +112,7 @@ def find_sources(processor):
                 yield os.path.join(root, filename)
 
 
-extra_compile_args = []
+extra_compile_args = ['-O0', '-g']
 extra_link_args = []
 sources = list(find_sources(PROCESSOR))
 processor_dir = os.path.join('./c', PROCESSOR)

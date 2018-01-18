@@ -1,12 +1,13 @@
+#include "psyco.h"
 #include "dispatcher.h"
 #include "codemanager.h"
+#include "codegen.h"
 #include "mergepoints.h"
 #include "blockalloc.h"
 #include "Python/pycompiler.h"   /* for pyc_data_xxx() */
 #include "Objects/pobject.h"     /* for Psyco_SafelyDeleteVar() */
 #include <idispatcher.h>
 
-typedef long word_t;
  /***************************************************************/
 /***                       Snapshots                           ***/
  /***************************************************************/
