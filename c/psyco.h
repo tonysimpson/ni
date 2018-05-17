@@ -309,8 +309,10 @@ EXTERNFN PyObject* need_cpsyco_obj(char* name);
 EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 
 /* Convenience macros to start/end a code-emitting instruction block: */
-#define DEBUG_BEGIN_CODE_LOCATION                fprintf(stderr, "BEGIN_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code);
-#define DEBUG_END_CODE_LOCATION                  fprintf(stderr, "END_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code);
+
+FILE *codegen_log;
+#define DEBUG_BEGIN_CODE_LOCATION                fprintf(codegen_log, "BEGIN_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code); fflush(codegen_log);
+#define DEBUG_END_CODE_LOCATION                  fprintf(codegen_log, "END_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code); fflush(codegen_log);
 #define BEGIN_CODE         { code_t* code = po->code;\
                              DEBUG_BEGIN_CODE_LOCATION
 

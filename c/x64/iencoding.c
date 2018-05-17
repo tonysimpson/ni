@@ -77,35 +77,20 @@ void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
 
   if (restore)
     {
-      /* cancel the effect of CALL_SET_ARG_FROM_RT on po->stack_depth,
-         to match the 'ADD ESP' instruction below */
-      int nb_args = 1 + (extraarg != SOURCE_DUMMY);
-      po->stack_depth -= 8*(nb_args-1);
-      
-      extra_assert(4*nb_args < 128);   /* trivially true */
-      CODE_FOUR_BYTES(code,
-                      0x83,       /* ADD		  */
-                      0xC4,       /*     ESP,		  */
-                      4*nb_args,  /*           4*nb_args  */
-                      0);         /* not used             */
-      code += 3;
-      CALL_STACK_ALIGN_RESTORE(aligndelta);
       TEMP_RESTORE_REGS_FN_CALLS_AND_JUMP;
     }
   else
     {
       po->stack_depth += 8;  /* for the PUSH IMM32 above */
-      code[0] = 0xFF;      /* JMP *EAX */
+      code[0] = 0xFF;      /* JMP *RAX */
       code[1] = 0xE0;
       code += 2;
     }
 
     /* make 'fs' point just after the end of the code, aligned */
   result = (void*)(((long)code + 3) & ~ 3);
-#if CODE_DUMP
   while (code != (code_t*) result)
     *code++ = (code_t) 0xCC;   /* fill with INT 3 (debugger trap) instructions */
-#endif
   *(dword_t*)fixvalue = ((code_t*)result) - (fixvalue+4);    /* set value at code+1 above */
   DEBUG_END_CODE_LOCATION
   return result;
@@ -169,6 +154,7 @@ PSY_INLINE vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonne
 	return vi;
 }
 
+
 code_t* write_modrm(code_t* code, code_t middle, reg_t base, reg_t index, int shift, unsigned long offset)
 {
   /* write a mod/rm encoding. */
@@ -179,8 +165,8 @@ code_t* write_modrm(code_t* code, code_t middle, reg_t base, reg_t index, int sh
       if (index == REG_NONE)
         {
           code[0] = middle | 0x05;
-          *(unsigned long*)(code+1) = offset;
-          return code+5;
+          *(dword_t*)(code+1) = (dword_t)(offset - (unsigned long )(code+5)); //RIP relative
+          return code + 5;
         }
       else
         {
@@ -251,42 +237,51 @@ static reg_t mem_access(PsycoObject* po, code_t opcodes[], vinfo_t* nv_ptr,
 
   BEGIN_CODE
   if (is_runtime(nv_ptr->source))
-    {
-      RTVINFO_IN_REG(nv_ptr);
-      basereg = RUNTIME_REG(nv_ptr);
-    }
+  {
+    RTVINFO_IN_REG(nv_ptr);
+    basereg = RUNTIME_REG(nv_ptr);
+  }
   else
-    {
-      offset += CompileTime_Get(nv_ptr->source)->value;
-      basereg = REG_NONE;
-    }
+  {
+    offset += CompileTime_Get(nv_ptr->source)->value;
+    basereg = REG_NONE;
+  }
   
   if (rt_vindex != NULL)
-    {
-      DELAY_USE_OF(basereg);
-      RTVINFO_IN_REG(rt_vindex);
-      indexreg = RUNTIME_REG(rt_vindex);
-    }
-  else
+  {
+    DELAY_USE_OF(basereg);
+    RTVINFO_IN_REG(rt_vindex);
+    indexreg = RUNTIME_REG(rt_vindex);
+  }
+  else 
+  {
     indexreg = REG_NONE;
+  }
 
   if (rt_extra == NULL)
+  {
     extrareg = 0;
+  }
   else
+  {
+    DELAY_USE_OF_2(basereg, indexreg);
+    if (rt_extra == NewOutputRegister)
     {
-      DELAY_USE_OF_2(basereg, indexreg);
-      if (rt_extra == NewOutputRegister)
         NEED_FREE_REG(extrareg);
+    } 
+    else
+    {
+      if (size2==0)
+      {
+        RTVINFO_IN_BYTE_REG(rt_extra, basereg, indexreg);
+      }
       else
-        {
-          if (size2==0)
-            RTVINFO_IN_BYTE_REG(rt_extra, basereg, indexreg);
-          else
-            RTVINFO_IN_REG(rt_extra);
-          extrareg = RUNTIME_REG(rt_extra);
-        }
+      {
+        RTVINFO_IN_REG(rt_extra);
+        extrareg = RUNTIME_REG(rt_extra);
+      }
     }
-  
+  }
   for (i = *opcodes++; i--; ) *code++ = *opcodes++;
   code = write_modrm(code, (code_t)(extrareg<<3), basereg, indexreg, size2,
                      (unsigned long) offset);
@@ -322,9 +317,10 @@ vinfo_t* psyco_memory_read(PsycoObject* po, vinfo_t* nv_ptr, long offset,
     break;
   default:
     /* reading a long */
-    opcodes[0] = 1;
-    opcodes[1] = 0x8B;  /* MOV reg, long [...] */
-    opcodes[2] = 0;
+    opcodes[0] = 2;
+    opcodes[1] = 0x48;
+    opcodes[2] = 0x8B;  /* MOV reg, long [...] */
+    opcodes[3] = 0;
     break;
   }
   targetreg = mem_access(po, opcodes, nv_ptr, offset, rt_vindex,
