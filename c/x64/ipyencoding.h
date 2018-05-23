@@ -12,72 +12,23 @@
 #include "../Objects/pobject.h"
 #include "../Objects/pdictobject.h"
 
-
 #define TRACE_START_COMPILING(c)    do { /* nothing */ } while (0)
 
-
-/* Note: the following macro must output a fixed number of bytes of
-   code, so that DICT_ITEM_UPDINDEX() can be called later
-   to update an existing code buffer */
-#define DICT_ITEM_KEYVALUE(code, index, key, value, mprg)  do {                 \
-  extra_assert(0 < offsetof(PyDictObject, ma_mask) &&                           \
-                   offsetof(PyDictObject, ma_mask) < 128);                      \
-  extra_assert(0 < offsetof(PyDictObject, ma_table) &&                          \
-                   offsetof(PyDictObject, ma_table) < 128);                     \
-  code[0] = 0x48;                                                               \
-  code[1] = 0x81;           /* CMP [...], imm32 */                              \
-  code[2] = 0x40 | (7<<3) | mprg;   /* CMP [mpreg->ma_mask], ... */             \
-  code[3] = offsetof(PyDictObject, ma_mask);                                    \
-  code += 4; \
-  *(dword_t*)(code) = (index);                                                  \
-  code += 4; \
-  /* perform the load before checking the CMP outcome */                        \
-  code[0] = 0x48; \
-  code[1] = 0x8B;                                                               \
-  code[2] = 0x40 | (mprg<<3) | mprg;   /* MOV mpreg, [mpreg->ma_table] */       \
-  code[3] = offsetof(PyDictObject, ma_table); \
-  code += 4; \
-  code[0] = 0x70 | CC_L; \
-  code_t *jmp_origin_1 = code + 1; \
-  code[2] = 0x48; \
-  code[3] = 0x81; \
-  code[4] = 0x80 | (7<<3) | mprg; \
-  code += 5; \
-  *(dword_t*)(code) = (index)*sizeof(PyDictEntry) +                             \
-                                      offsetof(PyDictEntry, me_key);            \
-  code += 4; \
-  *(dword_t*)(code) = (qword_t)(key); \
-  code += 4; \
-  code[0] = 0x70 | CC_NE; \
-  code_t *jmp_origin_2 = code +1; \
-  code[2] = 0x48; \
-  code[3] = 0x81; \
-  code[4] = 0x80 | (7<<3) | mprg; \
-  code += 5; \
-  *(dword_t*)(code) = (index)*sizeof(PyDictEntry) +                             \
-                                          offsetof(PyDictEntry, me_value);      \
-  code += 4; \
-  *(dword_t*)(code) = (qword_t)(value); \
-  code += 4; \
-  *jmp_origin_1 = (code - jmp_origin_1) - 1; \
-  *jmp_origin_2 = (code - jmp_origin_2) - 1; \
-} while (0)
-
 #define DICT_ITEM_CHECK_CC     CC_NE
-
-#define DICT_ITEM_UPDINDEX(index)        do {                           \
-  *(dword_t*)(code+4) = (index);                                           \
-  *(dword_t*)(code+17) = (index)*sizeof(PyDictEntry) +                     \
-                                  offsetof(PyDictEntry, me_key);        \
-  *(dword_t*)(code+30) = (index)*sizeof(PyDictEntry) +                     \
-                                  offsetof(PyDictEntry, me_value);      \
+#define DICT_ITEM_KEYVALUE(index, key, value, mprg)  do {\
+  MOV_R_UI(REG_X64_RAX, index);\
+  CMP_R_O8(REG_X64_RAX, mprg, offsetof(PyDictObject, ma_mask));\
+  MOV_R_O8(mprg, mprg, offsetof(PyDictObject, ma_table));\
+  BEGIN_SHORT_COND_JUMP(0, CC_L);\
+  MOV_R_I(REG_X64_RAX, key);\
+  CMP_R_UO32(REG_X64_RAX, mprg, (index) * sizeof(PyDictEntry) + offsetof(PyDictEntry, me_key));\
+  BEGIN_SHORT_COND_JUMP(1, DICT_ITEM_CHECK_CC);\
+  MOV_R_I(REG_X64_RAX, value);\
+  CMP_R_UO32(REG_X64_RAX, mprg, (index) * sizeof(PyDictEntry) + offsetof(PyDictEntry, me_value));\
+  END_SHORT_COND_JUMP(0);\
+  END_SHORT_COND_JUMP(1);\
 } while (0)
 
-
-/* A cleaner interface to the two big macros above: quickly
-   checking if a globals' dictionary still map the given key to
-   the given value.
-   XXX 'dict' must never be released! */
 PSY_INLINE void* dictitem_check_change(PsycoObject* po,
                                    PyDictObject* dict, PyDictEntry* ep)
 {
@@ -97,7 +48,7 @@ PSY_INLINE void* dictitem_check_change(PsycoObject* po,
      object is still in place in the dictionary */
   LOAD_REG_FROM_IMMED(mprg, (qword_t)dict);
   codebase = code;
-  DICT_ITEM_KEYVALUE(code, index, key, result, mprg);
+  DICT_ITEM_KEYVALUE(index, key, result, mprg);
   END_CODE
   return codebase;
 }
@@ -107,7 +58,11 @@ PSY_INLINE void dictitem_update_nochange(void* originalmacrocode,
 {
   int index = new_ep - dict->ma_table;
   code_t* code = (code_t*) originalmacrocode;
-  DICT_ITEM_UPDINDEX(index);
+#undef ONLY_UPDATING
+#define ONLY_UPDATING 1
+  DICT_ITEM_KEYVALUE(index, 0, 0, 0);
+#undef ONLY_UPDATING
+#define ONLY_UPDATING 0
 }
 
 
@@ -129,10 +84,10 @@ PSY_INLINE void dictitem_update_nochange(void* originalmacrocode,
 } while (0)
 #define INC_OB_REFCNT_internal(rg)		do {    \
   code[0] = 0xFF;          /* INC [reg] */              \
-  if ((EBP_IS_RESERVED || (rg) != REG_386_EBP) &&       \
+  if ((RBP_IS_RESERVED || (rg) != REG_X64_RBP) &&       \
       offsetof(PyObject, ob_refcnt) == 0)               \
     {                                                   \
-      extra_assert((rg) != REG_386_EBP);                \
+      extra_assert((rg) != REG_X64_RBP);                \
       code[1] = (rg);                                   \
     }                                                   \
   else                                                  \
@@ -167,10 +122,10 @@ PSY_INLINE void dictitem_update_nochange(void* originalmacrocode,
 #define DEC_OB_REFCNT_NZ(rg)    do {                    \
   NEED_CC_REG(rg);                                      \
   code[0] = 0xFF;          /* DEC [reg] */              \
-  if ((EBP_IS_RESERVED || (rg) != REG_386_EBP) &&       \
+  if ((RBP_IS_RESERVED || (rg) != REG_X64_RBP) &&       \
       offsetof(PyObject, ob_refcnt) == 0)               \
     {                                                   \
-      extra_assert((rg) != REG_386_EBP);                \
+      extra_assert((rg) != REG_X64_RBP);                \
       code[1] = 0x08 | (rg);                            \
     }                                                   \
   else                                                  \
@@ -284,7 +239,7 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
 
 /* called by psyco_emit_header() */
 #define INITIALIZE_FRAME_LOCALS(nframelocal)   do {     \
-  STACK_CORRECTION(sizeof(int)*((nframelocal)-1));                \
+  STACK_CORRECTION(sizeof(long)*((nframelocal)-1));                \
   PUSH_IMMED(0);    /* f_exc_type, initially NULL */    \
 } while (0)
 
@@ -320,7 +275,7 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
                                                                                 \
       /* perform Python-specific cleanup */                                     \
       FINALIZE_FRAME_LOCALS(nframelocal);                                       \
-      LOAD_REG_FROM_REG(REG_FUNCTIONS_RETURN, REG_ANY_CALLEE_SAVED);            \
+      MOV_R_R(REG_FUNCTIONS_RETURN, REG_ANY_CALLEE_SAVED);            \
     }                                                                           \
 } while (0)
 

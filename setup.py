@@ -112,7 +112,7 @@ def find_sources(processor):
                 yield os.path.join(root, filename)
 
 
-extra_compile_args = ['-O0', '-g']
+extra_compile_args = ['-O0', '-g', '-Wall']
 extra_link_args = []
 sources = list(find_sources(PROCESSOR))
 processor_dir = os.path.join('./c', PROCESSOR)

@@ -24,8 +24,6 @@ typedef int64_t qword_t;
     #error "Environment not 32 or 64-bit."
 #endif
 
-
-
 /*****************************************************************/
  /***   Various customizable parameters (use your compilers'    ***/
   /***   option to override them, e.g. -DXXX=value in gcc)       ***/
@@ -273,6 +271,14 @@ typedef struct {
 } source_virtual_t;
 
 
+#define psyco_inc_stackdepth(po) do {\
+    po->stack_depth += sizeof(stackitem_t);\
+} while(0)
+
+#define psyco_dec_stackdepth(po) do {\
+    po->stack_depth -= sizeof(stackitem_t);\
+} while(0)
+
 #if CODE_DUMP
 EXTERNFN void psyco_dump_code_buffers(void);
 #endif
@@ -313,13 +319,14 @@ EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 FILE *codegen_log;
 #define DEBUG_BEGIN_CODE_LOCATION                fprintf(codegen_log, "BEGIN_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code); fflush(codegen_log);
 #define DEBUG_END_CODE_LOCATION                  fprintf(codegen_log, "END_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code); fflush(codegen_log);
-#define BEGIN_CODE         { code_t* code = po->code;\
-                             DEBUG_BEGIN_CODE_LOCATION
-
+#define BEGIN_CODE         do { code_t* code = po->code;\
+                             DEBUG_BEGIN_CODE_LOCATION\
+                             BRKP();\
+                             STACKDEPTH_CHECK();
 #define END_CODE             po->code = code;                           \
                              DEBUG_END_CODE_LOCATION\
                              if (code >= po->codelimit)                 \
                                PsycoObject_EmergencyCodeRoom(po);       \
-                           }
+                           } while(0);
 
 #endif /* _PSYCO_H */

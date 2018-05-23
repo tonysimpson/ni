@@ -46,18 +46,18 @@ PSY_INLINE long gettime(Source s)        { return s & TimeMask; }
  *
  **/
 
-#if REG_TOTAL > 8
+#if REG_TOTAL > 255
 # error "fix the masks below"
 #endif
 
 /* flags */
-#define RunTime_StackMask    0x01FFFFFC
+#define RunTime_StackMask    0x0000000001FFFFFC
 #define RunTime_StackMax     RunTime_StackMask
-#define RunTime_StackNone    0
-#define RunTime_RegMask      0xF0000000
-#define RunTime_NoRef        0x08000000
-#define RunTime_NonNeg       0x04000000
-#define RunTime_Megamorphic  0x02000000
+#define RunTime_StackNone    0x0000000000000000
+#define RunTime_RegMask      0x00000FFFF0000000
+#define RunTime_NoRef        0x0000000008000000
+#define RunTime_NonNeg       0x0000000004000000
+#define RunTime_Megamorphic  0x0000000002000000
 #define RunTime_FlagsMask    RunTime_NoRef
 
 /* construction */
@@ -94,7 +94,7 @@ PSY_INLINE bool has_rtref(Source s) {
 PSY_INLINE reg_t getreg(RunTimeSource s)     { CHKTIME(s, RunTime); return (reg_t)(s >> 28); }
 #endif
 PSY_INLINE bool is_reg_none(RunTimeSource s) { CHKTIME(s, RunTime); return s < 0; }
-PSY_INLINE int getstack(RunTimeSource s)     { CHKTIME(s, RunTime); return s & RunTime_StackMask; }
+PSY_INLINE long getstack(RunTimeSource s)     { CHKTIME(s, RunTime); return s & RunTime_StackMask; }
 PSY_INLINE bool is_runtime_with_reg(Source s) {
   return (s & (TimeMask|(1<<31))) == 0;
 }
@@ -462,16 +462,18 @@ EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
 #define FIELD_UNSIGNED    0x0400
 #define FIELD_NONNEG      0x0800
 #define FIELD_PYOBJ_REF   0x1000
-#define FIELD_SIZE2_SHIFT 13
+#define FIELD_SIZE2_SHIFT 28
+#define FIELD_SIZE2_MASK  0x7
 #define FIELD_INTL_NOREF  0x8000
-#define FIELD_OFS_SHIFT   16
+#define FIELD_OFS_SHIFT   32
 #define NO_PREV_FIELD     ((defield_t) -1)
 #define FIELD_RESERVED_INDEX  0xCC
 #define SIZE2_FROM_CTYPE(ctype) \
-	(sizeof(ctype)==1 ? 0 : \
-	 sizeof(ctype)==2 ? 1 : \
-	 sizeof(ctype)==4 ? 2 : \
-	 sizeof(ctype)==8 ? 3 : \
+	(sizeof(ctype)==1  ? 0 : \
+	 sizeof(ctype)==2  ? 1 : \
+	 sizeof(ctype)==4  ? 2 : \
+	 sizeof(ctype)==8  ? 3 : \
+     sizeof(ctype)==16 ? 4 : \
 	 (extra_assert(!"field size is not a small power of two"), 0))
 /*#define FIELD_NTH(df, n)
 	(extra_assert(FIELD_INDEX(df)+(n) == FIELD_INDEX((df)+(n))),
@@ -537,7 +539,7 @@ EXTERNFN bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
     - FIELD_C_OFFSET(df) is the offset of 'df' in the C structure. */
 #define FIELDS_TOTAL(lastdf)  (field_next_index(lastdf, false))
 #define FIELD_INDEX(df)    ((long)(df) & FIELD_INDEX_MASK)
-#define FIELD_SIZE2(df)   (((long)(df) >> FIELD_SIZE2_SHIFT) & 3)
+#define FIELD_SIZE2(df)   (((long)(df) >> FIELD_SIZE2_SHIFT) & FIELD_SIZE2_MASK)
 #define FIELD_C_OFFSET(df)   ((long)(df) >> FIELD_OFS_SHIFT)
 #define FIELD_HAS_REF(df)  ((long)(df) & FIELD_PYOBJ_REF)
 #define CHECK_FIELD_INDEX(n)  extra_assert((unsigned)FIELD_INDEX(n) <	\

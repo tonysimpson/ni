@@ -115,7 +115,7 @@ typedef struct {
   signed char* buf_end;
   signed char* buf_opc;     /* current opcode position */
   Source* buf_args;          /* current opargs position */
-  word_t tmp_counter;            /* for links */
+  long tmp_counter;            /* for links */
   struct vcilink_s* vcilink;   /* pending links during decompression */
   struct vcilink_s sentinel;
 } vcompat_internal_t;
@@ -231,7 +231,7 @@ static void fz_compress(vinfo_array_t* aa)
         fz_putopc(FZ_OPC_NULL);   /* emit FZ_OPC_NULL */
       }
       else if (a->tmp != NULL) {
-        word_t prevcounter = (word_t)a->tmp;   /* already seen, emit a link */
+        long prevcounter = a->tmp;   /* already seen, emit a link */
         fz_putopc(FZ_OPC_LINK - (cmpinternal.tmp_counter-prevcounter));
       }
       else {

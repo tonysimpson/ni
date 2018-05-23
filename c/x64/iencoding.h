@@ -28,28 +28,52 @@
 #endif
 #endif
 
-/* Define to 0 to use EBP as any other register, or to 1 to reserve it */
-#ifndef EBP_IS_RESERVED
-# define EBP_IS_RESERVED    0
+/* Define to 0 to use RBP as any other register, or to 1 to reserve it 
+ * useful for debugging to set this to 1 */
+#ifndef RBP_IS_RESERVED
+# define RBP_IS_RESERVED 0
 #endif
 
+/* Set to 0 to limit registers to RAX>RDI */
+#define NEW_REGISTERS 1
 
+#define REG_TOTAL    16
 typedef enum {
-        REG_386_EAX    = 0,
-        REG_386_ECX    = 1,
-        REG_386_EDX    = 2,
-        REG_386_EBX    = 3,
-        REG_386_ESP    = 4,
-        REG_386_EBP    = 5,
-        REG_386_ESI    = 6,
-        REG_386_EDI    = 7,
-#define REG_TOTAL        8
-        
-        REG_NONE       = -1} reg_t;
+        REG_X64_RAX = 0, /* only used for transient values */
+        REG_X64_RCX = 1, /* 4th ARG */
+        REG_X64_RDX = 2, /* 3rd ARG */
+        REG_X64_RBX = 3, /* CALLEE Saved */
+        REG_X64_RSP = 4, /* stack pointer */
+        REG_X64_RBP = 5, /* CALLEE Saved (special see RBP_IS_RESERVED) */
+        REG_X64_RSI = 6, /* 2nd ARG */
+        REG_X64_RDI = 7, /* 1st ARG */
+        REG_X64_R8  = 8, /* 5th ARG */
+        REG_X64_R9  = 9, /* 6th ARG */
+        REG_X64_R10 = 10,/* CALLER Saved */   
+        REG_X64_R11 = 11,/* CALLER Saved */
+        REG_X64_R12 = 12,/* CALLEE Saved */
+        REG_X64_R13 = 13,/* CALLEE Saved */
+        REG_X64_R14 = 14,/* CALLEE Saved */
+        REG_X64_R15 = 15,/* CALLEE Saved */
+        REG_NONE    = -1} reg_t;
 
-#define REG_FUNCTIONS_RETURN       REG_386_EAX
-#define REG_ANY_CALLER_SAVED       REG_386_EAX  /* just any "trash" register */
-#define REG_ANY_CALLEE_SAVED       REG_386_EBX  /* saved by C functions */
+#if NEW_REGISTERS
+#define REG_LOOP_START REG_X64_R13
+#else
+#define REG_LOOP_START REG_X64_RBX
+#endif
+
+#define REG_ANY_CALLER_SAVED       REG_X64_RAX  /* just any "trash" register */
+#define REG_ANY_CALLEE_SAVED       REG_X64_RBX  /* saved by C functions */
+#define REG_FUNCTIONS_RETURN       REG_X64_RAX
+
+/* the registers we want Psyco to use in compiled code,
+ *    as a circular linked list */
+EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
+
+/* returns the next register that should be used */
+#define next_free_reg(po)	\
+	((po)->last_used_reg = RegistersLoop[(int)((po)->last_used_reg)])
 
 typedef enum {
         CC_O         = 0,    /* overflow */
@@ -90,17 +114,7 @@ typedef enum {
 #define HAS_CCREG(po)    ((po)->ccregs[0] != NULL || (po)->ccregs[1] != NULL)
 
 
-/* the registers we want Psyco to use in compiled code,
-   as a circular linked list (see iprocessor.c) */
-EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 
-/* the first register in RegistersLoop that Psyco will use.
-   The best choice is probably the first callee-saved register */
-#define REG_LOOP_START      REG_386_EBX
-
-/* returns the next register that should be used */
-#define next_free_reg(po)	\
-	((po)->last_used_reg = RegistersLoop[(int)((po)->last_used_reg)])
 
 /* processor-depend part of PsycoObject */
 #define PROCESSOR_PSYCOOBJECT_FIELDS                                            \
@@ -163,6 +177,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
 #define NEXT_FREE_REG()         next_free_reg(po)
 #define REG_NUMBER(po, rg)      ((po)->reg_array[(int)(rg)])
 
+
 /* release a run-time vinfo_t */
 #define RTVINFO_RELEASE(rtsource)         do {          \
   if (!RSOURCE_REG_IS_NONE(rtsource))                   \
@@ -204,7 +219,234 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
       extra_assert(REG_NUMBER(po, i) == NULL);  \
 } while (0)
 
-/*****************************************************************/
+/*****************************************************************
+ * Low level code producing macros
+ *
+ * All codegen should be done via these
+ *
+ * REX will include the REX byte before opcode
+ * MODRM will include the MODRM byte after opcode
+ * U   - Prefix for updateable (use #define UPDATE_CODE ... #undef UPDATE_CODE
+ * REG - MODRM REG or just reg encoded in opcode (REX.R)
+ * RM  - MODRM RM or just reg encoded in opcode (REX.B)
+ * A   - MODRM RM with indirect addressing (reg is pointer to address)
+ * O8  - MODRM RM with indirect addressing and 8bit offset
+ * O32 - MODRM RM with indirect addressing and 32bit offset
+ * I8  - Immediate 8bit
+ * I32 - Immediate 32bit
+ * I64 - Immediate 64bit
+ */
+#define ONLY_UPDATING 0 /* redefine to 1 when updating code */
+#define REX_64 0x48
+#define REX_64_REG(reg) (REX_64 | (reg > 7 ? 4 : 0))
+#define REX_64_RM(rm) (REX_64 | (rm > 7 ? 1 : 0))
+#define REX_64_REG_RM(reg, rm) (0x48 | (reg > 7 ? 4 : 0) | (rm > 7 ? 1 : 0))
+#define REX_64_REG_X_B(reg, index, base) (REX_64_REG_RM(reg, base) | (index > 7 ? 2 : 0))
+#define REG_IN_OPCODE(opcode, reg) (opcode | (reg & 0x7))
+#define MODRM_GENERAL(type_code, reg, rm) (type_code | ((reg & 0x7) << 3) | (rm & 0x7))
+#define MODRM_REG_A(reg, rm) MODRM_GENERAL(0x0, reg, rm) 
+#define MODRM_REG_O8(reg, rm) MODRM_GENERAL(0x40, reg, rm)
+#define MODRM_REG_O32(reg, rm) MODRM_GENERAL(0x80, reg, rm)
+#define MODRM_REG_RM(reg, rm) MODRM_GENERAL(0xC0, reg, rm)
+#define WRITE_8BIT(immed) do {\
+if(!ONLY_UPDATING) {\
+    *code = (code_t)immed;\
+}\
+    code += 1;\
+} while(0)
+#define WRITE_32BIT(immed) do {\
+if(!ONLY_UPDATING) {\
+    *(dword_t*)code = (dword_t)immed;\
+}\
+    code += sizeof(dword_t);\
+} while(0)
+#define WRITE_64BIT(immed) do {\
+if(!ONLY_UPDATING) {\
+  *(qword_t*)code = (qword_t)immed;\
+}\
+  code += sizeof(qword_t);\
+} while(0)
+#define UPDATABLE_WRITE_8BIT(immed) do {\
+    *code = (code_t)immed;\
+    code += 1;\
+} while(0)
+#define UPDATABLE_WRITE_32BIT(immed) do {\
+    *(dword_t*)code = (dword_t)immed;\
+    code += sizeof(dword_t);\
+} while(0)
+#define UPDATABLE_WRITE_64BIT(immed) do {\
+  *(qword_t*)code = (qword_t)immed;\
+  code += sizeof(qword_t);\
+} while(0)
+#define WRITE_1(b1) do {\
+if(!ONLY_UPDATING) {\
+    code[0] = b1;\
+}\
+    code += 1;\
+} while(0)
+#define WRITE_2(b1, b2) do {\
+if(!ONLY_UPDATING) {\
+    code[0] = b1;\
+    code[1] = b2;\
+}\
+    code += 2;\
+} while(0)
+#define WRITE_3(b1, b2, b3) do {\
+if(!ONLY_UPDATING) {\
+    code[0] = b1;\
+    code[1] = b2;\
+    code[2] = b3;\
+}\
+    code += 3;\
+} while(0)
+#define WRITE_4(b1, b2, b3, b4) do {\
+if(!ONLY_UPDATING) {\
+    code[0] = b1;\
+    code[1] = b2;\
+    code[2] = b3;\
+    code[3] = b4;\
+}\
+    code += 4;\
+} while(0)
+#define OP_REX_64_RM(opcode, reg) WRITE_2(REX_64_RM(reg), REG_IN_OPCODE(opcode, reg))
+#define OP_REX_64_RM_I64(opcode, reg, immed) do {\
+    WRITE_2(REX_64_RM(reg), REG_IN_OPCODE(opcode, reg));\
+    WRITE_64BIT(immed);\
+} while(0)
+#define OP_REX_64_RM_UI64(opcode, reg, immed) do {\
+    WRITE_2(REX_64_RM(reg), REG_IN_OPCODE(opcode, reg));\
+    UPDATABLE_WRITE_64BIT(immed);\
+} while(0)
+#define OP_REX_64_MODRM_REG_RM(opcode, reg, rm) WRITE_3(\
+        REX_64_REG_RM(reg, rm), \
+        opcode, \
+        MODRM_REG_RM(reg, rm))
+#define OP_REX_64_MODRM_REG_A(opcode, reg, rm) WRITE_3(\
+        REX_64_REG_RM(reg, rm), \
+        opcode, \
+        MODRM_REG_A(reg, rm))
+#define OP_REX_64_MODRM_REG_O8(opcode, reg, rm, offset) WRITE_4(\
+        REX_64_REG_RM(reg, rm), \
+        opcode, \
+        MODRM_REG_O8(reg, rm),\
+        offset)
+#define OP_REX_64_MODRM_REG_O32(opcode, reg, rm, offset) do {\
+    WRITE_3(REX_64_REG_RM(reg, rm), opcode, MODRM_REG_O32(reg, rm));\
+    WRITE_32BIT(offset);\
+} while(0)
+#define OP_REX_64_MODRM_REG_UO32(opcode, reg, rm, offset) do {\
+    WRITE_3(REX_64_REG_RM(reg, rm), opcode, MODRM_REG_O32(reg, rm));\
+    UPDATABLE_WRITE_32BIT(offset);\
+} while(0)
+/* Common Instructions:
+ * U - Prefix for updatable fields
+ * R - Register direct
+ * A - Address in register
+ * O8 - Address is register + 8 bit offset
+ * O32 - Address is register + 32 bit offset
+ * I - Immediat
+ * X - base + (index * scale) + offset
+ *
+ * Registers etc are in [destination, source] order like 
+ * AT&T assembler
+ */
+#define BRKP() WRITE_1(0xCC)
+#define MOV_R_R(dst, src) OP_REX_64_MODRM_REG_RM(0x89, dst, src)
+#define MOV_R_A(dst, src) OP_REX_64_MODRM_REG_A(0x89, dst, src)
+#define MOV_R_I(dst, immed) OP_REX_64_RM_I64(0xB8, dst, immed)
+#define MOV_R_UI(dst, immed) OP_REX_64_RM_UI64(0xB8, dst, immed)
+#define MOV_R_O8(dst, src, offset) OP_REX_64_MODRM_REG_O8(0x89, dst, src, offset)
+#define MOV_R_O32(dst, src, offset) OP_REX_64_MODRM_REG_O32(0x89, dst, src, offset)
+#define MOV_R_X8(dst, base, offset, index, scale) do {\
+    WRITE_4(REX_64_REG_X_B(dst, index, base),\
+            0x89,\
+            0x44 | (dst & 7),\
+            (scale == 8 ? 0xC0 : scale == 4 ? 0x80 : scale == 2 ? 0x40 : 0x00) \
+            | (base & 7) | ((index & 7) << 3));\
+    WRITE_8BIT(offset);\
+} while (0)
+#define MOV_R_X32(dst, base, offset, index, scale) do {\
+    WRITE_4(REX_64_REG_X_B(dst, index, base),\
+            0x89,\
+            0x84 | (dst & 7),\
+            (scale == 8 ? 0xC0 : scale == 4 ? 0x80 : scale == 2 ? 0x40 : 0x00) \
+            | (base & 7) | ((index & 7) << 3));\
+    WRITE_32BIT(offset);\
+} while (0)
+#define XCHG_R_R(rg1, rg2) do {\
+  if(rg1 == REG_X64_RAX) {\
+      OP_REX_64_RM(0x90, rg2);\
+  } else if(rg2 == REG_X64_RAX) {\
+      OP_REX_64_RM(0x90, rg1);\
+  } else {\
+      OP_REX_64_MODRM_REG_RM(0x87, rg1, rg2);\
+  }\
+} while (0)
+#define CMP_R_R(r1, r2) OP_REX_64_MODRM_REG_RM(0x39, r1, r2)
+#define CMP_R_A(r1, r2) OP_REX_64_MODRM_REG_A(0x39, r1, r2)
+#define CMP_R_O8(r1, r2, o2) OP_REX_64_MODRM_REG_O8(0x39, r1, r2, o2)
+#define CMP_R_UO32(r1, r2, o2) OP_REX_64_MODRM_REG_UO32(0x39, r1, r2, o2)
+#define CMP_I_R(i1, r2) do {\
+    if(i1 >= -128 && i1 < 128) {\
+        WRITE_4(REX_64_RM(r2), 0x83, REG_IN_OPCODE(0xF8, r2), (code_t)(i1));\
+    }else {\
+        MOV_R_I(REG_X64_RAX, (i1));\
+        CMP_R_R(REG_X64_RAX, (r2));\
+    }\
+} while (0)
+#define OP_VREX_VMOD_R(mod, reg) do {\
+    if(reg <= 7) {\
+        WRITE_2(0xFF, mod | reg);\
+    } else {\
+        WRITE_3(0x41, 0XFF, mod | (reg & 0x7));\
+    }\
+} while(0)
+#define JMP_R(r) OP_VREX_VMOD_R(0xE0, r)
+#define CALL_R(r) OP_VREX_VMOD_R(0xD0, r)
+
+#define ADD_R_R(r1, r2) OP_REX_64_MODRM_REG_RM(0x01, r1, r2)
+/***********************************************************************/
+/* vinfo based instructions */
+#define V_MOV_N_A(vnew, vaddr) do {\
+    reg_t addr_reg;\
+    reg_t target_reg = NEXT_FREE_REG();\
+    NEED_REGISTER(target_reg);\
+    if(is_compiletime(vaddr->source)) {\
+        addr_reg = REG_X64_RAX;\
+        MOV_R_I(addr_reg, CompileTime_Get(vaddr->source)->value);\
+    } else {\
+        addr_reg = getreg(vaddr->source);\
+    }\
+    MOV_R_A(target_reg, addr_reg);\
+    vnew = vinfo_new(RunTime_New(target_reg, false, false));\
+    REG_NUMBER(po, target_reg) = vnew;\
+} while(0)
+#define V_MOV_N_O8(vnew, vaddr, offset) do {\
+    reg_t addr_reg;\
+    reg_t target_reg = NEXT_FREE_REG();\
+    NEED_REGISTER(target_reg);\
+    if(is_compiletime(vaddr->source)) {\
+        addr_reg = REG_X64_RAX;\
+        MOV_R_I(addr_reg, CompileTime_Get(vaddr->source)->value);\
+    } else {\
+        addr_reg = getreg(vaddr->source);\
+    }\
+    MOV_R_O8(target_reg, addr_reg, offset);\
+    vnew = vinfo_new(RunTime_New(target_reg, false, false));\
+    REG_NUMBER(po, target_reg) = vnew;\
+} while(0)
+
+/***********************************************************************/
+#define STACKDEPTH_CHECK() do {\
+    /* see glue_run_code for companion code */\
+    MOV_R_I(REG_X64_RAX, po->stack_depth);\
+    ADD_R_R(REG_X64_RSP, REG_X64_RAX);\
+    CMP_R_A(REG_X64_RAX, REG_X64_RAX);\
+    BEGIN_SHORT_COND_JUMP(0, CC_E);\
+    BRKP();\
+    END_SHORT_COND_JUMP(0);\
+} while(0)
+/**********************************************************************/
 
 #define CODE_FOUR_BYTES(code, b1, b2, b3, b4)   /* for constant bytes */        \
   (*(long*)(code) = ((unsigned char)(b1)) | (((unsigned char)(b2))<<8) |        \
@@ -386,21 +628,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
   code[1] = 0xC0 | ((rg)*9),                    \
   code += 2)
 
-#define COMPARE_IMMED_FROM_RT(source, immed)   do {                             \
-  long _value = (immed);                                                        \
-  if (COMPACT_ENCODING && -128 <= _value && _value < 128)                       \
-    /*if (_value == 0 && !RSOURCE_REG_IS_NONE(source))                          \
-      CHECK_NONZERO_REG(RSOURCE_REG(source));                                   \
-    else*/ {                                                                    \
-      INSTR_MODRM_FROM_RT(source, 0x83, 7<<3);  /* CMP (source), imm8 */        \
-      *code++ = (code_t) _value;                                                \
-    }                                                                           \
-  else {                                                                        \
-    INSTR_MODRM_FROM_RT(source, 0x81, 7<<3);    /* CMP (source), imm32 */       \
-    *(long*)code = _value;                                                      \
-    code += 4;                                                                  \
-  }                                                                             \
-} while (0)
+#define COMPARE_IMMED_FROM_RT(source, immed) CMP_I_R(immed, getreg(source))
 
 /* Signed integer multiplications */
 #define IMUL_REG_FROM_RT(source, rg)   do {             \
@@ -434,7 +662,7 @@ EXTERNVAR reg_t RegistersLoop[REG_TOTAL];
     code += 3;                                  \
   }                                             \
 } while (0)
-#define SHIFT_COUNTER    REG_386_ECX  /* must be in range(0,32) */
+#define SHIFT_COUNTER    REG_X64_RCX  /* must be in range(0,32) */
 #define SHIFT_GENERICCL(rg, middle)       do {  \
   code[0] = 0xD3;                               \
   code[1] = 0xC0 | ((middle)<<3) | (rg);        \
@@ -529,41 +757,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 #define PUSH_CC_FLAGS()       (*code++ = PUSH_CC_FLAGS_INSTR)
 #define POP_CC_FLAGS()        (*code++ = POP_CC_FLAGS_INSTR)
 
-#define LOAD_REG_FROM_REG(dst, src)  (                  \
-  code[0] = 0x89,		/* MOV dst, src */      \
-  code[1] = 0xC0 | ((src) << 3) | (dst),                \
-  code += 2                                             \
-)
-
-#define XCHG_REGS(rg1, rg2)   do {                      \
-  if (COMPACT_ENCODING && ((rg1) == REG_386_EAX))       \
-    *code++ = 0x90 | (rg2);                             \
-  else if (COMPACT_ENCODING && ((rg2) == REG_386_EAX))  \
-    *code++ = 0x90 | (rg1);                             \
-  else {                                                \
-    code[0] = 0x87;                                     \
-    code[1] = 0xC0 | ((rg2)<<3) | (rg1);                \
-    code += 2;                                          \
-  }                                                     \
-} while (0)
-
-#define LOAD_REG_FROM_IMMED(dst, immed) do {            \
-  code[0] = 0x48;                                       \
-  code[1] = 0xB8 | (dst);       /* MOV dst, immed */    \
-  code += 2;                                            \
-  *(qword_t*)(code) = (immed);                          \
-  code += 8;                                            \
-} while (0)    
-
-#define SIZE_OF_LOAD_REG_FROM_IMMED    10
-
-/* loads 0 in a register. The macro name reminds you that this
-   clobbers po->ccreg (use NEED_CC() to save it first). */
-/* #define CLEAR_REG_CLOBBER_CC(rg) (                      \ */
-/*   code[0] = 0x33,                  * XOR rg, rg *       \ */
-/*   code[1] = 0xC0 | ((rg)<<3) | (rg),                    \ */
-/*   code += 2                                             \ */
-/* ) */
+#define LOAD_REG_FROM_IMMED(dst, immed) MOV_R_I(dst, immed)
 
 #define LOAD_REG_FROM_EBP_BASE(dst, stack_pos)		\
   INSTR_EBP_BASE(0x8B, (dst)<<3, stack_pos)	/* MOV dst, [EBP-stack_pos] */
@@ -623,41 +817,76 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
    update po->stack_depth at each CALL_SET_ARG_xxx (instead of just
    in CALL_C_FUNCTION) because run-time arguments after the first one
    would be fetched at the wrong place otherwise. */
-#define CALL_SET_ARG_IMMED(immed, arg_index, nb_args)     do {  \
-  PUSH_IMMED(immed);                                            \
-  po->stack_depth += 4;                                         \
+
+#define CALL_SET_ARG_IMMED(immed, arg_index, nb_args) do {\
+  if(arg_index < argument_reg_table_len) {\
+      reg_t dst_reg = argument_reg_table[arg_index];\
+      NEED_REGISTER(dst_reg);\
+      LOAD_REG_FROM_IMMED(dst_reg, immed);\
+  }\
+  else {\
+      PUSH_IMMED(immed);\
+      psyco_inc_stackdepth(po);\
+  }\
 } while (0)
-#define CALL_SET_ARG_FROM_RT(source, arg_index, nb_args)  do {  \
-  PUSH_FROM_RT(source);                                         \
-  po->stack_depth += 4;                                         \
+
+#define CALL_SET_ARG_FROM_RT(source, arg_index, nb_args) do {  \
+    if(arg_index < argument_reg_table_len) {\
+        reg_t src_reg = getreg(source);\
+        reg_t dst_reg = argument_reg_table[arg_index];\
+        vinfo_t *src_vi = REG_NUMBER(po, src_reg);\
+        vinfo_t *dst_vi = REG_NUMBER(po, dst_reg);\
+        if(src_reg != dst_reg) {\
+            if(dst_vi == NULL) {\
+                MOV_R_R(dst_reg, src_reg);\
+                REG_NUMBER(po, dst_reg) = src_vi;\
+                REG_NUMBER(po, src_reg) = NULL;\
+                SET_RUNTIME_REG_TO(src_vi, dst_reg);\
+            }\
+            else {\
+                XCHG_R_R(dst_reg, src_reg);\
+                REG_NUMBER(po, dst_reg) = src_vi;\
+                REG_NUMBER(po, src_reg) = dst_vi;\
+                SET_RUNTIME_REG_TO(src_vi, dst_reg);\
+                SET_RUNTIME_REG_TO(dst_vi, src_reg);\
+            }\
+        }\
+        NEED_REGISTER(dst_reg);\
+    }\
+    else {\
+        PUSH_FROM_RT(source);\
+        psyco_inc_stackdepth(po);\
+    }\
 } while (0)
-#define CALL_SET_ARG_FROM(source, arg_index, nb_args)     do {  \
-  PUSH_FROM(source);                                            \
-  po->stack_depth += 4;                                         \
+
+#define CALL_SET_ARG_FROM(source, arg_index, nb_args) do {\
+  if (((source) & TimeMask) == RunTime) {\
+    CALL_SET_ARG_FROM_RT(source, arg_index, nb_args);\
+  }\
+  else {\
+    CALL_SET_ARG_IMMED(KSOURCE_SOURCE(source)->value, arg_index, nb_args);\
+  }\
 } while (0)
+
 #define CALL_SET_ARG_FROM_ADDR_CLOBBER_REG   REG_ANY_CALLER_SAVED
 #define CALL_SET_ARG_FROM_ADDR(source, arg_index, nb_args) do {         \
   LOAD_ADDRESS_FROM_RT(source, CALL_SET_ARG_FROM_ADDR_CLOBBER_REG);     \
   CALL_SET_ARG_FROM_RT(RunTime_New(CALL_SET_ARG_FROM_ADDR_CLOBBER_REG,  \
                                    false, false), arg_index, nb_args);  \
 } while (0)
-#define CALL_C_FUNCTION(target, nb_args)   do { \
-  code[0] = 0xE8;    /* CALL */                 \
-  code += 5;                                    \
-  *(long*)(code-4) = (code_t*)(target) - code;  \
-} while (0)
-#define CALL_C_FUNCTION_FROM_RT(source, nb_args)                \
-  INSTR_MODRM_FROM_RT(source, 0xFF, 2<<3)    /* CALL [source] */
+
+#define CALL_C_FUNCTION(target, nb_args) do {\
+    MOV_R_I(REG_X64_RAX, target);\
+    CALL_R(REG_X64_RAX);\
+} while(0)
+
+#define CALL_C_FUNCTION_FROM_RT(source, nb_args) CALL_R(getreg(source))
+
 #define CALL_C_FUNCTION_FROM(source, nb_args)   do {            \
   if (((source) & CompileTime) != 0)                            \
     CALL_C_FUNCTION(KSOURCE_SOURCE(source)->value, nb_args);    \
   else                                                          \
     CALL_C_FUNCTION_FROM_RT(source, nb_args);                   \
-} while (0)
-/* optimization of a CALL followed by a JMP */
-#define CALL_C_FUNCTION_AND_JUMP(target, nb_args, jmptarget) do {       \
-  PUSH_IMMED((long)(jmptarget));                                        \
-  JUMP_TO((code_t*)(target));                                           \
 } while (0)
 
 #ifdef __APPLE__
@@ -696,9 +925,9 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
   code[0] = 0x8D;                                               \
   code[1] = 0x04 | ((dst)<<3);  /* LEA dst, [rg1+rg2] */        \
   code[2] = ((rg1)<<3) | (rg2);                                 \
-  if (!EBP_IS_RESERVED && (rg2) == REG_386_EBP)                 \
+  if (!RBP_IS_RESERVED && (rg2) == REG_X64_RBP)                 \
     {                                                           \
-      if ((rg1) != REG_386_EBP)                                 \
+      if ((rg1) != REG_X64_RBP)                                 \
         code[2] = ((rg2)<<3) | (rg1);                           \
       else                                                      \
         {                                                       \
@@ -730,16 +959,16 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
    SAVE_REGS_FN_CALLS) */
 #define TEMP_SAVE_REGS_FN_CALLS       do {                              \
   if (COMPACT_ENCODING) {                                               \
-    if (REG_NUMBER(po, REG_386_EAX) != NULL) PUSH_REG(REG_386_EAX);     \
-    if (REG_NUMBER(po, REG_386_ECX) != NULL) PUSH_REG(REG_386_ECX);     \
-    if (REG_NUMBER(po, REG_386_EDX) != NULL) PUSH_REG(REG_386_EDX);     \
+    if (REG_NUMBER(po, REG_X64_RAX) != NULL) PUSH_REG(REG_X64_RAX);     \
+    if (REG_NUMBER(po, REG_X64_RCX) != NULL) PUSH_REG(REG_X64_RCX);     \
+    if (REG_NUMBER(po, REG_X64_RDX) != NULL) PUSH_REG(REG_X64_RDX);     \
     if (HAS_CCREG(po))                       PUSH_CC_FLAGS();           \
   }                                                                     \
   else {                                                                \
     CODE_FOUR_BYTES(code,                                               \
-                    PUSH_REG_INSTR(REG_386_EAX),                        \
-                    PUSH_REG_INSTR(REG_386_ECX),                        \
-                    PUSH_REG_INSTR(REG_386_EDX),                        \
+                    PUSH_REG_INSTR(REG_X64_RAX),                        \
+                    PUSH_REG_INSTR(REG_X64_RCX),                        \
+                    PUSH_REG_INSTR(REG_X64_RDX),                        \
                     PUSH_CC_FLAGS_INSTR);                               \
     code += 4;                                                          \
   }                                                                     \
@@ -748,16 +977,16 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 #define TEMP_RESTORE_REGS_FN_CALLS    do {                              \
   if (COMPACT_ENCODING) {                                               \
     if (HAS_CCREG(po))                       POP_CC_FLAGS();            \
-    if (REG_NUMBER(po, REG_386_EDX) != NULL) POP_REG(REG_386_EDX);      \
-    if (REG_NUMBER(po, REG_386_ECX) != NULL) POP_REG(REG_386_ECX);      \
-    if (REG_NUMBER(po, REG_386_EAX) != NULL) POP_REG(REG_386_EAX);      \
+    if (REG_NUMBER(po, REG_X64_RDX) != NULL) POP_REG(REG_X64_RDX);      \
+    if (REG_NUMBER(po, REG_X64_RCX) != NULL) POP_REG(REG_X64_RCX);      \
+    if (REG_NUMBER(po, REG_X64_RAX) != NULL) POP_REG(REG_X64_RAX);      \
   }                                                                     \
   else {                                                                \
     CODE_FOUR_BYTES(code,                                               \
                     POP_CC_FLAGS_INSTR,                                 \
-                    POP_REG_INSTR(REG_386_EDX),                         \
-                    POP_REG_INSTR(REG_386_ECX),                         \
-                    POP_REG_INSTR(REG_386_EAX));                        \
+                    POP_REG_INSTR(REG_X64_RDX),                         \
+                    POP_REG_INSTR(REG_X64_RCX),                         \
+                    POP_REG_INSTR(REG_X64_RAX));                        \
     code += 4;                                                          \
   }                                                                     \
 } while (0)
@@ -766,18 +995,18 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 #define TEMP_RESTORE_REGS_FN_CALLS_AND_JUMP   do {                      \
   if (COMPACT_ENCODING) {                                               \
     if (HAS_CCREG(po))                       POP_CC_FLAGS();            \
-    if (REG_NUMBER(po, REG_386_EDX) != NULL) POP_REG(REG_386_EDX);      \
-    if (REG_NUMBER(po, REG_386_ECX) != NULL) POP_REG(REG_386_ECX);      \
+    if (REG_NUMBER(po, REG_X64_RDX) != NULL) POP_REG(REG_X64_RDX);      \
+    if (REG_NUMBER(po, REG_X64_RCX) != NULL) POP_REG(REG_X64_RCX);      \
   }                                                                     \
   else {                                                                \
     CODE_FOUR_BYTES(code,                                               \
                     POP_CC_FLAGS_INSTR,                                 \
-                    POP_REG_INSTR(REG_386_EDX),                         \
-                    POP_REG_INSTR(REG_386_ECX),                         \
+                    POP_REG_INSTR(REG_X64_RDX),                         \
+                    POP_REG_INSTR(REG_X64_RCX),                         \
                     0   /* dummy */);                                   \
     code += 3;                                                          \
   }                                                                     \
-  if (!COMPACT_ENCODING || REG_NUMBER(po, REG_386_EAX) != NULL) {       \
+  if (!COMPACT_ENCODING || REG_NUMBER(po, REG_X64_RAX) != NULL) {       \
     /* must restore EAX, but it contains the jump target... */          \
     CODE_FOUR_BYTES(code,                                               \
                     0x87,                                               \
@@ -797,9 +1026,9 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 /* put an immediate value in memory */
 #define SET_REG_ADDR_TO_IMMED(rg, immed)    do {        \
   code[0] = 0xC7;               /* MOV [reg], immed */  \
-  if (EBP_IS_RESERVED || (rg) != REG_386_EBP)           \
+  if (RBP_IS_RESERVED || (rg) != REG_X64_RBP)           \
     {                                                   \
-      extra_assert((rg) != REG_386_EBP);                \
+      extra_assert((rg) != REG_X64_RBP);                \
       code[1] = (rg);                                   \
     }                                                   \
   else                                                  \
@@ -831,9 +1060,9 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
     {                                                                   \
       /* uncommon case: too many stuff left in the stack for the 16-bit \
          immediate we can encoding in RET */                            \
-      POP_REG(REG_386_EDX);                                             \
+      POP_REG(REG_X64_RDX);                                             \
       STACK_CORRECTION(-_b);                                            \
-      PUSH_REG(REG_386_EDX);                                            \
+      PUSH_REG(REG_X64_RDX);                                            \
       _b = 0;                                                           \
     }                                                                   \
   code[0] = 0xC2;   /* RET imm16 */                                     \
@@ -848,7 +1077,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 /* save 'vi', which is currently in register 'rg'. */
 #define SAVE_REG_VINFO(vi, rg)	do {            \
   PUSH_REG(rg);                                 \
-  po->stack_depth += 4;                         \
+  psyco_inc_stackdepth(po);                     \
   SET_RUNTIME_STACK_TO(vi, po->stack_depth);    \
 } while (0)
 
@@ -897,14 +1126,27 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   code += 6;                                                                    \
 } while (0)
 
-/* save all registers that might be clobbered by a call to a C function */
+/* Save registeres clobberd by a function call excluding registers used to pass arguments */
 #define SAVE_REGS_FN_CALLS(cc)   do {           \
   if (cc) NEED_CC();                            \
-  NEED_REGISTER(REG_386_EAX);                   \
-  NEED_REGISTER(REG_386_ECX);                   \
-  NEED_REGISTER(REG_386_EDX);                   \
 } while (0)
 
+static const int argument_reg_table_len = 6;
+static const reg_t argument_reg_table[] = {
+    REG_X64_RDI, /* First ARG in RDI etc. */
+    REG_X64_RSI, 
+    REG_X64_RDX, 
+    REG_X64_RCX,
+    REG_X64_R8,
+    REG_X64_R9
+};
+
+#define SAVE_REGS_FN_CALLS_POST_ARGS(count)  do {\
+    for(int arg_idx = count; arg_idx < argument_reg_table_len; arg_idx++) {\
+        NEED_REGISTER(argument_reg_table[arg_idx]);\
+    }\
+} while (0)
+  
 #define NEED_FREE_REG_COND(targ, cond)   do {           \
   targ = po->last_used_reg;                             \
   if (!(cond) || REG_NUMBER(po, targ) != NULL) {        \
@@ -918,7 +1160,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 /* like NEED_REGISTER but 'targ' is an output argument which will
    receive the number of a now-free register */
 #define NEED_FREE_REG(targ)      NEED_FREE_REG_COND(targ, 1)
-#define IS_BYTE_REG(rg)          (REG_386_EAX <= (rg) && (rg) <= REG_386_EBX)
+#define IS_BYTE_REG(rg)          (REG_X64_RAX <= (rg) && (rg) <= REG_X64_RBX)
 #define NEED_FREE_BYTE_REG(targ, resrv1, resrv2)                        \
            NEED_FREE_REG_COND(targ, IS_BYTE_REG(targ) &&                \
                                     targ!=(resrv1) && targ!=(resrv2))
@@ -1020,6 +1262,17 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 #define SIZE_OF_SHORT_CONDITIONAL_JUMP     2    /* Jcond rel8 */
 #define RANGE_OF_SHORT_CONDITIONAL_JUMP  127    /* max. positive offset */
 
+#define BEGIN_SHORT_COND_JUMP(id, condition) \
+    code_t *_short_cond_jump_op_start ## id = code;\
+    do {\
+        code[0] = 0x70 | (code_t)(condition);\
+        code += SIZE_OF_SHORT_CONDITIONAL_JUMP;\
+    } while(0)
+#define END_SHORT_COND_JUMP(id) do {\
+    long _jump_amount = code - (_short_cond_jump_op_start ## id + SIZE_OF_SHORT_CONDITIONAL_JUMP);\
+    extra_assert(-128 <= _jump_amount && _jump_amount < 128);\
+    _short_cond_jump_op_start ## id[1] = (code_t)_jump_amount;\
+}while(0)
 #define SHORT_COND_JUMP_TO(addr, condition)  do {       \
   long _ofs = (addr) - (code+2);                        \
   extra_assert(-128 <= _ofs && _ofs < 128);             \
@@ -1042,14 +1295,6 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   *(long*)(_codeend-10) = (value);                              \
   *(long*)(_codeend-4) = (targetaddr) - _codeend;               \
 } while (0)
-
-
-#if PENTIUM_INSNS
-/* #define CONDITIONAL_LOAD_REG_FROM_RT(source, dst, condition)  do {      \ */
-/*   *code++ = 0x0F;        * CMOVxx dst, (...) *                          \ */
-/*   INSTR_MODRM_FROM_RT(source, 0x40 | (condition), (dst)<<3);            \ */
-/* } while (0) */
-#endif
 
 
 /* correct the stack pointer */
@@ -1083,7 +1328,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
      reg_t _rg2 = rg;                                   \
      rg = RUNTIME_REG(vi);                              \
      extra_assert(rg!=_rg2);                            \
-     LOAD_REG_FROM_REG(_rg2, rg);                       \
+     MOV_R_R(_rg2, rg);                       \
      SET_RUNTIME_REG_TO(vi, _rg2);                      \
      REG_NUMBER(po, _rg2) = vi;                         \
      REG_NUMBER(po, rg) = NULL;                         \

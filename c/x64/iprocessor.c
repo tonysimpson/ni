@@ -18,8 +18,14 @@ static code_t glue_run_code[] = {
                                        *   RDX - long* initial_stack
                                        *   RCX - struct stack_frame_info_s*** finfo
                                        */
-  PUSH_REG_INSTR(REG_386_EBP),        /*   PUSH RBP        */
-  0x6A, -1,                           /*   PUSH -1        (stack should be 16 byte aligned now) */
+  PUSH_REG_INSTR(REG_X64_RBP),        /*   PUSH RBP        */
+  
+  /*   PUSH stack address to stack  */
+  0x48, 0x89, 0xE0,                   /*   MOV RSP RAX     */
+  0x48, 0x83, 0xE8, 0x08,             /*   SUB RAX 8 */
+  PUSH_REG_INSTR(REG_X64_RAX),        
+  /*   PUSH RSP for stack corruption checking */
+  /* po->stack_depth is taken from here */
   0x48, 0x89, 0x21,                   /*   MOV [RCX], RSP  (set finfo to stack pointer) */ 
   0xEB, +6,                           /*   JMP Label2      */
                                       /* Label1:          (push item from initial_stack onto real stack in reverse order) */
@@ -29,7 +35,8 @@ static code_t glue_run_code[] = {
   0x48, 0x39, 0xF2,                   /*   CMP RDX, RSI    */
   0x75, -11,                          /*   JNE Label1      */
   0xFF, 0xD7,                         /*   CALL *RDI      (callee removes args)  */
-  POP_REG_INSTR(REG_386_EBP),         /*   POP EBP         */
+  POP_REG_INSTR(REG_X64_RCX),         /*   POP RCX -- from push stack above */
+  POP_REG_INSTR(REG_X64_RBP),         /*   POP RBP         */
   0xC3,                               /*   RET             */
 };
 

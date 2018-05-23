@@ -276,7 +276,8 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
                   /* the value of 'a' is currently in register 'rg' but
                      should go into register 'i'. */
                   NEED_REGISTER(i);
-                  LOAD_REG_FROM_REG(i, rg);
+
+                  MOV_R_R(i, rg);
                   /*SET_RUNTIME_REG_TO(a, i);
                     REG_NUMBER(po, rg) = NULL;
                     REG_NUMBER(po, i) = a;*/

@@ -6,93 +6,70 @@
 #include "../Python/frames.h"
 
 
-/* We make no special use of any register but ESP, and maybe EBP
- * (if EBP_IF_RESERVED).
- * We consider that we can call C functions with arbitrary values in
- * all registers but ESP, and that only EAX, ECX and EDX will be
- * clobbered.
- * We do not use EBP as the frame pointer, unlike normal C compiled
- * functions. This makes instruction encodings one byte longer
- * (ESP-relative instead of EBP-relative).
- */
-
-DEFINEVAR
-reg_t RegistersLoop[REG_TOTAL] = {
-  /* following EAX: */  REG_386_ECX,
-  /* following ECX: */  REG_386_EDX,
-  /* following EDX: */  REG_386_EBX,
-  /* following EBX: */  EBP_IS_RESERVED ? REG_386_ESI : REG_386_EBP,
-  /* following ESP: */  REG_NONE,
-  /* following EBP: */  EBP_IS_RESERVED ? REG_NONE : REG_386_ESI,
-  /* following ESI: */  REG_386_EDI,
-  /* following EDI: */  REG_386_EAX };
-
-
-#if 0   /* disabled */
-DEFINEFN
-code_t* psyco_emergency_jump(PsycoObject* po, code_t* code)
-{
-  STACK_CORRECTION(INITIAL_STACK_DEPTH - po->stack_depth);  /* at most 6 bytes */
-  code[0] = 0xE9;   /* JMP rel32 */
-  code += 5;
-  *(long*)(code-4) = ((code_t*)(&PyErr_NoMemory)) - code;
-  /* total: at most 11 bytes. Check the value of EMERGENCY_PROXY_SIZE. */
-  return code;
-}
+#if NEW_REGISTERS
+DEFINEVAR reg_t RegistersLoop[REG_TOTAL] = {
+    /* RAX > */ REG_NONE,
+    /* RCX > */ REG_NONE,
+    /* RDX > */ REG_NONE,
+    /* RBX > */ RBP_IS_RESERVED ? REG_LOOP_START : REG_X64_RBP,
+    /* RSP > */ REG_NONE,
+    /* RBP > */ RBP_IS_RESERVED ? REG_NONE : REG_LOOP_START,
+    /* RSI > */ REG_NONE,
+    /* RDI > */ REG_NONE,
+    /* R8  > */ REG_NONE,
+    /* R9  > */ REG_NONE,
+    /* R10 > */ REG_NONE,
+    /* R11 > */ REG_NONE,
+    /* R12 > */ REG_NONE,
+    /* R13 > */ REG_X64_R14,
+    /* R14 > */ REG_X64_R15,
+    /* R15 > */ REG_X64_RBX
+};
+#else
+DEFINEVAR reg_t RegistersLoop[REG_TOTAL] = {
+    /* RAX > */ REG_NONE,
+    /* RCX > */ REG_X64_RDX,
+    /* RDX > */ REG_X64_RBX,
+    /* RBX > */ RBP_IS_RESERVED ? REG_X64_RSI : REG_X64_RBP,
+    /* RSP > */ REG_NONE,
+    /* RBP > */ RBP_IS_RESERVED ? REG_NONE : REG_X64_RSI,
+    /* RSI > */ REG_X64_RDI,
+    /* RDI > */ REG_X64_RCX,
+    /* R8  > */ REG_NONE,
+    /* R9  > */ REG_NONE,
+    /* R10 > */ REG_NONE,
+    /* R11 > */ REG_NONE,
+    /* R12 > */ REG_NONE,
+    /* R13 > */ REG_NONE,
+    /* R14 > */ REG_NONE,
+    /* R15 > */ REG_NONE
+};
 #endif
 
-DEFINEFN
-void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
+DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
                               RunTimeSource extraarg)
 {
-  code_t* code = po->code;
-  DEBUG_BEGIN_CODE_LOCATION
   void* result;
-  code_t* fixvalue;
-#ifdef __APPLE__
-  int aligndelta;
-#endif
+  BEGIN_CODE
 
-  if (restore)
-    TEMP_SAVE_REGS_FN_CALLS;
-  else
-    SAVE_REGS_FN_CALLS(true);
-
-  CALL_STACK_ALIGN_DELTA(1+(extraarg != SOURCE_DUMMY), aligndelta);
-  
+  SAVE_REGS_FN_CALLS(true);
   /* first pushed argument */
-  if (extraarg != SOURCE_DUMMY)
-    CALL_SET_ARG_FROM_RT(extraarg, 1, 2);  /* argument index 1 out of total 2 */
-    
-  /* last pushed argument (will be the first argument of 'fn') */
-  NEED_REGISTER(REG_386_EDI);
-
-  code[0] = 0x48; /* LEA RDI, RIP+OFFSET32 set below to argument to respawn function */
-  code[1] = 0x8D;
-  code[2] = 0x3D;
-  fixvalue = code+3;
-  code[7] = 0xE8;     /* CALL fn	*/
-  code += 12;
-  *(dword_t*)(code-4) = ((code_t*)fn) - code;
-
-  if (restore)
-    {
-      TEMP_RESTORE_REGS_FN_CALLS_AND_JUMP;
-    }
-  else
-    {
-      po->stack_depth += 8;  /* for the PUSH IMM32 above */
-      code[0] = 0xFF;      /* JMP *RAX */
-      code[1] = 0xE0;
-      code += 2;
-    }
-
-    /* make 'fs' point just after the end of the code, aligned */
-  result = (void*)(((long)code + 3) & ~ 3);
-  while (code != (code_t*) result)
+  if (extraarg != SOURCE_DUMMY) {
+    CALL_SET_ARG_FROM_RT(extraarg, 1, 2);  /* argument index 2 out of total 2 */
+    result = (void*)(((long)code + 32 + 3) & (~3));
+    CALL_SET_ARG_IMMED(result, 0, 2);
+    SAVE_REGS_FN_CALLS_POST_ARGS(2);
+    CALL_C_FUNCTION(fn, 2);
+  } else {
+    result = (void*)(((long)code + 32 + 3) & (~3));
+    CALL_SET_ARG_IMMED(result, 0, 1);
+    SAVE_REGS_FN_CALLS_POST_ARGS(1);
+    CALL_C_FUNCTION(fn, 1);
+  }
+  JMP_R(REG_X64_RAX);
+  while (code != result)
     *code++ = (code_t) 0xCC;   /* fill with INT 3 (debugger trap) instructions */
-  *(dword_t*)fixvalue = ((code_t*)result) - (fixvalue+4);    /* set value at code+1 above */
-  DEBUG_END_CODE_LOCATION
+  END_CODE
   return result;
 }
 
@@ -158,7 +135,7 @@ PSY_INLINE vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonne
 code_t* write_modrm(code_t* code, code_t middle, reg_t base, reg_t index, int shift, unsigned long offset)
 {
   /* write a mod/rm encoding. */
-  extra_assert(index != REG_386_ESP);
+  extra_assert(index != REG_X64_RSP);
   extra_assert(0 <= shift && shift < 4);
   if (base == REG_NONE)
     {
@@ -178,14 +155,14 @@ code_t* write_modrm(code_t* code, code_t middle, reg_t base, reg_t index, int sh
     }
   else if (index == REG_NONE)
     {
-      if (base == REG_386_ESP)
+      if (base == REG_X64_RSP)
         {
           code[0] = 0x84 | middle;
           code[1] = 0x24;
           *(unsigned long*)(code+2) = offset;
           return code+6;
         }
-      else if (COMPACT_ENCODING && offset == 0 && base!=REG_386_EBP)
+      else if (COMPACT_ENCODING && offset == 0 && base!=REG_X64_RBP)
         {
           code[0] = middle | base;
           return code+1;
@@ -206,7 +183,7 @@ code_t* write_modrm(code_t* code, code_t middle, reg_t base, reg_t index, int sh
   else
     {
       code[1] = (shift<<6) | (index<<3) | base;
-      if (COMPACT_ENCODING && offset == 0 && base!=REG_386_EBP)
+      if (COMPACT_ENCODING && offset == 0 && base!=REG_X64_RBP)
         {
           code[0] = middle | 0x04;
           return code+2;
@@ -317,10 +294,9 @@ vinfo_t* psyco_memory_read(PsycoObject* po, vinfo_t* nv_ptr, long offset,
     break;
   default:
     /* reading a long */
-    opcodes[0] = 2;
-    opcodes[1] = 0x48;
-    opcodes[2] = 0x8B;  /* MOV reg, long [...] */
-    opcodes[3] = 0;
+    opcodes[0] = 1;
+    opcodes[1] = 0x8B;  /* MOV reg, long [...] */
+    opcodes[2] = 0;
     break;
   }
   targetreg = mem_access(po, opcodes, nv_ptr, offset, rt_vindex,
@@ -616,9 +592,9 @@ vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
   BEGIN_CODE
   NEED_FREE_REG(rg);
   LOAD_REG_FROM_IMMED(rg, immed_true);
-  SHORT_COND_JUMP_TO(code + SIZE_OF_SHORT_CONDITIONAL_JUMP
-                          + SIZE_OF_LOAD_REG_FROM_IMMED, cc);
+  BEGIN_SHORT_COND_JUMP(1, cc);
   LOAD_REG_FROM_IMMED(rg, immed_false);
+  END_SHORT_COND_JUMP(1);
   END_CODE
   return new_rtvinfo(po, rg, false, immed_true >= 0 && immed_false >= 0);
 }

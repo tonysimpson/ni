@@ -16,20 +16,20 @@ code_t* decref_dealloc_calling(code_t* code, PsycoObject* po, reg_t rg,
   code += 2;
   code_origin = code;
   if (COMPACT_ENCODING) {
-    save_eax = REG_NUMBER(po, REG_386_EAX) != NULL;
-    save_ecx = REG_NUMBER(po, REG_386_ECX) != NULL;
-    save_edx = REG_NUMBER(po, REG_386_EDX) != NULL;
-    last_reg = REG_386_EAX;
-    if (save_eax) PUSH_REG(REG_386_EAX);
-    if (save_ecx) { PUSH_REG(REG_386_ECX); last_reg = REG_386_ECX; }
-    if (save_edx) { PUSH_REG(REG_386_EDX); last_reg = REG_386_EDX; }
+    save_eax = REG_NUMBER(po, REG_X64_RAX) != NULL;
+    save_ecx = REG_NUMBER(po, REG_X64_RCX) != NULL;
+    save_edx = REG_NUMBER(po, REG_X64_RDX) != NULL;
+    last_reg = REG_X64_RAX;
+    if (save_eax) PUSH_REG(REG_X64_RAX);
+    if (save_ecx) { PUSH_REG(REG_X64_RCX); last_reg = REG_X64_RCX; }
+    if (save_edx) { PUSH_REG(REG_X64_RDX); last_reg = REG_X64_RDX; }
     PUSH_REG(rg);
   }
   else {
     CODE_FOUR_BYTES(code,                                                     
-            PUSH_REG_INSTR(REG_386_EAX),
-            PUSH_REG_INSTR(REG_386_ECX),
-            PUSH_REG_INSTR(REG_386_EDX),
+            PUSH_REG_INSTR(REG_X64_RAX),
+            PUSH_REG_INSTR(REG_X64_RCX),
+            PUSH_REG_INSTR(REG_X64_RDX),
             PUSH_REG_INSTR(rg));
     code += 4;
   }
@@ -50,16 +50,16 @@ code_t* decref_dealloc_calling(code_t* code, PsycoObject* po, reg_t rg,
   }
   if (COMPACT_ENCODING) {
     POP_REG(last_reg);  /* pop argument back */
-    if (save_edx) POP_REG(REG_386_EDX);
-    if (save_ecx) POP_REG(REG_386_ECX);
-    if (save_eax) POP_REG(REG_386_EAX);
+    if (save_edx) POP_REG(REG_X64_RDX);
+    if (save_ecx) POP_REG(REG_X64_RCX);
+    if (save_eax) POP_REG(REG_X64_RAX);
   }
   else {
     CODE_FOUR_BYTES(code,
-            POP_REG_INSTR(REG_386_EDX),
-            POP_REG_INSTR(REG_386_EDX),
-            POP_REG_INSTR(REG_386_ECX),
-            POP_REG_INSTR(REG_386_EAX));
+            POP_REG_INSTR(REG_X64_RDX),
+            POP_REG_INSTR(REG_X64_RDX),
+            POP_REG_INSTR(REG_X64_RCX),
+            POP_REG_INSTR(REG_X64_RAX));
     code += 4;
   }
   extra_assert(code-code_origin < 128);

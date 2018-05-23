@@ -16,7 +16,7 @@
 #endif
 
 
-#define INITIAL_STACK_DEPTH  4 /* anything >0 and a multiple of 4 */
+#define INITIAL_STACK_DEPTH  0 /* anything >0 and a multiple of 4 */
 
 
 /***************************************************************/

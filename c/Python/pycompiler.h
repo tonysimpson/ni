@@ -235,12 +235,17 @@ PSY_INLINE vinfo_t* psyco_PyErr_Occurred(PsycoObject* po) {
 		vinfo_t* vcurexc;
 		vaddr = vinfo_new(CompileTime_New(
 					(long)(&_PyThreadState_Current)));
-		vtstate = psyco_memory_read(po, vaddr, 0, NULL, 2, false);
+		// vtstate = psyco_memory_read(po, vaddr, 0, NULL, 2, false);
+        BEGIN_CODE
+        V_MOV_N_A(vtstate, vaddr);
 		vinfo_decref(vaddr, po);
-		vcurexc = psyco_memory_read(po, vtstate,
-					    offsetof(PyThreadState, curexc_type),
-					    NULL, 2, false);
+		// vcurexc = psyco_memory_read(po, vtstate,
+		//			    offsetof(PyThreadState, curexc_type),
+		//			    NULL, 2, false);
+        //
+        V_MOV_N_O8(vcurexc, vtstate, offsetof(PyThreadState, curexc_type));
 		vinfo_decref(vtstate, po);
+        END_CODE
 		return vcurexc;
 	}
 }

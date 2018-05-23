@@ -32,7 +32,7 @@ void psyco_emit_header(PsycoObject* po, int nframelocal)
 DEFINEFN
 code_t* psyco_finish_return(PsycoObject* po, Source retval)
 {
-  code_t* code = po->code;
+  BEGIN_CODE
   int retpos;
   int nframelocal = LOC_CONTINUATION->array->count;
 
@@ -49,7 +49,8 @@ code_t* psyco_finish_return(PsycoObject* po, Source retval)
   /* emit the 'RET' instruction */
   retpos -= INITIAL_STACK_DEPTH_INUSE;
   FUNCTION_RET(retpos);
-  
+  END_CODE
+  code_t *code = po->code;
   PsycoObject_Delete(po);
   return code;
 }
@@ -420,6 +421,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 			break;
 		}
 	}
+    SAVE_REGS_FN_CALLS_POST_ARGS(count);
 	CALL_C_FUNCTION                      (c_function, count);
 	END_CODE
 
