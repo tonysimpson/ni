@@ -35,7 +35,6 @@
 #endif
 
 /* Set to 0 to limit registers to RAX>RDI */
-#define NEW_REGISTERS 1
 
 #define REG_TOTAL    16
 typedef enum {
@@ -57,11 +56,7 @@ typedef enum {
         REG_X64_R15 = 15,/* CALLEE Saved */
         REG_NONE    = -1} reg_t;
 
-#if NEW_REGISTERS
 #define REG_LOOP_START REG_X64_R13
-#else
-#define REG_LOOP_START REG_X64_RBX
-#endif
 
 #define REG_ANY_CALLER_SAVED       REG_X64_RAX  /* just any "trash" register */
 #define REG_ANY_CALLEE_SAVED       REG_X64_RBX  /* saved by C functions */
@@ -236,6 +231,8 @@ typedef enum {
  * I32 - Immediate 32bit
  * I64 - Immediate 64bit
  */
+#define FITS_IN_8BITS(v) ((v) < 128 && (v) >= -128)
+#define FITS_IN_32BITS(v) ((v) < 2147483648 && (v) >= -2147483648)
 #define ONLY_UPDATING 0 /* redefine to 1 when updating code */
 #define REX_64 0x48
 #define REX_64_REG(reg) (REX_64 | (reg > 7 ? 4 : 0))
@@ -351,28 +348,42 @@ if(!ONLY_UPDATING) {\
  * AT&T assembler
  */
 #define BRKP() WRITE_1(0xCC)
-#define MOV_R_R(dst, src) OP_REX_64_MODRM_REG_RM(0x89, dst, src)
-#define MOV_R_A(dst, src) OP_REX_64_MODRM_REG_A(0x89, dst, src)
+#define MOV_R_R(dst, src) OP_REX_64_MODRM_REG_RM(0x8B, dst, src)
+#define MOV_R_A(dst, src) OP_REX_64_MODRM_REG_A(0x8B, dst, src)
+#define MOV_A_R(dst, src) OP_REX_64_MODRM_REG_A(0x89, dst, src)
 #define MOV_R_I(dst, immed) OP_REX_64_RM_I64(0xB8, dst, immed)
 #define MOV_R_UI(dst, immed) OP_REX_64_RM_UI64(0xB8, dst, immed)
-#define MOV_R_O8(dst, src, offset) OP_REX_64_MODRM_REG_O8(0x89, dst, src, offset)
-#define MOV_R_O32(dst, src, offset) OP_REX_64_MODRM_REG_O32(0x89, dst, src, offset)
-#define MOV_R_X8(dst, base, offset, index, scale) do {\
+#define SIB_ENCODING(opcode, size, dst, base, offset, index, scale) do {\
     WRITE_4(REX_64_REG_X_B(dst, index, base),\
-            0x89,\
-            0x44 | (dst & 7),\
+            opcode,\
+            (size == 8 ? 0x44 : 0x84) | (dst & 7),\
             (scale == 8 ? 0xC0 : scale == 4 ? 0x80 : scale == 2 ? 0x40 : 0x00) \
             | (base & 7) | ((index & 7) << 3));\
-    WRITE_8BIT(offset);\
+    if(size == 8) {\
+        WRITE_8BIT(offset);\
+    } else {\
+        WRITE_32BIT(offset);\
+    }\
 } while (0)
-#define MOV_R_X32(dst, base, offset, index, scale) do {\
-    WRITE_4(REX_64_REG_X_B(dst, index, base),\
-            0x89,\
-            0x84 | (dst & 7),\
-            (scale == 8 ? 0xC0 : scale == 4 ? 0x80 : scale == 2 ? 0x40 : 0x00) \
-            | (base & 7) | ((index & 7) << 3));\
-    WRITE_32BIT(offset);\
-} while (0)
+#define INDIRECT_ENCODING(opcode, size, dst, src, offset) do {\
+    /* Encoding RSP and R12 collide with SIB which takes precidence */\
+    if((src & 7) == 4) {\
+        SIB_ENCODING(opcode, size, dst, src, offset, src, 0);\
+    } else {\
+        if(size == 8) {\
+            OP_REX_64_MODRM_REG_O8(opcode, dst, src, offset);\
+        } else {\
+            OP_REX_64_MODRM_REG_O32(opcode, dst, src, offset);\
+        }\
+    }\
+} while(0)
+
+#define MOV_R_O8(dst, src, offset) INDIRECT_ENCODING(0x8B, 8, dst, src, offset)
+#define MOV_R_O32(dst, src, offset) INDIRECT_ENCODING(0x8B, 32, dst, src, offset)
+#define LEA_R_O8(dst, src, offset) INDIRECT_ENCODING(0x8D, 8, dst, src, offset)
+#define LEA_R_O32(dst, src, offset) INDIRECT_ENCODING(0x8D, 32, dst, src, offset)
+#define MOV_R_X8(dst, base, offset, index, scale) SIB_ENCODING(0x8B, 8, dst, base, offset, index, scale)
+#define MOV_R_X32(dst, base, offset, index, scale) SIB_ENCODING(0x8B, 32, dst, base, offset, index, scale) 
 #define XCHG_R_R(rg1, rg2) do {\
   if(rg1 == REG_X64_RAX) {\
       OP_REX_64_RM(0x90, rg2);\
@@ -401,10 +412,41 @@ if(!ONLY_UPDATING) {\
         WRITE_3(0x41, 0XFF, mod | (reg & 0x7));\
     }\
 } while(0)
+#define OP_VREX_R(opcode, reg) do {\
+    if(reg <= 7) {\
+        WRITE_1(opcode | reg);\
+    } else {\
+        WRITE_2(0x41, opcode | (reg & 0x7));\
+    }\
+} while(0)
 #define JMP_R(r) OP_VREX_VMOD_R(0xE0, r)
 #define CALL_R(r) OP_VREX_VMOD_R(0xD0, r)
 
 #define ADD_R_R(r1, r2) OP_REX_64_MODRM_REG_RM(0x01, r1, r2)
+#define SUB_R_I8(r, i) WRITE_4(REX_64_RM(r), 0x83, REG_IN_OPCODE(0xE8, r), (code_t)(i))
+#define IMUL_R_R(r1, r2) WRITE_4(REX_64_REG_RM(r1, r2), 0x0F, 0xAF, MODRM_REG_RM(r1, r2))
+#define SET_R_CC(r, cc) do {\
+    if(r <= 7) {\
+        WRITE_3(0x0F, 90 | cc, MODRM_REG_RM(0, r));\
+    } else {\
+        WRITE_4(REX_64_RM(r), 0x0F, 90 | cc, MODRM_REG_RM(0, r));\
+    }\
+} while(0)
+
+#define PUSH_A(r) do {\
+    if(r <= 7) {\
+        WRITE_2(0xFF, 0x30 | r);\
+    } else {\
+        WRITE_3(0x41, 0xFF, 0x30 | (r & 7));\
+    }\
+} while(0)
+#define PUSH_R(r) OP_VREX_R(0x50, r)
+#define POP_R(r) OP_VREX_R(0x58, r)
+#define PUSH_I(immed) do {\
+    MOV_R_I(REG_X64_RAX, immed);\
+    PUSH_R(REG_X64_RAX);\
+} while(0)
+#define RET() WRITE_1(0xC3)
 /***********************************************************************/
 /* vinfo based instructions */
 #define V_MOV_N_A(vnew, vaddr) do {\
@@ -444,7 +486,7 @@ if(!ONLY_UPDATING) {\
     CMP_R_A(REG_X64_RAX, REG_X64_RAX);\
     BEGIN_SHORT_COND_JUMP(0, CC_E);\
     BRKP();\
-    END_SHORT_COND_JUMP(0);\
+    END_SHORT_JUMP(0);\
 } while(0)
 /**********************************************************************/
 
@@ -453,25 +495,6 @@ if(!ONLY_UPDATING) {\
                    (((unsigned char)(b3))<<16) | (((unsigned char)(b4))<<24))
 
 
-/* note: the following macro starts writing at code+1 */
-#if 0
-/* access stack by [EBP-n] where 'n' is fixed for the variable */
-#define MODRM_EBP_BASE(middle, stack_pos)       do {                    \
-  extra_assert(0 < (stack_pos) && (stack_pos) <= RUNTIME_STACK_MAX);    \
-  if (COMPACT_ENCODING && (stack_pos) <= 128)                           \
-    {                                                                   \
-      code[1] = 0x45 | (middle);                                        \
-      code[2] = -(stack_pos);                                           \
-      code += 3;                                                        \
-    }                                                                   \
-  else                                                                  \
-    {                                                                   \
-      code[1] = 0x85 | (middle);                                        \
-      *(long*)(code+2) = -(stack_pos);                                  \
-      code += 6;                                                        \
-    }                                                                   \
-} while (0)
-#else
 /* access stack by [ESP+n] where 'n' varies depending on the current ESP */
 #define MODRM_EBP_BASE(middle, stack_pos)       do {                    \
   int _s_p = po->stack_depth - (stack_pos);                             \
@@ -496,7 +519,6 @@ if(!ONLY_UPDATING) {\
       code += 7;                                                        \
     }                                                                   \
 } while (0)
-#endif
 
 /* Emit instruction 'opcode' having a mod/rm as its second byte.
    Insert 'middle' in the mod/rm. Let the mod/rm point to the given stack_pos. */
@@ -748,8 +770,8 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 #define PUSH_REG_INSTR(reg)       (0x50 | (reg))
 #define POP_REG_INSTR(reg)        (0x58 | (reg))
 
-#define PUSH_REG(reg)       (*code++ = PUSH_REG_INSTR(reg))
-#define POP_REG(reg)        (*code++ = POP_REG_INSTR(reg))
+#define PUSH_REG(reg) PUSH_R(reg)       
+#define POP_REG(reg) POP_R(reg)
 
 #define PUSH_CC_FLAGS_INSTR     0x9C   /* PUSHF */
 #define POP_CC_FLAGS_INSTR      0x9D   /* POPF */
@@ -796,124 +818,118 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 #define POP_EBP_BASE(ofs)				\
   INSTR_EBP_BASE(0x8F, 0x00, ofs)		/* POP [EBP-ofs] */
 
-#define PUSH_IMMED(immed)     do {                              \
-  if (COMPACT_ENCODING && -128 <= (immed) && (immed) < 128) {   \
-    code[0] = 0x6A;    /* PUSH imm8 */                          \
-    code[1] = (code_t) (immed);                                 \
-    code += 2;                                                  \
-  }                                                             \
-  else {                                                        \
-    code[0] = 0x68;      /* PUSH imm32 */                       \
-    *(long*)(code+1) = (immed);                                 \
-    code += 5;                                                  \
-  }                                                             \
-} while (0)
-
-/* call a function written in C. Use the macros CALL_SET_ARG_xxx() for
-   each argument in reverse order, then use CALL_C_FUNCTION(). */
-/* Note: the update of po->stack_depth saves one "ADD ESP, 4*nb_args"
-   at the end of the call. If the stack is to be kept as compact as
-   possible we might as well write the instruction. We have to
-   update po->stack_depth at each CALL_SET_ARG_xxx (instead of just
-   in CALL_C_FUNCTION) because run-time arguments after the first one
-   would be fetched at the wrong place otherwise. */
-
-#define CALL_SET_ARG_IMMED(immed, arg_index, nb_args) do {\
+#define PUSH_IMMED(immed) PUSH_R(immed)
+/*******************************************************************
+ * Call a C function.
+ * Use BEGIN_CALL() then CALL_SET_ARG_* in reverse arg order
+ * then END_CALL_R(r) or END_CALL_I(immediate)
+ *******************************************************************/
+static const int argument_reg_table_len = 6;
+static const reg_t argument_reg_table[] = {
+    REG_X64_RDI, /* First ARG in RDI etc. */
+    REG_X64_RSI, 
+    REG_X64_RDX, 
+    REG_X64_RCX,
+    REG_X64_R8,
+    REG_X64_R9
+};
+/* Note we only save Registers that may have a runtime vinfo so 
+ * RAX, R11 and R12 which are transient are not saved by caller 
+ *
+ * Also we don't care about restoring thing immediatly after a call. 
+ * Important things are put on the stack and if we need them pysco 
+ * will generate code to get them.
+ * */
+#define BEGIN_CALL() do {\
+    int _last_arg_index = -1;\
+    int _initial_stack_depth = po->stack_depth;\
+    do {} while(0)
+#define _CHECK_IS_NEXT_ARG(index) do {\
+    /* call in reverse order 0 indexed */\
+    assert(index == _last_arg_index + 1);\
+    _last_arg_index++;\
+} while(0)
+#define END_CALL_R(r) do {\
+        for(int arg_idx = _last_arg_index + 1; arg_idx < argument_reg_table_len; arg_idx++) {\
+            NEED_REGISTER(argument_reg_table[arg_idx]);\
+        }\
+        CALL_R(r);\
+        po->stack_depth = _initial_stack_depth;\
+    }while(0);\
+}while(0)
+#define END_CALL_I(immed) do {\
+        for(int arg_idx = _last_arg_index + 1; arg_idx < argument_reg_table_len; arg_idx++) {\
+            NEED_REGISTER(argument_reg_table[arg_idx]);\
+        }\
+        MOV_R_I(REG_X64_RAX, immed);\
+        CALL_R(REG_X64_RAX);\
+        po->stack_depth = _initial_stack_depth;\
+    }while(0);\
+}while(0)
+#define CALL_SET_ARG_IMMED(immed, arg_index) do {\
+  _CHECK_IS_NEXT_ARG(arg_index);\
   if(arg_index < argument_reg_table_len) {\
       reg_t dst_reg = argument_reg_table[arg_index];\
       NEED_REGISTER(dst_reg);\
-      LOAD_REG_FROM_IMMED(dst_reg, immed);\
+      MOV_R_I(dst_reg, immed);\
   }\
   else {\
-      PUSH_IMMED(immed);\
+      PUSH_I(immed);\
       psyco_inc_stackdepth(po);\
   }\
 } while (0)
-
-#define CALL_SET_ARG_FROM_RT(source, arg_index, nb_args) do {  \
+#define CALL_SET_ARG_FROM_REG(src_reg, arg_index) do {  \
+    _CHECK_IS_NEXT_ARG(arg_index);\
     if(arg_index < argument_reg_table_len) {\
-        reg_t src_reg = getreg(source);\
         reg_t dst_reg = argument_reg_table[arg_index];\
         vinfo_t *src_vi = REG_NUMBER(po, src_reg);\
         vinfo_t *dst_vi = REG_NUMBER(po, dst_reg);\
         if(src_reg != dst_reg) {\
             if(dst_vi == NULL) {\
                 MOV_R_R(dst_reg, src_reg);\
-                REG_NUMBER(po, dst_reg) = src_vi;\
-                REG_NUMBER(po, src_reg) = NULL;\
-                SET_RUNTIME_REG_TO(src_vi, dst_reg);\
+                if(src_vi != NULL) {\
+                    REG_NUMBER(po, dst_reg) = src_vi;\
+                    REG_NUMBER(po, src_reg) = NULL;\
+                    SET_RUNTIME_REG_TO(src_vi, dst_reg);\
+                }\
             }\
-            else {\
+            else if (src_vi != NULL) {\
                 XCHG_R_R(dst_reg, src_reg);\
                 REG_NUMBER(po, dst_reg) = src_vi;\
                 REG_NUMBER(po, src_reg) = dst_vi;\
                 SET_RUNTIME_REG_TO(src_vi, dst_reg);\
                 SET_RUNTIME_REG_TO(dst_vi, src_reg);\
             }\
+            /* dst_vi != NULL && src_vi == NULL */\
+            else {\
+                NEED_REGISTER(dst_reg);\
+                MOV_R_R(dst_reg, src_reg);\
+            }\
         }\
-        NEED_REGISTER(dst_reg);\
+        if(src_vi != NULL) {\
+            NEED_REGISTER(dst_reg);\
+        }\
     }\
     else {\
-        PUSH_FROM_RT(source);\
+        PUSH_R(src_reg);\
         psyco_inc_stackdepth(po);\
     }\
 } while (0)
-
-#define CALL_SET_ARG_FROM(source, arg_index, nb_args) do {\
-  if (((source) & TimeMask) == RunTime) {\
-    CALL_SET_ARG_FROM_RT(source, arg_index, nb_args);\
-  }\
-  else {\
-    CALL_SET_ARG_IMMED(KSOURCE_SOURCE(source)->value, arg_index, nb_args);\
-  }\
+#define CALL_SET_ARG_FROM_RT(source, arg_index) CALL_SET_ARG_FROM_REG(getreg(source), arg_index)
+#define CALL_SET_ARG_FROM_STACK_REF(source, arg_index) do {\
+    long offset = po->stack_depth - RSOURCE_STACK(source);\
+    if(FITS_IN_8BITS(offset)) {\
+        LEA_R_O8(REG_X64_RAX, REG_X64_RSP, offset);\
+    }\
+    else {\
+        LEA_R_O32(REG_X64_RAX, REG_X64_RSP, offset);\
+    };\
+    CALL_SET_ARG_FROM_REG(REG_X64_RAX, arg_index);\
 } while (0)
 
-#define CALL_SET_ARG_FROM_ADDR_CLOBBER_REG   REG_ANY_CALLER_SAVED
-#define CALL_SET_ARG_FROM_ADDR(source, arg_index, nb_args) do {         \
-  LOAD_ADDRESS_FROM_RT(source, CALL_SET_ARG_FROM_ADDR_CLOBBER_REG);     \
-  CALL_SET_ARG_FROM_RT(RunTime_New(CALL_SET_ARG_FROM_ADDR_CLOBBER_REG,  \
-                                   false, false), arg_index, nb_args);  \
-} while (0)
+/***************************************************************/
+/***************************************************************/
 
-#define CALL_C_FUNCTION(target, nb_args) do {\
-    MOV_R_I(REG_X64_RAX, target);\
-    CALL_R(REG_X64_RAX);\
-} while(0)
-
-#define CALL_C_FUNCTION_FROM_RT(source, nb_args) CALL_R(getreg(source))
-
-#define CALL_C_FUNCTION_FROM(source, nb_args)   do {            \
-  if (((source) & CompileTime) != 0)                            \
-    CALL_C_FUNCTION(KSOURCE_SOURCE(source)->value, nb_args);    \
-  else                                                          \
-    CALL_C_FUNCTION_FROM_RT(source, nb_args);                   \
-} while (0)
-
-#ifdef __APPLE__
-/* Stack alignment for MacOS X IA-32 ABI */
-#define CALL_STACK_ALIGN_DELTA(nbargs, delta) do { \
-	int sp = po->stack_depth-INITIAL_STACK_DEPTH+(nbargs)*4;	\
-	delta = ((sp+15)&~15)-sp; \
-	po->stack_depth += delta; \
-	STACK_CORRECTION(delta); \
-} while (0)
-
-#define CALL_STACK_ALIGN(nbargs) do { \
-	int delta; \
-	CALL_STACK_ALIGN_DELTA(nbargs, delta); \
-} while (0)
-
-#define CALL_STACK_ALIGN_RESTORE(delta) do { \
-	po->stack_depth -= delta; \
-	STACK_CORRECTION(-delta); \
-} while (0)
-#else
-/* Dummy stack alignment for non-MacOS X */
-#define CALL_STACK_ALIGN_DELTA(nbargs, delta)
-#define CALL_STACK_ALIGN(nbargs)
-#define CALL_STACK_ALIGN_RESTORE(delta)
-#endif
-	
 /* load the 'dst' register with the run-time address of 'source'
    which must be in the stack */
 #define LOAD_ADDRESS_FROM_RT(source, dst)    do {                               \
@@ -953,75 +969,6 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
     code += 6;                                                  \
   }                                                             \
 } while (0)
-
-
-/* saving and restoring the registers currently in use (see also
-   SAVE_REGS_FN_CALLS) */
-#define TEMP_SAVE_REGS_FN_CALLS       do {                              \
-  if (COMPACT_ENCODING) {                                               \
-    if (REG_NUMBER(po, REG_X64_RAX) != NULL) PUSH_REG(REG_X64_RAX);     \
-    if (REG_NUMBER(po, REG_X64_RCX) != NULL) PUSH_REG(REG_X64_RCX);     \
-    if (REG_NUMBER(po, REG_X64_RDX) != NULL) PUSH_REG(REG_X64_RDX);     \
-    if (HAS_CCREG(po))                       PUSH_CC_FLAGS();           \
-  }                                                                     \
-  else {                                                                \
-    CODE_FOUR_BYTES(code,                                               \
-                    PUSH_REG_INSTR(REG_X64_RAX),                        \
-                    PUSH_REG_INSTR(REG_X64_RCX),                        \
-                    PUSH_REG_INSTR(REG_X64_RDX),                        \
-                    PUSH_CC_FLAGS_INSTR);                               \
-    code += 4;                                                          \
-  }                                                                     \
-} while (0)
-
-#define TEMP_RESTORE_REGS_FN_CALLS    do {                              \
-  if (COMPACT_ENCODING) {                                               \
-    if (HAS_CCREG(po))                       POP_CC_FLAGS();            \
-    if (REG_NUMBER(po, REG_X64_RDX) != NULL) POP_REG(REG_X64_RDX);      \
-    if (REG_NUMBER(po, REG_X64_RCX) != NULL) POP_REG(REG_X64_RCX);      \
-    if (REG_NUMBER(po, REG_X64_RAX) != NULL) POP_REG(REG_X64_RAX);      \
-  }                                                                     \
-  else {                                                                \
-    CODE_FOUR_BYTES(code,                                               \
-                    POP_CC_FLAGS_INSTR,                                 \
-                    POP_REG_INSTR(REG_X64_RDX),                         \
-                    POP_REG_INSTR(REG_X64_RCX),                         \
-                    POP_REG_INSTR(REG_X64_RAX));                        \
-    code += 4;                                                          \
-  }                                                                     \
-} while (0)
-
-/* same as above, but concludes with a JMP *EAX */
-#define TEMP_RESTORE_REGS_FN_CALLS_AND_JUMP   do {                      \
-  if (COMPACT_ENCODING) {                                               \
-    if (HAS_CCREG(po))                       POP_CC_FLAGS();            \
-    if (REG_NUMBER(po, REG_X64_RDX) != NULL) POP_REG(REG_X64_RDX);      \
-    if (REG_NUMBER(po, REG_X64_RCX) != NULL) POP_REG(REG_X64_RCX);      \
-  }                                                                     \
-  else {                                                                \
-    CODE_FOUR_BYTES(code,                                               \
-                    POP_CC_FLAGS_INSTR,                                 \
-                    POP_REG_INSTR(REG_X64_RDX),                         \
-                    POP_REG_INSTR(REG_X64_RCX),                         \
-                    0   /* dummy */);                                   \
-    code += 3;                                                          \
-  }                                                                     \
-  if (!COMPACT_ENCODING || REG_NUMBER(po, REG_X64_RAX) != NULL) {       \
-    /* must restore EAX, but it contains the jump target... */          \
-    CODE_FOUR_BYTES(code,                                               \
-                    0x87,                                               \
-                    0x04,                                               \
-                    0x24,           /* XCHG EAX, [ESP] */               \
-                    0xC3);          /* RET             */               \
-    code += 4;                                                          \
-  }                                                                     \
-  else {                                                                \
-    code[0] = 0xFF;                                                     \
-    code[1] = 0xE0;     /* JMP *EAX */                                  \
-    code += 2;                                                          \
-  }                                                                     \
-} while (0)
-
 
 /* put an immediate value in memory */
 #define SET_REG_ADDR_TO_IMMED(rg, immed)    do {        \
@@ -1126,26 +1073,6 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   code += 6;                                                                    \
 } while (0)
 
-/* Save registeres clobberd by a function call excluding registers used to pass arguments */
-#define SAVE_REGS_FN_CALLS(cc)   do {           \
-  if (cc) NEED_CC();                            \
-} while (0)
-
-static const int argument_reg_table_len = 6;
-static const reg_t argument_reg_table[] = {
-    REG_X64_RDI, /* First ARG in RDI etc. */
-    REG_X64_RSI, 
-    REG_X64_RDX, 
-    REG_X64_RCX,
-    REG_X64_R8,
-    REG_X64_R9
-};
-
-#define SAVE_REGS_FN_CALLS_POST_ARGS(count)  do {\
-    for(int arg_idx = count; arg_idx < argument_reg_table_len; arg_idx++) {\
-        NEED_REGISTER(argument_reg_table[arg_idx]);\
-    }\
-} while (0)
   
 #define NEED_FREE_REG_COND(targ, cond)   do {           \
   targ = po->last_used_reg;                             \
@@ -1262,17 +1189,33 @@ static const reg_t argument_reg_table[] = {
 #define SIZE_OF_SHORT_CONDITIONAL_JUMP     2    /* Jcond rel8 */
 #define RANGE_OF_SHORT_CONDITIONAL_JUMP  127    /* max. positive offset */
 
+#define BEGIN_SHORT_JUMP(id) \
+    code[0] = 0xEB;\
+    code += 2;\
+    code_t *_short_jump_op_end_ ## id = code;\
+    do {} while (0)
 #define BEGIN_SHORT_COND_JUMP(id, condition) \
-    code_t *_short_cond_jump_op_start ## id = code;\
-    do {\
-        code[0] = 0x70 | (code_t)(condition);\
-        code += SIZE_OF_SHORT_CONDITIONAL_JUMP;\
-    } while(0)
-#define END_SHORT_COND_JUMP(id) do {\
-    long _jump_amount = code - (_short_cond_jump_op_start ## id + SIZE_OF_SHORT_CONDITIONAL_JUMP);\
+    code[0] = 0x70 | (condition);\
+    code += SIZE_OF_SHORT_CONDITIONAL_JUMP;\
+    code_t *_short_jump_op_end_ ## id = code;\
+    do {} while(0)
+#define END_SHORT_JUMP(id) do {\
+    long _jump_amount = (long)code - (long)_short_jump_op_end_ ## id;\
     extra_assert(-128 <= _jump_amount && _jump_amount < 128);\
-    _short_cond_jump_op_start ## id[1] = (code_t)_jump_amount;\
-}while(0)
+    *(_short_jump_op_end_ ## id - 1) = (code_t)_jump_amount;\
+} while(0)
+
+#define BEGIN_REVERSE_SHORT_JUMP(id) \
+    code_t *_reverse_short_jump_target_ ## id = code;
+#define END_REVERSE_SHORT_COND_JUMP(id, cond) do {\
+    long _jump_amount = (long)_reverse_short_jump_target_ ## id - (long)code;\
+    extra_assert(-128 <= _jump_amount && _jump_amount < 128);\
+    code[0] = 0x70 | (cond);\
+    code[1] = _jump_amount;\
+    code += 2;\
+} while (0)
+    
+
 #define SHORT_COND_JUMP_TO(addr, condition)  do {       \
   long _ofs = (addr) - (code+2);                        \
   extra_assert(-128 <= _ofs && _ofs < 128);             \
@@ -1338,14 +1281,6 @@ static const reg_t argument_reg_table[] = {
    }                                                    \
 } while (0)
 
-#define EMIT_TRACE(msg, fn)      do {           \
-  TEMP_SAVE_REGS_FN_CALLS;                      \
-  PUSH_IMMED((long) code);                      \
-  PUSH_IMMED((long) (msg));                     \
-  CALL_C_FUNCTION(fn, 2);                       \
-  STACK_CORRECTION(-8);                         \
-  TEMP_RESTORE_REGS_FN_CALLS;                   \
-} while (0)
 
 #define ALIGN_PAD_CODE_PTR()     do {                                   \
   if ((((long)code) & 15) > 8)   /* directive .p2align 4,,7 of 'as' */  \

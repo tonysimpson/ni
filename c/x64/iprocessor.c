@@ -5,51 +5,46 @@
 #include "../Python/frames.h"
 
 
-/* define to copy static machine code in the heap before running it.
-   I've seen some Linux distributions in which the static data pages
-   are not executable by default. */
-#define COPY_CODE_IN_HEAP
-
-
-/* glue code for psyco_processor_run(). */
-static code_t glue_run_code[] = {
-                                      /*   RDI - code_t* code_target
-                                       *   RSI - long* stack_end
-                                       *   RDX - long* initial_stack
-                                       *   RCX - struct stack_frame_info_s*** finfo
-                                       */
-  PUSH_REG_INSTR(REG_X64_RBP),        /*   PUSH RBP        */
-  
-  /*   PUSH stack address to stack  */
-  0x48, 0x89, 0xE0,                   /*   MOV RSP RAX     */
-  0x48, 0x83, 0xE8, 0x08,             /*   SUB RAX 8 */
-  PUSH_REG_INSTR(REG_X64_RAX),        
-  /*   PUSH RSP for stack corruption checking */
-  /* po->stack_depth is taken from here */
-  0x48, 0x89, 0x21,                   /*   MOV [RCX], RSP  (set finfo to stack pointer) */ 
-  0xEB, +6,                           /*   JMP Label2      */
-                                      /* Label1:          (push item from initial_stack onto real stack in reverse order) */
-  0x48, 0x83, 0xEE, 16,               /*   SUB RSI, 16     */
-  0xFF, 0x36,                         /*   PUSH [RSI]      */
-                                      /* Label2:           */
-  0x48, 0x39, 0xF2,                   /*   CMP RDX, RSI    */
-  0x75, -11,                          /*   JNE Label1      */
-  0xFF, 0xD7,                         /*   CALL *RDI      (callee removes args)  */
-  POP_REG_INSTR(REG_X64_RCX),         /*   POP RCX -- from push stack above */
-  POP_REG_INSTR(REG_X64_RBP),         /*   POP RBP         */
-  0xC3,                               /*   RET             */
-};
-
 typedef PyObject* (*glue_run_code_fn) (code_t* code_target,
 				       long* stack_end,
 				       long* initial_stack,
 				       struct stack_frame_info_s*** finfo);
 
-#ifdef COPY_CODE_IN_HEAP
-static glue_run_code_fn glue_run_code_1;
-#else
-# define glue_run_code_1 ((glue_run_code_fn) glue_run_code)
-#endif
+
+static glue_run_code_fn glue_run_code;
+
+
+static void write_glue_run_code_fn(PsycoObject *po) {
+    BEGIN_CODE
+    PUSH_R(REG_X64_RBP);
+    PUSH_R(REG_X64_RBX);
+    PUSH_R(REG_X64_R13);
+    PUSH_R(REG_X64_R14);
+    PUSH_R(REG_X64_R15);
+
+    MOV_R_R(REG_X64_RAX, REG_X64_RSP);
+    SUB_R_I8(REG_X64_RAX, 8);
+    PUSH_R(REG_X64_RAX);
+    PUSH_R(REG_X64_RCX);
+    BEGIN_SHORT_JUMP(0);
+    BEGIN_REVERSE_SHORT_JUMP(1);
+    SUB_R_I8(REG_X64_RSI, 8);
+    PUSH_A(REG_X64_RSI);
+    END_SHORT_JUMP(0);
+    CMP_R_R(REG_X64_RDX, REG_X64_RSI);
+    END_REVERSE_SHORT_COND_JUMP(1, CC_NE);
+    BEGIN_CALL();
+    END_CALL_R(REG_X64_RDI);
+    SUB_R_I8(REG_X64_RSP, 16);
+    POP_R(REG_X64_R15);
+    POP_R(REG_X64_R14);
+    POP_R(REG_X64_R13);
+    POP_R(REG_X64_RBX);
+    POP_R(REG_X64_RBP);
+    RET();
+    END_CODE
+}
+
 
 DEFINEFN
 PyObject* psyco_processor_run(CodeBufferObject* codebuf,
@@ -58,84 +53,23 @@ PyObject* psyco_processor_run(CodeBufferObject* codebuf,
                               PyObject* tdict)
 {
   int argc = RUN_ARGC(codebuf);
-  return glue_run_code_1(codebuf->codestart, initial_stack + argc,
+  return glue_run_code(codebuf->codestart, initial_stack + argc,
                          initial_stack, finfo);
 }
 
-/* call a C function with a variable number of arguments */
-DEFINEVAR long (*psyco_call_var) (void* c_func, int argcount, long arguments[]);
 
-static code_t glue_call_var[] = {
-	0x53,			/*   PUSH EBX                      */
-	0x8B, 0x5C, 0x24, 12,	/*   MOV EBX, [ESP+12]  (argcount) */
-	0x8B, 0x44, 0x24, 8,	/*   MOV EAX, [ESP+8]   (c_func)   */
-#ifdef __APPLE__
-	/* Adjust # of arguments for MacOS 16-byte stack alignment */
-	0x83, 0xC3, 3,		/*   ADD EBX, 3                    */
-	0x83, 0xE3, ~3,		/*   AND EBX, ~3                   */
-	/* Align stack on 16-byte boundary for MacOS X */
-	0x83, 0xEC, 8,		/*   SUB ESP, 8                    */
-#endif
-	0x09, 0xDB,		/*   OR EBX, EBX                   */
-	0x74, +16,		/*   JZ Label1                     */
-#ifdef __APPLE__
-	/* Arguments are 8 bytes further up stack on MacOS X */
-	0x8B, 0x54, 0x24, 24,	/*   MOV EDX, [ESP+24] (arguments) */
-#else
-	0x8B, 0x54, 0x24, 16,	/*   MOV EDX, [ESP+16] (arguments) */
-#endif
-	0x8D, 0x0C, 0x9A,	/*   LEA ECX, [EDX+4*EBX]          */
-				/* Label2:                         */
-	0x83, 0xE9, 4,		/*   SUB ECX, 4                    */
-	0xFF, 0x31,		/*   PUSH [ECX]                    */
-	0x39, 0xCA,		/*   CMP EDX, ECX                  */
-	0x75, -9,		/*   JNE Label2                    */
-				/* Label1:                         */
-	0xFF, 0xD0,		/*   CALL *EAX                     */
-#ifdef __APPLE__
-	/* Restore stack from 16-byte alignment on MacOS X */
-	0x83, 0xC4, 8,		/*   ADD ESP, 8                    */
-#endif
-	0x8D, 0x24, 0x9C,	/*   LEA ESP, [ESP+4*EBX]          */
-	0x5B,			/*   POP EBX                       */
-	0xC3,			/*   RET                           */
-};
-
-/* check for signed integer multiplication overflow */
-DEFINEVAR char (*psyco_int_mul_ovf) (long a, long b);
-
-static code_t glue_int_mul[] = {
-  0x8B, 0x44, 0x24, 8,          /*   MOV  EAX, [ESP+8]  (a)   */
-  0x0F, 0xAF, 0x44, 0x24, 4,    /*   IMUL EAX, [ESP+4]  (b)   */
-  0x0F, 0x90, 0xC0,             /*   SETO AL                  */
-  0xC3,                         /*   RET                      */
-};
+typedef char (*psyco_int_mul_ovf_fn) (long a, long b);
 
 
-#ifdef COPY_CODE_IN_HEAP
-static code_t* internal_copy_code(void* source, int size) {
-	CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL, NULL);
-	code_t* code = codebuf->codestart;
-	memcpy(code, source, size);
-	SHRINK_CODE_BUFFER(codebuf, code+size, "glue");
-	return code;
-}
-#  define COPY_CODE(target, source, type)   do {			\
-	target = (type) internal_copy_code(source, sizeof(source));	\
-} while (0)
-#else
-#  define COPY_CODE(target, source, type)   (target = (type) source)
-#endif
+psyco_int_mul_ovf_fn psyco_int_mul_ovf;
 
 
-INITIALIZATIONFN
-void psyco_processor_init(void)
-{
-#ifdef COPY_CODE_IN_HEAP
-  COPY_CODE(glue_run_code_1,    glue_run_code,     glue_run_code_fn);
-#endif
-  COPY_CODE(psyco_int_mul_ovf,  glue_int_mul,      char(*)(long, long));
-  COPY_CODE(psyco_call_var,     glue_call_var,     long(*)(void*, int, long[]));
+void write_psyco_int_mul_ovf(PsycoObject *po) {
+    BEGIN_CODE
+    IMUL_R_R(REG_X64_RDI, REG_X64_RSI);
+    SET_R_CC(REG_X64_RAX, CC_O);
+    RET();
+    END_CODE
 }
 
 
@@ -147,3 +81,21 @@ psyco_next_stack_frame(struct stack_frame_info_s** finfo)
 	return (struct stack_frame_info_s**)
 		(((char*) finfo) - finfo_last(*finfo)->link_stack_depth);
 }
+
+
+INITIALIZATIONFN
+void psyco_processor_init(void)
+{
+    code_t *limit;
+    CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL, &limit);
+    PsycoObject *po = PsycoObject_New(0);
+    po->code = codebuf->codestart;
+    po->codelimit = limit;
+    glue_run_code = (glue_run_code_fn)po->code;
+    write_glue_run_code_fn(po);
+    psyco_int_mul_ovf = (psyco_int_mul_ovf_fn)po->code;
+    write_psyco_int_mul_ovf(po);
+    SHRINK_CODE_BUFFER(codebuf, po->code, "glue");
+}
+
+

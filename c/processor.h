@@ -27,10 +27,6 @@ EXTERNFN PyObject* psyco_processor_run(CodeBufferObject* codebuf,
     (int)((get_stack_depth(&((CodeBufferObject*)(codebuf))->snapshot) \
      - INITIAL_STACK_DEPTH - sizeof(long)) / sizeof(long)))
 
-/* call a C function with a variable number of arguments
-   (implemented as a pointer to assembler code) */
-EXTERNVAR long (*psyco_call_var) (void* c_func, int argcount, long arguments[]);
-
 /* check for signed integer multiplication overflow */
 EXTERNVAR char (*psyco_int_mul_ovf) (long a, long b);
 

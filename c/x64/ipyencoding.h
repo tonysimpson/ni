@@ -25,8 +25,8 @@
   BEGIN_SHORT_COND_JUMP(1, DICT_ITEM_CHECK_CC);\
   MOV_R_I(REG_X64_RAX, value);\
   CMP_R_UO32(REG_X64_RAX, mprg, (index) * sizeof(PyDictEntry) + offsetof(PyDictEntry, me_value));\
-  END_SHORT_COND_JUMP(0);\
-  END_SHORT_COND_JUMP(1);\
+  END_SHORT_JUMP(0);\
+  END_SHORT_JUMP(1);\
 } while (0)
 
 PSY_INLINE void* dictitem_check_change(PsycoObject* po,

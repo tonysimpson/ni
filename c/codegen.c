@@ -45,10 +45,8 @@ code_t* psyco_finish_return(PsycoObject* po, Source retval)
 
   /* now clean up the stack up to retpos */
   STACK_CORRECTION(retpos - po->stack_depth);
-
-  /* emit the 'RET' instruction */
-  retpos -= INITIAL_STACK_DEPTH_INUSE;
-  FUNCTION_RET(retpos);
+  po->stack_depth = retpos;
+  FUNCTION_RET(po->stack_depth - sizeof(long));
   END_CODE
   code_t *code = po->code;
   PsycoObject_Delete(po);
@@ -207,6 +205,25 @@ bool psyco_vsource_is_promotion(VirtualTimeSource source)
 
 #define MAX_ARGUMENTS_COUNT    16
 
+static long psyco_call_var(void *c_function, int arg_count, long args[]) {
+    switch (arg_count) {
+        case 0:
+            return ((long (*) (void))c_function)();
+        case 1:
+            return ((long (*) (long))c_function)(args[0]);
+        case 2:
+            return ((long (*) (long, long))c_function)(args[0], args[1]);
+        case 3:
+            return ((long (*) (long, long, long))c_function)(args[0], args[1], args[2]);
+        case 4:
+            return ((long (*) (long, long, long, long))c_function)(args[0], args[1], args[2], args[3]);
+        case 5:
+            return ((long (*) (long, long, long, long, long))c_function)(args[0], args[1], args[2], args[3], args[4]);
+        default:
+            abort(); /* compile time arg count too long - extend this switch or find a better solution */
+    }
+}
+
 DEFINEFN
 vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
                             int flags, const char* arguments, ...)
@@ -356,18 +373,6 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		return vresult;
 	}
 
-#ifdef CALL_SET_ARG_FROM_ADDR_CLOBBER_REG
-	if (has_refs) {
-		/* we will need a trash register to compute the references
-		   we push later. The following three lines prevent another
-		   argument which would currently be in the same trash
-		   register from being pushed from the register after we
-		   clobbered it. */
-		BEGIN_CODE
-		NEED_REGISTER(CALL_SET_ARG_FROM_ADDR_CLOBBER_REG);
-		END_CODE
-	}
-#endif
 
 	BEGIN_CODE
 	NEED_CC();
@@ -384,22 +389,19 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		}
 	}
 
-	SAVE_REGS_FN_CALLS(false);   /* CC saved above */
 	stackbase = po->stack_depth;
 	po->stack_depth += totalstackspace;
 	STACK_CORRECTION(totalstackspace);
-	CALL_STACK_ALIGN(count);
+    BEGIN_CALL();
 	for (i=count; i--; ) {
 		switch (argtags[i]) {
 			
 		case 'v':
-			CALL_SET_ARG_FROM_RT   (args[i], i, count);
+			CALL_SET_ARG_FROM_RT(args[i], i);
 			break;
-			
 		case 'r':
-			CALL_SET_ARG_FROM_ADDR (args[i], i, count);
+			CALL_SET_ARG_FROM_STACK_REF(args[i], i);
 			break;
-			
 		case 'a':
 		case 'A':
 		{
@@ -412,17 +414,15 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 						RunTime_NewStack(stackbase,
 							with_reference, false));
 			}
-			CALL_SET_ARG_FROM_ADDR(array->items[0]->source, i,count);
+			CALL_SET_ARG_FROM_STACK_REF(array->items[0]->source, i);
 			break;
 		}
-		
 		default:
-			CALL_SET_ARG_IMMED   (args[i], i, count);
+			CALL_SET_ARG_IMMED(args[i], i);
 			break;
 		}
 	}
-    SAVE_REGS_FN_CALLS_POST_ARGS(count);
-	CALL_C_FUNCTION                      (c_function, count);
+    END_CALL_I(c_function);
 	END_CODE
 
 	switch (flags & CfReturnMask) {

@@ -6,64 +6,21 @@ DEFINEFN
 code_t* decref_dealloc_calling(code_t* code, PsycoObject* po, reg_t rg,
                                destructor fn)
 {
-  code_t* code_origin;
-  int save_eax, save_ecx, save_edx;
-  reg_t last_reg;
-  DEC_OB_REFCNT_NZ(rg);
   extra_assert(offsetof(PyObject, ob_type) < 128);
   extra_assert(offsetof(PyTypeObject, tp_dealloc) < 128);
-  code[0] = 0x75;          /* JNZ rel8 */
-  code += 2;
-  code_origin = code;
-  if (COMPACT_ENCODING) {
-    save_eax = REG_NUMBER(po, REG_X64_RAX) != NULL;
-    save_ecx = REG_NUMBER(po, REG_X64_RCX) != NULL;
-    save_edx = REG_NUMBER(po, REG_X64_RDX) != NULL;
-    last_reg = REG_X64_RAX;
-    if (save_eax) PUSH_REG(REG_X64_RAX);
-    if (save_ecx) { PUSH_REG(REG_X64_RCX); last_reg = REG_X64_RCX; }
-    if (save_edx) { PUSH_REG(REG_X64_RDX); last_reg = REG_X64_RDX; }
-    PUSH_REG(rg);
-  }
-  else {
-    CODE_FOUR_BYTES(code,                                                     
-            PUSH_REG_INSTR(REG_X64_RAX),
-            PUSH_REG_INSTR(REG_X64_RCX),
-            PUSH_REG_INSTR(REG_X64_RDX),
-            PUSH_REG_INSTR(rg));
-    code += 4;
-  }
+  DEC_OB_REFCNT_NZ(rg);
+  BEGIN_SHORT_COND_JUMP(0, CC_NE); /* NE is the not zero flag */
+  BEGIN_CALL();
+  CALL_SET_ARG_FROM_REG(rg, 0);
   if (fn == NULL) {
-    code[0] = 0x8B;          /* MOV EAX, [reg+ob_type] */
-    code[1] = 0x40 | (rg);
-    CODE_FOUR_BYTES(code+2,
-            offsetof(PyObject, ob_type),
-            0xFF,          /* CALL [EAX+tp_dealloc] */
-            0x50,
-            offsetof(PyTypeObject, tp_dealloc));
-    code += 6;
+    MOV_R_O8(REG_X64_RAX, rg, offsetof(PyObject, ob_type));
+    LEA_R_O8(REG_X64_RAX, REG_X64_RAX, offsetof(PyTypeObject, tp_dealloc));
   }
   else {
-    code[0] = 0xE8;    /* CALL */
-    code += 5;
-    *(long*)(code-4) = (code_t*)(fn) - code;
+    MOV_R_I(REG_X64_RAX, fn);
   }
-  if (COMPACT_ENCODING) {
-    POP_REG(last_reg);  /* pop argument back */
-    if (save_edx) POP_REG(REG_X64_RDX);
-    if (save_ecx) POP_REG(REG_X64_RCX);
-    if (save_eax) POP_REG(REG_X64_RAX);
-  }
-  else {
-    CODE_FOUR_BYTES(code,
-            POP_REG_INSTR(REG_X64_RDX),
-            POP_REG_INSTR(REG_X64_RDX),
-            POP_REG_INSTR(REG_X64_RCX),
-            POP_REG_INSTR(REG_X64_RAX));
-    code += 4;
-  }
-  extra_assert(code-code_origin < 128);
-  code_origin[-1] = (code_t)(code-code_origin);
+  END_CALL_R(REG_X64_RAX);
+  END_SHORT_JUMP(0);
   return code;
 }
 
@@ -98,7 +55,7 @@ bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w)
 			extra_assert(!RUNTIME_REG_IS_NONE(w));
 			INC_OB_REFCNT(RUNTIME_REG(w));
 		}
-                END_CODE
+        END_CODE
 	}
 	return could_eat;
 }

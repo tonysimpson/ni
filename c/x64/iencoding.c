@@ -6,7 +6,6 @@
 #include "../Python/frames.h"
 
 
-#if NEW_REGISTERS
 DEFINEVAR reg_t RegistersLoop[REG_TOTAL] = {
     /* RAX > */ REG_NONE,
     /* RCX > */ REG_NONE,
@@ -25,52 +24,24 @@ DEFINEVAR reg_t RegistersLoop[REG_TOTAL] = {
     /* R14 > */ REG_X64_R15,
     /* R15 > */ REG_X64_RBX
 };
-#else
-DEFINEVAR reg_t RegistersLoop[REG_TOTAL] = {
-    /* RAX > */ REG_NONE,
-    /* RCX > */ REG_X64_RDX,
-    /* RDX > */ REG_X64_RBX,
-    /* RBX > */ RBP_IS_RESERVED ? REG_X64_RSI : REG_X64_RBP,
-    /* RSP > */ REG_NONE,
-    /* RBP > */ RBP_IS_RESERVED ? REG_NONE : REG_X64_RSI,
-    /* RSI > */ REG_X64_RDI,
-    /* RDI > */ REG_X64_RCX,
-    /* R8  > */ REG_NONE,
-    /* R9  > */ REG_NONE,
-    /* R10 > */ REG_NONE,
-    /* R11 > */ REG_NONE,
-    /* R12 > */ REG_NONE,
-    /* R13 > */ REG_NONE,
-    /* R14 > */ REG_NONE,
-    /* R15 > */ REG_NONE
-};
-#endif
 
 DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
                               RunTimeSource extraarg)
 {
-  void* result;
+  code_t* result;
   BEGIN_CODE
-
-  SAVE_REGS_FN_CALLS(true);
-  /* first pushed argument */
+  BEGIN_CALL();
   if (extraarg != SOURCE_DUMMY) {
-    CALL_SET_ARG_FROM_RT(extraarg, 1, 2);  /* argument index 2 out of total 2 */
-    result = (void*)(((long)code + 32 + 3) & (~3));
-    CALL_SET_ARG_IMMED(result, 0, 2);
-    SAVE_REGS_FN_CALLS_POST_ARGS(2);
-    CALL_C_FUNCTION(fn, 2);
-  } else {
-    result = (void*)(((long)code + 32 + 3) & (~3));
-    CALL_SET_ARG_IMMED(result, 0, 1);
-    SAVE_REGS_FN_CALLS_POST_ARGS(1);
-    CALL_C_FUNCTION(fn, 1);
+    CALL_SET_ARG_FROM_RT(extraarg, 1);
   }
+  result = code + 48; /* TODO find a better way to set this after the current code */
+  CALL_SET_ARG_IMMED(result, 0);
+  END_CALL_I(fn);
   JMP_R(REG_X64_RAX);
   while (code != result)
     *code++ = (code_t) 0xCC;   /* fill with INT 3 (debugger trap) instructions */
   END_CODE
-  return result;
+  return (void*)result;
 }
 
 DEFINEFN
@@ -83,39 +54,20 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	int i, initial_depth;
 	Source* p;
 	bool ccflags;
-#ifdef __APPLE__
-	int aligncount=0;
-#endif
 	BEGIN_CODE
 	/* cannot use NEED_CC(): it might clobber one of the registers
 	   mentioned in argsources */
 	ccflags = HAS_CCREG(po);
-#ifdef __APPLE__
-	/* Calculate number of registers that will be pushed by
-	   NEED_REGISTER */
-	for (i=0; i<REG_TOTAL; i++)
-	{
-		vinfo_t* _content = REG_NUMBER(po, i);
-		if (_content != NULL)
-			if (RUNTIME_STACK(_content) == RUNTIME_STACK_NONE)
-				aligncount++;
-	}
-#endif
-	CALL_STACK_ALIGN(1+(ccflags!=0)+aligncount);
 	if (ccflags)
 		PUSH_CC_FLAGS();
-	for (i=0; i<REG_TOTAL; i++)
-		NEED_REGISTER(i);
 	finfo_last(finfo)->link_stack_depth = po->stack_depth;
-	ABOUT_TO_CALL_SUBFUNCTION(finfo);
-	initial_depth = po->stack_depth;
-	CALL_SET_ARG_IMMED(-1, argcount, argcount+1);
-	p = argsources;
-	for (i=argcount; i--; p++)
-		CALL_SET_ARG_FROM_RT(*p, i, argcount+1);
-	CALL_C_FUNCTION(codebuf->codestart, argcount+1);
-	po->stack_depth = initial_depth;  /* callee removes arguments */
-	RETURNED_FROM_SUBFUNCTION();
+	/* ABOUT_TO_CALL_SUBFUNCTION(finfo); ???? */
+    BEGIN_CALL();
+    for(i = argcount-1; i >= 0; i--) {
+        CALL_SET_ARG_FROM_RT(argsources[i], i);
+    }
+	END_CALL_I(codebuf->codestart);
+	/* RETURNED_FROM_SUBFUNCTION(); ?????? */
 	if (ccflags)
 		POP_CC_FLAGS();
 	END_CODE
@@ -207,7 +159,7 @@ code_t* write_modrm(code_t* code, code_t middle, reg_t base, reg_t index, int sh
 
 static reg_t mem_access(PsycoObject* po, code_t opcodes[], vinfo_t* nv_ptr,
                         long offset, vinfo_t* rt_vindex, int size2,
-                        vinfo_t* rt_extra)
+                        vinfo_t* rt_extra, bool rexw)
 {
   int i;
   reg_t basereg, indexreg, extrareg;
@@ -259,9 +211,9 @@ static reg_t mem_access(PsycoObject* po, code_t opcodes[], vinfo_t* nv_ptr,
       }
     }
   }
+  *code++ = 0x40 | (rexw ? 8 : 0) | (extrareg > 7 ? 4 : 0) | (indexreg > 7 ? 2 : 0) | (basereg > 7 ? 1 : 0); 
   for (i = *opcodes++; i--; ) *code++ = *opcodes++;
-  code = write_modrm(code, (code_t)(extrareg<<3), basereg, indexreg, size2,
-                     (unsigned long) offset);
+  code = write_modrm(code, (code_t)(extrareg & 7 <<3), basereg > 0 ? basereg & 7 : basereg, indexreg > 0 ? indexreg & 7 : indexreg, size2, (unsigned long) offset);
   for (i = *opcodes++; i--; ) *code++ = *opcodes++;
   END_CODE
   return extrareg;
@@ -273,6 +225,7 @@ vinfo_t* psyco_memory_read(PsycoObject* po, vinfo_t* nv_ptr, long offset,
 {
   code_t opcodes[4];
   reg_t targetreg;
+  bool rexw = true;
   switch (size2) {
   case 0:
     /* reading only one byte */
@@ -288,19 +241,33 @@ vinfo_t* psyco_memory_read(PsycoObject* po, vinfo_t* nv_ptr, long offset,
     opcodes[0] = 2;
     opcodes[1] = 0x0F;
     opcodes[2] = nonsigned
-      ? 0xB7       /* MOVZX reg, short [...] */
-      : 0xBF;      /* MOVSX reg, short [...] */
+      ? 0xB7       /* MOVZX reg, word [...] */
+      : 0xBF;      /* MOVSX reg, word [...] */
     opcodes[3] = 0;
     break;
-  default:
+  case 2:
+    if(nonsigned) {
+        opcodes[0] = 1;
+        opcodes[1] = 0x8B;  /* MOV regq, qword [...] */
+        opcodes[2] = 0;
+        rexw = false;
+    } else {
+        opcodes[0] = 1;
+        opcodes[1] = 0x63;  /* MOVSX reg, dword [...] */
+        opcodes[2] = 0;
+    }
+    break;
+  case 3:
     /* reading a long */
     opcodes[0] = 1;
-    opcodes[1] = 0x8B;  /* MOV reg, long [...] */
+    opcodes[1] = 0x8B;  /* MOV reg, qword [...] */
     opcodes[2] = 0;
     break;
+  default:
+    return NULL;
   }
   targetreg = mem_access(po, opcodes, nv_ptr, offset, rt_vindex,
-                         size2, NewOutputRegister);
+                         size2, NewOutputRegister, rexw);
   return new_rtvinfo(po, targetreg, false, false);
 }
 
@@ -309,6 +276,7 @@ bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr, long offset,
                         vinfo_t* rt_vindex, int size2, vinfo_t* value)
 {
   code_t opcodes[8];
+  bool rexw = true;
   if (!compute_vinfo(value, po)) return false;
 
   if (is_runtime(value->source))
@@ -368,7 +336,7 @@ bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr, long offset,
         break;
       }
     }
-  mem_access(po, opcodes, nv_ptr, offset, rt_vindex, size2, value);
+  mem_access(po, opcodes, nv_ptr, offset, rt_vindex, size2, value, rexw);
   return true;
 }
 
@@ -594,7 +562,7 @@ vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
   LOAD_REG_FROM_IMMED(rg, immed_true);
   BEGIN_SHORT_COND_JUMP(1, cc);
   LOAD_REG_FROM_IMMED(rg, immed_false);
-  END_SHORT_COND_JUMP(1);
+  END_SHORT_JUMP(1);
   END_CODE
   return new_rtvinfo(po, rg, false, immed_true >= 0 && immed_false >= 0);
 }
