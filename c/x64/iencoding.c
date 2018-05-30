@@ -59,7 +59,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	   mentioned in argsources */
 	ccflags = HAS_CCREG(po);
 	if (ccflags)
-		PUSH_CC_FLAGS();
+		PUSH_CC();
 	finfo_last(finfo)->link_stack_depth = po->stack_depth;
 	/* ABOUT_TO_CALL_SUBFUNCTION(finfo); ???? */
     BEGIN_CALL();
@@ -69,7 +69,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	END_CALL_I(codebuf->codestart);
 	/* RETURNED_FROM_SUBFUNCTION(); ?????? */
 	if (ccflags)
-		POP_CC_FLAGS();
+		POP_CC();
 	END_CODE
 	return generic_call_check(po, CfReturnRef|CfPyErrIfNull,
 				  bfunction_result(po, true));

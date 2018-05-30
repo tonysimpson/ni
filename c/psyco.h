@@ -321,7 +321,7 @@ FILE *codegen_log;
 #define DEBUG_END_CODE_LOCATION                  fprintf(codegen_log, "END_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code); fflush(codegen_log);
 #define BEGIN_CODE         do { code_t* code = po->code;\
                              DEBUG_BEGIN_CODE_LOCATION\
-                             /*BRKP();*/\
+                             BRKP();\
                              STACKDEPTH_CHECK();
 #define END_CODE             po->code = code;                           \
                              DEBUG_END_CODE_LOCATION\

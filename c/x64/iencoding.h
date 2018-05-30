@@ -482,6 +482,14 @@ if(!ONLY_UPDATING) {\
     PUSH_R(REG_TRANSIENT_1);\
 } while(0)
 #define RET() WRITE_1(0xC3)
+#define PUSH_CC() do {\
+    *code++ = 0x9C;\
+    psyco_inc_stackdepth(po);\
+} while (0)
+#define POP_CC() do {\
+    *code++ = 0x9D;\
+    psyco_dec_stackdepth(po);\
+} while (0)
 /***********************************************************************/
 /* vinfo based instructions */
 #define V_MOV_N_A(vnew, vaddr) do {\
@@ -516,12 +524,17 @@ if(!ONLY_UPDATING) {\
 /***********************************************************************/
 #define STACKDEPTH_CHECK() do {\
     /* see glue_run_code for companion code */\
-    MOV_R_I(REG_TRANSIENT_1, po->stack_depth);\
-    ADD_R_R(REG_X64_RSP, REG_TRANSIENT_1);\
-    CMP_R_A(REG_TRANSIENT_1, REG_TRANSIENT_1);\
-    BEGIN_SHORT_COND_JUMP(0, CC_E);\
-    BRKP();\
-    END_SHORT_JUMP(0);\
+    /* if stack_depth <= 0 we're in glue code */\
+    if(po->stack_depth > 0) {\
+        PUSH_CC();\
+        MOV_R_I(REG_TRANSIENT_1, po->stack_depth + sizeof(long));\
+        ADD_R_R(REG_X64_RSP, REG_TRANSIENT_1);\
+        CMP_R_A(REG_TRANSIENT_1, REG_TRANSIENT_1);\
+        BEGIN_SHORT_COND_JUMP(0, CC_E);\
+        BRKP();\
+        END_SHORT_JUMP(0);\
+        POP_CC();\
+    }\
 } while(0)
 /**********************************************************************/
 #define STACK_POS_OFFSET(stack_pos) (po->stack_depth - (stack_pos))
@@ -800,19 +813,10 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 /*****************************************************************/
  /***   Some basic management instructions...                   ***/
 
-/* these two macros do not actually emit the code.
-   They just give you the one-byte instruction encoding. */
-#define PUSH_REG_INSTR(reg)       (0x50 | (reg))
-#define POP_REG_INSTR(reg)        (0x58 | (reg))
-
 #define PUSH_REG(reg) PUSH_R(reg)       
 #define POP_REG(reg) POP_R(reg)
 
-#define PUSH_CC_FLAGS_INSTR     0x9C   /* PUSHF */
-#define POP_CC_FLAGS_INSTR      0x9D   /* POPF */
 
-#define PUSH_CC_FLAGS()       (*code++ = PUSH_CC_FLAGS_INSTR)
-#define POP_CC_FLAGS()        (*code++ = POP_CC_FLAGS_INSTR)
 
 #define LOAD_REG_FROM_IMMED(dst, immed) MOV_R_I(dst, immed)
 
@@ -1243,7 +1247,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 #define BEGIN_REVERSE_SHORT_JUMP(id) \
     code_t *_reverse_short_jump_target_ ## id = code;
 #define END_REVERSE_SHORT_COND_JUMP(id, cond) do {\
-    long _jump_amount = (long)_reverse_short_jump_target_ ## id - (long)code;\
+    long _jump_amount = (long)_reverse_short_jump_target_ ## id - (long)code -2;\
     extra_assert(-128 <= _jump_amount && _jump_amount < 128);\
     code[0] = 0x70 | (cond);\
     code[1] = _jump_amount;\

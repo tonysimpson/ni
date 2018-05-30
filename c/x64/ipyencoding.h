@@ -78,9 +78,9 @@ PSY_INLINE void dictitem_update_nochange(void* originalmacrocode,
 /* same as above, preserving the cc */
 #define INC_OB_REFCNT_CC(rg)			do {    \
   bool _save_ccreg = HAS_CCREG(po);                     \
-  if (_save_ccreg) PUSH_CC_FLAGS();                     \
+  if (_save_ccreg) PUSH_CC();                     \
   INC_OB_REFCNT_internal(rg);                           \
-  if (_save_ccreg) POP_CC_FLAGS();                      \
+  if (_save_ccreg) POP_CC();                      \
 } while (0)
 #define INC_OB_REFCNT_internal(rg) do {\
     if (offsetof(PyObject, ob_refcnt) == 0) {\
