@@ -37,7 +37,7 @@ DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
   result = code + 48; /* TODO find a better way to set this after the current code */
   CALL_SET_ARG_IMMED(result, 0);
   END_CALL_I(fn);
-  JMP_R(REG_X64_RAX);
+  JMP_R(REG_FUNCTIONS_RETURN);
   while (code != result)
     *code++ = (code_t) 0xCC;   /* fill with INT 3 (debugger trap) instructions */
   END_CODE
@@ -535,7 +535,7 @@ condition_code_t bint_cmp_i(PsycoObject* po, int base_py_op,
 {
   BEGIN_CODE
   NEED_CC();
-  COMPARE_IMMED_FROM_RT(rt1->source, immed2); /* CMP rt1, immed2 */
+  CMP_I_R(immed2, getreg(rt1->source));
   END_CODE
   return direct_results[base_py_op];
 }
@@ -570,7 +570,12 @@ vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
 DEFINEFN
 vinfo_t* bfunction_result(PsycoObject* po, bool ref)
 {
-  return new_rtvinfo(po, REG_FUNCTIONS_RETURN, ref, false);
+  reg_t rg;
+  BEGIN_CODE
+  NEED_FREE_REG(rg);
+  MOV_R_R(rg, REG_FUNCTIONS_RETURN);
+  END_CODE
+  return new_rtvinfo(po, rg, ref, false);
 }
 
 DEFINEFN

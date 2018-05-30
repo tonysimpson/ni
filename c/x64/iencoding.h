@@ -38,7 +38,7 @@
 
 #define REG_TOTAL    16
 typedef enum {
-        REG_X64_RAX = 0, /* only used for transient values */
+        REG_X64_RAX = 0, /* reserved for return values */
         REG_X64_RCX = 1, /* 4th ARG */
         REG_X64_RDX = 2, /* 3rd ARG */
         REG_X64_RBX = 3, /* CALLEE Saved */
@@ -58,9 +58,10 @@ typedef enum {
 
 #define REG_LOOP_START REG_X64_R13
 
-#define REG_ANY_CALLER_SAVED       REG_X64_RAX  /* just any "trash" register */
 #define REG_ANY_CALLEE_SAVED       REG_X64_RBX  /* saved by C functions */
-#define REG_FUNCTIONS_RETURN       REG_X64_RAX
+#define REG_FUNCTIONS_RETURN       REG_X64_RAX  
+#define REG_TRANSIENT_1            REG_X64_R10
+#define REG_TRANSIENT_2            REG_X64_R11
 
 /* the registers we want Psyco to use in compiled code,
  *    as a circular linked list */
@@ -221,7 +222,7 @@ typedef enum {
  *
  * REX will include the REX byte before opcode
  * MODRM will include the MODRM byte after opcode
- * U   - Prefix for updateable (use #define UPDATE_CODE ... #undef UPDATE_CODE
+ * U   - Prefix for updatable (use #define UPDATE_CODE ... #undef UPDATE_CODE
  * REG - MODRM REG or just reg encoded in opcode (REX.R)
  * RM  - MODRM RM or just reg encoded in opcode (REX.B)
  * A   - MODRM RM with indirect addressing (reg is pointer to address)
@@ -343,66 +344,97 @@ if(!ONLY_UPDATING) {\
  * O32 - Address is register + 32 bit offset
  * I - Immediat
  * X - base + (index * scale) + offset
- *
- * Registers etc are in [destination, source] order like 
- * AT&T assembler
  */
-#define BRKP() WRITE_1(0xCC)
-#define MOV_R_R(dst, src) OP_REX_64_MODRM_REG_RM(0x8B, dst, src)
-#define MOV_R_A(dst, src) OP_REX_64_MODRM_REG_A(0x8B, dst, src)
-#define MOV_A_R(dst, src) OP_REX_64_MODRM_REG_A(0x89, dst, src)
-#define MOV_R_I(dst, immed) OP_REX_64_RM_I64(0xB8, dst, immed)
-#define MOV_R_UI(dst, immed) OP_REX_64_RM_UI64(0xB8, dst, immed)
-#define SIB_ENCODING(opcode, size, dst, base, offset, index, scale) do {\
-    WRITE_4(REX_64_REG_X_B(dst, index, base),\
-            opcode,\
-            (size == 8 ? 0x44 : 0x84) | (dst & 7),\
-            (scale == 8 ? 0xC0 : scale == 4 ? 0x80 : scale == 2 ? 0x40 : 0x00) \
-            | (base & 7) | ((index & 7) << 3));\
-    if(size == 8) {\
-        WRITE_8BIT(offset);\
-    } else {\
-        WRITE_32BIT(offset);\
+#define REX_ENCODING(rex_w, r, i, rm) do {\
+    if(rex_w || r > 7 || rm > 7) {\
+        *code++ = 0x40 | (rex_w ? 8 : 0) | (r > 7 ? 4 : 0) | (i > 7 ? 2 : 0) |(rm > 7 ? 1 : 0);\
     }\
 } while (0)
-#define INDIRECT_ENCODING(opcode, size, dst, src, offset) do {\
-    /* Encoding RSP and R12 collide with SIB which takes precidence */\
-    if((src & 7) == 4) {\
-        SIB_ENCODING(opcode, size, dst, src, offset, src, 0);\
-    } else {\
-        if(size == 8) {\
-            OP_REX_64_MODRM_REG_O8(opcode, dst, src, offset);\
+#define MODRM_ENCODING(mod, r, rm) do {\
+    *code++ = mod | ((r & 7) << 3) | (rm & 7);\
+} while (0)
+#define ENCODE_OFFSET(updatable, size, value) do {\
+    if (updatable) {\
+        if (size == 8) {\
+            UPDATABLE_WRITE_8BIT(value);\
         } else {\
-            OP_REX_64_MODRM_REG_O32(opcode, dst, src, offset);\
+            UPDATABLE_WRITE_32BIT(value);\
+        }\
+    } else {\
+        if (size == 8) {\
+            WRITE_8BIT(value);\
+        } else {\
+            WRITE_32BIT(value);\
         }\
     }\
+} while (0)
+#define SIB_ENCODING(updatable, rex_w, opcode, mod, size, r, base, offset, index, scale) do {\
+    REX_ENCODING(rex_w, r, index, base);\
+    *code++ = (opcode);\
+    MODRM_ENCODING(mod | (offset == 0 ? 0x04 : (size == 8 ? 0x44 : 0x84)), r, 0);\
+    *code++ = (scale == 8 ? 0xC0 : scale == 4 ? 0x80 : scale == 2 ? 0x40 : 0x00) | (base & 7) | ((index & 7) << 3);\
+    if (offset != 0) {\
+        ENCODE_OFFSET(updatable, size, offset);\
+    }\
+} while (0)
+#define OFFSET_ENCODING(updatable, rex_w, opcode, mod, size, r, rm, offset) do {\
+    if((rm & 7) == 4) {\
+        SIB_ENCODING(updatable, rex_w, opcode, mod, size, r, rm, offset, rm, 0);\
+    } else {\
+        REX_ENCODING(rex_w, r, 0, rm);\
+        *code++ = (opcode);\
+        MODRM_ENCODING(mod | (size == 8 ? 0x40 : 0x80), r, rm);\
+        ENCODE_OFFSET(updatable, size, offset);\
+    }\
 } while(0)
-
-#define MOV_R_O8(dst, src, offset) INDIRECT_ENCODING(0x8B, 8, dst, src, offset)
-#define MOV_R_O32(dst, src, offset) INDIRECT_ENCODING(0x8B, 32, dst, src, offset)
-#define LEA_R_O8(dst, src, offset) INDIRECT_ENCODING(0x8D, 8, dst, src, offset)
-#define LEA_R_O32(dst, src, offset) INDIRECT_ENCODING(0x8D, 32, dst, src, offset)
-#define MOV_R_X8(dst, base, offset, index, scale) SIB_ENCODING(0x8B, 8, dst, base, offset, index, scale)
-#define MOV_R_X32(dst, base, offset, index, scale) SIB_ENCODING(0x8B, 32, dst, base, offset, index, scale) 
+#define INDIRECT_ENCODING(rex_w, opcode, mod, r, rm) do {\
+    if((rm & 7) == 4 || (rm & 7) == 5) {\
+        OFFSET_ENCODING(false, rex_w, opcode, mod, 8, r, rm, 0);\
+    } else {\
+        REX_ENCODING(rex_w, r, 0, rm);\
+        *code++ = (opcode);\
+        MODRM_ENCODING(mod, r, rm);\
+    }\
+} while (0)
+#define DIRECT_ENCODING(rex_w, opcode, mod, r, rm) do {\
+    REX_ENCODING(rex_w, r, 0, rm);\
+    *code++ = (opcode);\
+    MODRM_ENCODING(mod | 0xC0, r, rm);\
+} while (0)
+#define BRKP() WRITE_1(0xCC)
+#define MOV_R_R(r, rm) DIRECT_ENCODING(true, 0x8B, 0, r, rm)
+#define MOV_R_A(r, rm) INDIRECT_ENCODING(true, 0x8B, 0, r, rm)
+#define MOV_A_R(rm, r) INDIRECT_ENCODING(true, 0x89, 0, r, rm)
+#define MOV_R_I(rm, i) REX_ENCODING(true, 0, 0, rm); *code++ = (0xB8 | (rm & 7)); WRITE_64BIT(i)
+#define MOV_R_UI(rm, i) REX_ENCODING(true, 0, 0, rm); *code++ = (0xB8 | (rm & 7)); UPDATABLE_WRITE_64BIT(i)
+#define MOV_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 0x8B, 0, 8, r, rm, o)
+#define MOV_R_O32(r, rm, o) OFFSET_ENCODING(false, true, 0x8B, 0, 32, r, src, o)
+#define MOV_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x8B, 0, FITS_IN_8BITS(o) ? 8 : 32, r, rm, o)
+#define MOV_O_R(rm, o, r) OFFSET_ENCODING(false, true, 0x89, 0, FITS_IN_8BITS(o) ? 8 : 32, r, rm, o)
+#define LEA_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 0x8D, 0, 8, r, rm, o)
+#define LEA_R_O32(r, rm, o) OFFSET_ENCODING(false, true, 0x8D, 0, 32, r, rm, o)
+#define MOV_R_X8(r, base, offset, index, scale) SIB_ENCODING(false, true, 0x8B, 0, 8, r, base, offset, index, scale)
+#define MOV_R_X32(r, base, offset, index, scale) SIB_ENCODING(false, true, 0x8B, 0, 32, r, base, offset, index, scale) 
 #define XCHG_R_R(rg1, rg2) do {\
   if(rg1 == REG_X64_RAX) {\
       OP_REX_64_RM(0x90, rg2);\
   } else if(rg2 == REG_X64_RAX) {\
       OP_REX_64_RM(0x90, rg1);\
   } else {\
-      OP_REX_64_MODRM_REG_RM(0x87, rg1, rg2);\
+      DIRECT_ENCODING(true, 0x87, 0, rg1, rg2);\
   }\
 } while (0)
-#define CMP_R_R(r1, r2) OP_REX_64_MODRM_REG_RM(0x39, r1, r2)
-#define CMP_R_A(r1, r2) OP_REX_64_MODRM_REG_A(0x39, r1, r2)
-#define CMP_R_O8(r1, r2, o2) OP_REX_64_MODRM_REG_O8(0x39, r1, r2, o2)
-#define CMP_R_UO32(r1, r2, o2) OP_REX_64_MODRM_REG_UO32(0x39, r1, r2, o2)
+#define XCHG_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x87, 0, FITS_IN_8BITS(o) ? 8 : 32, r, rm, o)
+#define CMP_R_R(r, rm) DIRECT_ENCODING(true, 0x39, 0, r, rm)
+#define CMP_R_A(r, rm) INDIRECT_ENCODING(true, 0x39, 0, r, rm)
+#define CMP_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 0x39, 0, 8, r, rm, o)
+#define CMP_R_UO32(r, rm, o) OFFSET_ENCODING(true, true, 0x39, 0, 32, r, rm, o)
 #define CMP_I_R(i1, r2) do {\
     if(i1 >= -128 && i1 < 128) {\
         WRITE_4(REX_64_RM(r2), 0x83, REG_IN_OPCODE(0xF8, r2), (code_t)(i1));\
     }else {\
-        MOV_R_I(REG_X64_RAX, (i1));\
-        CMP_R_R(REG_X64_RAX, (r2));\
+        MOV_R_I(REG_TRANSIENT_1, (i1));\
+        CMP_R_R(REG_TRANSIENT_1, (r2));\
     }\
 } while (0)
 #define OP_VREX_VMOD_R(mod, reg) do {\
@@ -421,9 +453,12 @@ if(!ONLY_UPDATING) {\
 } while(0)
 #define JMP_R(r) OP_VREX_VMOD_R(0xE0, r)
 #define CALL_R(r) OP_VREX_VMOD_R(0xD0, r)
-
+#define ADD_A_I8(rm, i) INDIRECT_ENCODING(false, 0x83, 0, 0, rm); WRITE_8BIT(i)
+#define ADD_O8_I8(rm, o, i) OFFSET_ENCODING(false, false, 0x83, 0, 8, 0, rm, o); WRITE_8BIT(i)
+#define SUB_A_I8(rm, i) INDIRECT_ENCODING(false, 0x83, 0x28, 0, rm); WRITE_8BIT(i)
 #define ADD_R_R(r1, r2) OP_REX_64_MODRM_REG_RM(0x01, r1, r2)
 #define SUB_R_I8(r, i) WRITE_4(REX_64_RM(r), 0x83, REG_IN_OPCODE(0xE8, r), (code_t)(i))
+#define ADD_R_I8(r, i) WRITE_4(REX_64_RM(r), 0x83, REG_IN_OPCODE(0xC0, r), (code_t)(i))
 #define IMUL_R_R(r1, r2) WRITE_4(REX_64_REG_RM(r1, r2), 0x0F, 0xAF, MODRM_REG_RM(r1, r2))
 #define SET_R_CC(r, cc) do {\
     if(r <= 7) {\
@@ -443,8 +478,8 @@ if(!ONLY_UPDATING) {\
 #define PUSH_R(r) OP_VREX_R(0x50, r)
 #define POP_R(r) OP_VREX_R(0x58, r)
 #define PUSH_I(immed) do {\
-    MOV_R_I(REG_X64_RAX, immed);\
-    PUSH_R(REG_X64_RAX);\
+    MOV_R_I(REG_TRANSIENT_1, immed);\
+    PUSH_R(REG_TRANSIENT_1);\
 } while(0)
 #define RET() WRITE_1(0xC3)
 /***********************************************************************/
@@ -454,7 +489,7 @@ if(!ONLY_UPDATING) {\
     reg_t target_reg = NEXT_FREE_REG();\
     NEED_REGISTER(target_reg);\
     if(is_compiletime(vaddr->source)) {\
-        addr_reg = REG_X64_RAX;\
+        addr_reg = REG_TRANSIENT_1;\
         MOV_R_I(addr_reg, CompileTime_Get(vaddr->source)->value);\
     } else {\
         addr_reg = getreg(vaddr->source);\
@@ -468,7 +503,7 @@ if(!ONLY_UPDATING) {\
     reg_t target_reg = NEXT_FREE_REG();\
     NEED_REGISTER(target_reg);\
     if(is_compiletime(vaddr->source)) {\
-        addr_reg = REG_X64_RAX;\
+        addr_reg = REG_TRANSIENT_1;\
         MOV_R_I(addr_reg, CompileTime_Get(vaddr->source)->value);\
     } else {\
         addr_reg = getreg(vaddr->source);\
@@ -481,15 +516,15 @@ if(!ONLY_UPDATING) {\
 /***********************************************************************/
 #define STACKDEPTH_CHECK() do {\
     /* see glue_run_code for companion code */\
-    MOV_R_I(REG_X64_RAX, po->stack_depth);\
-    ADD_R_R(REG_X64_RSP, REG_X64_RAX);\
-    CMP_R_A(REG_X64_RAX, REG_X64_RAX);\
+    MOV_R_I(REG_TRANSIENT_1, po->stack_depth);\
+    ADD_R_R(REG_X64_RSP, REG_TRANSIENT_1);\
+    CMP_R_A(REG_TRANSIENT_1, REG_TRANSIENT_1);\
     BEGIN_SHORT_COND_JUMP(0, CC_E);\
     BRKP();\
     END_SHORT_JUMP(0);\
 } while(0)
 /**********************************************************************/
-
+#define STACK_POS_OFFSET(stack_pos) (po->stack_depth - (stack_pos))
 #define CODE_FOUR_BYTES(code, b1, b2, b3, b4)   /* for constant bytes */        \
   (*(long*)(code) = ((unsigned char)(b1)) | (((unsigned char)(b2))<<8) |        \
                    (((unsigned char)(b3))<<16) | (((unsigned char)(b4))<<24))
@@ -603,8 +638,8 @@ if(!ONLY_UPDATING) {\
 } while (0)
 
 /* Encodes "INC rg" and "DEC rg" */
-#define INCREASE_REG(rg)   (*code++ = 0x40 | (rg))
-#define DECREASE_REG(rg)   (*code++ = 0x48 | (rg))
+#define INCREASE_REG(rg)   ADD_R_I8(rg, 1) 
+#define DECREASE_REG(rg)   SUB_R_I8(rg, 1) 
 
 /* Encodes taking absolute value of the register 'rg' knowing that
    'sourcecopy' is a (run-time) copy of 'rg' */
@@ -782,13 +817,13 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 #define LOAD_REG_FROM_IMMED(dst, immed) MOV_R_I(dst, immed)
 
 #define LOAD_REG_FROM_EBP_BASE(dst, stack_pos)		\
-  INSTR_EBP_BASE(0x8B, (dst)<<3, stack_pos)	/* MOV dst, [EBP-stack_pos] */
+  MOV_R_O(dst, REG_X64_RSP, STACK_POS_OFFSET(stack_pos))
 
 #define SAVE_REG_TO_EBP_BASE(src, stack_pos)		\
-  INSTR_EBP_BASE(0x89, (src)<<3, stack_pos)	/* MOV [EBP-stack_pos], src */
+  MOV_O_R(REG_X64_RSP, STACK_POS_OFFSET(stack_pos), src)
 
 #define XCHG_REG_AND_EBP_BASE(src, stack_pos)		\
-  INSTR_EBP_BASE(0x87, (src)<<3, stack_pos)	/* XCHG src, [EBP-stack_pos] */
+  XCHG_R_O(src, REG_X64_RSP, STACK_POS_OFFSET(stack_pos))
 
 #define SAVE_IMMED_TO_EBP_BASE(immed, stack_pos)   do { \
   INSTR_EBP_BASE(0xC7, 0<<3, stack_pos);        /* MOV [EBP-stack_pos], immed */\
@@ -861,8 +896,8 @@ static const reg_t argument_reg_table[] = {
         for(int arg_idx = _last_arg_index + 1; arg_idx < argument_reg_table_len; arg_idx++) {\
             NEED_REGISTER(argument_reg_table[arg_idx]);\
         }\
-        MOV_R_I(REG_X64_RAX, immed);\
-        CALL_R(REG_X64_RAX);\
+        MOV_R_I(REG_TRANSIENT_1, immed);\
+        CALL_R(REG_TRANSIENT_1);\
         po->stack_depth = _initial_stack_depth;\
     }while(0);\
 }while(0)
@@ -919,12 +954,12 @@ static const reg_t argument_reg_table[] = {
 #define CALL_SET_ARG_FROM_STACK_REF(source, arg_index) do {\
     long offset = po->stack_depth - RSOURCE_STACK(source);\
     if(FITS_IN_8BITS(offset)) {\
-        LEA_R_O8(REG_X64_RAX, REG_X64_RSP, offset);\
+        LEA_R_O8(REG_TRANSIENT_1, REG_X64_RSP, offset);\
     }\
     else {\
-        LEA_R_O32(REG_X64_RAX, REG_X64_RSP, offset);\
+        LEA_R_O32(REG_TRANSIENT_1, REG_X64_RSP, offset);\
     };\
-    CALL_SET_ARG_FROM_REG(REG_X64_RAX, arg_index);\
+    CALL_SET_ARG_FROM_REG(REG_TRANSIENT_1, arg_index);\
 } while (0)
 
 /***************************************************************/
@@ -1147,10 +1182,10 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 
 /* load register 'dst' from the given non-virtual source vinfo */
 #define LOAD_REG_FROM(source, dst)    do {                      \
-  if (((source) & CompileTime) != 0)                            \
+  if (((source) & CompileTime) != 0) {                           \
     LOAD_REG_FROM_IMMED(dst, KSOURCE_SOURCE(source)->value);    \
-  else {                                                        \
-    if (RSOURCE_REG(source) != dst)                             \
+  }\
+  else if (RSOURCE_REG(source) != dst) {\
       LOAD_REG_FROM_RT(source, dst);                            \
   }                                                             \
 } while (0)

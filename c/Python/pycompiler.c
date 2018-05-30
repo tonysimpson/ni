@@ -14,6 +14,8 @@
 #include "../Objects/pdictobject.h"
 #include "../Objects/pfuncobject.h"
 
+#include "../opcodes.h"
+
 #include <eval.h>
 #include "pycinternal.h"
 #include <ipyencoding.h>
@@ -1979,13 +1981,38 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 					 case of an opcode that cannot set
 					 run-time conditions */
 
-	/*fprintf(stderr, "%s: %d\n", PyString_AS_STRING(co->co_name),
-	  next_instr);*/
 	opcode = NEXTOP();
 	if (HAS_ARG(opcode))
 		oparg = NEXTARG();
   dispatch_opcode:
+    {
+        int i;
+        for(i=1; i <= po->pr.stack_level; i++) {
+            vinfo_t *vi = NTOP(i);
+            fprintf(codegen_log, "STACK %d: %p", i, vi);
+            switch(gettime(vi->source)) {
+                case RunTime:
+                    fprintf(codegen_log, " RUNTIME ");
+                    if (getreg(vi->source) != REG_NONE) {
+                        fprintf(codegen_log, "register:%d ", getreg(vi->source));
+                    }
+                    if(getstack(vi->source) != RunTime_StackNone) {
+                        fprintf(codegen_log, "stackpos:%d ", getstack(vi->source));
+                    }
+                    fprintf(codegen_log, "\n");
+                    break;
+                case CompileTime:
+                    fprintf(codegen_log, " COMPILETIME ");
+                    fprintf(codegen_log, "value:%ld\n", CompileTime_Get(vi->source)->value);
+                    break;
+                case VirtualTime:
+                    fprintf(codegen_log, " VIRTUALTIME\n");
+                    break;
+            }
 
+        }
+    }
+    fprintf(codegen_log, "OPCODE %s:%s:%d inst_no:%d op:%s opcode:%d oparg:%d %p\n", PyString_AS_STRING(po->pr.co->co_filename), PyString_AS_STRING(po->pr.co->co_name), PyCode_Addr2Line(po->pr.co, next_instr - 1),  next_instr - 1, opcode_names[opcode], opcode, oparg, po->code);
 	/* Main switch on opcode */
 	
 	/* !!IMPORTANT!!

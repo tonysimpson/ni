@@ -281,7 +281,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 				if (rg == REG_NONE) {
 					/* for undefined sources, pushing
 					   just any register will be fine */
-					rg = REG_ANY_CALLER_SAVED;
+					rg = REG_TRANSIENT_1;
 				}
 				BEGIN_CODE
 				SAVE_REG_VINFO(vi, rg);

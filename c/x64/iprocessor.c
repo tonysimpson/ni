@@ -22,9 +22,10 @@ static void write_glue_run_code_fn(PsycoObject *po) {
     PUSH_R(REG_X64_R14);
     PUSH_R(REG_X64_R15);
 
-    MOV_R_R(REG_X64_RAX, REG_X64_RSP);
-    SUB_R_I8(REG_X64_RAX, 8);
-    PUSH_R(REG_X64_RAX);
+    MOV_R_R(REG_TRANSIENT_1, REG_X64_RSP);
+    SUB_R_I8(REG_TRANSIENT_1, 8);
+    PUSH_R(REG_TRANSIENT_1);
+
     PUSH_R(REG_X64_RCX);
     BEGIN_SHORT_JUMP(0);
     BEGIN_REVERSE_SHORT_JUMP(1);
@@ -67,7 +68,7 @@ psyco_int_mul_ovf_fn psyco_int_mul_ovf;
 void write_psyco_int_mul_ovf(PsycoObject *po) {
     BEGIN_CODE
     IMUL_R_R(REG_X64_RDI, REG_X64_RSI);
-    SET_R_CC(REG_X64_RAX, CC_O);
+    SET_R_CC(REG_FUNCTIONS_RETURN, CC_O);
     RET();
     END_CODE
 }

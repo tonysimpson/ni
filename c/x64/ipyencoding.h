@@ -5,7 +5,7 @@
 #ifndef _IPYENCODING_H
 #define _IPYENCODING_H
 
-
+#include "iencoding.h"
 #include "../processor.h"
 #include "../dispatcher.h"
 
@@ -16,15 +16,15 @@
 
 #define DICT_ITEM_CHECK_CC     CC_NE
 #define DICT_ITEM_KEYVALUE(index, key, value, mprg)  do {\
-  MOV_R_UI(REG_X64_RAX, index);\
-  CMP_R_O8(REG_X64_RAX, mprg, offsetof(PyDictObject, ma_mask));\
+  MOV_R_UI(REG_TRANSIENT_1, index);\
+  CMP_R_O8(REG_TRANSIENT_1, mprg, offsetof(PyDictObject, ma_mask));\
   MOV_R_O8(mprg, mprg, offsetof(PyDictObject, ma_table));\
   BEGIN_SHORT_COND_JUMP(0, CC_L);\
-  MOV_R_I(REG_X64_RAX, key);\
-  CMP_R_UO32(REG_X64_RAX, mprg, (index) * sizeof(PyDictEntry) + offsetof(PyDictEntry, me_key));\
+  MOV_R_I(REG_TRANSIENT_1, key);\
+  CMP_R_UO32(REG_TRANSIENT_1, mprg, (index) * sizeof(PyDictEntry) + offsetof(PyDictEntry, me_key));\
   BEGIN_SHORT_COND_JUMP(1, DICT_ITEM_CHECK_CC);\
-  MOV_R_I(REG_X64_RAX, value);\
-  CMP_R_UO32(REG_X64_RAX, mprg, (index) * sizeof(PyDictEntry) + offsetof(PyDictEntry, me_value));\
+  MOV_R_I(REG_TRANSIENT_1, value);\
+  CMP_R_UO32(REG_TRANSIENT_1, mprg, (index) * sizeof(PyDictEntry) + offsetof(PyDictEntry, me_value));\
   END_SHORT_JUMP(0);\
   END_SHORT_JUMP(1);\
 } while (0)
@@ -82,60 +82,32 @@ PSY_INLINE void dictitem_update_nochange(void* originalmacrocode,
   INC_OB_REFCNT_internal(rg);                           \
   if (_save_ccreg) POP_CC_FLAGS();                      \
 } while (0)
-#define INC_OB_REFCNT_internal(rg)		do {    \
-  code[0] = 0xFF;          /* INC [reg] */              \
-  if ((RBP_IS_RESERVED || (rg) != REG_X64_RBP) &&       \
-      offsetof(PyObject, ob_refcnt) == 0)               \
-    {                                                   \
-      extra_assert((rg) != REG_X64_RBP);                \
-      code[1] = (rg);                                   \
-    }                                                   \
-  else                                                  \
-    {                                                   \
-      code++;                                           \
-      extra_assert(offsetof(PyObject, ob_refcnt) < 128);\
-      code[0] = 0x40 | (rg);                            \
-      code[1] = (code_t) offsetof(PyObject, ob_refcnt); \
-    }                                                   \
-  code += 2;                                            \
+#define INC_OB_REFCNT_internal(rg) do {\
+    if (offsetof(PyObject, ob_refcnt) == 0) {\
+        ADD_A_I8(rg, 1);\
+    } else {\
+        ADD_08_I8(rg, offsetof(PyObject, ob_refcnt), 1);\
+    }\
 } while (0)
 
 /* Py_INCREF() for a compile-time-known 'pyobj' */
 #define INC_KNOWN_OB_REFCNT(pyobj)    do {              \
   NEED_CC();                                            \
-  code[0] = 0xFF;  /* INC [address] */                  \
-  code[1] = 0x05;                                       \
-  *(int**)(code+2) = &(pyobj)->ob_refcnt;               \
-  code += 6;                                            \
+  MOV_R_I(REG_TRANSIENT_1,  &(pyobj)->ob_refcnt);\
+  ADD_A_I8(REG_TRANSIENT_1, 1);\
  } while (0)
 
 /* Py_DECREF() for a compile-time 'pyobj' assuming counter cannot reach zero */
 #define DEC_KNOWN_OB_REFCNT_NZ(pyobj)    do {           \
   NEED_CC();                                            \
-  code[0] = 0xFF;  /* DEC [address] */                  \
-  code[1] = (1<<3) | 0x05;                              \
-  *(int**)(code+2) = &(pyobj)->ob_refcnt;               \
-  code += 6;                                            \
+  MOV_R_I(REG_TRANSIENT_1,  &(pyobj)->ob_refcnt);\
+  SUB_A_I8(REG_TRANSIENT_1, 1);\
  } while (0)
 
 /* like DEC_OB_REFCNT() but assume the reference counter cannot reach zero */
 #define DEC_OB_REFCNT_NZ(rg)    do {                    \
   NEED_CC_REG(rg);                                      \
-  code[0] = 0xFF;          /* DEC [reg] */              \
-  if ((RBP_IS_RESERVED || (rg) != REG_X64_RBP) &&       \
-      offsetof(PyObject, ob_refcnt) == 0)               \
-    {                                                   \
-      extra_assert((rg) != REG_X64_RBP);                \
-      code[1] = 0x08 | (rg);                            \
-    }                                                   \
-  else                                                  \
-    {                                                   \
-      code++;                                           \
-      extra_assert(offsetof(PyObject, ob_refcnt) < 128);\
-      code[0] = 0x48 | (rg);                            \
-      code[1] = (code_t) offsetof(PyObject, ob_refcnt); \
-    }                                                   \
-  code += 2;                                            \
+  SUB_R_I8(rg, 1);\
 } while (0)
 
 /* internal utilities for the macros below */

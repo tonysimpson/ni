@@ -13,13 +13,13 @@ code_t* decref_dealloc_calling(code_t* code, PsycoObject* po, reg_t rg,
   BEGIN_CALL();
   CALL_SET_ARG_FROM_REG(rg, 0);
   if (fn == NULL) {
-    MOV_R_O8(REG_X64_RAX, rg, offsetof(PyObject, ob_type));
-    LEA_R_O8(REG_X64_RAX, REG_X64_RAX, offsetof(PyTypeObject, tp_dealloc));
+    MOV_R_O8(REG_TRANSIENT_1, rg, offsetof(PyObject, ob_type));
+    LEA_R_O8(REG_TRANSIENT_1, REG_TRANSIENT_1, offsetof(PyTypeObject, tp_dealloc));
   }
   else {
-    MOV_R_I(REG_X64_RAX, fn);
+    MOV_R_I(REG_TRANSIENT_1, fn);
   }
-  END_CALL_R(REG_X64_RAX);
+  END_CALL_R(REG_TRANSIENT_1);
   END_SHORT_JUMP(0);
   return code;
 }
