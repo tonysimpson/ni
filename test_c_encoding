@@ -1,0 +1,2 @@
+echo $@
+gcc -I/usr/include/python2.7 test_mcg_template.c -DREPLACE_ME="$@" && ./a.out && rm a.out
