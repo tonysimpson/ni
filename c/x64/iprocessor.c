@@ -26,7 +26,8 @@ static void write_glue_run_code_fn(PsycoObject *po) {
     SUB_R_I8(REG_TRANSIENT_1, 8);
     PUSH_R(REG_TRANSIENT_1);
 
-    PUSH_R(REG_X64_RCX);
+    PUSH_I(-1);
+    MOV_A_R(REG_X64_RCX, REG_X64_RSP);
     BEGIN_SHORT_JUMP(0);
     BEGIN_REVERSE_SHORT_JUMP(1);
     SUB_R_I8(REG_X64_RSI, 8);
