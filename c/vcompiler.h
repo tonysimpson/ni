@@ -54,7 +54,7 @@ PSY_INLINE long gettime(Source s)        { return s & TimeMask; }
 #define RunTime_StackMask    0x0000000001FFFFFC
 #define RunTime_StackMax     RunTime_StackMask
 #define RunTime_StackNone    0x0000000000000000
-#define RunTime_RegMask      0x00000FFFF0000000
+#define RunTime_RegMask      0xFFFFFFFFF0000000
 #define RunTime_NoRef        0x0000000008000000
 #define RunTime_NonNeg       0x0000000004000000
 #define RunTime_Megamorphic  0x0000000002000000

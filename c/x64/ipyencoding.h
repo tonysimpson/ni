@@ -86,7 +86,7 @@ PSY_INLINE void dictitem_update_nochange(void* originalmacrocode,
     if (offsetof(PyObject, ob_refcnt) == 0) {\
         ADD_A_I8(rg, 1);\
     } else {\
-        ADD_08_I8(rg, offsetof(PyObject, ob_refcnt), 1);\
+        ADD_O8_I8(rg, offsetof(PyObject, ob_refcnt), 1);\
     }\
 } while (0)
 
@@ -217,16 +217,11 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
 
 /* called by psyco_finish_return() */
 #define FINALIZE_FRAME_LOCALS(nframelocal)     do {                     \
-  CODE_FOUR_BYTES(code,                                                 \
-            0x83,                                                       \
-            0x3C,               /* CMP [ESP], 0 */                      \
-            0x24,                                                       \
-            0);                                                         \
-  code[4] = 0x70 | CC_E;        /* JE exit */                           \
-  code[5] = 11 - 6;                                                     \
-  code[6] = 0xE8;               /* CALL cimpl_finalize_frame_locals */  \
-  code += 11;                                                           \
-  *(long*)(code-4) = (code_t*)(&cimpl_finalize_frame_locals) - code;    \
+  CMP_I8_A(0, REG_X64_RSP);\
+  BEGIN_SHORT_COND_JUMP(0, CC_E);\
+  BEGIN_CALL();\
+  END_CALL_I(&cimpl_finalize_frame_locals);\
+  END_SHORT_JUMP(0);\
 } while (0)
 
 #define WRITE_FRAME_EPILOGUE(retval, nframelocal)   do {                        \

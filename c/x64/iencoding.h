@@ -7,7 +7,7 @@
 
 
 #include "../psyco.h"
-#define MACHINE_CODE_FORMAT    "i386"
+#define MACHINE_CODE_FORMAT    "86x64"
 #define HAVE_FP_FN_CALLS       1
 
 
@@ -232,8 +232,8 @@ typedef enum {
  * I32 - Immediate 32bit
  * I64 - Immediate 64bit
  */
-#define FITS_IN_8BITS(v) ((v) < 128 && (v) >= -128)
-#define FITS_IN_32BITS(v) ((v) < 2147483648 && (v) >= -2147483648)
+#define FITS_IN_8BITS(v) (((v) < 128 && (v) >= -128))
+#define FITS_IN_32BITS(v) (((v) < 2147483648 && (v) >= -2147483648))
 #define ONLY_UPDATING 0 /* redefine to 1 when updating code */
 #define REX_64 0x48
 #define REX_64_REG(reg) (REX_64 | (reg > 7 ? 4 : 0))
@@ -409,10 +409,10 @@ if(!ONLY_UPDATING) {\
 #define MOV_R_UI(rm, i) REX_ENCODING(true, 0, 0, rm); *code++ = (0xB8 | (rm & 7)); UPDATABLE_WRITE_64BIT(i)
 #define MOV_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 0x8B, 0, 8, r, rm, o)
 #define MOV_R_O32(r, rm, o) OFFSET_ENCODING(false, true, 0x8B, 0, 32, r, src, o)
-#define MOV_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x8B, 0, FITS_IN_8BITS(o) ? 8 : 32, r, rm, o)
-#define MOV_O_R(rm, o, r) OFFSET_ENCODING(false, true, 0x89, 0, FITS_IN_8BITS(o) ? 8 : 32, r, rm, o)
+#define MOV_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x8B, 0, (FITS_IN_8BITS(o) ? 8 : 32), r, rm, o)
+#define MOV_O_R(rm, o, r) OFFSET_ENCODING(false, true, 0x89, 0, (FITS_IN_8BITS(o) ? 8 : 32), r, rm, o)
 #define LEA_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 0x8D, 0, 8, r, rm, o)
-#define LEA_R_O32(r, rm, o) OFFSET_ENCODING(false, true, 0x8D, 0, 32, r, rm, o)
+#define LEA_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x8D, 0, (FITS_IN_8BITS(o) ? 8 : 32), r, rm, o)
 #define MOV_R_X8(r, base, offset, index, scale) SIB_ENCODING(false, true, 0x8B, 0, 8, r, base, offset, index, scale)
 #define MOV_R_X32(r, base, offset, index, scale) SIB_ENCODING(false, true, 0x8B, 0, 32, r, base, offset, index, scale) 
 #define XCHG_R_R(rg1, rg2) do {\
@@ -424,10 +424,11 @@ if(!ONLY_UPDATING) {\
       DIRECT_ENCODING(true, 0x87, 0, rg1, rg2);\
   }\
 } while (0)
-#define XCHG_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x87, 0, FITS_IN_8BITS(o) ? 8 : 32, r, rm, o)
+#define XCHG_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x87, 0, (FITS_IN_8BITS(o) ? 8 : 32), r, rm, o)
 #define CMP_R_R(r, rm) DIRECT_ENCODING(true, 0x39, 0, r, rm)
 #define CMP_R_A(r, rm) INDIRECT_ENCODING(true, 0x39, 0, r, rm)
 #define CMP_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 0x39, 0, 8, r, rm, o)
+#define CMP_I8_A(i, rm) INDIRECT_ENCODING(false, 0x83, 0x38, 0, rm); WRITE_8BIT(i)
 #define CMP_R_UO32(r, rm, o) OFFSET_ENCODING(true, true, 0x39, 0, 32, r, rm, o)
 #define CMP_I_R(i1, r2) do {\
     if(i1 >= -128 && i1 < 128) {\
@@ -452,13 +453,26 @@ if(!ONLY_UPDATING) {\
     }\
 } while(0)
 #define JMP_R(r) OP_VREX_VMOD_R(0xE0, r)
+#define JMP_CC_UI32(cc, address) WRITE_2(0x0F, 0x80 | (cc)); UPDATABLE_WRITE_32BIT((address) - ((long)code + 4))
 #define CALL_R(r) OP_VREX_VMOD_R(0xD0, r)
+#define CALL_I(i) do {\
+    long jump_amount = (long)(i) - ((long)code + 5);\
+    if(FITS_IN_32BITS(jump_amount)) {\
+        WRITE_1(0xE8);\
+        WRITE_32BIT(jump_amount);\
+    } else {\
+        MOV_R_I(REG_TRANSIENT_1, i);\
+        CALL_R(REG_TRANSIENT_1);\
+    }\
+} while (0)
 #define ADD_A_I8(rm, i) INDIRECT_ENCODING(false, 0x83, 0, 0, rm); WRITE_8BIT(i)
 #define ADD_O8_I8(rm, o, i) OFFSET_ENCODING(false, false, 0x83, 0, 8, 0, rm, o); WRITE_8BIT(i)
 #define SUB_A_I8(rm, i) INDIRECT_ENCODING(false, 0x83, 0x28, 0, rm); WRITE_8BIT(i)
-#define ADD_R_R(r1, r2) OP_REX_64_MODRM_REG_RM(0x01, r1, r2)
-#define SUB_R_I8(r, i) WRITE_4(REX_64_RM(r), 0x83, REG_IN_OPCODE(0xE8, r), (code_t)(i))
-#define ADD_R_I8(r, i) WRITE_4(REX_64_RM(r), 0x83, REG_IN_OPCODE(0xC0, r), (code_t)(i))
+#define ADD_R_R(r, rm) DIRECT_ENCODING(true, 0x01, 0, r, rm);
+#define SUB_R_I8(rm, i) DIRECT_ENCODING(true, 0x83, 0x28, 0, rm); WRITE_8BIT(i)
+#define SUB_R_I32(rm, i) DIRECT_ENCODING(true, 0x81, 0x28, 0, rm); WRITE_32BIT(i)
+#define ADD_R_I8(rm, i) DIRECT_ENCODING(true, 0x83, 0x0, 0, rm); WRITE_8BIT(i)
+#define ADD_R_I32(rm, i) DIRECT_ENCODING(true, 0x81, 0x0, 0, rm); WRITE_32BIT(i)
 #define IMUL_R_R(r1, r2) WRITE_4(REX_64_REG_RM(r1, r2), 0x0F, 0xAF, MODRM_REG_RM(r1, r2))
 #define SET_R_CC(r, cc) do {\
     if(r <= 7) {\
@@ -468,19 +482,14 @@ if(!ONLY_UPDATING) {\
     }\
 } while(0)
 
-#define PUSH_A(r) do {\
-    if(r <= 7) {\
-        WRITE_2(0xFF, 0x30 | r);\
-    } else {\
-        WRITE_3(0x41, 0xFF, 0x30 | (r & 7));\
-    }\
-} while(0)
+#define PUSH_A(rm) INDIRECT_ENCODING(false, 0xFF, 0x30, 0, rm)
 #define PUSH_R(r) OP_VREX_R(0x50, r)
 #define POP_R(r) OP_VREX_R(0x58, r)
 #define PUSH_I(immed) do {\
     MOV_R_I(REG_TRANSIENT_1, immed);\
     PUSH_R(REG_TRANSIENT_1);\
 } while(0)
+#define PUSH_O(rm, o) OFFSET_ENCODING(false, false, 0xFF, 0x70, (FITS_IN_8BITS(o) ? 8 : 32), 0, rm, o)
 #define RET() WRITE_1(0xC3)
 #define PUSH_CC() do {\
     *code++ = 0x9C;\
@@ -538,10 +547,6 @@ if(!ONLY_UPDATING) {\
 } while(0)
 /**********************************************************************/
 #define STACK_POS_OFFSET(stack_pos) (po->stack_depth - (stack_pos))
-#define CODE_FOUR_BYTES(code, b1, b2, b3, b4)   /* for constant bytes */        \
-  (*(long*)(code) = ((unsigned char)(b1)) | (((unsigned char)(b2))<<8) |        \
-                   (((unsigned char)(b3))<<16) | (((unsigned char)(b4))<<24))
-
 
 /* access stack by [ESP+n] where 'n' varies depending on the current ESP */
 #define MODRM_EBP_BASE(middle, stack_pos)       do {                    \
@@ -872,6 +877,26 @@ static const reg_t argument_reg_table[] = {
     REG_X64_R8,
     REG_X64_R9
 };
+
+static const bool callee_saved_reg_table[REG_TOTAL] = {
+        false, /* RAX */
+        false, /* RCX */
+        false, /* RDX */
+        true,  /* RBX */
+        false, /* RSP*/
+        true,  /* RBP */
+        false, /* RSI */
+        false, /* RDI */
+        false, /* R8 */
+        false, /* R9 */
+        false, /* R10 */   
+        false, /* R11 */
+        true,  /* R12 */
+        true,  /* R13 */
+        true,  /* R14 */
+        true,  /* R15 */
+};
+
 /* Note we only save Registers that may have a runtime vinfo so 
  * RAX, R11 and R12 which are transient are not saved by caller 
  *
@@ -900,16 +925,23 @@ static const reg_t argument_reg_table[] = {
         for(int arg_idx = _last_arg_index + 1; arg_idx < argument_reg_table_len; arg_idx++) {\
             NEED_REGISTER(argument_reg_table[arg_idx]);\
         }\
-        MOV_R_I(REG_TRANSIENT_1, immed);\
-        CALL_R(REG_TRANSIENT_1);\
+        CALL_I(immed);\
         po->stack_depth = _initial_stack_depth;\
     }while(0);\
 }while(0)
+#define CHECK_AND_UPDATE_TARGET_REG(reg) do {\
+    vinfo_t *vi = REG_NUMBER(po, reg);\
+    if (vi != NULL) {\
+        assert(RUNTIME_STACK(vi) != RUNTIME_STACK_NONE);\
+        SET_RUNTIME_REG_TO_NONE(vi);\
+        REG_NUMBER(po, (reg)) = NULL;\
+    }\
+} while (0)
 #define CALL_SET_ARG_IMMED(immed, arg_index) do {\
   _CHECK_IS_NEXT_ARG(arg_index);\
   if(arg_index < argument_reg_table_len) {\
       reg_t dst_reg = argument_reg_table[arg_index];\
-      NEED_REGISTER(dst_reg);\
+      CHECK_AND_UPDATE_TARGET_REG(dst_reg);\
       MOV_R_I(dst_reg, immed);\
   }\
   else {\
@@ -917,123 +949,65 @@ static const reg_t argument_reg_table[] = {
       psyco_inc_stackdepth(po);\
   }\
 } while (0)
+#define CHECK_AND_UPDATE_SOURCE_REG(reg) do {\
+    vinfo_t *vi = REG_NUMBER(po, reg);\
+    if (vi != NULL) {\
+        if (!callee_saved_reg_table[RUNTIME_REG(vi)]) {\
+            assert(RUNTIME_STACK(vi) != RUNTIME_STACK_NONE);\
+            SET_RUNTIME_REG_TO_NONE(vi);\
+            REG_NUMBER(po, (reg)) = NULL;\
+        }\
+    }\
+} while (0)
 #define CALL_SET_ARG_FROM_REG(src_reg, arg_index) do {  \
     _CHECK_IS_NEXT_ARG(arg_index);\
     if(arg_index < argument_reg_table_len) {\
         reg_t dst_reg = argument_reg_table[arg_index];\
-        vinfo_t *src_vi = REG_NUMBER(po, src_reg);\
-        vinfo_t *dst_vi = REG_NUMBER(po, dst_reg);\
-        if(src_reg != dst_reg) {\
-            if(dst_vi == NULL) {\
-                MOV_R_R(dst_reg, src_reg);\
-                if(src_vi != NULL) {\
-                    REG_NUMBER(po, dst_reg) = src_vi;\
-                    REG_NUMBER(po, src_reg) = NULL;\
-                    SET_RUNTIME_REG_TO(src_vi, dst_reg);\
-                }\
-            }\
-            else if (src_vi != NULL) {\
-                XCHG_R_R(dst_reg, src_reg);\
-                REG_NUMBER(po, dst_reg) = src_vi;\
-                REG_NUMBER(po, src_reg) = dst_vi;\
-                SET_RUNTIME_REG_TO(src_vi, dst_reg);\
-                SET_RUNTIME_REG_TO(dst_vi, src_reg);\
-            }\
-            /* dst_vi != NULL && src_vi == NULL */\
-            else {\
-                NEED_REGISTER(dst_reg);\
-                MOV_R_R(dst_reg, src_reg);\
-            }\
+        if(dst_reg != src_reg) {\
+            CHECK_AND_UPDATE_TARGET_REG(dst_reg);\
+            MOV_R_R(dst_reg, src_reg);\
         }\
-        if(src_vi != NULL) {\
-            NEED_REGISTER(dst_reg);\
-        }\
+        CHECK_AND_UPDATE_SOURCE_REG(src_reg);\
     }\
     else {\
         PUSH_R(src_reg);\
         psyco_inc_stackdepth(po);\
     }\
 } while (0)
-#define CALL_SET_ARG_FROM_RT(source, arg_index) CALL_SET_ARG_FROM_REG(getreg(source), arg_index)
-#define CALL_SET_ARG_FROM_STACK_REF(source, arg_index) do {\
-    long offset = po->stack_depth - RSOURCE_STACK(source);\
-    if(FITS_IN_8BITS(offset)) {\
-        LEA_R_O8(REG_TRANSIENT_1, REG_X64_RSP, offset);\
+#define CALL_SET_ARG_FROM_RT(source, arg_index) do {\
+    if(RSOURCE_REG_IS_NONE(source)) {\
+        _CHECK_IS_NEXT_ARG(arg_index);\
+        assert(RUNTIME_STACK(vi) != RUNTIME_STACK_NONE);\
+        if(arg_index < argument_reg_table_len) {\
+            reg_t dst_reg = argument_reg_table[arg_index];\
+            CHECK_AND_UPDATE_TARGET_REG(dst_reg);\
+            MOV_R_O(dst_reg, REG_X64_RSP, STACK_POS_OFFSET(RSOURCE_STACK(source)));\
+        } else {\
+            PUSH_O(REG_X64_RSP, STACK_POS_OFFSET(RSOURCE_STACK(source)));\
+            psyco_inc_stackdepth(po);\
+        }\
+    } else {\
+        CALL_SET_ARG_FROM_REG(getreg(source), arg_index);\
     }\
-    else {\
-        LEA_R_O32(REG_TRANSIENT_1, REG_X64_RSP, offset);\
-    };\
-    CALL_SET_ARG_FROM_REG(REG_TRANSIENT_1, arg_index);\
+} while (0)
+#define CALL_SET_ARG_FROM_STACK_REF(source, arg_index) do {\
+    _CHECK_IS_NEXT_ARG(arg_index);\
+    assert(RSOURCE_REG_IS_NONE(source));\
+    assert(RUNTIME_STACK(vi) != RUNTIME_STACK_NONE);\
+    if(arg_index < argument_reg_table_len) {\
+        reg_t dst_reg = argument_reg_table[arg_index];\
+        CHECK_AND_UPDATE_TARGET_REG(dst_reg);\
+        LEA_R_O(dst_reg, REG_X64_RSP, STACK_POS_OFFSET(RSOURCE_STACK(source)));\
+    } else {\
+        LEA_R_O(REG_TRANSIENT_1, REG_X64_RSP, STACK_POS_OFFSET(RSOURCE_STACK(source)));\
+        PUSH_R(REG_TRANSIENT_1);\
+        psyco_inc_stackdepth(po);\
+    }\
 } while (0)
 
 /***************************************************************/
 /***************************************************************/
-
-/* load the 'dst' register with the run-time address of 'source'
-   which must be in the stack */
-#define LOAD_ADDRESS_FROM_RT(source, dst)    do {                               \
-  extra_assert(RSOURCE_STACK(source) != RUNTIME_STACK_NONE);                    \
-  INSTR_MODRM_FROM_RT(source, 0x8D, ((dst)<<3));  /* LEA dst, [source] */       \
-} while (0)
-
-#define LOAD_REG_FROM_REG_PLUS_REG(dst, rg1, rg2)   do {        \
-  code[0] = 0x8D;                                               \
-  code[1] = 0x04 | ((dst)<<3);  /* LEA dst, [rg1+rg2] */        \
-  code[2] = ((rg1)<<3) | (rg2);                                 \
-  if (!RBP_IS_RESERVED && (rg2) == REG_X64_RBP)                 \
-    {                                                           \
-      if ((rg1) != REG_X64_RBP)                                 \
-        code[2] = ((rg2)<<3) | (rg1);                           \
-      else                                                      \
-        {                                                       \
-          code[1] |= 0x40;                                      \
-          code[3] = 0;                                          \
-          code++;                                               \
-        }                                                       \
-    }                                                           \
-  code += 3;                                                    \
-} while (0)
-
-#define LOAD_REG_FROM_REG_PLUS_IMMED(dst, rg1, immed)   do {    \
-  long _value = (immed);                                        \
-  code[0] = 0x8D;   /* LEA dst,[rg1+immed] */                   \
-  if (COMPACT_ENCODING && -128 <= _value && _value < 128) {     \
-    code[1] = 0x40 | (dst)<<3 | (rg1);                          \
-    code[2] = (code_t) _value;                                  \
-    code += 3;                                                  \
-  }                                                             \
-  else {                                                        \
-    code[1] = 0x80 | (dst)<<3 | (rg1);                          \
-    *(long*)(code+2) = _value;                                  \
-    code += 6;                                                  \
-  }                                                             \
-} while (0)
-
-/* put an immediate value in memory */
-#define SET_REG_ADDR_TO_IMMED(rg, immed)    do {        \
-  code[0] = 0xC7;               /* MOV [reg], immed */  \
-  if (RBP_IS_RESERVED || (rg) != REG_X64_RBP)           \
-    {                                                   \
-      extra_assert((rg) != REG_X64_RBP);                \
-      code[1] = (rg);                                   \
-    }                                                   \
-  else                                                  \
-    {                                                   \
-      *++code = 0x45;                                   \
-      code[1] = 0;                                      \
-    }                                                   \
-  *(long*)(code+2) = (immed);                           \
-  code += 6;                                            \
-} while (0)
-
-/* put an immediate value in memory */
-#define SET_IMMED_ADDR_TO_IMMED(addr, immed)    do {    \
-  code[0] = 0xC7;               /* MOV [addr], immed */ \
-  code[1] = 0x05;                                       \
-  *(long*)(code+2) = (addr);                            \
-  *(long*)(code+6) = (immed);                           \
-  code += 10;                                           \
-} while (0)
+#define LOAD_REG_FROM_REG_PLUS_IMMED(dst, rg1, immed) LEA_R_O(dst, rg1, immed)
 
 #define FUNCTION_RET(popbytes)      do {                                \
   /* emit a 'RET xxx' instruction that pops and jumps to the address    \
@@ -1199,10 +1173,9 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
  /***   conditional jumps                                       ***/
 
 #define JUMP_TO(addr)   do {                    \
-  code[0] = 0x48;                               \
-  code[1] = 0xE9;   /* JMP rel32 */             \
-  *(dword_t*)(code+2) = (addr) - (code+6);      \
-  code += 6;                                    \
+  *code++ = 0xE9;   /* JMP rel32 */             \
+  *(dword_t*)(code) = (addr) - (code+4);\
+  code += 4;\
 } while (0)
 
 #define IS_A_JUMP(code, targetaddr)                             \
@@ -1212,11 +1185,10 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   ((codeend)-(code) == SIZE_OF_FAR_JUMP && IS_A_JUMP(code, targetaddr))
 
 #define FAR_COND_JUMP_TO(addr, condition)   do {        \
-  code[0] = 0x48;                                       \
-  code[1] = 0x0F;    /* Jcond rel32 */                  \
-  code[2] = 0x80 | (code_t)(condition);                 \
-  *(dword_t*)(code+3) = (addr) - (code+7);              \
-  code += 7;                                            \
+  *code++ = 0x0F;\
+  *code++ = 0x80 | (code_t)(condition);\
+  *(dword_t*)(code) = (addr) - (code+4);\
+  code += 4;\
 } while (0)
 
 #define CHANGE_JUMP_TO(addr)                do {        \
@@ -1263,46 +1235,20 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   code += 2;                                            \
 } while (0)
 
-/* reverse room for a CMP/JE pair of instructions */
-#define RESERVE_JUMP_IF_EQUAL(rg)   do {                        \
-  code[0] = 0x81;                                               \
-  code[1] = 0xC0 | (7<<3) | (rg);   /* CMP rg, imm32 */         \
-  code[6] = 0x0F;                                               \
-  code[7] = 0x80 | (code_t)(CC_E);    /* JE rel32 */            \
-  code += 12;                                                   \
-  *(long*)(code-4) = 0;  /* by default, go nowhere else */      \
-} while (0)
-#define FIX_JUMP_IF_EQUAL(codeend, value, targetaddr)   do {    \
-  code_t* _codeend = (codeend);                                 \
-  *(long*)(_codeend-10) = (value);                              \
-  *(long*)(_codeend-4) = (targetaddr) - _codeend;               \
-} while (0)
-
 
 /* correct the stack pointer */
-#define STACK_CORRECTION(stack_correction)   do {                       \
-  if ((stack_correction) != 0) {                                        \
-    if (COMPACT_ENCODING && !HAS_CCREG(po) &&                           \
-        -128 <= (stack_correction) && (stack_correction) < 128) {       \
-      code[0] = 0x48; /* SUB RSP, imm8 */                               \
-      code[1] = 0x83;                                                   \
-      code[2] = 0xEC;                                                   \
-      code[3] = (byte_t)(stack_correction);                             \
-      code += 4;                                                        \
-    }                                                                   \
-    else {                                                              \
-      code[0] = 0x48; /* SUB RSP, imm32 */                              \
-      code[1] = 0x81;                                                   \
-      code[2] = 0xEC;                                                   \
-      code += 3;                                                        \
-      *(dword_t*)(code) = (dword_t)(stack_correction);                  \
-      code += 4;                                                        \
-    }                                                                   \
-  }                                                                     \
+#define STACK_CORRECTION(stack_correction) do {\
+    if ((stack_correction) != 0) {\
+        if (FITS_IN_8BITS(stack_correction)) {\
+            SUB_R_I8(REG_X64_RSP, (stack_correction));\
+        } else {\
+            SUB_R_I32(REG_X64_RSP, (stack_correction));\
+        }\
+    }\
 } while (0)
 
 
-  /* convenience macros */
+/* convenience macros */
 #define COPY_IN_REG(vi, rg)   do {                      \
    NEED_FREE_REG(rg);                                   \
    if (((vi)->source & (TimeMask|RunTime_StackMask)) == \
