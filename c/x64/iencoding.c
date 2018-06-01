@@ -93,9 +93,9 @@ code_t* write_modrm(code_t* code, code_t middle, reg_t base, reg_t index, int sh
     {
       if (index == REG_NONE)
         {
-          code[0] = middle | 0x05;
-          *(dword_t*)(code+1) = (dword_t)(offset - (unsigned long )(code+5)); //RIP relative
-          return code + 5;
+          *code++ = middle | 0x05;
+          *(dword_t*)(code) = (dword_t)(offset - (unsigned long )(code+4)); //RIP relative
+          return code + 4;
         }
       else
         {
@@ -211,9 +211,9 @@ static reg_t mem_access(PsycoObject* po, code_t opcodes[], vinfo_t* nv_ptr,
       }
     }
   }
-  *code++ = 0x40 | (rexw ? 8 : 0) | (extrareg > 7 ? 4 : 0) | (indexreg > 7 ? 2 : 0) | (basereg > 7 ? 1 : 0); 
+  *code++ = 0x40 | (rexw ? 8 : 0) | (extrareg < 8 ? 0 : 4) | (indexreg < 8 ? 0 : 2) | (basereg < 8 ? 0 : 1); 
   for (i = *opcodes++; i--; ) *code++ = *opcodes++;
-  code = write_modrm(code, (code_t)(extrareg & 7 <<3), basereg > 0 ? basereg & 7 : basereg, indexreg > 0 ? indexreg & 7 : indexreg, size2, (unsigned long) offset);
+  code = write_modrm(code, (code_t)((extrareg & 7) <<3), basereg > 0 ? basereg & 7 : basereg, indexreg > 0 ? indexreg & 7 : indexreg, size2, (unsigned long) offset);
   for (i = *opcodes++; i--; ) *code++ = *opcodes++;
   END_CODE
   return extrareg;

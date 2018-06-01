@@ -425,9 +425,11 @@ if(!ONLY_UPDATING) {\
   }\
 } while (0)
 #define XCHG_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x87, 0, (FITS_IN_8BITS(o) ? 8 : 32), r, rm, o)
+#define TEST_R_R(r, rm) DIRECT_ENCODING(true, 0x85, 0, r, rm)
 #define CMP_R_R(r, rm) DIRECT_ENCODING(true, 0x39, 0, r, rm)
 #define CMP_R_A(r, rm) INDIRECT_ENCODING(true, 0x39, 0, r, rm)
 #define CMP_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 0x39, 0, 8, r, rm, o)
+#define CMP_I8_O(i, rm, o) OFFSET_ENCODING(false, false, 0x83, 0x78, (FITS_IN_8BITS(o) ? 8 : 32), 0, rm, o); WRITE_8BIT(i)
 #define CMP_I8_A(i, rm) INDIRECT_ENCODING(false, 0x83, 0x38, 0, rm); WRITE_8BIT(i)
 #define CMP_R_UO32(r, rm, o) OFFSET_ENCODING(true, true, 0x39, 0, 32, r, rm, o)
 #define CMP_I_R(i1, r2) do {\
@@ -688,20 +690,15 @@ if(!ONLY_UPDATING) {\
 
 /* Encodes a check (zero/non-zero) on the given 'source' */
 #define CHECK_NONZERO_FROM_RT(source, rcc)        do {                          \
-  NEED_CC_SRC(source);                                                          \
-  if (RSOURCE_REG_IS_NONE(source))                                              \
-    {                                                                           \
-      INSTR_MODRM_FROM_RT(source, 0x83, 7<<3);  /* CMP (source), imm8 */        \
-      *code++ = 0;                                                              \
-    }                                                                           \
-  else                                                                          \
-    CHECK_NONZERO_REG(RSOURCE_REG(source));                                     \
-  rcc = CC_NE;  /* a.k.a. NZ flag */                                            \
+  NEED_CC_SRC(source);\
+  if (RSOURCE_REG_IS_NONE(source)) {\
+      CMP_I8_O(0, REG_X64_RSP, STACK_POS_OFFSET(RSOURCE_STACK(source)));\
+  } else {\
+    CHECK_NONZERO_REG(RSOURCE_REG(source));\
+  }\
+  rcc = CC_NE;  /* a.k.a. NZ flag */\
 } while (0)
-#define CHECK_NONZERO_REG(rg)    (              \
-  code[0] = 0x85,      /* TEST reg, reg */      \
-  code[1] = 0xC0 | ((rg)*9),                    \
-  code += 2)
+#define CHECK_NONZERO_REG(rg) TEST_R_R(rg, rg)
 
 #define COMPARE_IMMED_FROM_RT(source, immed) CMP_I_R(immed, getreg(source))
 
@@ -1100,7 +1097,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 /* like NEED_REGISTER but 'targ' is an output argument which will
    receive the number of a now-free register */
 #define NEED_FREE_REG(targ)      NEED_FREE_REG_COND(targ, 1)
-#define IS_BYTE_REG(rg)          (REG_X64_RAX <= (rg) && (rg) <= REG_X64_RBX)
+#define IS_BYTE_REG(rg)          (1) /* all registers are byte registers */
 #define NEED_FREE_BYTE_REG(targ, resrv1, resrv2)                        \
            NEED_FREE_REG_COND(targ, IS_BYTE_REG(targ) &&                \
                                     targ!=(resrv1) && targ!=(resrv2))
