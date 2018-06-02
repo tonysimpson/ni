@@ -322,7 +322,7 @@ FILE *codegen_log;
 #define BEGIN_CODE         do { code_t* code = po->code;\
                              DEBUG_BEGIN_CODE_LOCATION\
                              /*BRKP();*/\
-                             STACKDEPTH_CHECK();
+                             STACK_DEPTH_CHECK();
 #define END_CODE             po->code = code;                           \
                              DEBUG_END_CODE_LOCATION\
                              if (code >= po->codelimit)                 \

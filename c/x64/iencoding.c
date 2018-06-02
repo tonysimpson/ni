@@ -60,14 +60,38 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	ccflags = HAS_CCREG(po);
 	if (ccflags)
 		PUSH_CC();
-	finfo_last(finfo)->link_stack_depth = po->stack_depth;
-	/* ABOUT_TO_CALL_SUBFUNCTION(finfo); ???? */
+    
+#if CHECK_STACK_DEPTH 
+    MOV_R_R(REG_TRANSIENT_1, REG_X64_RSP);
+    SUB_R_I8(REG_TRANSIENT_1, 8);
+    PUSH_R(REG_TRANSIENT_1);
+    psyco_inc_stackdepth(po);
+#endif
+    PUSH_I(finfo);
+    psyco_inc_stackdepth(po);
+    finfo_last(finfo)->link_stack_depth = po->stack_depth;
+
     BEGIN_CALL();
     for(i = argcount-1; i >= 0; i--) {
-        CALL_SET_ARG_FROM_RT(argsources[i], i);
+        Source source = argsources[i];
+        if(RSOURCE_REG_IS_NONE(source)) {
+            assert(getstack(source) != RUNTIME_STACK_NONE);
+            PUSH_O(REG_X64_RSP, STACK_POS_OFFSET(RSOURCE_STACK(source)));
+        } else {
+            PUSH_R(getreg(source));
+        }
+        psyco_inc_stackdepth(po);
     }
 	END_CALL_I(codebuf->codestart);
-	/* RETURNED_FROM_SUBFUNCTION(); ?????? */
+
+    ADD_R_I8(REG_X64_RSP, 8);
+    psyco_dec_stackdepth(po);
+
+#if CHECK_STACK_DEPTH
+    ADD_R_I8(REG_X64_RSP, 8);
+    psyco_dec_stackdepth(po);
+#endif
+
 	if (ccflags)
 		POP_CC();
 	END_CODE

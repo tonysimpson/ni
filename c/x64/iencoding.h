@@ -28,6 +28,8 @@
 #endif
 #endif
 
+#define CHECK_STACK_DEPTH 1
+
 /* Define to 0 to use RBP as any other register, or to 1 to reserve it 
  * useful for debugging to set this to 1 */
 #ifndef RBP_IS_RESERVED
@@ -373,7 +375,7 @@ if(!ONLY_UPDATING) {\
     *code++ = (opcode);\
     MODRM_ENCODING(mod | (offset == 0 ? 0x04 : (size == 8 ? 0x44 : 0x84)), r, 0);\
     *code++ = (scale == 8 ? 0xC0 : scale == 4 ? 0x80 : scale == 2 ? 0x40 : 0x00) | (base & 7) | ((index & 7) << 3);\
-    if (offset != 0) {\
+    if (offset != 0 || (base == REG_X64_RSP && mod != 0x38)) {\
         ENCODE_OFFSET(updatable, size, offset);\
     }\
 } while (0)
@@ -533,7 +535,8 @@ if(!ONLY_UPDATING) {\
 } while(0)
 
 /***********************************************************************/
-#define STACKDEPTH_CHECK() do {\
+#if CHECK_STACK_DEPTH
+#define STACK_DEPTH_CHECK() do {\
     /* see glue_run_code for companion code */\
     /* if stack_depth <= 0 we're in glue code */\
     if(po->stack_depth > 0) {\
@@ -547,6 +550,9 @@ if(!ONLY_UPDATING) {\
         POP_CC();\
     }\
 } while(0)
+#else
+#define STACK_DEPTH_CHECK() do { } while (0)
+#endif
 /**********************************************************************/
 #define STACK_POS_OFFSET(stack_pos) (po->stack_depth - (stack_pos))
 
@@ -859,7 +865,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 #define POP_EBP_BASE(ofs)				\
   INSTR_EBP_BASE(0x8F, 0x00, ofs)		/* POP [EBP-ofs] */
 
-#define PUSH_IMMED(immed) PUSH_R(immed)
+#define PUSH_IMMED(immed) PUSH_I(immed)
 /*******************************************************************
  * Call a C function.
  * Use BEGIN_CALL() then CALL_SET_ARG_* in reverse arg order

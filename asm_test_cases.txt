@@ -1,4 +1,4 @@
-MOV_R_R(REG_X64_RAX, REG_X64_RAX); mov %rax, %rax
-MOV_R_R(REG_X64_RAX, REG_X64_R13); mov %rax, %r13
-MOV_R_R(REG_X64_R13, REG_X64_RAX); mov %r13, %rax
 MOV_R_O(REG_X64_R14, REG_X64_RSP, 64); mov 64(%rsp), %r14
+CMP_I8_O(0, REG_X64_RSP, 0x1); cmp $0,0x1(%rsp)
+CMP_I8_A(0, REG_X64_RSP); cmp $0,(%rsp)
+
