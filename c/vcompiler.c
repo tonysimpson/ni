@@ -5,7 +5,7 @@
 #include "Python/pycompiler.h"
 #include "pycodegen.h"
 #include <idispatcher.h>
-
+#include "v_mem_mov.h"
 
 DEFINEVAR const long psyco_zero = 0;
 DEFINEVAR source_virtual_t psyco_vsource_not_important;
@@ -534,8 +534,7 @@ PyObject* direct_xobj_vinfo(vinfo_t* vi, char* data)
 PSY_INLINE vinfo_t* field_read(PsycoObject* po, vinfo_t* vi, long offset,
 			   vinfo_t* vindex, defield_t df, bool newref)
 {
-	vinfo_t* result = psyco_memory_read(po, vi, offset, vindex,
-				FIELD_SIZE2(df), (long)df & FIELD_UNSIGNED);
+	vinfo_t* result = v_mem_mov(po, NULL, vi, vindex, offset,  FIELD_SIZE2(df), ((long)df & FIELD_UNSIGNED) == 0); 
 	if ((long)df & FIELD_NONNEG) {
 		assert_nonneg(result);
 	}
@@ -650,9 +649,9 @@ bool psyco_internal_putfld(PsycoObject* po, int findex, defield_t df,
 			return false;
 	}
 	extra_assert((long)df & FIELD_MUTABLE);
-	if (!psyco_memory_write(po, vi, offset, NULL, FIELD_SIZE2(df), value))
-		return false;
-
+    if (v_mem_mov(po, value, vi, NULL, offset, FIELD_SIZE2(df), ((long)df & FIELD_UNSIGNED) == 0) == NULL) {
+        return false;
+    }
 	if (FIELD_HAS_REF(df)) {
 		/* 'value' is a PyObject* that wants to hold a reference */
 		if (vinfo_getitem(vi, findex) == value) {
@@ -699,9 +698,9 @@ bool psyco_put_field_array(PsycoObject* po, vinfo_t* vi, defield_t df,
 	else {
 		if (!compute_vinfo(vi, po))
 			return false;
-		if (!psyco_memory_write(po, vi, offset, vindex,
-					FIELD_SIZE2(df), value))
-			return false;
+        if (v_mem_mov(po, value, vi, vindex, offset, FIELD_SIZE2(df), ((long)df & FIELD_UNSIGNED)) == NULL) {
+            return false;
+        }
 		if (FIELD_HAS_REF(df)) {
 			/* 'value' is a PyObject* that wants to
 			   hold a reference */

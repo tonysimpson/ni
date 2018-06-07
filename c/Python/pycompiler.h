@@ -11,6 +11,7 @@
 #include "../vcompiler.h"
 #include "../processor.h"
 #include "../dispatcher.h"
+#include "v_mem_mov.h"
 
 
 /*#define MAX3(a,b,c)  ((a)>(b)?((a)>(c)?(a):(c)):(b)>(c)?(b):(c))*/
@@ -226,21 +227,16 @@ PSY_INLINE vinfo_t* psyco_PyErr_Occurred(PsycoObject* po) {
 		return psyco_vi_One();
 	}
 	else {
-		/* normal call would be:
-		     return psyco_generic_call(po, PyErr_Occurred,
-		     CfReturnNormal, "");
-		   but we inline the check done in PyErr_Occurred(). */
+        /* inline PyErr_Occurred */
 		vinfo_t* vaddr;
 		vinfo_t* vtstate;
 		vinfo_t* vcurexc;
 		vaddr = vinfo_new(CompileTime_New(
 					(long)(&_PyThreadState_Current)));
-        BEGIN_CODE
-        V_MOV_N_A(vtstate, vaddr);
+        vtstate = v_mem_mov(po, NULL, vaddr, NULL, 0, V_MEM_MOV_SCALE_POINTER, false);
 		vinfo_decref(vaddr, po);
-        V_MOV_N_O8(vcurexc, vtstate, offsetof(PyThreadState, curexc_type));
+        vcurexc = v_mem_mov(po, NULL, vtstate, NULL, offsetof(PyThreadState, curexc_type), V_MEM_MOV_SCALE_POINTER, false);
 		vinfo_decref(vtstate, po);
-        END_CODE
 		return vcurexc;
 	}
 }

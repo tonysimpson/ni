@@ -40,13 +40,8 @@ code_t* psyco_finish_return(PsycoObject* po, Source retval)
   retpos = getstack(LOC_CONTINUATION->source);
   extra_assert(retpos != RunTime_StackNone);
 
-  /* write the epilogue */
   WRITE_FRAME_EPILOGUE(retval, nframelocal);
-
-  /* now clean up the stack up to retpos */
-  STACK_CORRECTION(retpos - po->stack_depth);
-  po->stack_depth = retpos;
-  FUNCTION_RET(po->stack_depth - sizeof(long));
+  FUNCTION_RET(retpos);
   END_CODE
   code_t *code = po->code;
   PsycoObject_Delete(po);
@@ -479,7 +474,8 @@ void psyco_inline_enter(PsycoObject* po)
 {
 	struct stack_frame_info_s* finfo = psyco_finfo(NULL, po);
 	BEGIN_CODE
-	ABOUT_TO_CALL_SUBFUNCTION((long) finfo);
+    PUSH_I(finfo);
+    psyco_inc_stackdepth(po);
 	END_CODE
 }
 
@@ -487,7 +483,8 @@ DEFINEFN
 void psyco_inline_exit (PsycoObject* po)
 {
 	BEGIN_CODE
-	RETURNED_FROM_SUBFUNCTION();
+    ADD_R_I8(REG_X64_RSP, 8);
+    psyco_dec_stackdepth(po);
 	END_CODE
 }
 

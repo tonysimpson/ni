@@ -51,8 +51,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 {
 	/* this is a simplified version of psyco_generic_call() which
 	   assumes Psyco's calling convention instead of the C's. */
-	int i, initial_depth;
-	Source* p;
+	int i;
 	bool ccflags;
 	BEGIN_CODE
 	/* cannot use NEED_CC(): it might clobber one of the registers
@@ -61,6 +60,14 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	if (ccflags)
 		PUSH_CC();
     
+    /* PUSH RTs with reg set */
+    for(i = 0; i < REG_TOTAL; i++) {
+        vinfo_t* content = REG_NUMBER(po, i);
+        if (content != NULL) {
+            PUSH_R(i);
+            psyco_inc_stackdepth(po);
+        }
+    }
 #if CHECK_STACK_DEPTH 
     MOV_R_R(REG_TRANSIENT_1, REG_X64_RSP);
     SUB_R_I8(REG_TRANSIENT_1, 8);
@@ -70,9 +77,10 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
     PUSH_I(finfo);
     psyco_inc_stackdepth(po);
     finfo_last(finfo)->link_stack_depth = po->stack_depth;
-
+    
+    /* We assume that compiler register state is not changed by the call macros */
     BEGIN_CALL();
-    for(i = argcount-1; i >= 0; i--) {
+    for(i = 0; i < argcount; i++) {
         Source source = argsources[i];
         if(RSOURCE_REG_IS_NONE(source)) {
             assert(getstack(source) != RUNTIME_STACK_NONE);
@@ -82,6 +90,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
         }
         psyco_inc_stackdepth(po);
     }
+    /* SET RT REG TO NONE */
 	END_CALL_I(codebuf->codestart);
 
     ADD_R_I8(REG_X64_RSP, 8);
@@ -91,6 +100,14 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
     ADD_R_I8(REG_X64_RSP, 8);
     psyco_dec_stackdepth(po);
 #endif
+    /* POP RTs with reg set */
+    for(i = REG_TOTAL-1; i >= 0; i--) {
+        vinfo_t* content = REG_NUMBER(po, i);
+        if (content != NULL) {
+            POP_R(i);
+            psyco_dec_stackdepth(po);
+        }
+    }
 
 	if (ccflags)
 		POP_CC();
@@ -106,264 +123,6 @@ PSY_INLINE vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonne
 	REG_NUMBER(po, reg) = vi;
 	return vi;
 }
-
-
-code_t* write_modrm(code_t* code, code_t middle, reg_t base, reg_t index, int shift, unsigned long offset)
-{
-  /* write a mod/rm encoding. */
-  extra_assert(index != REG_X64_RSP);
-  extra_assert(0 <= shift && shift < 4);
-  if (base == REG_NONE)
-    {
-      if (index == REG_NONE)
-        {
-          *code++ = middle | 0x05;
-          *(dword_t*)(code) = (dword_t)(offset - (unsigned long )(code+4)); //RIP relative
-          return code + 4;
-        }
-      else
-        {
-          code[0] = middle | 0x04;
-          code[1] = (shift<<6) | (index<<3) | 0x05;
-          *(unsigned long*)(code+2) = offset;
-          return code+6;
-        }
-    }
-  else if (index == REG_NONE)
-    {
-      if (base == REG_X64_RSP)
-        {
-          code[0] = 0x84 | middle;
-          code[1] = 0x24;
-          *(unsigned long*)(code+2) = offset;
-          return code+6;
-        }
-      else if (COMPACT_ENCODING && offset == 0 && base!=REG_X64_RBP)
-        {
-          code[0] = middle | base;
-          return code+1;
-        }
-      else if (COMPACT_ENCODING && offset < 128)
-        {
-          code[0] = 0x40 | middle | base;
-          code[1] = (code_t) offset;
-          return code+2;
-        }
-      else
-        {
-          code[0] = 0x80 | middle | base;
-          *(unsigned long*)(code+1) = offset;
-          return code+5;
-        }
-    }
-  else
-    {
-      code[1] = (shift<<6) | (index<<3) | base;
-      if (COMPACT_ENCODING && offset == 0 && base!=REG_X64_RBP)
-        {
-          code[0] = middle | 0x04;
-          return code+2;
-        }
-      else if (COMPACT_ENCODING && offset < 128)
-        {
-          code[0] = middle | 0x44;
-          code[2] = (code_t) offset;
-          return code+3;
-        }
-      else
-        {
-          code[0] = middle | 0x84;
-          *(long*)(code+2) = offset;
-          return code+6;
-        }
-    }
-}
-
-#define NewOutputRegister  ((vinfo_t*) 1)
-
-static reg_t mem_access(PsycoObject* po, code_t opcodes[], vinfo_t* nv_ptr,
-                        long offset, vinfo_t* rt_vindex, int size2,
-                        vinfo_t* rt_extra, bool rexw)
-{
-  int i;
-  reg_t basereg, indexreg, extrareg;
-
-  BEGIN_CODE
-  if (is_runtime(nv_ptr->source))
-  {
-    RTVINFO_IN_REG(nv_ptr);
-    basereg = RUNTIME_REG(nv_ptr);
-  }
-  else
-  {
-    offset += CompileTime_Get(nv_ptr->source)->value;
-    basereg = REG_NONE;
-  }
-  
-  if (rt_vindex != NULL)
-  {
-    DELAY_USE_OF(basereg);
-    RTVINFO_IN_REG(rt_vindex);
-    indexreg = RUNTIME_REG(rt_vindex);
-  }
-  else 
-  {
-    indexreg = REG_NONE;
-  }
-
-  if (rt_extra == NULL)
-  {
-    extrareg = 0;
-  }
-  else
-  {
-    DELAY_USE_OF_2(basereg, indexreg);
-    if (rt_extra == NewOutputRegister)
-    {
-        NEED_FREE_REG(extrareg);
-    } 
-    else
-    {
-      if (size2==0)
-      {
-        RTVINFO_IN_BYTE_REG(rt_extra, basereg, indexreg);
-      }
-      else
-      {
-        RTVINFO_IN_REG(rt_extra);
-        extrareg = RUNTIME_REG(rt_extra);
-      }
-    }
-  }
-  *code++ = 0x40 | (rexw ? 8 : 0) | (extrareg < 8 ? 0 : 4) | (indexreg < 8 ? 0 : 2) | (basereg < 8 ? 0 : 1); 
-  for (i = *opcodes++; i--; ) *code++ = *opcodes++;
-  code = write_modrm(code, (code_t)((extrareg & 7) <<3), basereg > 0 ? basereg & 7 : basereg, indexreg > 0 ? indexreg & 7 : indexreg, size2, (unsigned long) offset);
-  for (i = *opcodes++; i--; ) *code++ = *opcodes++;
-  END_CODE
-  return extrareg;
-}
-
-DEFINEFN
-vinfo_t* psyco_memory_read(PsycoObject* po, vinfo_t* nv_ptr, long offset,
-                           vinfo_t* rt_vindex, int size2, bool nonsigned)
-{
-  code_t opcodes[4];
-  reg_t targetreg;
-  bool rexw = true;
-  switch (size2) {
-  case 0:
-    /* reading only one byte */
-    opcodes[0] = 2;
-    opcodes[1] = 0x0F;
-    opcodes[2] = nonsigned
-      ? 0xB6       /* MOVZX reg, byte [...] */
-      : 0xBE;      /* MOVSX reg, byte [...] */
-    opcodes[3] = 0;
-    break;
-  case 1:
-    /* reading only two bytes */
-    opcodes[0] = 2;
-    opcodes[1] = 0x0F;
-    opcodes[2] = nonsigned
-      ? 0xB7       /* MOVZX reg, word [...] */
-      : 0xBF;      /* MOVSX reg, word [...] */
-    opcodes[3] = 0;
-    break;
-  case 2:
-    if(nonsigned) {
-        opcodes[0] = 1;
-        opcodes[1] = 0x8B;  /* MOV regq, qword [...] */
-        opcodes[2] = 0;
-        rexw = false;
-    } else {
-        opcodes[0] = 1;
-        opcodes[1] = 0x63;  /* MOVSX reg, dword [...] */
-        opcodes[2] = 0;
-    }
-    break;
-  case 3:
-    /* reading a long */
-    opcodes[0] = 1;
-    opcodes[1] = 0x8B;  /* MOV reg, qword [...] */
-    opcodes[2] = 0;
-    break;
-  default:
-    return NULL;
-  }
-  targetreg = mem_access(po, opcodes, nv_ptr, offset, rt_vindex,
-                         size2, NewOutputRegister, rexw);
-  return new_rtvinfo(po, targetreg, false, false);
-}
-
-DEFINEFN
-bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr, long offset,
-                        vinfo_t* rt_vindex, int size2, vinfo_t* value)
-{
-  code_t opcodes[8];
-  bool rexw = true;
-  if (!compute_vinfo(value, po)) return false;
-
-  if (is_runtime(value->source))
-    {
-      switch (size2) {
-      case 0:
-        /* writing only one byte */
-        opcodes[0] = 1;
-        opcodes[1] = 0x88;   /* MOV byte [...], reg */
-        /* 'reg' is forced in mem_access to be an 8-bit register */
-        opcodes[2] = 0;
-        break;
-      case 1:
-        /* writing only two bytes */
-        opcodes[0] = 2;
-        opcodes[1] = 0x66;
-        opcodes[2] = 0x89;   /* MOV short [...], reg */
-        opcodes[3] = 0;
-        break;
-      default:
-        /* writing a long */
-        opcodes[0] = 1;
-        opcodes[1] = 0x89;   /* MOV long [...], reg */
-        opcodes[2] = 0;
-        break;
-      }
-    }
-  else
-    {
-      code_t* code1;
-      long immed = CompileTime_Get(value->source)->value;
-      value = NULL;  /* not run-time */
-      switch (size2) {
-      case 0:
-        /* writing an immediate byte */
-        opcodes[0] = 1;
-        opcodes[1] = 0xC6;
-        opcodes[2] = 1;
-        opcodes[3] = (code_t) immed;
-        break;
-      case 1:
-        /* writing an immediate short */
-        opcodes[0] = 2;
-        opcodes[1] = 0x66;
-        opcodes[2] = 0xC7;
-        opcodes[3] = 2;
-        opcodes[4] = (code_t) immed;
-        opcodes[5] = (code_t) (immed >> 8);
-        break;
-      default:
-        /* writing an immediate long */
-        code1 = opcodes;  /* workaround for a GCC overoptimization */
-        code1[0] = 1;
-        code1[1] = 0xC7;
-        code1[2] = 4;
-        *(long*)(code1+3) = immed;
-        break;
-      }
-    }
-  mem_access(po, opcodes, nv_ptr, offset, rt_vindex, size2, value, rexw);
-  return true;
-}
-
 
 /* internal, see NEED_CC() */
 EXTERNFN condition_code_t cc_from_vsource(Source source);  /* in codegen.c */
@@ -559,7 +318,7 @@ condition_code_t bint_cmp_i(PsycoObject* po, int base_py_op,
 {
   BEGIN_CODE
   NEED_CC();
-  CMP_I_R(immed2, getreg(rt1->source));
+  COMPARE_IMMED_FROM_RT(rt1->source, immed2);
   END_CODE
   return direct_results[base_py_op];
 }

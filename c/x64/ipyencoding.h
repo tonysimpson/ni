@@ -210,19 +210,28 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
 
 
 /* called by psyco_emit_header() */
-#define INITIALIZE_FRAME_LOCALS(nframelocal)   do {     \
-  STACK_CORRECTION(sizeof(long)*((nframelocal)-1));                \
-  PUSH_IMMED(0);    /* f_exc_type, initially NULL */    \
+#define INITIALIZE_FRAME_LOCALS(nframelocal)   do {\
+  if(RBP_IS_RESERVED) {\
+      PUSH_R(REG_X64_RBP);\
+      psyco_inc_stackdepth(po);\
+      MOV_R_R(REG_X64_RBP, REG_X64_RSP);\
+  }\
+  STACK_CORRECTION(sizeof(long)*((nframelocal)-1));\
+  PUSH_IMMED(0);    /* f_exc_type, initially NULL */\
 } while (0)
 
 /* called by psyco_finish_return() */
-#define FINALIZE_FRAME_LOCALS(nframelocal)     do {                     \
+#define FINALIZE_FRAME_LOCALS(nframelocal) do {\
   CMP_I8_A(0, REG_X64_RSP);\
   BEGIN_SHORT_COND_JUMP(0, CC_E);\
   BEGIN_CALL();\
+  CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[0], 0);\
+  CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[1], 1);\
+  CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[2], 2);\
   END_CALL_I(&cimpl_finalize_frame_locals);\
   END_SHORT_JUMP(0);\
 } while (0)
+
 
 #define WRITE_FRAME_EPILOGUE(retval, nframelocal)   do {                        \
   /* load the return value into EAX for regular functions, EBX for functions    \

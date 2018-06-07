@@ -17,6 +17,9 @@ static glue_run_code_fn glue_run_code;
 static void write_glue_run_code_fn(PsycoObject *po) {
     BEGIN_CODE
     PUSH_R(REG_X64_RBP);
+#if RBP_IS_RESERVED
+    MOV_R_R(REG_X64_RBP, REG_X64_RSP);
+#endif
     PUSH_R(REG_X64_RBX);
     PUSH_R(REG_X64_R13);
     PUSH_R(REG_X64_R14);

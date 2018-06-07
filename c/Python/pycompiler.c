@@ -1908,6 +1908,32 @@ static code_t* exit_function(PsycoObject* po)
 	return psyco_finish_return(po, retsource);
 }
 
+static void _log_compiler_vinfo(char *region, int pos, vinfo_t *vi, int stack_depth) {
+    fprintf(codegen_log, "%s %d: %p", region, pos, vi);
+    if(vi == NULL) {
+        fprintf(codegen_log, "\n");
+        return;
+    }
+    switch(gettime(vi->source)) {
+        case RunTime:
+            fprintf(codegen_log, " RUNTIME ");
+            if (getreg(vi->source) != REG_NONE) {
+                fprintf(codegen_log, "register:%d ", getreg(vi->source));
+            }
+            if(getstack(vi->source) != RunTime_StackNone) {
+                fprintf(codegen_log, "stackpos:%d %s", getstack(vi->source), getstack(vi->source) > stack_depth ? "OOPS off stack!!! " : "");
+            }
+            fprintf(codegen_log, "\n");
+            break;
+        case CompileTime:
+            fprintf(codegen_log, " COMPILETIME ");
+            fprintf(codegen_log, "value:%ld\n", CompileTime_Get(vi->source)->value);
+            break;
+        case VirtualTime:
+            fprintf(codegen_log, " VIRTUALTIME\n");
+            break;
+    }
+}
 
 /***************************************************************/
  /***   the main loop of the interpreter/compiler.            ***/
@@ -1987,32 +2013,19 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
   dispatch_opcode:
     {
         int i;
+        fprintf(codegen_log, "\nCOMPILER_OBJ %p\n", po);
         for(i=1; i <= po->pr.stack_level; i++) {
             vinfo_t *vi = NTOP(i);
-            fprintf(codegen_log, "STACK %d: %p", i, vi);
-            switch(gettime(vi->source)) {
-                case RunTime:
-                    fprintf(codegen_log, " RUNTIME ");
-                    if (getreg(vi->source) != REG_NONE) {
-                        fprintf(codegen_log, "register:%d ", getreg(vi->source));
-                    }
-                    if(getstack(vi->source) != RunTime_StackNone) {
-                        fprintf(codegen_log, "stackpos:%d ", getstack(vi->source));
-                    }
-                    fprintf(codegen_log, "\n");
-                    break;
-                case CompileTime:
-                    fprintf(codegen_log, " COMPILETIME ");
-                    fprintf(codegen_log, "value:%ld\n", CompileTime_Get(vi->source)->value);
-                    break;
-                case VirtualTime:
-                    fprintf(codegen_log, " VIRTUALTIME\n");
-                    break;
-            }
-
+            _log_compiler_vinfo("STACK", i - 1, vi, po->stack_depth);
+        }
+        for(i=0; i < po->vlocals.count; i++) {
+            _log_compiler_vinfo("LOCALS_PLUS", i, po->vlocals.items[i], po->stack_depth);
+        }
+        for(i=0; i < REG_TOTAL; i++) {
+            _log_compiler_vinfo("REG", i, po->reg_array[i], po->stack_depth);
         }
     }
-    fprintf(codegen_log, "OPCODE %s:%s:%d inst_no:%d op:%s opcode:%d oparg:%d %p\n", PyString_AS_STRING(po->pr.co->co_filename), PyString_AS_STRING(po->pr.co->co_name), PyCode_Addr2Line(po->pr.co, next_instr - 1),  next_instr - 1, opcode_names[opcode], opcode, oparg, po->code);
+    fprintf(codegen_log, "OPCODE %s:%s:%d inst_no:%d op:%s opcode:%d oparg:%d stackdepth:%ld %p\n", PyString_AS_STRING(po->pr.co->co_filename), PyString_AS_STRING(po->pr.co->co_name), PyCode_Addr2Line(po->pr.co, next_instr - 1),  next_instr - 1, opcode_names[opcode], opcode, oparg, po->stack_depth, po->code);
 	/* Main switch on opcode */
 	
 	/* !!IMPORTANT!!

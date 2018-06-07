@@ -28,7 +28,7 @@
 #endif
 #endif
 
-#define CHECK_STACK_DEPTH 1
+#define CHECK_STACK_DEPTH 0
 
 /* Define to 0 to use RBP as any other register, or to 1 to reserve it 
  * useful for debugging to set this to 1 */
@@ -156,21 +156,21 @@ typedef enum {
 
 #define RUNTIME_STACK_MAX        RunTime_StackMax
 #define RUNTIME_STACK_NONE       RunTime_StackNone
-#define RUNTIME_REG(vi)	         RSOURCE_REG         ((vi)->source)
-#define RUNTIME_REG_IS_NONE(vi)	 RSOURCE_REG_IS_NONE ((vi)->source)
-#define RUNTIME_STACK(vi)        RSOURCE_STACK       ((vi)->source)
+#define RUNTIME_REG(vi)	         RSOURCE_REG         (((vinfo_t*)(vi))->source)
+#define RUNTIME_REG_IS_NONE(vi)	 RSOURCE_REG_IS_NONE (((vinfo_t*)(vi))->source)
+#define RUNTIME_STACK(vi)        RSOURCE_STACK       (((vinfo_t*)(vi))->source)
 
-#define SET_RUNTIME_REG_TO(vi, rg)      ((vi)->source =                         \
-                                         set_rtreg_to((vi)->source, rg))
-#define SET_RUNTIME_REG_TO_NONE(vi)     ((vi)->source =                         \
-                                         set_rtreg_to_none((vi)->source))
-#define SET_RUNTIME_STACK_TO(vi, s)     ((vi)->source =                         \
-                                         set_rtstack_to((vi)->source, (s)))
-#define SET_RUNTIME_STACK_TO_NONE(vi)   ((vi)->source =                         \
-                                         set_rtstack_to_none((vi)->source))
+#define SET_RUNTIME_REG_TO(vi, rg)      (((vinfo_t*)(vi))->source =                         \
+                                         set_rtreg_to(((vinfo_t*)(vi))->source, rg))
+#define SET_RUNTIME_REG_TO_NONE(vi)     (((vinfo_t*)(vi))->source =                         \
+                                         set_rtreg_to_none(((vinfo_t*)(vi))->source))
+#define SET_RUNTIME_STACK_TO(vi, s)     (((vinfo_t*)(vi))->source =                         \
+                                         set_rtstack_to(((vinfo_t*)(vi))->source, (s)))
+#define SET_RUNTIME_STACK_TO_NONE(vi)   (((vinfo_t*)(vi))->source =                         \
+                                         set_rtstack_to_none(((vinfo_t*)(vi))->source))
 
 #define KSOURCE_SOURCE(src)     CompileTime_Get(src)
-#define KNOWN_SOURCE(vi)        KSOURCE_SOURCE((vi)->source)
+#define KNOWN_SOURCE(vi)        KSOURCE_SOURCE(((vinfo_t*)(vi))->source)
 
 #define NEXT_FREE_REG()         next_free_reg(po)
 #define REG_NUMBER(po, rg)      ((po)->reg_array[(int)(rg)])
@@ -254,6 +254,12 @@ if(!ONLY_UPDATING) {\
 }\
     code += 1;\
 } while(0)
+#define WRITE_16BIT(immed) do {\
+if(!ONLY_UPDATING) {\
+    *(word_t*)code = (word_t)immed;\
+}\
+    code += sizeof(word_t);\
+} while(0)
 #define WRITE_32BIT(immed) do {\
 if(!ONLY_UPDATING) {\
     *(dword_t*)code = (dword_t)immed;\
@@ -269,6 +275,10 @@ if(!ONLY_UPDATING) {\
 #define UPDATABLE_WRITE_8BIT(immed) do {\
     *code = (code_t)immed;\
     code += 1;\
+} while(0)
+#define UPDATABLE_WRITE_16BIT(immed) do {\
+    *(word_t*)code = (word_t)immed;\
+    code += sizeof(word_t);\
 } while(0)
 #define UPDATABLE_WRITE_32BIT(immed) do {\
     *(dword_t*)code = (dword_t)immed;\
@@ -355,6 +365,7 @@ if(!ONLY_UPDATING) {\
 #define MODRM_ENCODING(mod, r, rm) do {\
     *code++ = mod | ((r & 7) << 3) | (rm & 7);\
 } while (0)
+#define DECODE_SIZE(size, offset) (((size) == 0) ? (FITS_IN_8BITS(offset) ? 8 : 32): (size))
 #define ENCODE_OFFSET(updatable, size, value) do {\
     if (updatable) {\
         if (size == 8) {\
@@ -370,53 +381,81 @@ if(!ONLY_UPDATING) {\
         }\
     }\
 } while (0)
-#define SIB_ENCODING(updatable, rex_w, opcode, mod, size, r, base, offset, index, scale) do {\
-    REX_ENCODING(rex_w, r, index, base);\
-    *code++ = (opcode);\
-    MODRM_ENCODING(mod | (offset == 0 ? 0x04 : (size == 8 ? 0x44 : 0x84)), r, 0);\
-    *code++ = (scale == 8 ? 0xC0 : scale == 4 ? 0x80 : scale == 2 ? 0x40 : 0x00) | (base & 7) | ((index & 7) << 3);\
-    if (offset != 0 || (base == REG_X64_RSP && mod != 0x38)) {\
-        ENCODE_OFFSET(updatable, size, offset);\
+#define WRITE_OPCODES(op_len, b1, b2, b3) do {\
+    if (op_len > 0) {\
+        *code++ = b1;\
+    }\
+    if (op_len > 1) {\
+        *code++ = b2;\
+    }\
+    if (op_len > 2) {\
+        *code++ = b3;\
     }\
 } while (0)
-#define OFFSET_ENCODING(updatable, rex_w, opcode, mod, size, r, rm, offset) do {\
+#define REQUIRES_OFFSET(rm) ((((rm) & 7) == 4 || ((rm) & 7) == 5))
+#define SIB_ENCODING(updatable, rex_w, op_len, b1, b2, b3, mod, size, r, base, offset, index, scale) do {\
+    REX_ENCODING(rex_w, r, index, base);\
+    WRITE_OPCODES(op_len, b1, b2, b3);\
+    MODRM_ENCODING(mod | ((offset == 0 && !REQUIRES_OFFSET(base)) ? 0x04 : (DECODE_SIZE(size, offset) == 8 ? 0x44 : 0x84)), r, 0);\
+    *code++ = (scale == 8 ? 0xC0 : scale == 4 ? 0x80 : scale == 2 ? 0x40 : 0x00) | (base & 7) | ((index & 7) << 3);\
+    if (offset != 0 || REQUIRES_OFFSET(base)) {\
+        ENCODE_OFFSET(updatable, DECODE_SIZE(size, offset), offset);\
+    }\
+} while (0)
+#define OFFSET_ENCODING(updatable, rex_w, op_len, b1, b2, b3, mod, size, r, rm, offset) do {\
     if((rm & 7) == 4) {\
-        SIB_ENCODING(updatable, rex_w, opcode, mod, size, r, rm, offset, rm, 0);\
+        SIB_ENCODING(updatable, rex_w, op_len, b1, b2, b3, mod, size, r, rm, offset, rm, 0);\
     } else {\
         REX_ENCODING(rex_w, r, 0, rm);\
-        *code++ = (opcode);\
-        MODRM_ENCODING(mod | (size == 8 ? 0x40 : 0x80), r, rm);\
-        ENCODE_OFFSET(updatable, size, offset);\
+        WRITE_OPCODES(op_len, b1, b2, b3);\
+        MODRM_ENCODING(mod | (DECODE_SIZE(size, offset) == 8 ? 0x40 : 0x80), r, rm);\
+        ENCODE_OFFSET(updatable, DECODE_SIZE(size, offset), offset);\
     }\
 } while(0)
-#define INDIRECT_ENCODING(rex_w, opcode, mod, r, rm) do {\
+#define INDIRECT_ENCODING(rex_w, op_len, b1, b2, b3, mod, r, rm) do {\
     if((rm & 7) == 4 || (rm & 7) == 5) {\
-        OFFSET_ENCODING(false, rex_w, opcode, mod, 8, r, rm, 0);\
+        OFFSET_ENCODING(false, rex_w, op_len, b1, b2, b3, mod, 8, r, rm, 0);\
     } else {\
         REX_ENCODING(rex_w, r, 0, rm);\
-        *code++ = (opcode);\
+        WRITE_OPCODES(op_len, b1, b2, b3);\
         MODRM_ENCODING(mod, r, rm);\
     }\
 } while (0)
-#define DIRECT_ENCODING(rex_w, opcode, mod, r, rm) do {\
+#define DIRECT_ENCODING(rex_w, op_len, b1, b2, b3, mod, r, rm) do {\
     REX_ENCODING(rex_w, r, 0, rm);\
-    *code++ = (opcode);\
+    WRITE_OPCODES(op_len, b1, b2, b3);\
     MODRM_ENCODING(mod | 0xC0, r, rm);\
 } while (0)
+#define ADDRESS_ENCODING(rex_w, op_len, b1, b2, b3, mod, r, address) do {\
+    long rip_offset = address - ((long)code + 5 + op_len + ((rex_w || r > 7) ? 1 :0));\
+    if(FITS_IN_32BITS(rip_offset)) {\
+        REX_ENCODING(rex_w, r, 0, 0);\
+        WRITE_OPCODES(op_len, b1, b2, b3);\
+        MODRM_ENCODING(mod, r, 5);\
+        WRITE_32BIT(rip_offset);\
+    } else {\
+        MOV_R_I(REG_TRANSIENT_2, address);\
+        INDIRECT_ENCODING(rex_w, op_len, b1, b2, b3, mod, r, REG_TRANSIENT_2);\
+    }\
+} while (0)
 #define BRKP() WRITE_1(0xCC)
-#define MOV_R_R(r, rm) DIRECT_ENCODING(true, 0x8B, 0, r, rm)
-#define MOV_R_A(r, rm) INDIRECT_ENCODING(true, 0x8B, 0, r, rm)
-#define MOV_A_R(rm, r) INDIRECT_ENCODING(true, 0x89, 0, r, rm)
+#define MOV_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x8B, 0, 0, 0, r, rm)
+#define MOV_R_A(r, rm) INDIRECT_ENCODING(true, 1, 0x8B, 0, 0, 0, r, rm)
+#define MOV_A_R(rm, r) INDIRECT_ENCODING(true, 1, 0x89, 0, 0, 0, r, rm)
 #define MOV_R_I(rm, i) REX_ENCODING(true, 0, 0, rm); *code++ = (0xB8 | (rm & 7)); WRITE_64BIT(i)
 #define MOV_R_UI(rm, i) REX_ENCODING(true, 0, 0, rm); *code++ = (0xB8 | (rm & 7)); UPDATABLE_WRITE_64BIT(i)
-#define MOV_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 0x8B, 0, 8, r, rm, o)
-#define MOV_R_O32(r, rm, o) OFFSET_ENCODING(false, true, 0x8B, 0, 32, r, src, o)
-#define MOV_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x8B, 0, (FITS_IN_8BITS(o) ? 8 : 32), r, rm, o)
-#define MOV_O_R(rm, o, r) OFFSET_ENCODING(false, true, 0x89, 0, (FITS_IN_8BITS(o) ? 8 : 32), r, rm, o)
-#define LEA_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 0x8D, 0, 8, r, rm, o)
-#define LEA_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x8D, 0, (FITS_IN_8BITS(o) ? 8 : 32), r, rm, o)
-#define MOV_R_X8(r, base, offset, index, scale) SIB_ENCODING(false, true, 0x8B, 0, 8, r, base, offset, index, scale)
-#define MOV_R_X32(r, base, offset, index, scale) SIB_ENCODING(false, true, 0x8B, 0, 32, r, base, offset, index, scale) 
+#define MOV_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x8B, 0, 0, 0, 8, r, rm, o)
+#define MOV_R_O32(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x8B, 0, 0, 0, 32, r, src, o)
+#define MOV_R_O(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x8B, 0, 0, 0, 0, r, rm, o)
+#define MOV_O_R(rm, o, r) OFFSET_ENCODING(false, true, 1, 0x89, 0, 0, 0, 0, r, rm, o)
+#define LEA_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x8D, 0, 0, 0, 8, r, rm, o)
+#define LEA_R_O(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x8D, 0, 0, 0, 0, r, rm, o)
+#define MOV_R_X8(r, base, offset, index, scale) SIB_ENCODING(false, true, 1, 0x8B, 0, 0, 0, 8, r, base, offset, index, scale)
+#define MOV_R_X32(r, base, offset, index, scale) SIB_ENCODING(false, true, 1, 0x8B, 0, 0, 0, 32, r, base, offset, index, scale)
+#define MOV_O_I(rm, o, i) do {\
+    MOV_R_I(REG_TRANSIENT_1, i);\
+    MOV_O_R(rm, o, REG_TRANSIENT_1);\
+} while (0)
 #define XCHG_R_R(rg1, rg2) do {\
   if(rg1 == REG_X64_RAX) {\
       OP_REX_64_RM(0x90, rg2);\
@@ -426,14 +465,14 @@ if(!ONLY_UPDATING) {\
       DIRECT_ENCODING(true, 0x87, 0, rg1, rg2);\
   }\
 } while (0)
-#define XCHG_R_O(r, rm, o) OFFSET_ENCODING(false, true, 0x87, 0, (FITS_IN_8BITS(o) ? 8 : 32), r, rm, o)
-#define TEST_R_R(r, rm) DIRECT_ENCODING(true, 0x85, 0, r, rm)
-#define CMP_R_R(r, rm) DIRECT_ENCODING(true, 0x39, 0, r, rm)
-#define CMP_R_A(r, rm) INDIRECT_ENCODING(true, 0x39, 0, r, rm)
-#define CMP_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 0x39, 0, 8, r, rm, o)
-#define CMP_I8_O(i, rm, o) OFFSET_ENCODING(false, false, 0x83, 0x78, (FITS_IN_8BITS(o) ? 8 : 32), 0, rm, o); WRITE_8BIT(i)
-#define CMP_I8_A(i, rm) INDIRECT_ENCODING(false, 0x83, 0x38, 0, rm); WRITE_8BIT(i)
-#define CMP_R_UO32(r, rm, o) OFFSET_ENCODING(true, true, 0x39, 0, 32, r, rm, o)
+#define XCHG_R_O(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x87, 0, 0, 0, 0, r, rm, o)
+#define TEST_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x85, 0, 0, 0, r, rm)
+#define CMP_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x39, 0, 0, 0, r, rm)
+#define CMP_R_A(r, rm) INDIRECT_ENCODING(true, 1, 0x39, 0, 0, 0, r, rm)
+#define CMP_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x39, 0, 0, 0, 8, r, rm, o)
+#define CMP_I8_O(i, rm, o) OFFSET_ENCODING(false, false, 1, 0x83, 0, 0, 0x78, 0, 0, rm, o); WRITE_8BIT(i)
+#define CMP_I8_A(i, rm) INDIRECT_ENCODING(false, 1, 0x83, 0, 0, 0x38, 0, rm); WRITE_8BIT(i)
+#define CMP_R_UO32(r, rm, o) OFFSET_ENCODING(true, true, 1, 0x39, 0, 0, 0, 32, r, rm, o)
 #define CMP_I_R(i1, r2) do {\
     if(i1 >= -128 && i1 < 128) {\
         WRITE_4(REX_64_RM(r2), 0x83, REG_IN_OPCODE(0xF8, r2), (code_t)(i1));\
@@ -469,14 +508,14 @@ if(!ONLY_UPDATING) {\
         CALL_R(REG_TRANSIENT_1);\
     }\
 } while (0)
-#define ADD_A_I8(rm, i) INDIRECT_ENCODING(false, 0x83, 0, 0, rm); WRITE_8BIT(i)
-#define ADD_O8_I8(rm, o, i) OFFSET_ENCODING(false, false, 0x83, 0, 8, 0, rm, o); WRITE_8BIT(i)
-#define SUB_A_I8(rm, i) INDIRECT_ENCODING(false, 0x83, 0x28, 0, rm); WRITE_8BIT(i)
-#define ADD_R_R(r, rm) DIRECT_ENCODING(true, 0x01, 0, r, rm);
-#define SUB_R_I8(rm, i) DIRECT_ENCODING(true, 0x83, 0x28, 0, rm); WRITE_8BIT(i)
-#define SUB_R_I32(rm, i) DIRECT_ENCODING(true, 0x81, 0x28, 0, rm); WRITE_32BIT(i)
-#define ADD_R_I8(rm, i) DIRECT_ENCODING(true, 0x83, 0x0, 0, rm); WRITE_8BIT(i)
-#define ADD_R_I32(rm, i) DIRECT_ENCODING(true, 0x81, 0x0, 0, rm); WRITE_32BIT(i)
+#define ADD_A_I8(rm, i) INDIRECT_ENCODING(false, 1, 0x83, 0, 0, 0, 0, rm); WRITE_8BIT(i)
+#define ADD_O8_I8(rm, o, i) OFFSET_ENCODING(false, false, 1, 0x83, 0, 0, 0, 8, 0, rm, o); WRITE_8BIT(i)
+#define SUB_A_I8(rm, i) INDIRECT_ENCODING(false, 1, 0x83, 0, 0, 0x28, 0, rm); WRITE_8BIT(i)
+#define ADD_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x01, 0, 0, 0, r, rm);
+#define SUB_R_I8(rm, i) DIRECT_ENCODING(true, 1, 0x83, 0, 0, 0x28, 0, rm); WRITE_8BIT(i)
+#define SUB_R_I32(rm, i) DIRECT_ENCODING(true, 1, 0x81, 0, 0, 0x28, 0, rm); WRITE_32BIT(i)
+#define ADD_R_I8(rm, i) DIRECT_ENCODING(true, 1, 0x83, 0, 0, 0x0, 0, rm); WRITE_8BIT(i)
+#define ADD_R_I32(rm, i) DIRECT_ENCODING(true, 1, 0x81, 0, 0, 0x0, 0, rm); WRITE_32BIT(i)
 #define IMUL_R_R(r1, r2) WRITE_4(REX_64_REG_RM(r1, r2), 0x0F, 0xAF, MODRM_REG_RM(r1, r2))
 #define SET_R_CC(r, cc) do {\
     if(r <= 7) {\
@@ -486,15 +525,23 @@ if(!ONLY_UPDATING) {\
     }\
 } while(0)
 
-#define PUSH_A(rm) INDIRECT_ENCODING(false, 0xFF, 0x30, 0, rm)
+#define PUSH_A(rm) INDIRECT_ENCODING(false, 1, 0xFF, 0, 0, 0x30, 0, rm)
 #define PUSH_R(r) OP_VREX_R(0x50, r)
-#define POP_R(r) OP_VREX_R(0x58, r)
 #define PUSH_I(immed) do {\
     MOV_R_I(REG_TRANSIENT_1, immed);\
     PUSH_R(REG_TRANSIENT_1);\
 } while(0)
-#define PUSH_O(rm, o) OFFSET_ENCODING(false, false, 0xFF, 0x70, (FITS_IN_8BITS(o) ? 8 : 32), 0, rm, o)
+#define PUSH_O(rm, o) OFFSET_ENCODING(false, false, 1, 0xFF, 0, 0, 0x70, 0, 0, rm, o)
+#define POP_R(r) OP_VREX_R(0x58, r)
+#define POP_O(rm, o) OFFSET_ENCODING(false, false, 1, 0x8F, 0, 0, 0x40, 0, 0, rm, o)
 #define RET() WRITE_1(0xC3)
+#define RET_N(n) do {\
+    if(n == 0) {\
+        RET();\
+    } else {\
+        WRITE_1(0xC2); WRITE_16BIT(n);\
+    }\
+} while (0)
 #define PUSH_CC() do {\
     *code++ = 0x9C;\
     psyco_inc_stackdepth(po);\
@@ -503,37 +550,6 @@ if(!ONLY_UPDATING) {\
     *code++ = 0x9D;\
     psyco_dec_stackdepth(po);\
 } while (0)
-/***********************************************************************/
-/* vinfo based instructions */
-#define V_MOV_N_A(vnew, vaddr) do {\
-    reg_t addr_reg;\
-    reg_t target_reg = NEXT_FREE_REG();\
-    NEED_REGISTER(target_reg);\
-    if(is_compiletime(vaddr->source)) {\
-        addr_reg = REG_TRANSIENT_1;\
-        MOV_R_I(addr_reg, CompileTime_Get(vaddr->source)->value);\
-    } else {\
-        addr_reg = getreg(vaddr->source);\
-    }\
-    MOV_R_A(target_reg, addr_reg);\
-    vnew = vinfo_new(RunTime_New(target_reg, false, false));\
-    REG_NUMBER(po, target_reg) = vnew;\
-} while(0)
-#define V_MOV_N_O8(vnew, vaddr, offset) do {\
-    reg_t addr_reg;\
-    reg_t target_reg = NEXT_FREE_REG();\
-    NEED_REGISTER(target_reg);\
-    if(is_compiletime(vaddr->source)) {\
-        addr_reg = REG_TRANSIENT_1;\
-        MOV_R_I(addr_reg, CompileTime_Get(vaddr->source)->value);\
-    } else {\
-        addr_reg = getreg(vaddr->source);\
-    }\
-    MOV_R_O8(target_reg, addr_reg, offset);\
-    vnew = vinfo_new(RunTime_New(target_reg, false, false));\
-    REG_NUMBER(po, target_reg) = vnew;\
-} while(0)
-
 /***********************************************************************/
 #if CHECK_STACK_DEPTH
 #define STACK_DEPTH_CHECK() do {\
@@ -606,6 +622,17 @@ if(!ONLY_UPDATING) {\
 } while (0)
 
 
+typedef enum {
+    ADD = 0,
+    OR  = 1,
+    ADC = 2,
+    SBB = 3,
+    AND = 4,
+    SUB = 5,
+    XOR = 6,
+    CMP = 7
+ } common_instr;
+
 /* The "common instructions" groups: there are 8 arithmetic instructions
    whose encodings are identical. Here they are, with their 'group' value:
      ADD    (group 0)
@@ -617,21 +644,44 @@ if(!ONLY_UPDATING) {\
      XOR    (group 6)
      CMP    (group 7)  */
 
+#define _ENCODE_COMMON_INSTR(instr) ((instr) << 3)
 /* The following macro encodes  "INSTR register, immediate"  */
-#define COMMON_INSTR_IMMED(group, rg, value) do {       \
-  long _v;                                              \
-  code[1] = 0xC0 | (group<<3) | (rg);                   \
-  _v = value;                                           \
-  if (COMPACT_ENCODING && -128 <= _v && _v < 128) {     \
-    code[2] = (code_t) _v;                              \
-    code[0] = 0x83;                                     \
-    code += 3;                                          \
-  }                                                     \
-  else {                                                \
-    *(long*)(code+2) = _v;                              \
-    code[0] = 0x81;                                     \
-    code += 6;                                          \
-  }                                                     \
+
+#define COMMON_INSTR_IMMED(instr, rm, i) do {\
+    if(FITS_IN_8BITS(i)) {\
+        DIRECT_ENCODING(true, 1, 0x83, 0, 0, _ENCODE_COMMON_INSTR(instr), 0, rm);\
+        WRITE_8BIT(i);\
+    } else if (FITS_IN_32BITS(i)) {\
+        DIRECT_ENCODING(true, 1, 0x81, 0, 0, _ENCODE_COMMON_INSTR(instr), 0, rm);\
+        WRITE_32BIT(i);\
+    } else {\
+        MOV_R_I(REG_TRANSIENT_1, i);\
+        DIRECT_ENCODING(true, 1, 0x01 | _ENCODE_COMMON_INSTR(instr), 0, 0, 0, REG_TRANSIENT_1, rm);\
+    }\
+} while (0)
+
+
+#define DIRECT_OR_RSP_OFFSET_ENCODING(rex_w, opcode, mod, r, source) do {\
+    if(getreg(source) == REG_NONE) {\
+        long offset = STACK_POS_OFFSET(getstack(source));\
+        OFFSET_ENCODING(false, rex_w, 1, opcode, 0, 0, mod, 0, r, REG_X64_RSP, offset);\
+    } else {\
+        DIRECT_ENCODING(rex_w, 1, opcode, 0, 0, mod, r, getreg(source));\
+    }\
+} while(0)
+
+#define COMMON_INSTR_FROM_RT(instr, r, source) DIRECT_OR_RSP_OFFSET_ENCODING(true, 0x03 | _ENCODE_COMMON_INSTR(instr), 0, r, source)
+#define COMMON_INSTR_IMMED_FROM_RT(instr, source, i) do {\
+    if(FITS_IN_8BITS(i)) {\
+        DIRECT_OR_RSP_OFFSET_ENCODING(true, 0x83, _ENCODE_COMMON_INSTR(instr), 0, source);\
+        WRITE_8BIT(i);\
+    } else if (FITS_IN_32BITS(i)) {\
+        DIRECT_OR_RSP_OFFSET_ENCODING(true, 0x81, _ENCODE_COMMON_INSTR(instr), 0, source);\
+        WRITE_32BIT(i);\
+    } else {\
+        MOV_R_I(REG_TRANSIENT_1, i);\
+        DIRECT_OR_RSP_OFFSET_ENCODING(true, 0x01 | _ENCODE_COMMON_INSTR(instr), 0, REG_TRANSIENT_1, source);\
+    }\
 } while (0)
 
 /* Encodes  "INSTR register, source"  for a run-time or compile-time vinfo_t */
@@ -642,26 +692,17 @@ if(!ONLY_UPDATING) {\
     COMMON_INSTR_IMMED(group, rg, KSOURCE_SOURCE(source)->value);       \
 } while(0)
 
-/* Encodes  "INSTR register, source"  for a run-time vinfo_t */
-#define COMMON_INSTR_FROM_RT(group, rg, source)    do { \
-  code[0] = group*8 + 3;                                \
-  MODRM_FROM_RT(source, (rg)<<3);                       \
-} while(0)
 
 /* Encodes "INSTR reg" for the following instructions:
      NOT    (group 2)
      NEG    (group 3)
-     IDIV   (group 7) */
-#define UNARY_INSTR_ON_REG(group, rg)              do { \
-  code[0] = 0xF7;                                       \
-  code[1] = 0xC0 | (group<<3) | (rg);                   \
-  code += 2;                                            \
-} while (0)
+*/
+#define UNARY_INSTR_ON_REG(instr, rm) DIRECT_ENCODING(true, 1, 0xF7, 0, 0, _ENCODE_COMMON_INSTR(instr), 0, rm) 
+
 
 /* Encodes "INSTR source" for the same instructions as above */
-#define UNARY_INSTR_FROM_RT(group, source)         do { \
-  INSTR_MODRM_FROM_RT(0xF7, source, (group)<<3);        \
-} while (0)
+#define UNARY_INSTR_FROM_RT(instr, source) DIRECT_OR_RSP_OFFSET_ENCODING(true, 0xF7, _ENCODE_COMMON_INSTR(instr), 0, source)
+
 
 /* Encodes "INC rg" and "DEC rg" */
 #define INCREASE_REG(rg)   ADD_R_I8(rg, 1) 
@@ -706,7 +747,7 @@ if(!ONLY_UPDATING) {\
 } while (0)
 #define CHECK_NONZERO_REG(rg) TEST_R_R(rg, rg)
 
-#define COMPARE_IMMED_FROM_RT(source, immed) CMP_I_R(immed, getreg(source))
+#define COMPARE_IMMED_FROM_RT(source, immed) COMMON_INSTR_IMMED_FROM_RT(CMP, source, immed)
 
 /* Signed integer multiplications */
 #define IMUL_REG_FROM_RT(source, rg)   do {             \
@@ -802,7 +843,7 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
   if (RSOURCE_REG_IS_NONE(source))                      \
     PUSH_EBP_BASE(RSOURCE_STACK(source));               \
   else                                                  \
-    PUSH_REG(RSOURCE_REG(source));                      \
+    PUSH_R(RSOURCE_REG(source));                      \
 } while (0)
 
 /* insert a PUSH_FROM_RT at point 'insert_at' in the given 'code1' */
@@ -821,50 +862,16 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 /*****************************************************************/
  /***   Some basic management instructions...                   ***/
 
-#define PUSH_REG(reg) PUSH_R(reg)       
-#define POP_REG(reg) POP_R(reg)
-
-
-
 #define LOAD_REG_FROM_IMMED(dst, immed) MOV_R_I(dst, immed)
-
-#define LOAD_REG_FROM_EBP_BASE(dst, stack_pos)		\
-  MOV_R_O(dst, REG_X64_RSP, STACK_POS_OFFSET(stack_pos))
-
-#define SAVE_REG_TO_EBP_BASE(src, stack_pos)		\
-  MOV_O_R(REG_X64_RSP, STACK_POS_OFFSET(stack_pos), src)
-
-#define XCHG_REG_AND_EBP_BASE(src, stack_pos)		\
-  XCHG_R_O(src, REG_X64_RSP, STACK_POS_OFFSET(stack_pos))
-
-#define SAVE_IMMED_TO_EBP_BASE(immed, stack_pos)   do { \
-  INSTR_EBP_BASE(0xC7, 0<<3, stack_pos);        /* MOV [EBP-stack_pos], immed */\
-  *(long*)code = (immed);                               \
-  code += 4;                                            \
-} while (0)
-
-#define SAVE_IMM8_TO_EBP_BASE(imm8, stack_pos)     do { \
-  INSTR_EBP_BASE(0xC6, 0<<3, stack_pos);    /* MOV byte [EBP-stack_pos], imm8 */\
-  *code++ = (imm8);                                     \
-} while (0)
-
-#define ABOUT_TO_CALL_SUBFUNCTION(finfo)                \
-  SAVE_IMMED_TO_EBP_BASE((long)(finfo), INITIAL_STACK_DEPTH)
-#define RETURNED_FROM_SUBFUNCTION()                     \
-  SAVE_IMM8_TO_EBP_BASE(-1, INITIAL_STACK_DEPTH)
-
-#define LOAD_REG_FROM_RT(source, dst)			\
-  INSTR_MODRM_FROM_RT(source, 0x8B, (dst)<<3)   /* MOV dst, (...) */
-
-#define SAVE_REG_TO_RT(source, src)			\
-  INSTR_MODRM_FROM_RT(source, 0x89, (src)<<3)   /* MOV (...), src */
-
-#define PUSH_EBP_BASE(ofs)				\
-  INSTR_EBP_BASE(0xFF, 0x30, ofs)		/* PUSH [EBP-ofs] */
-
-#define POP_EBP_BASE(ofs)				\
-  INSTR_EBP_BASE(0x8F, 0x00, ofs)		/* POP [EBP-ofs] */
-
+#define LOAD_REG_FROM_EBP_BASE(dst, stack_pos) MOV_R_O(dst, REG_X64_RSP, STACK_POS_OFFSET(stack_pos))
+#define LOAD_REG_FROM_RT(source, dst) DIRECT_OR_RSP_OFFSET_ENCODING(true, 0x8B, 0, dst, source)
+#define SAVE_REG_TO_EBP_BASE(src, stack_pos) MOV_O_R(REG_X64_RSP, STACK_POS_OFFSET(stack_pos), src)
+#define XCHG_REG_AND_EBP_BASE(src, stack_pos) XCHG_R_O(src, REG_X64_RSP, STACK_POS_OFFSET(stack_pos))
+#define SAVE_IMMED_TO_EBP_BASE(immed, stack_pos) MOV_O_I(REG_X64_RSP, STACK_POS_OFFSET(stack_pos), immed)
+#define SAVE_IMM8_TO_EBP_BASE(imm8, stack_pos) MOV_O_I(REG_X64_RSP, STACK_POS_OFFSET(stack_pos), immed)
+#define SAVE_REG_TO_RT(source, src) DIRECT_OR_RSP_OFFSET_ENCODING(true, 0x89, 0, src, source)
+#define PUSH_EBP_BASE(ofs) PUSH_O(REG_X64_RSP, STACK_POS_OFFSET(ofs))
+#define POP_EBP_BASE(ofs) POP_O(REG_X64_RSP, STACK_POS_OFFSET(ofs))
 #define PUSH_IMMED(immed) PUSH_I(immed)
 /*******************************************************************
  * Call a C function.
@@ -1012,25 +1019,33 @@ static const bool callee_saved_reg_table[REG_TOTAL] = {
 /***************************************************************/
 #define LOAD_REG_FROM_REG_PLUS_IMMED(dst, rg1, immed) LEA_R_O(dst, rg1, immed)
 
-#define FUNCTION_RET(popbytes)      do {                                \
-  /* emit a 'RET xxx' instruction that pops and jumps to the address    \
-     which is now at the top of the stack, and finishes to clean the    \
-     stack by removing everything left past the return address          \
-     (typically the arguments, although it could be anything). */       \
-  int _b = popbytes;                                                    \
-  extra_assert(0 < _b);                                                 \
-  if (_b >= 0x8000)                                                     \
-    {                                                                   \
-      /* uncommon case: too many stuff left in the stack for the 16-bit \
-         immediate we can encoding in RET */                            \
-      POP_REG(REG_X64_RDX);                                             \
-      STACK_CORRECTION(-_b);                                            \
-      PUSH_REG(REG_X64_RDX);                                            \
-      _b = 0;                                                           \
-    }                                                                   \
-  code[0] = 0xC2;   /* RET imm16 */                                     \
-  *(short*)(code+1) = _b;                                               \
-  code += 3;                                                            \
+/* retpos is position in stack of the return address pushed by call */
+/* the stack must be cleared up this */
+#define FUNCTION_RET(retpos) do {\
+    int post_return_stack_depth = 0;\
+    int pre_return_stack_correction = retpos - po->stack_depth;\
+    if(RBP_IS_RESERVED) {\
+        pre_return_stack_correction += sizeof(long);\
+    }\
+    STACK_CORRECTION(pre_return_stack_correction);\
+    po->stack_depth += pre_return_stack_correction;\
+    if(RBP_IS_RESERVED) {\
+        POP_R(REG_X64_RBP);\
+        psyco_dec_stackdepth(po);\
+    }\
+    post_return_stack_depth = po->stack_depth - sizeof(long);\
+    if (post_return_stack_depth >= 0x8000) {\
+        POP_R(REG_TRANSIENT_1);\
+        STACK_CORRECTION(-post_return_stack_depth);\
+        PUSH_R(REG_TRANSIENT_1);\
+        po->stack_depth = sizeof(long);\
+        STACK_DEPTH_CHECK();\
+        RET();\
+    } else {\
+        STACK_DEPTH_CHECK();\
+        RET_N(post_return_stack_depth);\
+    }\
+    po->stack_depth = 0;\
 } while (0)
 
 
@@ -1039,7 +1054,7 @@ static const bool callee_saved_reg_table[REG_TOTAL] = {
 
 /* save 'vi', which is currently in register 'rg'. */
 #define SAVE_REG_VINFO(vi, rg)	do {            \
-  PUSH_REG(rg);                                 \
+  PUSH_R(rg);                                 \
   psyco_inc_stackdepth(po);                     \
   SET_RUNTIME_STACK_TO(vi, po->stack_depth);    \
 } while (0)
@@ -1133,6 +1148,12 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 
 /*****************************************************************/
  /***   vinfo_t restoring                                       ***/
+
+#define RTVINFO_FROM_STACK_TO_REG(v, r) do {\
+    LOAD_REG_FROM_EBP_BASE(r, RUNTIME_STACK(v));\
+    REG_NUMBER(po, r) = (v);\
+    SET_RUNTIME_REG_TO(v, r);\
+} while(0)
 
 /* ensure that a run-time vinfo is in a register */
 #define RTVINFO_IN_REG(vi)	  do {          \

@@ -38,25 +38,6 @@ EXTERNFN void psyco_resolved_cc(PsycoObject* po, condition_code_t cc_known_true)
 #endif
 
 
-/***************************************************************/
- /*** Read/write memory                                       ***/
-
-/* access the data word at address 'nv_ptr + offset + (rt_vindex<<size2)'.
-   'nv_ptr' must be a non-virtual source.
-   'rt_vindex' must be a run-time source or NULL.
-   '1<<size2' also specifies the size of the data word to access.
-   '1<<size2' must be 1, 2, 4 or 8 (in the latter case, only the first 4 bytes
-     are accessed anyway).
-   'nonsigned' selects between zero- and sign-extension
-     if '1<<size2' is 1 or 2. */
-EXTERNFN vinfo_t* psyco_memory_read(PsycoObject* po, vinfo_t* nv_ptr,
-                                    long offset, vinfo_t* rt_vindex,
-                                    int size2, bool nonsigned);
-EXTERNFN bool psyco_memory_write(PsycoObject* po, vinfo_t* nv_ptr,
-                                 long offset, vinfo_t* rt_vindex,
-                                 int size2, vinfo_t* value);
-
-
 #if 0
 /* XXX to do: references from the code buffers. This is tricky because
    we can have quite indirect references, or references to a subobject of

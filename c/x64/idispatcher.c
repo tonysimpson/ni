@@ -310,9 +310,9 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
               If there are more, give up and use regular MOVs to load the rest */
             po->stack_depth -= 4;
             reg = pops[++i];
-            POP_REG(reg);
+            POP_R(reg);
           }
-        POP_REG(reg);
+        POP_R(reg);
         dm.copy_regs[(int) reg] = NULL;
         po->stack_depth -= 4;
       }
