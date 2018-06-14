@@ -231,7 +231,7 @@ static void fz_compress(vinfo_array_t* aa)
         fz_putopc(FZ_OPC_NULL);   /* emit FZ_OPC_NULL */
       }
       else if (a->tmp != NULL) {
-        long prevcounter = a->tmp;   /* already seen, emit a link */
+        long prevcounter = (long)a->tmp;   /* already seen, emit a link */
         fz_putopc(FZ_OPC_LINK - (cmpinternal.tmp_counter-prevcounter));
       }
       else {
@@ -660,7 +660,7 @@ void psyco_respawn_detected(PsycoObject* po)
 
 DEFINEFN
 void* psyco_prepare_respawn_ex(PsycoObject* po, condition_code_t jmpcondition,
-                               void* fn, int extrasize)
+                               void* fn, size_t extrasize)
 {
   /* ignore calls to psyco_prepare_respawn() while currently respawning */
   if (!is_respawning(po))
@@ -680,9 +680,9 @@ void* psyco_prepare_respawn_ex(PsycoObject* po, condition_code_t jmpcondition,
       calling_limit = po->codelimit;
       po->code = insn_code_label(codebuf->codestart);
       po->codelimit = limit;
-      closure = (char*) psyco_call_code_builder(po, fn, true, SOURCE_DUMMY);
+      closure = (char*) psyco_call_code_builder(po, fn, true, SOURCE_DUMMY, extrasize + sizeof(respawn_t));
       rs = (respawn_t*) (closure+extrasize);
-      SHRINK_CODE_BUFFER(codebuf, (code_t*)(rs+1), "respawn");
+      SHRINK_CODE_BUFFER(codebuf, po->code, "respawn");
       /* fill in the respawn_t structure */
       extra_assert(po->respawn_proxy != NULL);
       rs->self = codebuf;
@@ -1989,7 +1989,7 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, int pflags)
     psyco_fatal_msg("bad pflags");
     return NULL;
   }
-  fs = (rt_promotion_t*) ipromotion_finish(po, fix, do_promotion);
+  fs = (rt_promotion_t*) ipromotion_finish(po, fix, do_promotion, sizeof(rt_promotion_t));
 
   /* fill in the constant structure that 'do_promotion' will get as parameter */
   clear_tmp_marks(&po->vlocals);
@@ -2000,8 +2000,7 @@ code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix, int pflags)
 #if CODE_DUMP
   fs->zero_tag = 0;
 #endif
-  
-  return (code_t*)(fs+1);  /* end of code == end of 'fs' structure */
+  return po->code; 
 }
 
 

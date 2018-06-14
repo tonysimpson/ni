@@ -32,18 +32,12 @@ void psyco_emit_header(PsycoObject* po, int nframelocal)
 DEFINEFN
 code_t* psyco_finish_return(PsycoObject* po, Source retval)
 {
-  BEGIN_CODE
-  int retpos;
+  code_t *code;
   int nframelocal = LOC_CONTINUATION->array->count;
-
-  /* 'retpos' is the position in the stack of the return address. */
-  retpos = getstack(LOC_CONTINUATION->source);
+  int retpos = getstack(LOC_CONTINUATION->source);
   extra_assert(retpos != RunTime_StackNone);
-
-  WRITE_FRAME_EPILOGUE(retval, nframelocal);
-  FUNCTION_RET(retpos);
-  END_CODE
-  code_t *code = po->code;
+  function_return(po, retval, nframelocal, retpos);
+  code = po->code;
   PsycoObject_Delete(po);
   return code;
 }
@@ -468,24 +462,21 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 	return NULL;
 }
 
-
 DEFINEFN
 void psyco_inline_enter(PsycoObject* po)
 {
-	struct stack_frame_info_s* finfo = psyco_finfo(NULL, po);
-	BEGIN_CODE
-    PUSH_I(finfo);
-    psyco_inc_stackdepth(po);
-	END_CODE
+    struct stack_frame_info_s* finfo = psyco_finfo(NULL, po);
+    BEGIN_CODE
+    ABOUT_TO_CALL_SUBFUNCTION((long) finfo);
+    END_CODE
 }
 
 DEFINEFN
 void psyco_inline_exit (PsycoObject* po)
 {
-	BEGIN_CODE
-    ADD_R_I8(REG_X64_RSP, 8);
-    psyco_dec_stackdepth(po);
-	END_CODE
+    BEGIN_CODE
+    RETURNED_FROM_SUBFUNCTION();
+    END_CODE
 }
 
 

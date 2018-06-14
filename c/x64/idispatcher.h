@@ -57,18 +57,18 @@ PSY_INLINE code_t* fix_fast_common_case(void* fs, long value,
                                     code_t* codeptr)
 {
 #if PROMOTION_FAST_COMMON_CASE
-#undef UPDATING_ONLY
-#define UPDATING_ONLY 1
+#undef ONLY_UPDATING
+#define ONLY_UPDATING 1
   code_t *code = ((struct ipromotion_s*)fs)->jump_if_equal_code;
   UPDATABLE_JUMP_IF_EQUALS(0, value, codeptr);
-#undef UPDATING_ONLY
-#define UPDATING_ONLY 0
+#undef ONLY_UPDATING
+#define ONLY_UPDATING 0
 #endif
   return codeptr;
 }
 
 
-PSY_INLINE void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promotion)
+PSY_INLINE void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promotion, size_t block_size)
 {
   long xsource;
   struct ipromotion_s* fs;
@@ -82,19 +82,19 @@ PSY_INLINE void* ipromotion_finish(PsycoObject* po, vinfo_t* fix, void* do_promo
   start_jump = code;
   UPDATABLE_JUMP_IF_EQUALS(getreg(xsource), 0, code);
   end_jump = code;
-#undef UPDATING_ONLY
-#define UPDATING_ONLY 1
+#undef ONLY_UPDATING
+#define ONLY_UPDATING 1
   code = start_jump;
   UPDATABLE_JUMP_IF_EQUALS(0, 0, end_jump); /* rewrite with jump to end of jump */
-#undef UPDATING_ONLY
-#define UPDATING_ONLY 0
+#undef ONLY_UPDATING
+#define ONLY_UPDATING 0
   END_CODE
 #else
   xsource = fix->source;
 #endif
   fs = (struct ipromotion_s*) psyco_call_code_builder(po, do_promotion,
                                                       PROMOTION_FAST_COMMON_CASE,
-                                                      xsource);
+                                                      xsource, block_size);
 #if PROMOTION_FAST_COMMON_CASE
   fs->jump_if_equal_code = start_jump;
 #endif

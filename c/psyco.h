@@ -314,23 +314,16 @@ EXTERNFN PyObject* need_cpsyco_obj(char* name);
 /* defined in dispatcher.c */
 EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 
+/* Call trace execution function */
+EXTERNVAR void (*call_trace_execution) (void);
+
 FILE *codegen_log;
 #define DEBUG_BEGIN_CODE_LOCATION                fprintf(codegen_log, "BEGIN_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code); fflush(codegen_log);
 #define DEBUG_END_CODE_LOCATION                  fprintf(codegen_log, "END_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code); fflush(codegen_log);
 #define BEGIN_CODE do {\
     code_t* code = po->code;\
     DEBUG_BEGIN_CODE_LOCATION\
-    if(getenv("NI_BRK_ON") != NULL && po->pr.co != NULL) {\
-        char buf[2048];\
-        strncpy(buf, getenv("NI_BRK_ON"), 2048);\
-        char *break_on_file = strtok(buf, ":");\
-        int break_on_line = atoi(strtok(NULL, ":"));\
-        char *current_file = PyString_AS_STRING(po->pr.co->co_filename);\
-        int current_line = PyCode_Addr2Line(po->pr.co, po->pr.next_instr);\
-        if(strcmp(break_on_file, current_file) == 0 && break_on_line == current_line) {\
-            BRKP();\
-        }\
-    }\
+    BREAK_ON();\
     STACK_DEPTH_CHECK();
 #define END_CODE\
     po->code = code;\

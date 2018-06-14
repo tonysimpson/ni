@@ -15,10 +15,6 @@
 # define SIZE_OF_LONG_BITS   2
 #endif
 
-
-#define INITIAL_STACK_DEPTH  0 /* anything >0 and a multiple of 4 */
-
-
 /***************************************************************/
  /*** Condition Codes (a.k.a. the processor 'flags' register) ***/
 
@@ -232,7 +228,7 @@ EXTERNFN code_t* psyco_finish_return(PsycoObject* po, Source retval);
    2) the run-time value described by 'extraarg' if != SOURCE_DUMMY. */
 EXTERNFN
 void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
-                              RunTimeSource extraarg);
+                              RunTimeSource extraarg, size_t block_size);
 
 #if 0   /* disabled */
 /* emergency code for out-of-memory conditions in which do not

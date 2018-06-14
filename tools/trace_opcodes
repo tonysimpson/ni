@@ -1,0 +1,47 @@
+#!/usr/bin/env python
+from __future__ import print_function
+import sys
+
+def gen_blocks():
+    for line in open('codegen.log'):
+        if 'BEGIN_CODE' in line:
+            begin = line.split()[-1]
+        elif 'END_CODE' in line:
+            yield begin, line.split()[-1]
+            del begin
+
+def hex_to_int(h):
+    return int(h, 16)
+
+opcodes = [("%s %s" % (num, line)) for num, line in enumerate(open('codegen.log')) if line.startswith('OPCODE')]
+opcodes.sort(key = lambda x: hex_to_int(x.split()[-1]))
+blocks = list(gen_blocks())
+start, finish = None, None
+for line in open('trace_execution.log'):
+    pc = line.split()[0].split(':')[1]
+    for begin, end in blocks:
+        if hex_to_int(begin) <= hex_to_int(pc) < hex_to_int(end):
+            break
+    else:
+        raise Exception('No match for %s' % (pc,))
+    if finish == None:
+        start, finish = begin, end
+    elif finish != begin:
+        print('START', start)
+        for opcode in opcodes:
+            if hex_to_int(start) <= hex_to_int(opcode.split()[-1]) < hex_to_int(finish):
+                print(opcode.strip())
+        print('END', finish)
+        start, finish = begin, end
+    else:
+        finish = end
+if finish != None:
+    print('START', start)
+    for opcode in opcodes:
+        if hex_to_int(start) <= hex_to_int(opcode.split()[-1]) < hex_to_int(finish):
+            print(opcode.strip())
+    print('END', finish)
+
+
+
+        

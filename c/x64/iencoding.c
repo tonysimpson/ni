@@ -25,23 +25,24 @@ DEFINEVAR reg_t RegistersLoop[REG_TOTAL] = {
     /* R15 > */ REG_X64_RBX
 };
 
-DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore,
-                              RunTimeSource extraarg)
+DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore, RunTimeSource extraarg, size_t block_size)
 {
-  code_t* result;
+  char* block_start;
   BEGIN_CODE
+  BEGIN_SHORT_JUMP(0);
+  block_start = (char*)(((long)code + 7) & (~7)); /* alignment */
+  code = block_start;
+  code += block_size;
+  END_SHORT_JUMP(0);
   BEGIN_CALL();
   if (extraarg != SOURCE_DUMMY) {
     CALL_SET_ARG_FROM_RT(extraarg, 1);
   }
-  result = code + 48; /* TODO find a better way to set this after the current code */
-  CALL_SET_ARG_IMMED(result, 0);
+  CALL_SET_ARG_IMMED(block_start, 0);
   END_CALL_I(fn);
   JMP_R(REG_FUNCTIONS_RETURN);
-  while (code != result)
-    *code++ = (code_t) 0xCC;   /* fill with INT 3 (debugger trap) instructions */
   END_CODE
-  return (void*)result;
+  return (void*)block_start;
 }
 
 DEFINEFN
@@ -53,6 +54,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	   assumes Psyco's calling convention instead of the C's. */
 	int i;
 	bool ccflags;
+    int initial_stack_depth;
 	BEGIN_CODE
 	/* cannot use NEED_CC(): it might clobber one of the registers
 	   mentioned in argsources */
@@ -68,18 +70,20 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
             psyco_inc_stackdepth(po);
         }
     }
-#if CHECK_STACK_DEPTH 
+#if CHECK_STACK_DEPTH
     MOV_R_R(REG_TRANSIENT_1, REG_X64_RSP);
     SUB_R_I8(REG_TRANSIENT_1, 8);
     PUSH_R(REG_TRANSIENT_1);
     psyco_inc_stackdepth(po);
 #endif
-    PUSH_I(finfo);
+    PUSH_I(-1); /* finfo */
     psyco_inc_stackdepth(po);
+
+    ABOUT_TO_CALL_SUBFUNCTION(finfo);
     finfo_last(finfo)->link_stack_depth = po->stack_depth;
-    
+    initial_stack_depth = po->stack_depth;
     /* We assume that compiler register state is not changed by the call macros */
-    BEGIN_CALL();
+    /* note that we are not using C calling convention here */
     for(i = 0; i < argcount; i++) {
         Source source = argsources[i];
         if(RSOURCE_REG_IS_NONE(source)) {
@@ -90,16 +94,16 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
         }
         psyco_inc_stackdepth(po);
     }
-    /* SET RT REG TO NONE */
-	END_CALL_I(codebuf->codestart);
-
-    ADD_R_I8(REG_X64_RSP, 8);
+    CALL_I(codebuf->codestart);
+    /* psyco callees remove args :| */
+    po->stack_depth = initial_stack_depth;
+    RETURNED_FROM_SUBFUNCTION();
+    #if CHECK_STACK_DEPTH
+        ADD_R_I8(REG_X64_RSP, sizeof(long));
+        psyco_dec_stackdepth(po);
+    #endif
+    ADD_R_I8(REG_X64_RSP, sizeof(long));
     psyco_dec_stackdepth(po);
-
-#if CHECK_STACK_DEPTH
-    ADD_R_I8(REG_X64_RSP, 8);
-    psyco_dec_stackdepth(po);
-#endif
     /* POP RTs with reg set */
     for(i = REG_TOTAL-1; i >= 0; i--) {
         vinfo_t* content = REG_NUMBER(po, i);
@@ -277,19 +281,37 @@ vinfo_t* unaryinstrgrp(PsycoObject* po, int group, bool ovf,
   return new_rtvinfo(po, rg, false, nonneg);
 }
 
+/* XXX assumes RAX is free to trash */
 DEFINEFN
 vinfo_t* unaryinstrabs(PsycoObject* po, bool ovf,
                                 bool nonneg, vinfo_t* v1)
 {
-  reg_t rg;
-  BEGIN_CODE
-  NEED_CC();
-  COPY_IN_REG(v1, rg);                  /*  MOV  rg, (v1) */
-  INT_ABS(rg, v1->source);              /* 'ABS' rg       */
-  END_CODE
-  if (ovf && runtime_condition_f(po, CHECK_ABS_OVERFLOW))
-    return NULL;  /* if overflow */
-  return new_rtvinfo(po, rg, false, nonneg);
+    reg_t rg;
+    BEGIN_CODE
+    NEED_CC();
+    if(getreg(v1->source) == REG_NONE) {
+        LOAD_REG_FROM_EBP_BASE(REG_X64_RAX, RUNTIME_STACK(v1));
+    } else {
+        MOV_R_R(REG_X64_RAX, getreg(v1->source));
+    }
+    NEED_FREE_REG_COND(rg, (rg != REG_X64_RAX && rg != REG_X64_RDX && rg != getreg(v1->source)));
+    if(REG_NUMBER(po, REG_X64_RDX) != NULL) {
+        MOV_R_R(rg, REG_X64_RDX);
+    }
+    /* ABS RAX */
+    CQO();
+    ADD_R_R(REG_X64_RAX, REG_X64_RDX);
+    XOR_R_R(REG_X64_RAX, REG_X64_RDX);
+    /*     */
+    if(REG_NUMBER(po, REG_X64_RDX) != NULL) {
+        MOV_R_R(REG_X64_RDX, rg);
+    }
+    MOV_R_R(rg, REG_X64_RAX);
+    END_CODE
+    /* if number is negative we overflowed */
+    if (ovf && runtime_condition_f(po, CC_S))
+        return NULL;  
+    return new_rtvinfo(po, rg, false, nonneg);
 }
 
 static const condition_code_t direct_results[16] = {

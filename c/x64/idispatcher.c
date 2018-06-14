@@ -79,8 +79,8 @@ static void data_update_stack(vinfo_t* a, RunTimeSource bsource,
   vinfo_t* overridden;
   
   /* check for values passing from no-reference to reference */
-  if ((bsource & RunTime_NoRef) == 0) {  /* destination has ref */
-    if ((a->source & RunTime_NoRef) == 0)   /* source has ref too */
+  if (has_rtref(bsource)) {  /* destination has ref */
+    if (has_rtref(a->source))   /* source has ref too */
       {
         /* remove the reference from 'a' because it now belongs
            to 'b' ('b->source' itself is in the frozen snapshot
@@ -275,12 +275,8 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
                 {
                   /* the value of 'a' is currently in register 'rg' but
                      should go into register 'i'. */
-                  NEED_REGISTER(i);
-
-                  MOV_R_R(i, rg);
-                  /*SET_RUNTIME_REG_TO(a, i);
-                    REG_NUMBER(po, rg) = NULL;
-                    REG_NUMBER(po, i) = a;*/
+                    NEED_REGISTER(i);
+                    MOV_R_R(i, rg);
                 }
               dm.copy_regs[i] = NULL;
             }
@@ -308,13 +304,13 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
         if (reg<0)
           {/* If there is only one 'garbage' stack entry, POP it as well.
               If there are more, give up and use regular MOVs to load the rest */
-            po->stack_depth -= 4;
+            po->stack_depth -= sizeof(long);
             reg = pops[++i];
             POP_R(reg);
           }
         POP_R(reg);
         dm.copy_regs[(int) reg] = NULL;
-        po->stack_depth -= 4;
+        po->stack_depth -= sizeof(long);
       }
   if (code > dm.code_limit)  /* start a new buffer if we wrote past the end */
     code = data_new_buffer(code, &dm);

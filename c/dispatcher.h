@@ -225,7 +225,7 @@ EXTERNFN void psyco_unfix(PsycoObject* po, vinfo_t* vi);
 /* internal use */
 EXTERNFN void* psyco_prepare_respawn_ex(PsycoObject* po,
                                         condition_code_t jmpcondition,
-                                        void* fn, int extrasize);
+                                        void* fn, size_t extrasize);
 EXTERNFN bool psyco_prepare_respawn(PsycoObject* po,
                                     condition_code_t jmpcondition);
 EXTERNFN code_t* psyco_do_respawn(void* arg, int extrasize);

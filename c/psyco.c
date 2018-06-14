@@ -81,45 +81,6 @@ void psyco_debug_printf(char* msg, ...)
 #endif /* VERBOSE_LEVEL */
 
 
-/* Trace */
-#if defined(PSYCO_TRACE)
-static void* trace_buffer[4096];
-static int   trace_bufdata = 4096;
-static FILE* trace_f = NULL;
-DEFINEFN void psyco_trace_execution(char* msg, void* code_position)
-{
-  if (trace_bufdata == 4096)
-    {
-      if (trace_f == NULL)
-        trace_f = fopen(PSYCO_TRACE, "wb");
-      else
-        fwrite(trace_buffer, sizeof(void*), 4096, trace_f);
-      trace_bufdata = 0;
-    }
-  trace_buffer[trace_bufdata++] = code_position;
-}
-static void trace_flush(void)
-{
-  if (trace_f != NULL)
-    {
-      fwrite(trace_buffer, sizeof(void*), trace_bufdata, trace_f);
-      fclose(trace_f);
-      trace_f = NULL;
-      trace_bufdata = 4096;
-    }
-}
-#elif VERBOSE_LEVEL >= 4
-DEFINEFN void psyco_trace_execution(char* msg, void* code_position)
-{
-  debug_printf(4, ("trace %p for %s\n", code_position, msg));
-}
-DEFINEFN void psyco_trace_execution_noerr(char* msg, void* code_position)
-{
-  debug_printf(4, ("trace %p for %s\n", code_position, msg));
-  psyco_assert(!PyErr_Occurred());
-}
-#endif
-
 
 DEFINEFN
 void psyco_flog(char* msg, ...)
@@ -398,6 +359,7 @@ PyObject* need_cpsyco_obj(char* name)
 		PyErr_Format(PyExc_PsycoError, "missing _psyco.%s", name);
 	return result;
 }
+
 
 static PyObject* psyco_get_locals_msg(char* msg, int flag)
 {

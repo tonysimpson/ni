@@ -153,4 +153,10 @@ setup ( name             = "ni",
                                define_macros = macros,
                                debug = True,
                                include_dirs = [processor_dir])],
+        install_requires=['docopt'],
+        entry_points={
+            'console_scripts': [
+                'ni = ni.__main__:main',
+            ],
+        },
         **kwds )

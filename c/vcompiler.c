@@ -772,7 +772,7 @@ static code_t* do_resume_coding(coding_pause_t* cp)
    compiled code. */
 DEFINEFN
 void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
-                        resume_fn_t resume_fn, void* extra, int extrasize)
+                        resume_fn_t resume_fn, void* extra, size_t extrasize)
 {
   coding_pause_t* cp;
   code_t* calling_code;
@@ -788,7 +788,7 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
   po->code = insn_code_label(codebuf->codestart);
   po->codelimit = limit;
   cp = (coding_pause_t*) psyco_call_code_builder(po, &do_resume_coding,
-                                                 true, SOURCE_DUMMY);
+                                                 true, SOURCE_DUMMY, sizeof(coding_pause_t) + extrasize);
   SHRINK_CODE_BUFFER(codebuf,
                      (code_t*)(cp+1) + extrasize,
                      "coding_pause");

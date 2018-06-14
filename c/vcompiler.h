@@ -729,7 +729,7 @@ EXTERNFN CodeBufferObject* psyco_compile_code(PsycoObject* po, mergepoint_t* mp)
 typedef code_t* (*resume_fn_t)(PsycoObject* po, void* extra);
 EXTERNFN void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
 				 resume_fn_t resume_fn,
-				 void* extra, int extrasize);
+				 void* extra, size_t extrasize);
 
 /* management functions; see comments in compiler.c */
 #if ALL_CHECKS

@@ -225,9 +225,9 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
   CMP_I8_A(0, REG_X64_RSP);\
   BEGIN_SHORT_COND_JUMP(0, CC_E);\
   BEGIN_CALL();\
-  CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[0], 0);\
-  CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[1], 1);\
-  CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[2], 2);\
+  CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[0]->source, 0);\
+  CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[1]->source, 1);\
+  CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[2]->source, 2);\
   END_CALL_I(&cimpl_finalize_frame_locals);\
   END_SHORT_JUMP(0);\
 } while (0)
@@ -255,7 +255,95 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
     }                                                                           \
 } while (0)
 
+/* retpos is position in stack of the return address pushed by call */
+/* the stack must be cleared up this */
+#define FUNCTION_RET(retpos) do {\
+    int post_return_stack_depth = 0;\
+    int pre_return_stack_correction = retpos - po->stack_depth;\
+    int return_depth = sizeof(long) + INITIAL_STACK_DEPTH;\
+    if(RBP_IS_RESERVED) {\
+        pre_return_stack_correction += sizeof(long);\
+    }\
+    STACK_CORRECTION(pre_return_stack_correction);\
+    po->stack_depth += pre_return_stack_correction;\
+    if(RBP_IS_RESERVED) {\
+        POP_R(REG_X64_RBP);\
+        psyco_dec_stackdepth(po);\
+    }\
+    post_return_stack_depth = po->stack_depth - return_depth;\
+    if (post_return_stack_depth >= 0x8000) {\
+        POP_R(REG_TRANSIENT_1);\
+        STACK_CORRECTION(-post_return_stack_depth);\
+        PUSH_R(REG_TRANSIENT_1);\
+        po->stack_depth = return_depth;\
+        STACK_DEPTH_CHECK();\
+        RET();\
+    } else {\
+        STACK_DEPTH_CHECK();\
+        RET_N(post_return_stack_depth);\
+    }\
+    po->stack_depth = 0;\
+} while (0)
+
 /* implemented in pycompiler.c */
 EXTERNFN void cimpl_finalize_frame_locals(PyObject*, PyObject*, PyObject*);
+
+static void function_return(PsycoObject *po, Source retval, int nframelocal, long retpos) {
+    int post_return_stack_depth = 0;
+    int pre_return_stack_correction = 0;
+    int return_depth = sizeof(long) + INITIAL_STACK_DEPTH;
+    BEGIN_CODE
+    /* load the return value into EAX for regular functions, EBX for functions with a prologue */
+    if (retval != SOURCE_DUMMY) {
+        reg_t rg = nframelocal>0 ? REG_ANY_CALLEE_SAVED : REG_FUNCTIONS_RETURN;
+        LOAD_REG_FROM(retval, rg);
+    }
+  
+    if (nframelocal > 0)
+    {
+        /* psyco_emit_header() was used; first clear the stack only up to and not including the frame-local data */
+        int framelocpos = getstack(LOC_CONTINUATION->array->items[0]->source);
+        STACK_CORRECTION(framelocpos - po->stack_depth);
+        po->stack_depth = framelocpos;
+        /* perform Python-specific cleanup */
+
+        CMP_I8_A(0, REG_X64_RSP);
+        BEGIN_SHORT_COND_JUMP(0, CC_E);
+        BEGIN_CALL();
+        CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[0]->source, 0);
+        CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[1]->source, 1);
+        CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[2]->source, 2);
+        END_CALL_I(&cimpl_finalize_frame_locals);
+        END_SHORT_JUMP(0);
+        
+        MOV_R_R(REG_FUNCTIONS_RETURN, REG_ANY_CALLEE_SAVED);
+    }
+
+    pre_return_stack_correction = retpos - po->stack_depth;
+    if(RBP_IS_RESERVED) {
+        pre_return_stack_correction += sizeof(long);
+    }
+    STACK_CORRECTION(pre_return_stack_correction);
+    po->stack_depth += pre_return_stack_correction;
+    if(RBP_IS_RESERVED) {
+        POP_R(REG_X64_RBP);
+        psyco_dec_stackdepth(po);
+    }
+    post_return_stack_depth = po->stack_depth - return_depth;
+    if (post_return_stack_depth >= 0x8000) {
+        POP_R(REG_TRANSIENT_1);
+        STACK_CORRECTION(-post_return_stack_depth);
+        PUSH_R(REG_TRANSIENT_1);
+        po->stack_depth = return_depth;
+        STACK_DEPTH_CHECK();
+        RET();
+    } else {
+        STACK_DEPTH_CHECK();
+        RET_N(post_return_stack_depth);
+    }
+    po->stack_depth = 0;
+
+    END_CODE
+}
 
 #endif /* _IPYENCODING_H */
