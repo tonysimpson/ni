@@ -789,9 +789,7 @@ void psyco_coding_pause(PsycoObject* po, condition_code_t jmpcondition,
   po->codelimit = limit;
   cp = (coding_pause_t*) psyco_call_code_builder(po, &do_resume_coding,
                                                  true, SOURCE_DUMMY, sizeof(coding_pause_t) + extrasize);
-  SHRINK_CODE_BUFFER(codebuf,
-                     (code_t*)(cp+1) + extrasize,
-                     "coding_pause");
+  SHRINK_CODE_BUFFER(codebuf, po->code, "coding_pause");
   /* fill in the coding_pause_t structure and the following 'extra' data */
   psyco_resolved_cc(po, jmpcondition);  /* jmpcondition is true if we follow
                                            the branch */
