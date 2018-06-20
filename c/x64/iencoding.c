@@ -80,7 +80,8 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
     psyco_inc_stackdepth(po);
 
     ABOUT_TO_CALL_SUBFUNCTION(finfo);
-    finfo_last(finfo)->link_stack_depth = po->stack_depth;
+    /* offset in stack to this this finfo */
+    finfo_last(finfo)->link_stack_depth = po->stack_depth - INITIAL_STACK_DEPTH; 
     initial_stack_depth = po->stack_depth;
     /* We assume that compiler register state is not changed by the call macros */
     /* note that we are not using C calling convention here */
