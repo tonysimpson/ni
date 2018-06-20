@@ -30,7 +30,7 @@
 
 
 /* everything before args, including finfo which is the last thing before args */
-#define CHECK_STACK_DEPTH 1 
+#define CHECK_STACK_DEPTH 0
 #if CHECK_STACK_DEPTH
 #define INITIAL_STACK_DEPTH  16
 #else
@@ -433,6 +433,17 @@ if(!ONLY_UPDATING) {\
         MODRM_ENCODING(mod, r, rm);\
     }\
 } while (0)
+#define REX_ENCODING2(rex, rex_w, r, i, rm) do {\
+    if(rex || rex_w || r > 7 || rm > 7) {\
+        WRITE_1(0x40 | (rex_w ? 8 : 0) | (r > 7 ? 4 : 0) | (i > 7 ? 2 : 0) |(rm > 7 ? 1 : 0));\
+    }\
+} while (0)
+#define DIRECT_ENCODING2(rex, rex_w, op_len, b1, b2, b3, mod, r, rm) do {\
+    CALL_TRACE_EXECTION();\
+    REX_ENCODING2(rex, rex_w, r, 0, rm);\
+    WRITE_OPCODES(op_len, b1, b2, b3);\
+    MODRM_ENCODING(mod | 0xC0, r, rm);\
+} while (0)
 #define DIRECT_ENCODING(rex_w, op_len, b1, b2, b3, mod, r, rm) do {\
     CALL_TRACE_EXECTION();\
     REX_ENCODING(rex_w, r, 0, rm);\
@@ -528,7 +539,7 @@ if(!ONLY_UPDATING) {\
 #define ADD_R_I8(rm, i) DIRECT_ENCODING(true, 1, 0x83, 0, 0, 0x0, 0, rm); WRITE_8BIT(i)
 #define ADD_R_I32(rm, i) DIRECT_ENCODING(true, 1, 0x81, 0, 0, 0x0, 0, rm); WRITE_32BIT(i)
 #define IMUL_R_R(r1, r2) WRITE_4(REX_64_REG_RM(r1, r2), 0x0F, 0xAF, MODRM_REG_RM(r1, r2))
-#define SET_R_CC(r, cc) DIRECT_ENCODING(false, 2, 0x0F, 0x90 | cc, 0, 0, 0, r);
+#define SET_R_CC(r, cc) DIRECT_ENCODING2((r > 3), false, 2, 0x0F, 0x90 | cc, 0, 0, 0, r)
 #define PUSH_A(rm) INDIRECT_ENCODING(false, 1, 0xFF, 0, 0, 0x30, 0, rm)
 #define PUSH_R(r) BASE_ENCODING(false, 0, 0, 0, 0, 0x50, 0, r);
 #define PUSH_I(immed) do {\
