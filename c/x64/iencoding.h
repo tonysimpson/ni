@@ -30,14 +30,14 @@
 
 
 /* everything before args, including finfo which is the last thing before args */
-#define CHECK_STACK_DEPTH 0
+#define CHECK_STACK_DEPTH 1 
 #if CHECK_STACK_DEPTH
 #define INITIAL_STACK_DEPTH  16
 #else
 #define INITIAL_STACK_DEPTH  8
 #endif
 
-#define TRACE_EXECTION 1
+#define TRACE_EXECTION 0
 
 /* Define to 0 to use RBP as any other register, or to 1 to reserve it 
  * useful for debugging to set this to 1 */
@@ -535,7 +535,7 @@ if(!ONLY_UPDATING) {\
     MOV_R_I(REG_TRANSIENT_1, immed);\
     PUSH_R(REG_TRANSIENT_1);\
 } while(0)
-#define PUSH_O(rm, o) OFFSET_ENCODING(false, false, 1, 0xFF, 0, 0, 0x70, 0, 0, rm, o)
+#define PUSH_O(rm, o) OFFSET_ENCODING(false, false, 1, 0xFF, 0, 0, 0x30, 0, 0, rm, o)
 #define POP_R(r) BASE_ENCODING(false, 0, 0, 0, 0, 0x58, 0, r);
 #define POP_O(rm, o) OFFSET_ENCODING(false, false, 1, 0x8F, 0, 0, 0x40, 0, 0, rm, o)
 #define RET() do {\
@@ -995,7 +995,9 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 #define IS_BYTE_REG(rg)          (1) /* all registers are byte registers */
 #define NEED_FREE_BYTE_REG(targ, resrv1, resrv2) do {\
     NEED_FREE_REG_COND(targ, targ!=(resrv1) && targ!=(resrv2));\
+    PUSH_CC();\
     XOR_R_R(targ, targ); /* need to zero before use */\
+    POP_CC();\
 } while (0)
 
 /* make sure that the register 'reg' will not
