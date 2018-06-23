@@ -318,16 +318,22 @@ EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 EXTERNVAR void (*call_trace_execution) (void);
 
 FILE *codegen_log;
-#define DEBUG_BEGIN_CODE_LOCATION                fprintf(codegen_log, "BEGIN_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code); fflush(codegen_log);
-#define DEBUG_END_CODE_LOCATION                  fprintf(codegen_log, "END_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, code); fflush(codegen_log);
+#define LOG_BEGIN_CODE_GEN(_code) do {\
+    fprintf(codegen_log, "BEGIN_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, _code);\
+    fflush(codegen_log);\
+} while (0)
+#define LOG_END_CODE_GEN(_code) do {\
+    fprintf(codegen_log, "END_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, _code);\
+    fflush(codegen_log);\
+} while (0)
 #define BEGIN_CODE do {\
     code_t* code = po->code;\
-    DEBUG_BEGIN_CODE_LOCATION\
+    LOG_BEGIN_CODE_GEN(code);\
     BREAK_ON();\
     STACK_DEPTH_CHECK();
 #define END_CODE\
     po->code = code;\
-    DEBUG_END_CODE_LOCATION\
+    LOG_END_CODE_GEN(code);\
     if (code >= po->codelimit) {\
         PsycoObject_EmergencyCodeRoom(po);\
     }\
