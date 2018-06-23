@@ -1,17 +1,8 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import sys
+from tools import *
 
-def gen_blocks():
-    for line in open('codegen.log'):
-        if 'BEGIN_CODE' in line:
-            begin = line.split()[-1]
-        elif 'END_CODE' in line:
-            yield begin, line.split()[-1]
-            del begin
-
-def hex_to_int(h):
-    return int(h, 16)
 
 opcodes = [("%s %s" % (num, line)) for num, line in enumerate(open('codegen.log')) if line.startswith('OPCODE')]
 opcodes.sort(key = lambda x: hex_to_int(x.split()[-1]))
