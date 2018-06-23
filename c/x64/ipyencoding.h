@@ -225,7 +225,7 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
 #define FINALIZE_FRAME_LOCALS(nframelocal) do {\
   CMP_I8_A(0, REG_X64_RSP);\
   BEGIN_SHORT_COND_JUMP(0, CC_E);\
-  BEGIN_CALL();\
+  BEGIN_CALL(3);\
   CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[0]->source, 0);\
   CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[1]->source, 1);\
   CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[2]->source, 2);\
@@ -310,7 +310,7 @@ static void function_return(PsycoObject *po, Source retval, int nframelocal, lon
 
         CMP_I8_A(0, REG_X64_RSP);
         BEGIN_SHORT_COND_JUMP(0, CC_E);
-        BEGIN_CALL();
+        BEGIN_CALL(3);
         CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[0]->source, 0);
         CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[1]->source, 1);
         CALL_SET_ARG_FROM_RT(LOC_CONTINUATION->array->items[2]->source, 2);

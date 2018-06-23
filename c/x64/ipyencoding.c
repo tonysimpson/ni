@@ -10,7 +10,7 @@ code_t* decref_dealloc_calling(code_t* code, PsycoObject* po, reg_t rg,
   extra_assert(offsetof(PyTypeObject, tp_dealloc) < 128);
   DEC_OB_REFCNT_NZ(rg);
   BEGIN_SHORT_COND_JUMP(0, CC_NE); /* NE is the not zero flag */
-  BEGIN_CALL();
+  BEGIN_CALL(1);
   CALL_SET_ARG_FROM_REG(rg, 0);
   if (fn == NULL) {
     MOV_R_O8(REG_TRANSIENT_1, rg, offsetof(PyObject, ob_type));

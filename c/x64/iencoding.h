@@ -27,7 +27,31 @@
 #define INITIAL_STACK_DEPTH  8
 #endif
 
-#define TRACE_EXECTION 0
+#define TRACE_EXECTION 1
+
+#define CHECK_CALL_STACK_ALIGNED 1
+
+#if CHECK_CALL_STACK_ALIGNED
+#define CALL_STACK_ALIGNED_CHECK() do {\
+    if (call_trace_execution != NULL) {\
+        PUSH_CC();\
+        TEST_R_I(REG_X64_RSP, 0x7);\
+        BEGIN_SHORT_COND_JUMP(0, CC_E); /* jump if 8 byte aligned */\
+        BRKP();\
+        END_SHORT_JUMP(0);\
+        TEST_R_I(REG_X64_RSP, 0x8);\
+        BEGIN_SHORT_COND_JUMP(1, CC_NE);\
+        /* check we are 8 byte aligned from PUSH_CC above, will be
+         * 16 byte aligned after POP_CC as required by calling
+         * convention */\
+        BRKP();\
+        END_SHORT_JUMP(1);\
+        POP_CC();\
+    }\
+} while(0)
+#else
+#define CALL_STACK_ALIGNED_CHECK() do { } while (0)
+#endif
 
 /* Define to 0 to use RBP as any other register, or to 1 to reserve it 
  * useful for debugging to set this to 1 */
@@ -495,6 +519,7 @@ if(!ONLY_UPDATING) {\
 } while (0)
 #define XCHG_R_O(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x87, 0, 0, 0, 0, r, rm, o)
 #define TEST_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x85, 0, 0, 0, r, rm)
+#define TEST_R_I(r, i) DIRECT_ENCODING(true, 1, 0xF7, 0, 0, 0, 0, r); WRITE_32BIT(i)
 #define CMP_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x39, 0, 0, 0, r, rm)
 #define CMP_R_A(r, rm) INDIRECT_ENCODING(true, 1, 0x39, 0, 0, 0, r, rm)
 #define CMP_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x39, 0, 0, 0, 8, r, rm, o)
@@ -511,9 +536,13 @@ if(!ONLY_UPDATING) {\
 } while (0)
 #define JMP_R(r) DIRECT_ENCODING(false, 1, 0xFF, 0, 0, 0xE0, 0, r)
 #define JMP_CC_UI32(cc, address) BASE_ENCODING(false, 1, 0x0F, 0, 0, 0x80 | (cc), 0, 0); UPDATABLE_WRITE_32BIT((address) - ((long)code + 4))
-#define CALL_R(r) DIRECT_ENCODING(false, 1, 0xFF, 0, 0, 0xD0, 0, r)
+#define CALL_R(r) do {\
+    CALL_STACK_ALIGNED_CHECK();\
+    DIRECT_ENCODING(false, 1, 0xFF, 0, 0, 0xD0, 0, r);\
+} while (0)
 #define CALL_I(i) do {\
     long jump_amount;\
+    CALL_STACK_ALIGNED_CHECK();\
     CALL_TRACE_EXECTION();\
     jump_amount = (long)(i) - ((long)code + 5);\
     if(FITS_IN_32BITS(jump_amount)) {\
@@ -836,16 +865,20 @@ static const bool callee_saved_reg_table[REG_TOTAL] = {
         true,  /* R15 */
 };
 
-/* Note we only save Registers that may have a runtime vinfo so 
- * RAX, R11 and R12 which are transient are not saved by caller 
- *
- * Also we don't care about restoring thing immediatly after a call. 
- * Important things are put on the stack and if we need them pysco 
- * will generate code to get them.
- * */
-#define BEGIN_CALL() do {\
+
+
+#define BEGIN_CALL(_num_args) do {\
     int _last_arg_index = -1;\
     int _initial_stack_depth = po->stack_depth;\
+    /* align stack to 16 byte */\
+    int _stack_correction = 0;\
+    int _args_depth = 0;\
+    if(_num_args > argument_reg_table_len) {\
+        _args_depth = ((_num_args - argument_reg_table_len) * sizeof(long));\
+    }\
+    _stack_correction = (16 - ((STACK_DEPTH_SINCE_CALL() + _args_depth) % 16)) % 16;\
+    STACK_CORRECTION(_stack_correction);\
+    po->stack_depth += _stack_correction;\
     do {} while(0)
 #define _CHECK_IS_NEXT_ARG(index) do {\
     /* call in reverse order 0 indexed */\

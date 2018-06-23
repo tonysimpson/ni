@@ -34,7 +34,7 @@ DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore, R
   code = block_start;
   code += block_size;
   END_SHORT_JUMP(0);
-  BEGIN_CALL();
+  BEGIN_CALL(extraarg != SOURCE_DUMMY ? 2 : 1);
   if (extraarg != SOURCE_DUMMY) {
     CALL_SET_ARG_FROM_RT(extraarg, 1);
   }
@@ -55,6 +55,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	int i;
 	bool ccflags;
     int initial_stack_depth;
+    int stack_correction;
 	BEGIN_CODE
 	/* cannot use NEED_CC(): it might clobber one of the registers
 	   mentioned in argsources */
@@ -70,6 +71,14 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
             psyco_inc_stackdepth(po);
         }
     }
+
+    /* add 16 byte aligned stack */
+    do {
+        stack_correction = (16 - (((argcount * sizeof(long)) + STACK_DEPTH_SINCE_CALL() + INITIAL_STACK_DEPTH) % 16)) % 16;
+        STACK_CORRECTION(stack_correction);
+        po->stack_depth += stack_correction;
+    } while (0);
+
 #if CHECK_STACK_DEPTH
     MOV_R_R(REG_TRANSIENT_1, REG_X64_RSP);
     SUB_R_I8(REG_TRANSIENT_1, 8);
@@ -95,16 +104,22 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
         }
         psyco_inc_stackdepth(po);
     }
+    po->stack_depth += stack_correction;
     CALL_I(codebuf->codestart);
     /* psyco callees remove args :| */
     po->stack_depth = initial_stack_depth;
     RETURNED_FROM_SUBFUNCTION();
     #if CHECK_STACK_DEPTH
-        ADD_R_I8(REG_X64_RSP, sizeof(long));
+        ADD_R_I8(REG_X64_RSP, sizeof(long) * 2);
+        psyco_dec_stackdepth(po);
+        psyco_dec_stackdepth(po);
+    #else
+        ADD_R_I8(REG_X64_RSP, sizeof(long)); 
         psyco_dec_stackdepth(po);
     #endif
-    ADD_R_I8(REG_X64_RSP, sizeof(long));
-    psyco_dec_stackdepth(po);
+    /* remove stack correction */
+    STACK_CORRECTION(-stack_correction);
+    po->stack_depth -= stack_correction;
     /* POP RTs with reg set */
     for(i = REG_TOTAL-1; i >= 0; i--) {
         vinfo_t* content = REG_NUMBER(po, i);
@@ -116,6 +131,8 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 
 	if (ccflags)
 		POP_CC();
+
+
 	END_CODE
 	return generic_call_check(po, CfReturnRef|CfPyErrIfNull,
 				  bfunction_result(po, true));

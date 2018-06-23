@@ -11,10 +11,11 @@ typedef PyObject* (*glue_run_code_fn) (code_t* code_target,
 				       struct stack_frame_info_s*** finfo);
 
 
-static glue_run_code_fn glue_run_code;
+static glue_run_code_fn glue_run_code_aligned;
 
+static glue_run_code_fn glue_run_code_unaligned;
 
-static void write_glue_run_code_fn(PsycoObject *po) {
+static void write_glue_run_code_fn(PsycoObject *po, bool aligned) {
     BEGIN_CODE
     PUSH_R(REG_X64_RBP);
 #if RBP_IS_RESERVED
@@ -25,6 +26,9 @@ static void write_glue_run_code_fn(PsycoObject *po) {
     PUSH_R(REG_X64_R13);
     PUSH_R(REG_X64_R14);
     PUSH_R(REG_X64_R15);
+    if (!aligned) {
+        SUB_R_I8(REG_X64_RSP, 8);
+    }
 #if CHECK_STACK_DEPTH
     MOV_R_R(REG_TRANSIENT_1, REG_X64_RSP);
     SUB_R_I8(REG_TRANSIENT_1, 8);
@@ -39,13 +43,8 @@ static void write_glue_run_code_fn(PsycoObject *po) {
     END_SHORT_JUMP(0);
     CMP_R_R(REG_X64_RDX, REG_X64_RSI);
     END_REVERSE_SHORT_COND_JUMP(1, CC_NE);
-    BEGIN_CALL();
-    END_CALL_R(REG_X64_RDI);
-#if CHECK_STACK_DEPTH
-    ADD_R_I8(REG_X64_RSP, 16);
-#else
-    ADD_R_I8(REG_X64_RSP, 8);
-#endif
+    CALL_R(REG_X64_RDI);
+    ADD_R_I8(REG_X64_RSP, (1 + (aligned ? 0 : 1) + (CHECK_STACK_DEPTH ? 1 : 0)) * sizeof(long));
     POP_R(REG_X64_R15);
     POP_R(REG_X64_R14);
     POP_R(REG_X64_R13);
@@ -138,8 +137,20 @@ PyObject* psyco_processor_run(CodeBufferObject* codebuf,
                               PyObject* tdict)
 {
   int argc = RUN_ARGC(codebuf);
-  return glue_run_code(codebuf->codestart, initial_stack + argc,
-                         initial_stack, finfo);
+  int regs_saved = 6;
+  int finfo_pushed = 1;
+  int return_address = 1;
+  int stack_check = CHECK_STACK_DEPTH;
+  /* we need to work out if the call to psyco code would be made with the stack 16 bytes aligned
+   * and adjust accordingly - we assume everything pushed to the stack is 8 bytes wide
+   * and the call from C will be aligned before the call (in the call it is off by 8 due to return address),
+   * so we only need to know if an odd number of this is pushed to the stack before the call.
+   */
+  if((argc + regs_saved + stack_check + finfo_pushed + return_address) & 1) {
+    return glue_run_code_unaligned(codebuf->codestart, initial_stack + argc, initial_stack, finfo);
+  } else {
+    return glue_run_code_aligned(codebuf->codestart, initial_stack + argc, initial_stack, finfo);
+  }
 }
 
 
@@ -183,8 +194,10 @@ void psyco_processor_init(void)
     PsycoObject *po = PsycoObject_New(0);
     po->code = codebuf->codestart;
     po->codelimit = limit;
-    glue_run_code = (glue_run_code_fn)po->code;
-    write_glue_run_code_fn(po);
+    glue_run_code_aligned = (glue_run_code_fn)po->code;
+    write_glue_run_code_fn(po, true);
+    glue_run_code_unaligned = (glue_run_code_fn)po->code;
+    write_glue_run_code_fn(po, false);
     psyco_int_mul_ovf = (psyco_int_mul_ovf_fn)po->code;
     write_psyco_int_mul_ovf(po);
     call_trace_execution_loc = po->code;

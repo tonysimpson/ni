@@ -381,7 +381,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 	stackbase = po->stack_depth;
 	po->stack_depth += totalstackspace;
 	STACK_CORRECTION(totalstackspace);
-    BEGIN_CALL();
+    BEGIN_CALL(count);
 	for (i=count; i--; ) {
 		switch (argtags[i]) {
 			
