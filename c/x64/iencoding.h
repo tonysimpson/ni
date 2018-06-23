@@ -16,17 +16,7 @@
 # define PENTIUM_INSNS    1
 #endif
 
- /* Define to 1 to always write the most compact encoding of instructions.
-    (a quite minor overhead). Set to 0 to disable. No effect on real
-    optimizations. */
-#ifndef COMPACT_ENCODING
-#ifdef __APPLE__
-/* COMPACT_ENCODING not yet supported on MacOS X */
-# define COMPACT_ENCODING   0
-#else
-# define COMPACT_ENCODING   1
-#endif
-#endif
+#define COMPACT_ENCODING   1
 
 
 /* everything before args, including finfo which is the last thing before args */
