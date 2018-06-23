@@ -56,6 +56,7 @@ PSY_INLINE void* dictitem_check_change(PsycoObject* po,
 PSY_INLINE void dictitem_update_nochange(void* originalmacrocode,
                                      PyDictObject* dict, PyDictEntry* new_ep)
 {
+  PsycoObject *po = NULL;
   int index = new_ep - dict->ma_table;
   code_t* code = (code_t*) originalmacrocode;
 #undef ONLY_UPDATING

@@ -56,6 +56,7 @@ struct ipromotion_s {
 PSY_INLINE code_t* fix_fast_common_case(void* fs, long value,
                                     code_t* codeptr)
 {
+  PsycoObject *po = NULL; /* XXX HACK for trace_execution */
 #if PROMOTION_FAST_COMMON_CASE
 #undef ONLY_UPDATING
 #define ONLY_UPDATING 1

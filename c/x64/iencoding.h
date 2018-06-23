@@ -138,6 +138,12 @@ typedef enum {
 #define CHECK_STACK_SPACE()              do { /* nothing */ } while (0)
 
 
+/***************
+ * Return the stack depth after and including the return address pushed by the call to this function
+ * when inlining the return address is saved in a funny place
+ */
+#define STACK_DEPTH_SINCE_CALL() (po->pr.is_inlining ? ((po->stack_depth - getstack(LOC_INLINING->array->items[2]->source)) + sizeof(long)) : ((po->stack_depth - getstack(LOC_CONTINUATION->source)) + sizeof(long)))
+
 /*****************************************************************/
  /***   Production of code (common instruction encodings)       ***/
 
@@ -1196,9 +1202,11 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 
 #if TRACE_EXECTION
 #define CALL_TRACE_EXECTION() do {\
-    if (call_trace_execution != NULL) {\
+    if (!ONLY_UPDATING && call_trace_execution != NULL) {\
         WRITE_1(0xE8);\
         WRITE_32BIT((long)call_trace_execution - ((long)code+4));\
+        fprintf(codegen_log, "TRACE POINT stack_depth:%d call_depth:%lu %p\n", po->stack_depth, STACK_DEPTH_SINCE_CALL(), code);\
+        fflush(codegen_log);\
     }\
 } while (0)
 #else
