@@ -35,6 +35,7 @@
 #define CALL_STACK_ALIGNED_CHECK() do {\
     if (call_trace_execution != NULL) {\
         PUSH_CC();\
+        psyco_inc_stackdepth(po);\
         TEST_R_I(REG_X64_RSP, 0x7);\
         BEGIN_SHORT_COND_JUMP(0, CC_E); /* jump if 8 byte aligned */\
         BRKP();\
@@ -47,6 +48,7 @@
         BRKP();\
         END_SHORT_JUMP(1);\
         POP_CC();\
+        psyco_dec_stackdepth(po);\
     }\
 } while(0)
 #else
@@ -166,7 +168,17 @@ typedef enum {
  * Return the stack depth after and including the return address pushed by the call to this function
  * when inlining the return address is saved in a funny place
  */
-#define STACK_DEPTH_SINCE_CALL() (po->pr.is_inlining ? (LOC_INLINING == NULL ? -1 : ((po->stack_depth - getstack(LOC_INLINING->array->items[2]->source)) + sizeof(long))) : ((po->stack_depth - getstack(LOC_CONTINUATION->source)) + sizeof(long)))
+#define STACK_DEPTH_SINCE_CALL()\
+    (po->pr.is_inlining ?\
+        (LOC_INLINING == NULL ?\
+            (LOC_CONTINUATION == NULL ?\
+                -1 :\
+                ((po->stack_depth - getstack(LOC_CONTINUATION->source)) + sizeof(long))\
+            ) :\
+            ((po->stack_depth - getstack(LOC_INLINING->array->items[2]->source)) + sizeof(long))\
+        ) :\
+        ((po->stack_depth - getstack(LOC_CONTINUATION->source)) + sizeof(long))\
+    )
 
 /*****************************************************************/
  /***   Production of code (common instruction encodings)       ***/
