@@ -1425,6 +1425,20 @@ void psyco_delete_unused_vars(PsycoObject* po, global_entries_t* ge)
     }
 }
 
+/* This function is used to find the vinfo_t and frozen source corresponding to the return 
+ * addess on the stack and compare there locations for 16 byte alignment
+ *
+ * fz_find_runtimes walks the arrays in reverse order so the return value is the last thing 
+ * to be visited so its of to do this test and just overwrite the previous none-return address
+ * results.
+ *
+ * This is a kludge until I understand the freezing code and find a better way to handle
+ * call alignement
+ */
+static void compare_return_address_in_a_stupid_way(vinfo_t* a, RunTimeSource bsource, int *alignment_match) {
+    *alignment_match = (getstack(a->source) % 16) == (getstack(bsource) % 16);
+}
+
 DEFINEFN
 vcompatible_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns)
 {
@@ -1437,7 +1451,7 @@ vcompatible_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns)
   extra_assert(PyList_Check(plist));
   i = PyList_GET_SIZE(plist);
   while (i--)    /* the most dummy algorithm: step by step in the list, */
-    {            /* checking for a match at each step.                  */
+  {              /* checking for a match at each step.                  */
       CodeBufferObject* codebuf;
       PyObject* o1 = PyList_GET_ITEM(plist, i);
       if (!CodeBuffer_Check(o1))
@@ -1448,38 +1462,46 @@ vcompatible_t* psyco_compatible(PsycoObject* po, global_entries_t* patterns)
       extra_assert(CodeBuffer_Check(codebuf));
       fz_check_invariant(&codebuf->snapshot);
       if (fz_compatible_array(&po->vlocals, &codebuf->snapshot, &result))
-	{
-          /* compatible_array() leaves data in the 'tmp' fields.
-             It must be cleared unless it is the final result of
-             psyco_compatible() itself. */
-	  if (result.diff == NullArray)
+	  {
+        int alignment_match = -1;
+        fz_find_runtimes(&po->vlocals, &codebuf->snapshot, (fz_find_fn) &compare_return_address_in_a_stupid_way, &alignment_match, false);
+        /* 
+         * compatible_array() leaves data in the 'tmp' fields. It must be 
+         * cleared unless it is the final result of psyco_compatible() itself. 
+         */
+        if (alignment_match != 1) {
+            fz_restore_invariant(&codebuf->snapshot);
+            continue;
+        }
+	    if (result.diff == NullArray)
 	    {
-              /* Total match */
-              if (bestresult != NULL)
-                array_release(bestresult);
-              return &result;
+          /* Total match */
+          if (bestresult != NULL)
+            array_release(bestresult);
+          return &result;
 	    }
-          else
+        else {
+          /* Partial match, clear 'tmp' fields */
+          fz_restore_invariant(&codebuf->snapshot);
+          if (bestresult != NULL)
             {
-              /* Partial match, clear 'tmp' fields */
-              fz_restore_invariant(&codebuf->snapshot);
-              if (bestresult != NULL)
+              if (bestresult->count <= result.diff->count)
                 {
-                  if (bestresult->count <= result.diff->count)
-                    {
-                      array_release(result.diff);
-                      continue;  /* not better than the previous partial match */
-                    }
-                  array_release(bestresult);
+                  array_release(result.diff);
+                  continue;  /* not better than the previous partial match */
                 }
-              /* Record the best partial match we found so far */
-              bestresult = result.diff;
-              bestbuf    = codebuf;
+              array_release(bestresult);
             }
-	}
-      else   /* compatible_array() should have reset all 'tmp' fields */
+          /* Record the best partial match we found so far */
+          bestresult = result.diff;
+          bestbuf    = codebuf;
+        }
+	  }
+      else {
+      /* compatible_array() should have reset all 'tmp' fields */
         fz_check_invariant(&codebuf->snapshot);
-    }
+      }
+  }
   if (bestresult == NULL)
     return NULL;
   else
