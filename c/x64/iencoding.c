@@ -25,10 +25,24 @@ DEFINEVAR reg_t RegistersLoop[REG_TOTAL] = {
     /* R15 > */ REG_X64_RBX
 };
 
+/* XXX Get function info from function pointer in glibc only */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <dlfcn.h>
+
 DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore, RunTimeSource extraarg, size_t block_size)
 {
   char* block_start;
+  Dl_info dl_info;
+
   BEGIN_CODE
+  if(dladdr(fn, &dl_info)) {
+    fprintf(codegen_log, "CALL_CODE_BUILDER %p > %p (%s:%s)\n", code, fn, dl_info.dli_fname, dl_info.dli_sname);
+  } else {
+    fprintf(codegen_log, "CALL_CODE_BUILDER %p > %p ()\n", code, fn);
+  }
+
   BEGIN_SHORT_JUMP(0);
   block_start = (char*)(((long)code + 7) & (~7)); /* alignment */
   code = block_start;
@@ -105,6 +119,10 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
         psyco_inc_stackdepth(po);
     }
     po->stack_depth += stack_correction;
+
+    fprintf(codegen_log, "PSYCO_CALL_PSYCO %p > %p\n", code, codebuf->codestart);
+    fflush(codegen_log);
+
     CALL_I(codebuf->codestart);
     /* psyco callees remove args :| */
     po->stack_depth = initial_stack_depth;

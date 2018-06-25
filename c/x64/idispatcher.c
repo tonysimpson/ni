@@ -219,11 +219,13 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   code_t* backpointer;
   CodeBufferObject* target_codebuf = lastmatch->matching;
   int sdepth = get_stack_depth(&target_codebuf->snapshot);
-  int popsdepth;
-  char pops[REG_TOTAL+2];
 #if PSYCO_DEBUG
   bool has_ccreg = HAS_CCREG(po);
 #endif
+
+  fprintf(codegen_log, "UNIFY %p > %p\n", code, target_codebuf->codestart);
+  fflush(codegen_log);
+
   LOG_BEGIN_CODE_GEN(code);
   extra_assert(lastmatch->diff == NullArray);  /* unify with exact match only */
   psyco_assert_coherent(po);
