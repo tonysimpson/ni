@@ -8,7 +8,8 @@
 
 #include "../psyco.h"
 #define MACHINE_CODE_FORMAT    "86x64"
-#define HAVE_FP_FN_CALLS       1
+/* XXX hack remove float support - add back by fixing c/Object/pfloatobject.* */
+#define HAVE_FP_FN_CALLS       0
 
 
  /* set to 0 to emit code that runs on 386 and 486 */
