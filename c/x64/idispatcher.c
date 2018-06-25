@@ -268,59 +268,51 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
 
   LOG_BEGIN_CODE_GEN(code);
   /* update the registers (1): reg-to-reg moves and exchanges */
-  popsdepth = po->stack_depth;
-  memset(pops, -1, sizeof(pops));
-  for (i=0; i<REG_TOTAL; i++)
-    {
-      vinfo_t* a = dm.copy_regs[i];
-      if (a != NULL)
-        {
-          char rg = RUNTIME_REG(a);
-          if (rg != REG_NONE)
-            {
-              if (rg != i)
-                {
-                  /* the value of 'a' is currently in register 'rg' but
-                     should go into register 'i'. */
-                    NEED_REGISTER(i);
-                    MOV_R_R(i, rg);
+    for (i=0; i<REG_TOTAL; i++) {
+        vinfo_t* v = dm.copy_regs[i];
+        if (v != NULL) {
+            reg_t rg = RUNTIME_REG(v);
+            if (rg != REG_NONE) {
+                if (rg != i) {
+                    /* Value v is in rg but needs to be in register i */
+                    vinfo_t *v2 = REG_NUMBER(po, i);
+                    if (v2 != NULL) {
+                        /* Theres something in register i exchange and update */
+                        XCHG_R_R(rg, i);
+                        REG_NUMBER(po, i) = v;
+                        SET_RUNTIME_REG_TO(v, i);
+                        REG_NUMBER(po, rg) = v2;
+                        SET_RUNTIME_REG_TO(v2, rg);
+                    }
+                    else {
+                        /* Register i is free just move rg to i */
+                        MOV_R_R(i, rg);
+                        REG_NUMBER(po, rg) = NULL;
+                        REG_NUMBER(po, i) = v;
+                        SET_RUNTIME_REG_TO(v, i);
+                    }
                 }
-              dm.copy_regs[i] = NULL;
-            }
-          else
-            {  /* prepare the step (2) below by looking for registers
-                  whose source is near the top of the stack */
-              int from_tos = po->stack_depth - RUNTIME_STACK(a);
-              extra_assert(from_tos >= 0);
-              if (from_tos < REG_TOTAL*sizeof(void*))
-                {
-                  char* ptarget = pops + (from_tos / sizeof(void*));
-                  if (*ptarget == -1)
-                    *ptarget = i;
-                  else
-                    *ptarget = -2;
-                }
-            }
+                dm.copy_regs[i] = NULL;
+            } 
         }
     }
-  
-  if (code > dm.code_limit) {
-    /* start a new buffer if we wrote past the end */
-    LOG_END_CODE_GEN(code);
-    code = data_new_buffer(code, &dm);
-    LOG_BEGIN_CODE_GEN(code);
-  }
-  
-  /* update the registers (3): stack-to-register loads */
-  for (i=0; i<REG_TOTAL; i++)
-    {
-      vinfo_t* a = dm.copy_regs[i];
-      if (a != NULL)
-        LOAD_REG_FROM_EBP_BASE(i, RUNTIME_STACK(a));
+    if (code > dm.code_limit) {
+        /* start a new buffer if we wrote past the end */
+        LOG_END_CODE_GEN(code);
+        code = data_new_buffer(code, &dm);
+        LOG_BEGIN_CODE_GEN(code);
+    }
+    /* update the registers (2): stack-to-register loads */
+    for (i=0; i<REG_TOTAL; i++) {
+        vinfo_t* v = dm.copy_regs[i];
+        if (v != NULL) {
+            RTVINFO_FROM_STACK_TO_REG(v, i);
+        }
     }
 
-  /* done */
-  STACK_CORRECTION(sdepth - po->stack_depth);
+    /* done */
+    STACK_CORRECTION(sdepth - po->stack_depth);
+
   if (code > dm.code_limit) {
     /* start a new buffer if we wrote past the end */
     LOG_END_CODE_GEN(code);
