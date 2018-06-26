@@ -1,2 +1,0 @@
-1) ipromotion_finish - bad generated code
-2) stack depth checks failing
