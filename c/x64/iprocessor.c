@@ -55,6 +55,7 @@ static void write_glue_run_code_fn(PsycoObject *po, bool aligned) {
     END_CODE
 }
 
+#if TRACE_EXECUTION_LOG
 typedef struct {
     void* r15;
     void* r14;
@@ -76,12 +77,15 @@ typedef struct {
     void* return_address;
 } trace_state_t;
 
-
 FILE *trace_log;
 static void trace_execution(trace_state_t *state) {
     fprintf(trace_log, "pc:%p sp:%p\n", state->return_address, (void*)((char*)state->rsp + (sizeof(trace_state_t) - offsetof(trace_state_t, rsp))));
     fflush(trace_log);
 }
+
+typedef void (*call_trace_execution_fn) (void);
+
+call_trace_execution_fn call_trace_execution;
 
 /* 
  * Write code that can call the c trace_execution function.
@@ -128,7 +132,7 @@ static void write_call_trace_execution(PsycoObject *po) {
     RET();
     END_CODE;
 }
-
+#endif
 
 DEFINEFN
 PyObject* psyco_processor_run(CodeBufferObject* codebuf,
@@ -169,9 +173,6 @@ void write_psyco_int_mul_ovf(PsycoObject *po) {
     END_CODE
 }
 
-typedef void (*call_trace_execution_fn) (void); 
-
-call_trace_execution_fn call_trace_execution;
 
 
 DEFINEFN struct stack_frame_info_s**
@@ -187,9 +188,11 @@ psyco_next_stack_frame(struct stack_frame_info_s** finfo)
 INITIALIZATIONFN
 void psyco_processor_init(void)
 {
-    trace_log = fopen("trace_execution.log", "w");
     code_t *limit;
+#if TRACE_EXECUTION_LOG
     code_t *call_trace_execution_loc;
+    trace_log = fopen("trace_execution.log", "w");
+#endif
     CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL, &limit);
     PsycoObject *po = PsycoObject_New(0);
     po->code = codebuf->codestart;
@@ -200,9 +203,11 @@ void psyco_processor_init(void)
     write_glue_run_code_fn(po, false);
     psyco_int_mul_ovf = (psyco_int_mul_ovf_fn)po->code;
     write_psyco_int_mul_ovf(po);
+#if TRACE_EXECUTION_LOG
     call_trace_execution_loc = po->code;
     write_call_trace_execution(po);
     call_trace_execution = (call_trace_execution_fn)call_trace_execution_loc;
+#endif
     SHRINK_CODE_BUFFER(codebuf, po->code, "glue");
     PsycoObject_Delete(po);
 }

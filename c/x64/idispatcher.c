@@ -222,10 +222,10 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
 #if PSYCO_DEBUG
   bool has_ccreg = HAS_CCREG(po);
 #endif
-
+#if CODEGEN_LOG
   fprintf(codegen_log, "UNIFY %p > %p\n", code, target_codebuf->codestart);
   fflush(codegen_log);
-
+#endif
   LOG_BEGIN_CODE_GEN(code);
   extra_assert(lastmatch->diff == NullArray);  /* unify with exact match only */
   psyco_assert_coherent(po);

@@ -213,11 +213,13 @@ static long psyco_call_var(void *c_function, int arg_count, long args[]) {
     }
 }
 
+#if CODEGEN_LOG
 /* XXX Get function info from function pointer in glibc only */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
 #include <dlfcn.h>
+#endif
 
 DEFINEFN
 vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
@@ -231,14 +233,14 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 
 	va_list vargs;
 
+#if CODEGEN_LOG
     Dl_info dl_info;
-
     if(dladdr(c_function, &dl_info)) {
         fprintf(codegen_log, "GENERIC_CALL %p > %p (%s:%s)\n", po->code, c_function, dl_info.dli_fname, dl_info.dli_sname);
     } else {
         fprintf(codegen_log, "GENERIC_CALL %p > %p ()\n", po->code, c_function);
     }
-
+#endif
 
 #ifdef HAVE_STDARG_PROTOTYPES
 	va_start(vargs, arguments);

@@ -21,16 +21,11 @@
 
 
 /* everything before args, including finfo which is the last thing before args */
-#define CHECK_STACK_DEPTH 0
 #if CHECK_STACK_DEPTH
 #define INITIAL_STACK_DEPTH  16
 #else
 #define INITIAL_STACK_DEPTH  8
 #endif
-
-#define TRACE_EXECTION 1
-
-#define CHECK_CALL_STACK_ALIGNED 1
 
 #if CHECK_CALL_STACK_ALIGNED
 #define CALL_STACK_ALIGNED_CHECK() do {\
@@ -436,7 +431,7 @@ if(!ONLY_UPDATING) {\
 } while (0)
 #define REQUIRES_OFFSET(rm) ((((rm) & 7) == 4 || ((rm) & 7) == 5))
 #define SIB_ENCODING(updatable, rex_w, op_len, b1, b2, b3, mod, size, r, base, offset, index, scale) do {\
-    CALL_TRACE_EXECTION();\
+    CALL_TRACE_EXECUTION();\
     REX_ENCODING(rex_w, r, index, base);\
     WRITE_OPCODES(op_len, b1, b2, b3);\
     MODRM_ENCODING(mod | ((offset == 0 && !REQUIRES_OFFSET(base)) ? 0x04 : (DECODE_SIZE(size, offset) == 8 ? 0x44 : 0x84)), r, 0);\
@@ -449,7 +444,7 @@ if(!ONLY_UPDATING) {\
     if((rm & 7) == 4) {\
         SIB_ENCODING(updatable, rex_w, op_len, b1, b2, b3, mod, size, r, rm, offset, rm, 0);\
     } else {\
-        CALL_TRACE_EXECTION();\
+        CALL_TRACE_EXECUTION();\
         REX_ENCODING(rex_w, r, 0, rm);\
         WRITE_OPCODES(op_len, b1, b2, b3);\
         MODRM_ENCODING(mod | (DECODE_SIZE(size, offset) == 8 ? 0x40 : 0x80), r, rm);\
@@ -460,7 +455,7 @@ if(!ONLY_UPDATING) {\
     if((rm & 7) == 4 || (rm & 7) == 5) {\
         OFFSET_ENCODING(false, rex_w, op_len, b1, b2, b3, mod, 8, r, rm, 0);\
     } else {\
-        CALL_TRACE_EXECTION();\
+        CALL_TRACE_EXECUTION();\
         REX_ENCODING(rex_w, r, 0, rm);\
         WRITE_OPCODES(op_len, b1, b2, b3);\
         MODRM_ENCODING(mod, r, rm);\
@@ -472,26 +467,26 @@ if(!ONLY_UPDATING) {\
     }\
 } while (0)
 #define DIRECT_ENCODING2(rex, rex_w, op_len, b1, b2, b3, mod, r, rm) do {\
-    CALL_TRACE_EXECTION();\
+    CALL_TRACE_EXECUTION();\
     REX_ENCODING2(rex, rex_w, r, 0, rm);\
     WRITE_OPCODES(op_len, b1, b2, b3);\
     MODRM_ENCODING(mod | 0xC0, r, rm);\
 } while (0)
 #define DIRECT_ENCODING(rex_w, op_len, b1, b2, b3, mod, r, rm) do {\
-    CALL_TRACE_EXECTION();\
+    CALL_TRACE_EXECUTION();\
     REX_ENCODING(rex_w, r, 0, rm);\
     WRITE_OPCODES(op_len, b1, b2, b3);\
     MODRM_ENCODING(mod | 0xC0, r, rm);\
 } while (0)
 #define BASE_ENCODING(rex_w, op_len, b1, b2, b3, mod, r, rm) do {\
-    CALL_TRACE_EXECTION();\
+    CALL_TRACE_EXECUTION();\
     REX_ENCODING(rex_w, r, 0, rm);\
     WRITE_OPCODES(op_len, b1, b2, b3);\
     MODRM_ENCODING(mod, r, rm);\
 } while (0)
 #define ADDRESS_ENCODING(rex_w, op_len, b1, b2, b3, mod, r, address) do {\
     long rip_offset;\
-    CALL_TRACE_EXECTION();\
+    CALL_TRACE_EXECUTION();\
     rip_offset = (long)address - ((long)code + 5 + op_len + ((rex_w || r > 7) ? 1 : 0));\
     if(FITS_IN_32BITS(rip_offset)) {\
         REX_ENCODING(rex_w, r, 0, 0);\
@@ -556,7 +551,7 @@ if(!ONLY_UPDATING) {\
 #define CALL_I(i) do {\
     long jump_amount;\
     CALL_STACK_ALIGNED_CHECK();\
-    CALL_TRACE_EXECTION();\
+    CALL_TRACE_EXECUTION();\
     jump_amount = (long)(i) - ((long)code + 5);\
     if(FITS_IN_32BITS(jump_amount)) {\
         WRITE_1(0xE8);\
@@ -588,24 +583,24 @@ if(!ONLY_UPDATING) {\
 #define POP_R(r) BASE_ENCODING(false, 0, 0, 0, 0, 0x58, 0, r);
 #define POP_O(rm, o) OFFSET_ENCODING(false, false, 1, 0x8F, 0, 0, 0x40, 0, 0, rm, o)
 #define RET() do {\
-    CALL_TRACE_EXECTION();\
+    CALL_TRACE_EXECUTION();\
     WRITE_1(0xC3);\
 } while (0)
 #define RET_N(n) do {\
     if(n == 0) {\
         RET();\
     } else {\
-        CALL_TRACE_EXECTION();\
+        CALL_TRACE_EXECUTION();\
         WRITE_1(0xC2); WRITE_16BIT(n);\
     }\
 } while (0)
 #define PUSH_CC() do {\
-    CALL_TRACE_EXECTION();\
+    CALL_TRACE_EXECUTION();\
     WRITE_1(0x9C);\
     psyco_inc_stackdepth(po);\
 } while (0)
 #define POP_CC() do {\
-    CALL_TRACE_EXECTION();\
+    CALL_TRACE_EXECUTION();\
     WRITE_1(0x9D);\
     psyco_dec_stackdepth(po);\
 } while (0)
@@ -618,7 +613,7 @@ if(!ONLY_UPDATING) {\
     }\
 } while (0)
 #define CQO() do {\
-    CALL_TRACE_EXECTION();\
+    CALL_TRACE_EXECUTION();\
     WRITE_2(REX_64, 0x99);\
 } while (0)
 #define SHIFT_COUNTER REG_X64_RCX
@@ -1246,8 +1241,9 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 #define ABOUT_TO_CALL_SUBFUNCTION(finfo) SAVE_IMMED_TO_EBP_BASE((long)(finfo), INITIAL_STACK_DEPTH)
 #define RETURNED_FROM_SUBFUNCTION() SAVE_IMM8_TO_EBP_BASE(-1, INITIAL_STACK_DEPTH)
 
-#if TRACE_EXECTION
-#define CALL_TRACE_EXECTION() do {\
+#if TRACE_EXECUTION_LOG
+#if CODEGEN_LOG
+#define CALL_TRACE_EXECUTION() do {\
     if (call_trace_execution != NULL) {\
         WRITE_1(0xE8);\
         WRITE_32BIT((long)call_trace_execution - ((long)code+4));\
@@ -1258,9 +1254,18 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
     }\
 } while (0)
 #else
-#define CALL_TRACE_EXECTION() do { } while (0)
-#endif
+#define CALL_TRACE_EXECUTION() do {\
+    if (call_trace_execution != NULL) {\
+        WRITE_1(0xE8);\
+        WRITE_32BIT((long)call_trace_execution - ((long)code+4));\
+    }\
+} while (0)
+#endif /* CODEGEN_LOG */ 
+#else
+#define CALL_TRACE_EXECUTION() do { } while (0)
+#endif /* TRACE_EXECUTION_LOG */
 
+#if BREAK_ON_ENABLED
 #define BREAK_ON() do {\
     if(getenv("NI_BRK_ON") != NULL && po->pr.co != NULL) {\
         char buf[2048];\
@@ -1274,5 +1279,9 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
         }\
     }\
 } while (0)
+#else
+#define BREAK_ON() do { } while (0)
+#endif
+
 
 #endif /* _IENCODING_H */

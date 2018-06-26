@@ -25,14 +25,37 @@ typedef int64_t qword_t;
 #endif
 
 /*****************************************************************/
- /***   Various customizable parameters (use your compilers'    ***/
-  /***   option to override them, e.g. -DXXX=value in gcc)       ***/
-
- /* set to 0 to disable all debugging checks and output */
+/***   Various customizable parameters (use your compilers'    ***/
+/***   option to override them, e.g. -DXXX=value in gcc)       ***/
+/* set to 0 to disable all debugging checks and output */
 #ifndef PSYCO_DEBUG
-# define PSYCO_DEBUG   0
+#define PSYCO_DEBUG   0
 #endif
 
+/* Output code generation information to codegen.log */
+#ifndef CODEGEN_LOG
+#define CODEGEN_LOG 0
+#endif
+
+/* Enable the NI_BRK_ON environment variable */
+#ifndef BREAK_ON_ENABLED
+#define BREAK_ON_ENABLED 0
+#endif
+
+/* Enable the trace_execution.log */
+#ifndef TRACE_EXECUTION_LOG
+#define TRACE_EXECUTION_LOG 0
+#endif
+
+/* Call stack alignment checks */
+#ifndef CHECK_CALL_STACK_ALIGNED
+#define CHECK_CALL_STACK_ALIGNED 0
+#endif
+
+/* Compiler stack_depth checking */
+#ifndef CHECK_STACK_DEPTH
+#define CHECK_STACK_DEPTH 0
+#endif
 
  /* define to 1 for extra assert()'s */
 #ifndef ALL_CHECKS
@@ -317,6 +340,8 @@ EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 /* Call trace execution function */
 EXTERNVAR void (*call_trace_execution) (void);
 
+
+#if CODEGEN_LOG
 FILE *codegen_log;
 #define LOG_BEGIN_CODE_GEN(_code) do {\
     fprintf(codegen_log, "BEGIN_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, _code);\
@@ -326,6 +351,10 @@ FILE *codegen_log;
     fprintf(codegen_log, "END_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, _code);\
     fflush(codegen_log);\
 } while (0)
+#else
+#define LOG_BEGIN_CODE_GEN(_code) do {} while (0)
+#define LOG_END_CODE_GEN(_code) do {} while (0)
+#endif
 #define BEGIN_CODE do {\
     code_t* code = po->code;\
     LOG_BEGIN_CODE_GEN(code);\

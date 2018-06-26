@@ -1908,6 +1908,7 @@ static code_t* exit_function(PsycoObject* po)
 	return psyco_finish_return(po, retsource);
 }
 
+#if CODEGEN_LOG
 static void _log_compiler_vinfo(char *region, int pos, vinfo_t *vi, int stack_depth) {
     fprintf(codegen_log, "%s %d: %p ", region, pos, vi);
     if(vi == NULL) {
@@ -1934,6 +1935,7 @@ static void _log_compiler_vinfo(char *region, int pos, vinfo_t *vi, int stack_de
             break;
     }
 }
+#endif
 
 /***************************************************************/
  /***   the main loop of the interpreter/compiler.            ***/
@@ -2011,6 +2013,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 	if (HAS_ARG(opcode))
 		oparg = NEXTARG();
   dispatch_opcode:
+
+#if CODEGEN_LOG
     {
         int i;
         fprintf(codegen_log, "\nCOMPILER_OBJ %p\n", po);
@@ -2026,6 +2030,8 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
         }
     }
     fprintf(codegen_log, "OPCODE %s:%s:%d inst_no:%d op:%s opcode:%d oparg:%d stackdepth:%d %p\n", PyString_AS_STRING(po->pr.co->co_filename), PyString_AS_STRING(po->pr.co->co_name), PyCode_Addr2Line(po->pr.co, next_instr - 1),  next_instr - 1, opcode_names[opcode], opcode, oparg, po->stack_depth, po->code);
+#endif /* CODEGEN_LOG */
+
 	/* Main switch on opcode */
 	
 	/* !!IMPORTANT!!
