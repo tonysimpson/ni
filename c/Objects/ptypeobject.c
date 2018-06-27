@@ -64,7 +64,7 @@ static vinfo_t* ptype_call(PsycoObject* po, vinfo_t* vtype,
 		   now because 'vobj' is not yet stored in 'po->vlocals'.
 		   XXX check again why this wouldn't work */
 		if (!psyco_generic_call(po, cimpl_call_tp_init,
-					CfNoReturnValue|CfPyErrIfNeg,
+					CfCommonIntZeroOk,
 					"vvvv", vtype, vobj, varg, vkw))
 			goto error;
 		return vobj;
@@ -76,7 +76,7 @@ static vinfo_t* ptype_call(PsycoObject* po, vinfo_t* vtype,
 	    PyType_HasFeature(otype, Py_TPFLAGS_HAVE_CLASS) &&
 	    otype->tp_init != NULL) {
 		if (!Psyco_META3(po, otype->tp_init,
-				 CfNoReturnValue|CfPyErrIfNeg,
+				 CfCommonIntZeroOk,
 				 "vvv", vobj, varg, vkw))
 			goto error;
 	}
@@ -113,7 +113,7 @@ vinfo_t* psyco_pobject_new(PsycoObject* po, PyTypeObject* type,
 		int safe = (psyco_knowntobe(vkw, (long) NULL) &&
 			    PsycoTuple_Load(varg) == 0);
 		if (!safe && !psyco_generic_call(po, cimpl_check_noarg,
-						 CfNoReturnValue|CfPyErrIfNeg,
+						 CfCommonIntZeroOk,
 						 "vv", varg, vkw))
 			return NULL;
 	}
@@ -323,7 +323,7 @@ static bool pslot_tp_init(PsycoObject* po, vinfo_t* vself,
 
  fallback:
 	return psyco_generic_call(po, slot_tp_init,
-				  CfNoReturnValue|CfPyErrIfNeg,
+				  CfCommonIntZeroOk,
 				  "vvv", vself, vargs, vkwds) != NULL;
 }
 

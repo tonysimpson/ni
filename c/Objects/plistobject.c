@@ -204,7 +204,7 @@ static bool plist_ass_item(PsycoObject* po, vinfo_t* a, vinfo_t* i, vinfo_t* v)
 		/* XXX implement item deletion */
 		return psyco_generic_call(po, PyList_Type.tp_as_sequence->
 					  sq_ass_item,
-					  CfNoReturnValue|CfPyErrIfNonNull,
+					  CfCommonIntZeroOk,
 					  "vvl", a, i, (long) NULL) != NULL;
 	}
 
@@ -303,7 +303,7 @@ bool PsycoList_Append(PsycoObject* po, vinfo_t* v, vinfo_t* vitem)
 {
 	/* use the real PyList_Append */
 	return psyco_generic_call(po, PyList_Append,
-				  CfNoReturnValue|CfPyErrIfNonNull,
+				  CfCommonIntZeroOk,
 				  "vv", v, vitem) != NULL;
 }
 

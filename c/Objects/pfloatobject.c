@@ -4,9 +4,9 @@
 
 #if HAVE_FP_FN_CALLS
 
-#define CF_NONPURE_FP_HELPER    (CfPure|CfNoReturnValue|CfPyErrIfNonNull)
+#define CF_NONPURE_FP_HELPER    (CfPure|CfNoReturnValue|CfReturnTypeInt|CfPyErrIfNonNull)
 #ifdef WANT_SIGFPE_HANDLER
-# define CF_PURE_FP_HELPER	(CfPure|CfNoReturnValue|CfPyErrIfNonNull)
+# define CF_PURE_FP_HELPER	(CfPure|CfNoReturnValue|CfReturnTypeInt|CfPyErrIfNonNull)
 #else
 # define CF_PURE_FP_HELPER	(CfPure|CfNoReturnValue)
 #endif
@@ -353,7 +353,7 @@ static vinfo_t* pfloat_cmp(PsycoObject* po, vinfo_t* v, vinfo_t* w)
     vinfo_t *a1, *a2, *b1, *b2, *x;
     /* We could probably assume that these are floats, but using CONVERT is easier */
     CONVERT_TO_DOUBLE2(v, a1, a2, w, b1, b2);
-    x = psyco_generic_call(po, cimpl_fp_cmp, CfPure|CfReturnNormal, "vvvv", a1, a2, b1, b2);
+    x = psyco_generic_call(po, cimpl_fp_cmp, CfPure|CfReturnTypeInt, "vvvv", a1, a2, b1, b2);
     RELEASE_DOUBLE2(a1, a2, b1, b2);
     return x;
 }
@@ -388,7 +388,7 @@ static vinfo_t* pfloat_richcompare(PsycoObject* po, vinfo_t* v,
 	case Py_GT: fn = cimpl_fp_gt_int; break;
         default: Py_FatalError("bad richcmp op"); return NULL;
         }
-        r = psyco_generic_call(po, fn, CfReturnNormal|CfPure,
+        r = psyco_generic_call(po, fn, CfReturnTypeInt|CfPure,
                                "vvv", a1, a2, PsycoInt_AS_LONG(po, w));
         if (r != NULL)
             r = PsycoBool_FROM_LONG(r);
@@ -416,7 +416,7 @@ static vinfo_t* pfloat_richcompare(PsycoObject* po, vinfo_t* v,
         default: Py_FatalError("bad richcmp op"); return NULL;
         }
 #undef SWAP_A_B
-        r = psyco_generic_call(po, fn, CfReturnNormal|CfPure,
+        r = psyco_generic_call(po, fn, CfReturnTypeInt|CfPure,
                                "vvvv", a1, a2, b1, b2);
         if (r != NULL)
             r = PsycoBool_FROM_LONG(r);
@@ -434,7 +434,7 @@ static vinfo_t* pfloat_nonzero(PsycoObject* po, vinfo_t* v)
     a2 = PsycoFloat_AS_DOUBLE_2(po, v);       
     if (a1 == NULL || a2 == NULL)             
         return NULL;
-    return psyco_generic_call(po, cimpl_fp_nonzero, CfPure|CfReturnNormal, "vv", a1, a2);
+    return psyco_generic_call(po, cimpl_fp_nonzero, CfPure|CfReturnTypeInt, "vv", a1, a2);
 }
 
 static vinfo_t* pfloat_pos(PsycoObject* po, vinfo_t* v)

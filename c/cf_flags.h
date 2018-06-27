@@ -14,20 +14,27 @@
    psyco_generic_call() returns VINFO_OK (unless there is an error)
    in this case. */
 #define CfNoReturnValue     0x40
+/* If the c function result after error checking is always positive */
+#define CfNotNegative       0x80
+
 #define VINFO_OK ((vinfo_t*)1)
 
 /************************
  * Function return types
  ************************/
-#define CfReturnTypeMask    0x0F
+#define CfReturnTypeMask    0x07
 /* if the C function is declared as void */
 #define CfReturnTypeVoid    0x00
 /* if the C function returns an int */
 #define CfReturnTypeInt     0x01
 /* if the C function returns a long */
 #define CfReturnTypeLong    0x02
+/* if the c function returns a ssize_t or equivelent native sized type */
+#define CfReturnTypeNative  0x03
 /* if the C function returns a pointer or a PyObject* */
-#define CfReturnTypePtr     0x03
+#define CfReturnTypePtr     0x07
+/* All the above types are signed add this flag to make them unsigned */
+#define CfReturnUnsigned    0x08
 
 /*******************************
  * Error detection and handling
@@ -61,7 +68,10 @@
 #define CfCommonCheckNotImplemented     (CfReturnTypePtr|CfNewRef|CfPyErrNotImplemented)
 #define CfCommonIterNext                (CfReturnTypePtr|CfNewRef|CfPyErrIterNext)
 #define CfCommonNewRefPyObjectNoError   (CfReturnTypePtr|CfNewRef)
-
+#define CfCommonPySSizeTResult          (CfReturnTypeNative|CfNotNegative|CfPyErrCheckNeg)
+#define CfCommonIntBoolOrError          (CfReturnTypeInt|CfNotNegative|CfPyErrCheckNeg)
+#define CfCommonInquiry                 (CfReturnTypeInt|CfNotNegative|CfPyErrCheckNeg)
+#define CfCommonIntZeroOk               (CfNoReturnValue|CfReturnTypeInt|CfPyErrIfNonNull)
 #endif /* _CF_FLAGS_H */
 
 

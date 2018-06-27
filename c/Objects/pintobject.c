@@ -104,7 +104,7 @@ vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v)
 	}
 
 	return psyco_generic_call(po, PyInt_AsLong,
-				  CfReturnNormal|CfPyErrCheckMinus1,
+				  CfReturnTypeLong|CfPyErrCheckMinus1,
 				  "v", v);
 #if 0
 	---  DISABLED: cannot promote the type of a returned object :-(  ---
@@ -128,7 +128,7 @@ vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v)
 		}
 		else {  /* fall back */
 			result = psyco_generic_call(po, PyInt_AsLong,
-					CfReturnNormal|CfPyErrCheckMinus1,
+					CfReturnTypeLong|CfPyErrCheckMinus1,
 					"v", v);
 		}
 	}
@@ -302,7 +302,7 @@ static vinfo_t* pint_mod(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	vinfo_t* x;
 	CONVERT_TO_LONG(v, a);
 	CONVERT_TO_LONG(w, b);
-	x = psyco_generic_call(po, cimpl_int_mod, CfPure|CfReturnNormal|CfPyErrCheckMinus1, "vv", a, b);
+	x = psyco_generic_call(po, cimpl_int_mod, CfPure|CfReturnTypeLong|CfPyErrCheckMinus1, "vv", a, b);
 	if (x != NULL)
 		return PsycoInt_FROM_LONG(x);
 	/* Either an error occured or it overflowed. In either case let python deal with it */
@@ -319,7 +319,7 @@ static vinfo_t* pint_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	vinfo_t* x;
 	CONVERT_TO_LONG(v, a);
 	CONVERT_TO_LONG(w, b);
-	x = psyco_generic_call(po, cimpl_int_div, CfPure|CfReturnNormal|CfPyErrCheckMinus1, "vv", a, b);
+	x = psyco_generic_call(po, cimpl_int_div, CfPure|CfReturnTypeLong|CfPyErrCheckMinus1, "vv", a, b);
 	if (x != NULL)
 		return PsycoInt_FROM_LONG(x);
 	/* Either an error occured or it overflowed. In either case let python deal with it */
@@ -336,7 +336,7 @@ static vinfo_t* pint_floor_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	vinfo_t* x;
 	CONVERT_TO_LONG(v, a);
 	CONVERT_TO_LONG(w, b);
-	x = psyco_generic_call(po, cimpl_int_div, CfPure|CfReturnNormal|CfPyErrCheckMinus1, "vv", a, b);
+	x = psyco_generic_call(po, cimpl_int_div, CfPure|CfReturnTypeLong|CfPyErrCheckMinus1, "vv", a, b);
 	if (x != NULL)
 		return PsycoInt_FROM_LONG(x);
 	/* Either an error occured or it overflowed. In either case let python deal with it */
@@ -364,7 +364,7 @@ static vinfo_t* pint_pow(PsycoObject* po, vinfo_t* v, vinfo_t* w, vinfo_t* z)
 	else
 		cimpl = cimpl_int_pow2;
 	x = psyco_generic_call(po, cimpl,
-			       CfPure|CfReturnNormal|CfPyErrCheckMinus1,
+			       CfPure|CfReturnTypeLong|CfPyErrCheckMinus1,
 			       "vv", a, b);
 	if (x != NULL)
 		return PsycoInt_FROM_LONG(x);
@@ -486,7 +486,7 @@ static vinfo_t* pint_lshift(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	CONVERT_TO_LONG(v, a);
 	CONVERT_TO_LONG(w, b);
 	x = psyco_generic_call(po, cimpl_int_lshift,
-			       CfPure|CfReturnNormal,
+			       CfPure|CfReturnTypeLong,
 			       "vv", a, b);
 	if (x == NULL)
 		return NULL;

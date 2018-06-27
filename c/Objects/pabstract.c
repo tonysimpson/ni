@@ -124,7 +124,7 @@ vinfo_t* PsycoObject_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key)
 			vinfo_t* result;
 			vinfo_t* key_value;
 			key_value = psyco_generic_call(po, PyNumber_AsSsize_t,
-					    CfReturnNormal|CfPyErrCheckMinus1,
+					    CfCommonPySSizeTResult,
 					    "vl", key, (long) PyExc_IndexError);
 			if (key_value == NULL)
 				return NULL;
@@ -154,7 +154,7 @@ bool PsycoObject_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key,
 	if (m && m->mp_ass_subscript) {
 		char* vargs = (value!=NULL) ? "vvv" : "vvl";
 		return Psyco_META3(po, m->mp_ass_subscript,
-				   CfNoReturnValue|CfPyErrIfNonNull,
+				   CfCommonIntZeroOk,
 				   vargs, o, key, value) != NULL;
 	}
 
@@ -183,7 +183,7 @@ bool PsycoObject_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* key,
 			bool result;
 			vinfo_t* key_value;
 			key_value = psyco_generic_call(po, PyNumber_AsSsize_t,
-					    CfReturnNormal|CfPyErrCheckMinus1,
+					    CfCommonPySSizeTResult,
 					    "vl", key, (long) PyExc_IndexError);
 			if (key_value == NULL)
 				return false;
@@ -224,7 +224,7 @@ vinfo_t* PsycoObject_Size(PsycoObject* po, vinfo_t* vi)
 			return type_error(po, "len() of unsized object");
 	}
 	
-	return Psyco_META1(po, f, CfReturnNormal|CfPyErrIfNeg, "v", vi);
+	return Psyco_META1(po, f, CfCommonPySSizeTResult, "v", vi);
 }
 
 DEFINEFN
@@ -257,7 +257,7 @@ vinfo_t* PsycoSequence_GetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i)
 				return NULL;
 			if (runtime_condition_f(po, cc)) {
 				vinfo_t* l = Psyco_META1(po, m->sq_length,
-						CfReturnNormal|CfPyErrIfNeg,
+						CfCommonPySSizeTResult,
 							 "v", o);
 				if (l == NULL)
 					return NULL;
@@ -298,7 +298,7 @@ bool PsycoSequence_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i,
 				return false;
 			if (runtime_condition_f(po, cc)) {
 				vinfo_t* l = Psyco_META1(po, m->sq_length,
-						CfReturnNormal|CfPyErrIfNeg,
+						CfCommonPySSizeTResult,
 						"v", o);
 				if (l == NULL)
 					return false;
@@ -312,7 +312,7 @@ bool PsycoSequence_SetItem(PsycoObject* po, vinfo_t* o, vinfo_t* i,
 		}
 		vargs = (value!=NULL) ? "vvv" : "vvl";
 		result = Psyco_META3(po, m->sq_ass_item,
-				     CfNoReturnValue|CfPyErrIfNonNull,
+				     CfCommonIntZeroOk,
 				     vargs, o, i, value) != NULL;
 		vinfo_xdecref(release_me, po);
 		return result;
@@ -347,7 +347,7 @@ vinfo_t* PsycoSequence_GetSlice(PsycoObject* po, vinfo_t* o,
 			if (runtime_condition_f(po, cc)) {
 				/* i1 < 0 */
 				l = Psyco_META1(po, m->sq_length,
-						CfReturnNormal|CfPyErrIfNeg,
+						CfCommonPySSizeTResult,
 						"v", o);
 				if (l == NULL)
 					goto fail;
@@ -365,7 +365,7 @@ vinfo_t* PsycoSequence_GetSlice(PsycoObject* po, vinfo_t* o,
 				/* i2 < 0 */
 				if (l == NULL) {
 					l = Psyco_META1(po, m->sq_length,
-						CfReturnNormal|CfPyErrIfNeg,
+						CfCommonPySSizeTResult,
 						"v", o);
 					if (l == NULL)
 						goto fail;
@@ -402,11 +402,11 @@ bool PsycoSequence_SetSlice(PsycoObject* po, vinfo_t* o,
 	/* XXX implement me */
 	if (value != NULL)
 		return psyco_generic_call(po, PySequence_SetSlice,
-                                          CfNoReturnValue|CfPyErrIfNonNull,
+                                          CfCommonIntZeroOk,
                                           "vvvv", o, ilow, ihigh, value)!=NULL;
 	else
 		return psyco_generic_call(po, PySequence_DelSlice,
-                                          CfNoReturnValue|CfPyErrIfNonNull,
+                                          CfCommonIntZeroOk,
                                           "vvv", o, ilow, ihigh) != NULL;
 }
 
@@ -421,13 +421,13 @@ vinfo_t* PsycoSequence_Contains(PsycoObject* po, vinfo_t* seq, vinfo_t* ob)
 		PySequenceMethods *sqm = tp->tp_as_sequence;
 	        if (sqm != NULL && sqm->sq_contains != NULL)
 			return Psyco_META2(po, sqm->sq_contains,
-					   CfReturnNormal|CfPyErrIfNeg,
+					   CfCommonIntBoolOrError,
 					   "vv", seq, ob);
 	}
 
 	/* XXX implement me */
 	return psyco_generic_call(po, _PySequence_IterSearch,
-				  CfReturnNormal|CfPyErrIfNeg,
+				  CfCommonIntBoolOrError,
 				  "vvl", seq, ob, PY_ITERSEARCH_CONTAINS);
 }
 
@@ -707,7 +707,7 @@ static vinfo_t* psequence_repeat(PsycoObject* po, void *repeatfunc,
 #if HAVE_NB_INDEX
 	else if (PsycoIndex_Check(tp)) {
 		vcount = psyco_generic_call(po, PyNumber_AsSsize_t,
-					    CfReturnNormal|CfPyErrCheckMinus1,
+					    CfCommonPySSizeTResult,
 					    "vl", vn,
 					    (long) PyExc_OverflowError);
 	}
@@ -1084,7 +1084,7 @@ bool psyco_generic_ass_subscript(PsycoObject* po, vinfo_t* o,
 		extra_assert(tp->tp_as_mapping->mp_ass_subscript != NULL);
 		return psyco_generic_call(po,
 					  tp->tp_as_mapping->mp_ass_subscript,
-					  CfNoReturnValue|CfPyErrIfNonNull,
+					  CfCommonIntZeroOk,
 					  vargs, o, key, value) != NULL;
 	}
 }

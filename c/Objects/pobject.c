@@ -64,15 +64,15 @@ vinfo_t* PsycoObject_IsTrue(PsycoObject* po, vinfo_t* vi)
 	else if (tp->tp_as_number != NULL &&
 		 tp->tp_as_number->nb_nonzero != NULL)
 		return Psyco_META1(po, tp->tp_as_number->nb_nonzero,
-				   CfReturnNormal|CfPyErrIfNeg, "v", vi);
+				   CfCommonInquiry, "v", vi);
 	else if (tp->tp_as_mapping != NULL &&
 		 tp->tp_as_mapping->mp_length != NULL)
 		return Psyco_META1(po, tp->tp_as_mapping->mp_length,
-				   CfReturnNormal|CfPyErrIfNeg, "v", vi);
+				   CfCommonPySSizeTResult, "v", vi);
 	else if (tp->tp_as_sequence != NULL &&
 		 tp->tp_as_sequence->sq_length != NULL)
 		return Psyco_META1(po, tp->tp_as_sequence->sq_length,
-				   CfReturnNormal|CfPyErrIfNeg, "v", vi);
+				   CfCommonPySSizeTResult, "v", vi);
 	else
 		return psyco_vi_One();
 }
@@ -178,14 +178,14 @@ bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
 	PyString_InternInPlace(&name);
 	if (tp->tp_setattro != NULL) {
 		vresult = Psyco_META3(po, tp->tp_setattro,
-				      CfNoReturnValue|CfPyErrIfNonNull,
+				      CfCommonIntZeroOk,
 				      v ? "vlv" : "vll", o, name, v);
 		Py_DECREF(name);
 		return vresult != NULL;
 	}
 	if (tp->tp_setattr != NULL) {
 		vresult = Psyco_META3(po, tp->tp_setattr,
-				      CfNoReturnValue|CfPyErrIfNonNull,
+				      CfCommonIntZeroOk,
 				      v ? "vlv" : "vll", o,
 				      (long)PyString_AS_STRING(name), v);
 		Py_DECREF(name);
@@ -196,7 +196,7 @@ bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
    generic:
 	/* fall-back implementation */
 	return psyco_generic_call(po, PyObject_SetAttr,
-				  CfNoReturnValue|CfPyErrIfNonNull,
+				  CfCommonIntZeroOk,
 				  v ? "vvv" : "vvl", o, vattrname, v) != NULL;
 }
 
@@ -381,7 +381,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 		if (runtime_condition_t(po, cc)) {
 			/* the __dict__ slot contains a non-NULL value */
 			res = psyco_generic_call(po, PyDict_GetItem,
-						 CfReturnNormal,
+						 CfReturnTypePtr,
 						 "vl", dict, (long) name);
 			vinfo_decref(dict, po);
 			if (res == NULL)
@@ -548,7 +548,7 @@ DEFINEFN vinfo_t* PsycoObject_RichCompare(PsycoObject* po, vinfo_t* v,
 				return res;
 			vinfo_decref(res, po);
 		}
-		c = Psyco_META2(po, f, CfReturnNormal|CfPyErrCheck,
+		c = Psyco_META2(po, f, CfReturnTypePtr|CfPyErrCheck,
 				"vv", v, w);
 		if (c == NULL)
 			return NULL;

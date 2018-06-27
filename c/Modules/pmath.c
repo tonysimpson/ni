@@ -76,7 +76,7 @@ extern double modf (double, double *);
         vinfo_array_t* result; \
         PMATH_CONVERT_TO_DOUBLE(v,a1,a2); \
         result = array_new(2); \
-        x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfNoReturnValue|CfPyErrIfNonNull, \
+        x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfCommonIntZeroOk, \
                                   "vva",a1,a2,result); \
         PMATH_RELEASE_DOUBLE(a1,a2); \
         if (x != NULL) \
@@ -103,7 +103,7 @@ extern double modf (double, double *);
         v = PsycoTuple_GET_ITEM(varg, 0); \
         PMATH_CONVERT_TO_DOUBLE(v,a1,a2); \
         result = array_new(2); \
-        x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfNoReturnValue|CfPyErrIfNonNull, \
+        x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfCommonIntZeroOk, \
                                   "vva",a1,a2,result); \
         PMATH_RELEASE_DOUBLE(a1,a2); \
         if (x != NULL) \
@@ -133,7 +133,7 @@ extern double modf (double, double *);
         PMATH_CONVERT_TO_DOUBLE(v1,a1,a2); \
         PMATH_CONVERT_TO_DOUBLE(v2,b1,b2); \
         result = array_new(2); \
-        x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfNoReturnValue|CfPyErrIfNonNull, \
+        x = psyco_generic_call(po, cimpl_math_##func, CfPure|CfCommonIntZeroOk, \
                                "vvvva",a1,a2,b1,b2,result); \
         PMATH_RELEASE_DOUBLE(a1,a2); \
         PMATH_RELEASE_DOUBLE(b1,b2); \

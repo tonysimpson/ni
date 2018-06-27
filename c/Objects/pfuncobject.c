@@ -35,7 +35,7 @@ static bool compute_function(PsycoObject* po, vinfo_t* v)
 
 	if (!psyco_knowntobe(fdefaults, (long) NULL)) {
 		if (!psyco_generic_call(po, PyFunction_SetDefaults,
-					CfNoReturnValue|CfPyErrIfNonNull,
+					CfCommonIntZeroOk,
 					"vv", newobj, fdefaults))
 			return false;
 	}

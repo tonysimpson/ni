@@ -1150,7 +1150,7 @@ static vinfo_t* _PsycoEval_SliceIndex(PsycoObject* po, vinfo_t* v)
 #if HAVE_NB_INDEX
 	else if (PsycoIndex_Check(vtp)) {
 		result = psyco_generic_call(po, PyNumber_AsSsize_t,
-					    CfReturnNormal|CfPyErrCheckMinus1,
+					    CfCommonPySSizeTResult,
 					    "vl", v, (long) NULL);
 	}
 #endif
@@ -1392,7 +1392,7 @@ static vinfo_t* psyco_ext_do_calls(PsycoObject* po, int opcode, int oparg,
 		for (i = na + 2*nk; i > na; ) {
 			i -= 2;
 			if (!psyco_generic_call(po, setter,
-					CfNoReturnValue|CfPyErrIfNonNull,
+					CfCommonIntZeroOk,
 					"vvv", wdict, args[i], args[i+1]))
 				goto fail;
 		}
@@ -2355,7 +2355,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 	case PRINT_EXPR:
 		if (!psyco_generic_call(po, cimpl_print_expr,
-					CfNoReturnValue|CfPyErrIfNonNull,
+					CfCommonIntZeroOk,
 					"v", TOP()))
 			break;
 		POP_DECREF();
@@ -2363,7 +2363,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 	case PRINT_ITEM:
 		if (!psyco_generic_call(po, cimpl_print_item_to,
-					CfNoReturnValue|CfPyErrIfNonNull,
+					CfCommonIntZeroOk,
 					"vl", TOP(), 0))
 			break;
 		POP_DECREF();
@@ -2371,7 +2371,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		
 	case PRINT_ITEM_TO:
 		if (!psyco_generic_call(po, cimpl_print_item_to,
-					CfNoReturnValue|CfPyErrIfNonNull,
+					CfCommonIntZeroOk,
 					"vv", NTOP(2), TOP()))
 			break;
 		POP_DECREF();
@@ -2380,14 +2380,14 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		
 	case PRINT_NEWLINE:
 		if (!psyco_generic_call(po, cimpl_print_newline_to,
-					CfNoReturnValue|CfPyErrIfNonNull,
+					CfCommonIntZeroOk,
 					"l", 0))
 			break;
 		goto fine;
 		
 	case PRINT_NEWLINE_TO:
 		if (!psyco_generic_call(po, cimpl_print_newline_to,
-					CfNoReturnValue|CfPyErrIfNonNull,
+					CfCommonIntZeroOk,
 					"v", TOP()))
 			break;
 		POP_DECREF();
@@ -2585,7 +2585,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		{
 			vinfo_array_t* array = array_new(oparg);
 			if (!psyco_generic_call(po, cimpl_unpack,
-					      CfNoReturnValue|CfPyErrIfNonNull,
+					      CfCommonIntZeroOk,
 						"vlA", v, oparg, array)) {
 				array_release(array);
 				break;
@@ -2633,7 +2633,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		PyObject* w = GETNAMEV(oparg);
 		mark_varying(po, w);
 		if (!psyco_generic_call(po, PyDict_SetItem,
-					CfNoReturnValue|CfPyErrIfNonNull,
+					CfCommonIntZeroOk,
 					"vlv", LOC_GLOBALS, w, TOP()))
 			break;
 		POP_DECREF();
@@ -2650,7 +2650,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		PyObject* w = GETNAMEV(oparg);
 		mark_varying(po, w);
 		if (runtime_NON_NULL_f(po, psyco_generic_call(po, PyDict_DelItem,
-					CfReturnNormal, "vl", LOC_GLOBALS, w))) {
+					CfReturnTypeInt, "vl", LOC_GLOBALS, w))) {
 			PycException_SetFormat(po, PyExc_NameError,
 					       GLOBAL_NAME_ERROR_MSG,
 					       PyString_AsString(w));
@@ -2826,7 +2826,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 		case PyCmp_EXC_MATCH:
 			x = psyco_generic_call(po, PyErr_GivenExceptionMatches,
-					       CfPure|CfReturnNormal,
+					       CfPure|CfReturnTypeInt,
 					       "vv", v, w);
 			cc = integer_NON_NULL(po, x);
 			break;
@@ -2882,7 +2882,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		   for code objects compiled from frames where
 		   f_locals == f_globals */
 		x = psyco_generic_call(po, cimpl_import_all_from,
-				       CfReturnNormal|CfPyErrIfNonNull,
+				       CfReturnTypeInt|CfPyErrIfNonNull,
 				       "vv", LOC_GLOBALS, TOP());
 		if (x == NULL)
 			break;

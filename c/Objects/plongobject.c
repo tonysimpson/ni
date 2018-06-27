@@ -6,7 +6,7 @@ vinfo_t* PsycoLong_AsLong(PsycoObject* po, vinfo_t* v)
 {
 	/* XXX implement me */
 	return psyco_generic_call(po, PyLong_AsLong,
-				  CfReturnNormal|CfPyErrCheckMinus1,
+				  CfReturnTypeLong|CfPyErrCheckMinus1,
 				  "v", v);
 }
 

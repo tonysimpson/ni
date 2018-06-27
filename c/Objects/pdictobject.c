@@ -56,7 +56,7 @@ bool PsycoDict_SetItem(PsycoObject* po, vinfo_t* vdict,
 		       vinfo_t* key, vinfo_t* vvalue)
 {
 	return psyco_generic_call(po, PyDict_SetItem,
-				  CfNoReturnValue|CfPyErrIfNeg,
+				  CfCommonIntZeroOk,
 				  "vvv", vdict, key, vvalue) != NULL;
 }
 
@@ -65,7 +65,7 @@ bool PsycoDict_SetItemC(PsycoObject* po, vinfo_t* vdict,
 			PyObject* key, vinfo_t* vvalue)
 {
 	return psyco_generic_call(po, PyDict_SetItem,
-				  CfNoReturnValue|CfPyErrIfNeg,
+				  CfCommonIntZeroOk,
 				  "vlv", vdict, (long) key, vvalue) != NULL;
 }
 

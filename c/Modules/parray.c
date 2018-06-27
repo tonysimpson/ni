@@ -366,7 +366,7 @@ static bool parray_ass_item(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,vinfo_t* v
 		/* XXX implement item deletion */
 		return psyco_generic_call(po, arraytype->tp_as_sequence->
 					  sq_ass_item,
-					  CfNoReturnValue|CfPyErrIfNonNull,
+					  CfCommonIntZeroOk,
 					  "vvl", ap, vi, (long) NULL) != NULL;
 	}
 	
@@ -399,7 +399,7 @@ static bool parray_ass_item(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,vinfo_t* v
 	}
 
 	/* call the item setter or its meta-implementation */
-	return Psyco_META3(po, d->setitem, CfNoReturnValue|CfPyErrIfNonNull,
+	return Psyco_META3(po, d->setitem, CfCommonIntZeroOk,
 			   "vvv", ap, vi, v) != NULL;
 }
 

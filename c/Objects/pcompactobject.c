@@ -408,7 +408,7 @@ static bool pcompact_setattro(PsycoObject* po, vinfo_t* vk, PyObject* attr,
 		if (f != NULL && PyDescr_IsData(descr)) {
 			Py_INCREF(descr);   /* XXX leaks */
 			return Psyco_META3(po, f,
-					   CfNoReturnValue|CfPyErrIfNonNull,
+					   CfCommonIntZeroOk,
 					   source_vi ? "lvv" : "lvl",
 					   descr, vk, source_vi) != NULL;
 		}
@@ -513,7 +513,7 @@ static bool pcompact_setattro(PsycoObject* po, vinfo_t* vk, PyObject* attr,
 	if (source_vi == NULL) {
 		/* deleting a non-existing attribute */
 		return psyco_generic_call(po, PyObject_GenericSetAttr,
-					  CfNoReturnValue|CfPyErrIfNonNull,
+					  CfCommonIntZeroOk,
 					  "vll", vk, attr, (long) NULL) != NULL;
 	}
 
@@ -537,7 +537,7 @@ static bool pcompact_setattro(PsycoObject* po, vinfo_t* vk, PyObject* attr,
 		PSY_READ_K_DATA(vdata, return false);
 		
 		/* call PyMem_Realloc() on k->k_data */
-		vndata = psyco_generic_call(po, PyMem_Realloc, CfReturnNormal,
+		vndata = psyco_generic_call(po, PyMem_Realloc, CfReturnTypePtr,
 					    "vl", vdata,
 					    K_ROUNDUP(impl->datasize));
 		if (vndata == NULL)

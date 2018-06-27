@@ -782,7 +782,7 @@ PSY_INLINE int psyco_richmemcmp(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 		if (vtest == NULL || wtest == NULL)
 			goto fail2;
 		/* variable-sized memcmp */
-		vresult = psyco_generic_call(po, memcmp, CfReturnNormal,
+		vresult = psyco_generic_call(po, memcmp, CfReturnTypePtr,
 					     "vvv", vtest, wtest, minlen);
 		cc = integer_cmp_i(po, vresult, 0, op);
 	}
