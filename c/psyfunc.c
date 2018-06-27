@@ -432,7 +432,7 @@ vinfo_t* psyco_call_pyfunc(PsycoObject* po, PyCodeObject* co,
 
  fail_to_default:
   return psyco_generic_call(po, cimpl_call_pyfunc,
-                            CfReturnRef|CfPyErrIfNull,
+                            CfCommonNewRefPyObject,
                             "lvvv", co, vglobals, vdefaults, arg_tuple);
 
  pyerr:

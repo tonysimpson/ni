@@ -103,7 +103,7 @@ static bool compute_seqiter(PsycoObject* po, vinfo_t* v)
 		return false;
 
 	newobj = psyco_generic_call(po, PySeqIter_New,
-				    CfReturnRef|CfPyErrIfNull, "v", seq);
+				    CfCommonNewRefPyObject, "v", seq);
 	if (newobj == NULL)
 		return false;
 

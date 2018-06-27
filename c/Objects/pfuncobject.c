@@ -28,7 +28,7 @@ static bool compute_function(PsycoObject* po, vinfo_t* v)
 		return false;
 
 	newobj = psyco_generic_call(po, PyFunction_New,
-				    CfReturnRef|CfPyErrIfNull,
+				    CfCommonNewRefPyObject,
 				    "vv", fcode, fglobals);
 	if (newobj == NULL)
 		return false;
@@ -149,7 +149,7 @@ vinfo_t* pfunction_simple_call(PsycoObject* po, PyObject* f,
 
  fallback:
 	return psyco_generic_call(po, PyFunction_Type.tp_call,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "lvl", (long) f, arg, 0);
 }
 
@@ -205,7 +205,7 @@ vinfo_t* pfunction_call(PsycoObject* po, vinfo_t* func,
  fallback:
 
 	return psyco_generic_call(po, PyFunction_Type.tp_call,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vvv", func, arg, kw);
 }
 

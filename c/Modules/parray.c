@@ -350,7 +350,7 @@ static vinfo_t* parray_item(PsycoObject* po, vinfo_t* ap, vinfo_t* vi)
 	}
 
 	/* call the item getter or its meta-implementation */
-	return Psyco_META2(po, d->getitem, CfReturnRef|CfPyErrIfNull,
+	return Psyco_META2(po, d->getitem, CfCommonNewRefPyObject,
 			   "vv", ap, vi);
 }
 
@@ -405,7 +405,7 @@ static bool parray_ass_item(PsycoObject* po, vinfo_t* ap, vinfo_t* vi,vinfo_t* v
 
 
 /* array creation: we know the result is of type ArrayType. */
-DEF_KNOWN_RET_TYPE_2(pa_array, cimpl_array, CfReturnRef|CfPyErrIfNull, arraytype)
+DEF_KNOWN_RET_TYPE_2(pa_array, cimpl_array, CfCommonNewRefPyObject, arraytype)
 
 static vinfo_t* parray_new(PsycoObject* po, PyTypeObject* type,
 			   vinfo_t* varg, vinfo_t* vkw)
@@ -413,7 +413,7 @@ static vinfo_t* parray_new(PsycoObject* po, PyTypeObject* type,
 	/* In this version we also decode a constant-time
 	   description character. */
 	vinfo_t* result = psyco_generic_call(po, arraytype->tp_new,
-					     CfReturnRef|CfPyErrIfNull,
+					     CfCommonNewRefPyObject,
 					     "lvv", type, varg, vkw);
 	if (result != NULL) {
 		vinfo_t* firstarg;

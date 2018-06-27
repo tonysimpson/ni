@@ -90,7 +90,7 @@ static vinfo_t* pbuiltin_range(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 	if (PycException_Occurred(po))
 		return NULL;
 	return psyco_generic_call(po, cimpl_range,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "lv", NULL, vargs);
 }
 
@@ -104,7 +104,7 @@ static vinfo_t* pbuiltin_xrange(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 	if (PycException_Occurred(po))
 		return NULL;
 	return psyco_generic_call(po, cimpl_xrange,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "lv", NULL, vargs);
 }
 
@@ -121,7 +121,7 @@ static vinfo_t* prange_new(PsycoObject* po, PyTypeObject* type,
 	if (PycException_Occurred(po))
 		return NULL;
 	return psyco_generic_call(po, type->tp_new,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "lvv", type, vargs, vkw);
 }
 
@@ -152,7 +152,7 @@ static vinfo_t* pbuiltin_chr(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 	return result;
 
    use_proxy:
-	return psyco_generic_call(po, cimpl_chr, CfReturnRef|CfPyErrIfNull,
+	return psyco_generic_call(po, cimpl_chr, CfCommonNewRefPyObject,
 				  "lv", NULL, vargs);
 }
 
@@ -165,7 +165,7 @@ static vinfo_t* pbuiltin_ord(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 	if (result != NULL)
 		return PsycoInt_FROM_LONG(result);
 	
-	return psyco_generic_call(po, cimpl_ord, CfReturnRef|CfPyErrIfNull,
+	return psyco_generic_call(po, cimpl_ord, CfCommonNewRefPyObject,
 				  "lv", NULL, vobj);
 }
 
@@ -176,7 +176,7 @@ static vinfo_t* pbuiltin_id(PsycoObject* po, vinfo_t* vself, vinfo_t* vobj)
 #else
 	/* XXX fall-back for now */
 	return psyco_generic_call(po, PyLong_FromVoidPtr,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "v", vobj);
 #endif
 }
@@ -237,7 +237,7 @@ static vinfo_t* pbuiltin_apply(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 
 	if (PycException_Occurred(po))
 		return NULL;
-	return psyco_generic_call(po, cimpl_apply, CfReturnRef|CfPyErrIfNull,
+	return psyco_generic_call(po, cimpl_apply, CfCommonNewRefPyObject,
 				  "lv", NULL, vargs);
 }
 
@@ -250,7 +250,7 @@ static vinfo_t* pbuiltin_divmod(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 					  PsycoTuple_GET_ITEM(vargs, 0),
 					  PsycoTuple_GET_ITEM(vargs, 1));
 	}
-	return psyco_generic_call(po, cimpl_divmod, CfReturnRef|CfPyErrIfNull,
+	return psyco_generic_call(po, cimpl_divmod, CfCommonNewRefPyObject,
 				  "lv", NULL, vargs);
 }
 

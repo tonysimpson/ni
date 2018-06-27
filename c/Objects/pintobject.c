@@ -109,7 +109,7 @@ vinfo_t* PsycoInt_AsLong(PsycoObject* po, vinfo_t* v)
 #if 0
 	---  DISABLED: cannot promote the type of a returned object :-(  ---
 	v = Psyco_META1(po, nb->nb_int,
-			CfReturnRef|CfPyErrIfNull,
+			CfCommonNewRefPyObject,
 			"v", v);
 	if (v == NULL)
 		return NULL;
@@ -149,7 +149,7 @@ static bool compute_int(PsycoObject* po, vinfo_t* intobj)
 
 	/* call PyInt_FromLong() */
 	newobj = psyco_generic_call(po, PyInt_FromLong,
-				    CfPure|CfReturnRef|CfPyErrIfNull, "v", x);
+				    CfPure|CfCommonNewRefPyObject, "v", x);
 	if (newobj == NULL)
 		return false;
 
@@ -211,7 +211,7 @@ static vinfo_t* pint_neg(PsycoObject* po, vinfo_t* intobj)
 		return NULL;
 	/* overflow */
 	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_negative,
-				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  CfPure|CfCommonNewRefPyObject,
 				  "v", intobj);
 }
 
@@ -241,7 +241,7 @@ static vinfo_t* pint_abs(PsycoObject* po, vinfo_t* intobj)
 		return NULL;
 	/* overflow */
 	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_absolute,
-				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  CfPure|CfCommonNewRefPyObject,
 				  "v", intobj);
 }
 
@@ -273,7 +273,7 @@ static vinfo_t* pint_add(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 		return NULL;
 	/* overflow */
 	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_add,
-				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  CfPure|CfCommonNewRefPyObject,
 				  "vv", v, w);
 }
 
@@ -291,7 +291,7 @@ static vinfo_t* pint_sub(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 		return NULL;
 	/* overflow */
 	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_subtract,
-				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  CfPure|CfCommonNewRefPyObject,
 				  "vv", v, w);
 }
 
@@ -308,7 +308,7 @@ static vinfo_t* pint_mod(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	/* Either an error occured or it overflowed. In either case let python deal with it */
 	PycException_Clear(po);
 	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_remainder,
-				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  CfPure|CfCommonNewRefPyObject,
 				  "vv", v, w);
 }
 
@@ -325,7 +325,7 @@ static vinfo_t* pint_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	/* Either an error occured or it overflowed. In either case let python deal with it */
 	PycException_Clear(po);
 	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_divide,
-				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  CfPure|CfCommonNewRefPyObject,
 				  "vv", v, w);
 }
 
@@ -342,7 +342,7 @@ static vinfo_t* pint_floor_div(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	/* Either an error occured or it overflowed. In either case let python deal with it */
 	PycException_Clear(po);
 	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_floor_divide,
-				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  CfPure|CfCommonNewRefPyObject,
 				  "vv", v, w);
 }
 
@@ -354,7 +354,7 @@ static vinfo_t* pint_pow(PsycoObject* po, vinfo_t* v, vinfo_t* w, vinfo_t* z)
 	void* cimpl;
 	if (!psyco_knowntobe(z, (long) Py_None)) {
 		return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_power,
-				CfPure|CfReturnRef|CfPyErrNotImplemented,
+				CfPure|CfCommonCheckNotImplemented,
 					  "vvv", v, w, z);
 	}
 	CONVERT_TO_LONG(v, a);
@@ -371,7 +371,7 @@ static vinfo_t* pint_pow(PsycoObject* po, vinfo_t* v, vinfo_t* w, vinfo_t* z)
 	/* Either an error occured or it overflowed. In either case let python deal with it */
 	PycException_Clear(po);
 	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_power,
-				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  CfPure|CfCommonNewRefPyObject,
 				  "vvv", v, w, z);
 }
 
@@ -419,7 +419,7 @@ static vinfo_t* pint_mul(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 		return NULL;
 	/* overflow */
 	return psyco_generic_call(po, PyInt_Type.tp_as_number->nb_multiply,
-				  CfPure|CfReturnRef|CfPyErrIfNull,
+				  CfPure|CfCommonNewRefPyObject,
 				  "vv", v, w);
 }
 
@@ -501,7 +501,7 @@ static vinfo_t* pint_lshift(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 		/* overflow */
 		vinfo_decref(x, po);
 		return psyco_generic_call(po, cimpl_ovf_int_lshift,
-					  CfPure|CfReturnRef|CfPyErrIfNull,
+					  CfPure|CfCommonNewRefPyObject,
 					  "vv", a, b);
 	}
 	else
@@ -522,9 +522,9 @@ static vinfo_t* pint_rshift(PsycoObject* po, vinfo_t* v, vinfo_t* w)
    Only list here the ones that cannot. Besides, all these operations
    should sooner or later be implemented in Psyco. XXX */
 /*DEF_KNOWN_RET_TYPE_2(pint_lshift, PyInt_Type.tp_as_number->nb_lshift,
-  CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)
+  CfCommonCheckNotImplemented, &PyInt_Type)
   DEF_KNOWN_RET_TYPE_2(pint_rshift, PyInt_Type.tp_as_number->nb_rshift,
-  CfReturnRef|CfPyErrNotImplemented, &PyInt_Type)*/
+  CfCommonCheckNotImplemented, &PyInt_Type)*/
 
 INITIALIZATIONFN
 void psy_intobject_init(void)

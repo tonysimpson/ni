@@ -46,7 +46,7 @@ static bool compute_method(PsycoObject* po, vinfo_t* methobj)
 
 	/* call PyMethod_New() */
 	newobj = psyco_generic_call(po, PyMethod_New,
-				    CfPure|CfReturnRef|CfPyErrIfNull,
+				    CfPure|CfCommonNewRefPyObject,
 				    "vvv", im_func, im_self, im_class);
 	if (newobj == NULL)
 		return false;
@@ -141,7 +141,7 @@ vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,
 
   fallback:
 	return psyco_generic_call(po, PyMethod_Type.tp_call,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vvv", methobj, arg, kw);
 }
 
@@ -149,7 +149,7 @@ vinfo_t* pinstancemethod_call(PsycoObject* po, vinfo_t* methobj,
   /*** instances and classes                                   ***/
 
 DEF_KNOWN_RET_TYPE_3(pinstance_new, PyInstance_New,
-		     CfReturnRef|CfPyErrIfNull, &PyInstance_Type)
+		     CfCommonNewRefPyObject, &PyInstance_Type)
 
 
 INITIALIZATIONFN

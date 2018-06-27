@@ -459,13 +459,13 @@ vinfo_t* PycException_Matches(PsycoObject* po, PyObject* e)
 		/* Exception raised by Python, emit a call to
 		   PyErr_ExceptionMatches() */
 		result = psyco_generic_call(po, PyErr_ExceptionMatches,
-					    CfReturnNormal, "l", (long) e);
+					    CfReturnTypeInt, "l", (long) e);
 	}
 	else if (PycException_IsPython(po)) {
 		/* Exception virtually set, that is, present in the PsycoObject
 		   but not actually set at run-time by Python's PyErr_SetXxx */
 		result = psyco_generic_call(po, PyErr_GivenExceptionMatches,
-					    CfPure | CfReturnNormal,
+					    CfPure | CfReturnTypeInt,
 					    "vl", po->pr.exc, (long) e);
 	}
 	else {   /* pseudo exceptions don't match real Python ones */
@@ -785,7 +785,7 @@ PSY_INLINE void PsycoTraceBack_Here(PsycoObject* po, int lasti)
 		/* We only have a virtual-time exception (not set in Python),
 		   so we build po->pr.tb without actually setting it either */
 		vinfo_t* tb = psyco_generic_call(po, cimpl_vt_traceback,
-						 CfReturnRef, "lvll",
+						 CfCommonNewRefPyObjectNoError, "lvll",
 						 (long) po->pr.co, LOC_GLOBALS,
 						 lasti, lineno);
 		vinfo_xdecref(po->pr.tb, po);
@@ -1212,7 +1212,7 @@ static vinfo_t* psyco_apply_slice(PsycoObject* po, vinfo_t* u,
 		modes[2] = 'l';
 		modes[3] = 0;
 		vslice = psyco_generic_call(po, PySlice_New,
-					    CfReturnRef|CfPyErrIfNull,
+					    CfCommonNewRefPyObject,
 					    modes, v, w, NULL);
 		if (vslice != NULL) {
 			Psyco_AssertType(po, vslice, &PySlice_Type);
@@ -1277,7 +1277,7 @@ static bool psyco_assign_slice(PsycoObject* po, vinfo_t* u,
 		modes[2] = 'l';
 		modes[3] = 0;
 		vslice = psyco_generic_call(po, PySlice_New,
-					    CfReturnRef|CfPyErrIfNull,
+					    CfCommonNewRefPyObject,
 					    modes, v, w, NULL);
 		if (vslice != NULL) {
 			Psyco_AssertType(po, vslice, &PySlice_Type);
@@ -2504,7 +2504,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 
 	case BUILD_CLASS:
 		x = psyco_generic_call(po, cimpl_build_class,
-				       CfReturnRef|CfPyErrIfNull,
+				       CfCommonNewRefPyObject,
 				       "vvvv", LOC_GLOBALS,
 						NTOP(1), NTOP(2), NTOP(3));
 		if (x == NULL)
@@ -2689,7 +2689,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		}
 		/* else { Globals dict is unknown at compile-time } */
 		v = psyco_generic_call(po, cimpl_load_global,
-				       CfReturnRef|CfPyErrIfNull,
+				       CfCommonNewRefPyObject,
 				       "vl", LOC_GLOBALS, namev);
 		if (v == NULL)
 			break;
@@ -2856,7 +2856,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		PyObject* w = GETNAMEV(oparg);
 #if !VERYCONVOLUTED_IMPORT_NAME   /* Python < 2.5 */
 		x = psyco_generic_call(po, cimpl_import_name,
-				       CfReturnRef|CfPyErrIfNull,
+				       CfCommonNewRefPyObject,
 				       "vlv", LOC_GLOBALS, w, TOP());
 		if (x == NULL)
 			break;
@@ -2865,7 +2865,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		v = TOP();
 		u = NTOP(2);
 		x = psyco_generic_call(po, cimpl_import_name,
-				       CfReturnRef|CfPyErrIfNull,
+				       CfCommonNewRefPyObject,
 				       "vlvv", LOC_GLOBALS, w, v, u);
 		if (x == NULL)
 			break;
@@ -3088,7 +3088,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			u = NTOP(2);
 		}
 		x = psyco_generic_call(po, PySlice_New,
-				       CfReturnRef|CfPyErrIfNull,
+				       CfCommonNewRefPyObject,
 				       "vvv", u, v, w);
 		if (oparg != 3)
 			vinfo_decref(w, po);

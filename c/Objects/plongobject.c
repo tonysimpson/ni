@@ -37,7 +37,7 @@ DEFINEFN
 vinfo_t* PsycoLong_FromUnsignedLong(PsycoObject* po, vinfo_t* v)
 {
 	vinfo_t* result = psyco_generic_call(po, PyLong_FromUnsignedLong,
-					     CfReturnRef|CfPyErrIfNull,
+					     CfCommonNewRefPyObject,
 					     "v", v);
 	if (result != NULL)
 		Psyco_AssertType(po, result, &PyLong_Type);
@@ -50,8 +50,8 @@ vinfo_t* PsycoLong_FromUnsignedLong(PsycoObject* po, vinfo_t* v)
 #define RETLONG(arity, cname, slotname)						\
 	DEF_KNOWN_RET_TYPE_##arity(cname,					\
 				   PyLong_Type.tp_as_number->slotname,		\
-				   (arity)==1 ? (CfReturnRef|CfPyErrIfNull) :	\
-				        (CfReturnRef|CfPyErrNotImplemented),	\
+				   (arity)==1 ? (CfCommonNewRefPyObject) :	\
+				        (CfCommonCheckNotImplemented),	\
 				   &PyLong_Type)
 
 /* Python 2.2's long_mul() tries to be clever about 'sequence * long' */
@@ -94,7 +94,7 @@ static vinfo_t* plong_pow(PsycoObject *po, vinfo_t* v1, vinfo_t* v2,
 	   does not assert the return type. (cf. DEF_KNOWN_RET_TYPE_internal
 	   in pobject.h) */
 	return psyco_generic_call(po, PyLong_Type.tp_as_number->nb_power,
-				  CfReturnRef|CfPyErrNotImplemented,
+				  CfCommonCheckNotImplemented,
 				  "vvv", v1, v2, v3);
 }
 

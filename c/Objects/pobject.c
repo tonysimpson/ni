@@ -82,7 +82,7 @@ vinfo_t* PsycoObject_Repr(PsycoObject* po, vinfo_t* vi)
 {
 	/* XXX implement me */
 	vinfo_t* vstr = psyco_generic_call(po, PyObject_Repr,
-					   CfReturnRef|CfPyErrIfNull,
+					   CfCommonNewRefPyObject,
 					   "v", vi);
 	if (vstr == NULL)
 		return NULL;
@@ -116,18 +116,18 @@ vinfo_t* PsycoObject_GetAttr(PsycoObject* po, vinfo_t* o, vinfo_t* attr_name)
 		return NULL;
 	if (tp->tp_getattro != NULL)
 		return Psyco_META2(po, tp->tp_getattro,
-				   CfReturnRef|CfPyErrIfNull,
+				   CfCommonNewRefPyObject,
 				   "vv", o, attr_name);
 	if (tp->tp_getattr != NULL)
 		return Psyco_META2(po, tp->tp_getattr,
-				   CfReturnRef|CfPyErrIfNull,
+				   CfCommonNewRefPyObject,
 				   "vv", o,
                                    PsycoString_AS_STRING(po, attr_name));
 
    generic:
 	/* when the above fails */
 	return psyco_generic_call(po, PyObject_GetAttr,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vv", o, attr_name);
 }
 
@@ -292,7 +292,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 	if (!is_compiletime(vname->source)) {
 	   fallback:
 		return psyco_generic_call(po, PyObject_GenericGetAttr,
-					  CfReturnRef|CfPyErrIfNull,
+					  CfCommonNewRefPyObject,
 					  "vv", obj, vname);
         }
 	name = (PyObject*) CompileTime_Get(vname->source)->value;
@@ -346,7 +346,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 	    PyType_HasFeature(descr->ob_type, Py_TPFLAGS_HAVE_CLASS)) {
 		f = descr->ob_type->tp_descr_get;
 		if (f != NULL && PyDescr_IsData(descr)) {
-			res = Psyco_META3(po, f, CfReturnRef|CfPyErrIfNull,
+			res = Psyco_META3(po, f, CfCommonNewRefPyObject,
 					  "lvl", descr, obj, tp);
 			goto done;
 		}
@@ -421,7 +421,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 	}
 	
 	if (f != NULL) {
-		res = Psyco_META3(po, f, CfReturnRef|CfPyErrIfNull,
+		res = Psyco_META3(po, f, CfCommonNewRefPyObject,
 				  "lvl", descr, obj, tp);
 		goto done;
 	}
@@ -464,21 +464,21 @@ static vinfo_t* try_rich_compare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int op
 		PyType_IsSubtype(wtp, vtp) &&
 		fw != NULL);
 	if (swap) {
-		res = Psyco_META3(po, fw, CfReturnRef|CfPyErrNotImplemented,
+		res = Psyco_META3(po, fw, CfCommonCheckNotImplemented,
 				  "vvl", w, v, swapped_op[op]);
 		if (IS_IMPLEMENTED(res))
 			return res;   /* 'res' might be NULL */
 		vinfo_decref(res, po);
 	}
 	if (fv != NULL) {
-		res = Psyco_META3(po, fv, CfReturnRef|CfPyErrNotImplemented,
+		res = Psyco_META3(po, fv, CfCommonCheckNotImplemented,
 				  "vvl", v, w, op);
 		if (IS_IMPLEMENTED(res))
 			return res;
 		vinfo_decref(res, po);
 	}
 	if (!swap && fw != NULL) {
-		return Psyco_META3(po, fw, CfReturnRef|CfPyErrNotImplemented,
+		return Psyco_META3(po, fw, CfCommonCheckNotImplemented,
 				   "vvl", w, v, swapped_op[op]);
 	}
 	return psyco_vi_NotImplemented();
@@ -497,7 +497,7 @@ PSY_INLINE vinfo_t* try_3way_to_rich_compare(PsycoObject* po, vinfo_t* v,
 {
 	/* XXX implement me (some day) */
 	return psyco_generic_call(po, PyObject_RichCompare,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vvl", v, w, (long) op);
 }
 
@@ -542,7 +542,7 @@ DEFINEFN vinfo_t* PsycoObject_RichCompare(PsycoObject* po, vinfo_t* v,
 			   which is not needed since we've a single
 			   type only. */
 			res = Psyco_META3(po, f1,
-					  CfReturnRef|CfPyErrNotImplemented,
+					  CfCommonCheckNotImplemented,
 					  "vvl", v, w, (long) op);
 			if (IS_IMPLEMENTED(res))
 				return res;

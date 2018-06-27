@@ -106,7 +106,7 @@ static vinfo_t* ppsyco_globals(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 		return vglobals;
 	}
 	return psyco_generic_call(po, cimpl_globals,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vv", vself, vargs);
 }
 
@@ -143,7 +143,7 @@ static vinfo_t* pbuiltinevaluator(PsycoObject* po, vinfo_t* vargs,
 	return vresult;
 
    fallback:
-	return psyco_generic_call(po, cimpl, CfReturnRef|CfPyErrIfNull,
+	return psyco_generic_call(po, cimpl, CfCommonNewRefPyObject,
 				  "lv", (long) NULL, vargs);
 }
 
@@ -163,7 +163,7 @@ static vinfo_t* ppsyco_locals(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 		return psyco_fast_to_locals(po);
 	}
 	return psyco_generic_call(po, cimpl_locals,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vv", vself, vargs);
 }
 
@@ -173,7 +173,7 @@ static vinfo_t* ppsyco_vars(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 		return psyco_fast_to_locals(po);
 	}
 	return psyco_generic_call(po, cimpl_vars,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vv", vself, vargs);
 }
 
@@ -189,7 +189,7 @@ static vinfo_t* ppsyco_dir(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 							  SkFlagPyObj)));
 	}
 	return psyco_generic_call(po, cimpl_dir,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vv", vself, vargs);
 }
 
@@ -219,7 +219,7 @@ static vinfo_t* ppsyco_input(PsycoObject* po, vinfo_t* vself, vinfo_t* vargs)
 
    fallback:
 	return psyco_generic_call(po, cimpl_input,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vv", vself, vargs);
 }
 

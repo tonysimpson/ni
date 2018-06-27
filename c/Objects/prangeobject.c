@@ -57,7 +57,7 @@ static bool compute_xrange(PsycoObject* po, vinfo_t* v)
 
 	/* call PyRange_New() */
 	newobj = psyco_generic_call(po, cimpl_xrange_new,
-				    CfPure|CfReturnRef|CfPyErrIfNull,
+				    CfPure|CfCommonNewRefPyObject,
 				    "vv", vstart, vlen);
 	if (newobj == NULL)
 		return false;
@@ -136,7 +136,7 @@ static bool compute_listrange(PsycoObject* po, vinfo_t* rangelst)
 		return false;
 
 	newobj = psyco_generic_call(po, cimpl_listrange,
-				    CfReturnRef|CfPyErrIfNull,
+				    CfCommonNewRefPyObject,
 				    "vv", vstart, vlen);
 	if (newobj == NULL)
 		return false;

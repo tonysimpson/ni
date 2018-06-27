@@ -53,7 +53,7 @@ static vinfo_t* ptype_call(PsycoObject* po, vinfo_t* vtype,
 	}
 
 	vobj = Psyco_META3(po, type->tp_new,
-			   CfReturnRef|CfPyErrIfNull, "lvv",
+			   CfCommonNewRefPyObject, "lvv",
 			   type, varg, vkw);
 	if (vobj == NULL)
 		return NULL;
@@ -88,7 +88,7 @@ static vinfo_t* ptype_call(PsycoObject* po, vinfo_t* vtype,
 
  fallback:
 	return psyco_generic_call(po, type_call,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vvv", vtype, varg, vkw);
 }
 
@@ -121,12 +121,12 @@ vinfo_t* psyco_pobject_new(PsycoObject* po, PyTypeObject* type,
 	if (type->tp_flags & Py_TPFLAGS_IS_ABSTRACT) {
 		/* fall back to object_new for error handling */
 		return psyco_generic_call(po, object_new,
-					  CfReturnRef|CfPyErrIfNull,
+					  CfCommonNewRefPyObject,
 					  "lvv", type, varg, vkw);
 	}
 #endif
 	return Psyco_META2(po, type->tp_alloc,
-			   CfReturnRef|CfPyErrIfNull, "ll",
+			   CfCommonNewRefPyObject, "ll",
 			   type, 0);
 }
 
@@ -134,7 +134,7 @@ static vinfo_t* ptype_genericnew(PsycoObject* po, PyTypeObject* type,
 				 vinfo_t* varg, vinfo_t* vkw)
 {
 	return Psyco_META2(po, type->tp_alloc,
-			   CfReturnRef|CfPyErrIfNull, "ll",
+			   CfCommonNewRefPyObject, "ll",
 			   type, 0);
 }
 
@@ -203,7 +203,7 @@ static vinfo_t* ptype_genericalloc(PsycoObject* po, PyTypeObject* type,
 #endif
 		/* fallback */
 		v_result = psyco_generic_call(po, PyType_GenericAlloc,
-					      CfReturnRef|CfPyErrIfNull,
+					      CfCommonNewRefPyObject,
 					      "ll", type, nitems);
 #if INLINE_GENERIC_ALLOC
 	}
@@ -222,7 +222,7 @@ static vinfo_t* ptype_genericalloc(PsycoObject* po, PyTypeObject* type,
 				cimpl = cimpl_alloc_nongc_nonheap;
 		}
 		v_result = psyco_generic_call(po, cimpl,
-					      CfReturnRef|CfPyErrIfNull,
+					      CfCommonNewRefPyObject,
 					      "l", type);
 	}
 #endif

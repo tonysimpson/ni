@@ -85,25 +85,7 @@ PSY_INLINE long reference_from_code(PsycoObject* po, CompileTimeSource source)
 EXTERNFN vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
                                      int flags, const char* arguments, ...);
 
-/* if the C function has no side effect it can be called at compile-time
-   if all its arguments are compile-time. Use CfPure in this case. */
-#define CfPure           0x10
-
-/* if the C function returns a long or a PyObject* but not a new reference */
-#define CfReturnNormal   0x00   /* default */
-
-/* if the C function returns a new reference */
-#define CfReturnRef      0x01
-
-/* if the C function does not return anything
-   or if you are not interested in getting the result in a vinfo_t.
-   psyco_generic_call() returns anything non-NULL (unless there is an error)
-   in this case. */
-#define CfNoReturnValue  0x03
-
-#define CfReturnMask     0x0F
-/* See also the Python-specific flags CfPyErrXxx defined in pycheader.h. */
-
+#include "cf_flags.h"
 
 /* To emit the call to other code blocks emitted by Psyco. 'argsources' gives
    the run-time sources for the arguments, as specified by

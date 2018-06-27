@@ -212,7 +212,7 @@ bool PsycoFloat_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** result_1, vinfo_
     }
 
     v = Psyco_META1(po, nb->nb_float,
-            CfReturnRef|CfPyErrIfNull,
+            CfCommonNewRefPyObject,
             "v", v);
     if (v == NULL)
         return false;
@@ -244,7 +244,7 @@ static bool compute_float(PsycoObject* po, vinfo_t* floatobj)
 
     /* call PyFloat_FromDouble() */
     newobj = psyco_generic_call(po, PyFloat_FromDouble, 
-        CfPure|CfReturnRef|CfPyErrIfNull,
+        CfPure|CfCommonNewRefPyObject,
         "vv", first_half, second_half);
 
     if (newobj == NULL)
@@ -397,7 +397,7 @@ static vinfo_t* pfloat_richcompare(PsycoObject* po, vinfo_t* v,
     if (PyType_TypeCheck(wtp, &PyLong_Type)) {
         /* fall back */
         return psyco_generic_call(po, PyFloat_Type.tp_richcompare,
-                                  CfReturnRef|CfPure,
+                                  CfCommonNewRefPyObjectNoError|CfPure,
                                   "vvl", v, w, op);
     }
     if (PyType_TypeCheck(wtp, &PyFloat_Type)) {
@@ -562,7 +562,7 @@ static vinfo_t* pfloat_pow(PsycoObject* po, vinfo_t* v, vinfo_t* w, vinfo_t* z)
 
  fallback:
     return psyco_generic_call(po, PyFloat_Type.tp_as_number->nb_power,
-			      CfReturnRef|CfPyErrIfNull,
+			      CfCommonNewRefPyObject,
 			      "vvv", v, w, z);
 }
 

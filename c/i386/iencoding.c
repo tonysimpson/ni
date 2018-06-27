@@ -151,7 +151,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	if (ccflags)
 		POP_CC_FLAGS();
 	END_CODE
-	return generic_call_check(po, CfReturnRef|CfPyErrIfNull,
+	return generic_call_check(po, CfCommonNewRefPyObject,
 				  bfunction_result(po, true));
 }
 

@@ -85,7 +85,7 @@ extern double modf (double, double *);
         return x; \
     fallback:                                                   \
         return psyco_generic_call(po, fallback_##func,          \
-                                  CfReturnRef|CfPyErrIfNull,    \
+                                  CfCommonNewRefPyObject,    \
                                   "lv", NULL, v);               \
     error:                                                      \
         return NULL;                                            \
@@ -112,7 +112,7 @@ extern double modf (double, double *);
         return x; \
     fallback:                                                   \
         return psyco_generic_call(po, fallback_##func,          \
-                                  CfReturnRef|CfPyErrIfNull,    \
+                                  CfCommonNewRefPyObject,    \
                                   "lv", NULL, varg);            \
     error:                                                      \
         return NULL;                                            \
@@ -143,7 +143,7 @@ extern double modf (double, double *);
         return x; \
     fallback:                                                   \
         return psyco_generic_call(po, fallback_##func,          \
-                                  CfReturnRef|CfPyErrIfNull,    \
+                                  CfCommonNewRefPyObject,    \
                                   "lv", NULL, varg);            \
     error:                                                      \
         if (a2 != NULL) {                                       \

@@ -78,7 +78,7 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 		if (runtime_condition_t(po, cc)) {
 			/* the char* is not NULL */
 			v = psyco_generic_call(po, PyString_FromString,
-					       CfReturnRef|CfPyErrIfNull,
+					       CfCommonNewRefPyObject,
 					       "v", w1);
 			if (v != NULL)
 				Psyco_AssertType(po, v, &PyString_Type);
@@ -93,7 +93,7 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 		if (w1 == NULL)
 			return NULL;
 		v = psyco_generic_call(po, PyString_FromString,
-				       CfReturnRef|CfPyErrIfNull,
+				       CfCommonNewRefPyObject,
 				       "v", w1);
 		if (v != NULL)
 			Psyco_AssertType(po, v, &PyString_Type);
@@ -174,5 +174,5 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
   fallback:
 	/* call the Python implementation for cases we cannot handle directy */
 	return psyco_generic_call(po, PyMember_GetOne,
-				  CfReturnRef|CfPyErrIfNull, "vl", addr, l);
+				  CfCommonNewRefPyObject, "vl", addr, l);
 }

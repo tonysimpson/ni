@@ -84,30 +84,7 @@ typedef struct {
    'stack_level' needs special care.
 */
 
-
-/* some extra flags recognized by psyco_generic_call(). They tell how the
-   Python C function signals errors. They are ignored by the Psyco_METAX()
-   macros if a meta-implementation is found, as meta-implementations always
-   signal errors by returning either (vinfo_t*)NULL or CC_ERROR. */
-#define CfPyErrDontCheck    0x000   /* default: no check */
-#define CfPyErrIfNull       0x100   /* a return == 0 (or NULL) means an error */
-#define CfPyErrIfNonNull    0x200   /* a return != 0 means an error */
-#define CfPyErrIfNeg        0x300   /* a return < 0 means an error */
-#define CfPyErrIfMinus1     0x400   /* only -1 means an error */
-#define CfPyErrCheck        0x500   /* always check with PyErr_Occurred() */
-#define CfPyErrCheckMinus1  0x600   /* use PyErr_Occurred() if return is -1 */
-#define CfPyErrCheckNeg     0x700   /* use PyErr_Occurred() if return is < 0 */
-#define CfPyErrNotImplemented 0x800 /* test for a Py_NotImplemented result */
-#define CfPyErrIterNext     0x900   /* specially for tp_iternext slots */
-#define CfPyErrAlways       0xA00   /* always set an exception */
-
-#define CfPyErrMask         0xF00
-
-/* Note: CfPyErrNotImplemented means that the C function may return
-   Py_NotImplemented, and this is checked; if true, then Psyco_METAX()
-   returns exactly 'psyco_viNotImplemented', and not just a possibly run-time
-   vinfo_t* containing Py_NotImplemented. Meta-implementations always return
-   exactly 'psyco_viNotImplemented'. */
+#include "../cf_flags.h"
 
 /* for psyco_generic_call() only */
 EXTERNFN vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi);

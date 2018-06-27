@@ -192,7 +192,7 @@ static vinfo_t* pcompact_getattro(PsycoObject* po, vinfo_t* vk, vinfo_t* vattr)
 	   (see explanation in PsycoObject_GenericGetAttr()) */
 	if (!is_compiletime(vattr->source)) {
 		return psyco_generic_call(po, PyCompact_Type.tp_getattro,
-					  CfReturnRef|CfPyErrIfNull,
+					  CfCommonNewRefPyObject,
 					  "vv", vk, vattr);
 	}
 
@@ -221,7 +221,7 @@ static vinfo_t* pcompact_getattro(PsycoObject* po, vinfo_t* vk, vinfo_t* vattr)
 			f = descr->ob_type->tp_descr_get;
 			if (f != NULL && PyDescr_IsData(descr)) {
 				vresult = Psyco_META3(po, f,
-						      CfReturnRef|CfPyErrIfNull,
+						      CfCommonNewRefPyObject,
 						      "lvl", descr, vk, tp);
 				goto done;
 			}
@@ -248,7 +248,7 @@ static vinfo_t* pcompact_getattro(PsycoObject* po, vinfo_t* vk, vinfo_t* vattr)
 
 	/* The end of PyObject_GenericGetAttr() */
 	if (f != NULL) {
-		vresult = Psyco_META3(po, f, CfReturnRef|CfPyErrIfNull,
+		vresult = Psyco_META3(po, f, CfCommonNewRefPyObject,
 				      "lvl", descr, vk, tp);
 		goto done;
 	}

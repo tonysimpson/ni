@@ -51,7 +51,7 @@ static bool compute_tuple(PsycoObject* po, vinfo_t* v)
 		/* no -- code a call to PyTuple_New() */
 		int tuple_len = tuple_end - iTUPLE_OB_ITEM;
 		vinfo_t* tuple = psyco_generic_call(po, PyTuple_New,
-                                                    CfReturnRef|CfPyErrIfNull,
+                                                    CfCommonNewRefPyObject,
                                                     "l", tuple_len);
 		if (tuple == NULL)
 			return false;
@@ -167,7 +167,7 @@ vinfo_t* PsycoTuple_Concat(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 	case false:   /* fallback */
 		return psyco_generic_call(po,
 					  PyTuple_Type.tp_as_sequence->sq_concat,
-					  CfReturnRef|CfPyErrIfNull,
+					  CfCommonNewRefPyObject,
 					  "vv", v1, v2);
 	default:
 		return NULL;
@@ -189,7 +189,7 @@ vinfo_t* PsycoTuple_Concat(PsycoObject* po, vinfo_t* v1, vinfo_t* v2)
 		/* cannot do it now. Fall back. */
 		result = psyco_generic_call(po,
 					PyTuple_Type.tp_as_sequence->sq_concat,
-					CfReturnRef|CfPyErrIfNull,
+					CfCommonNewRefPyObject,
 					"vv", v1, v2);
 		if (result == NULL)
 			return NULL;

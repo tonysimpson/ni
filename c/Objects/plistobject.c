@@ -30,7 +30,7 @@ static bool compute_vlist(PsycoObject* po, vinfo_t* v)
         vinfo_t* ob_item;
 
 	newobj = psyco_generic_call(po, PyList_New,
-				    CfReturnRef|CfPyErrIfNull,
+				    CfCommonNewRefPyObject,
 				    "l", (long) length);
 	if (newobj == NULL)
 		return false;
@@ -285,7 +285,7 @@ vinfo_t* psyco_plist_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 		/* fallback - but we still know that the result is a list */
 		r = psyco_generic_call(po,
 				       PyList_Type.tp_as_sequence->sq_concat,
-				       CfReturnRef|CfPyErrIfNull,
+				       CfCommonNewRefPyObject,
 				       "vv", a, b);
 		if (r != NULL)
 			Psyco_AssertType(po, r, &PyList_Type);
@@ -294,7 +294,7 @@ vinfo_t* psyco_plist_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 
 	/* fallback */
 	return psyco_generic_call(po, PyList_Type.tp_as_sequence->sq_concat,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vv", a, b);
 }
 

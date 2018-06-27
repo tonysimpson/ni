@@ -31,7 +31,7 @@ static bool compute_char(PsycoObject* po, vinfo_t* v)
 		return false;
 
 	newobj = psyco_generic_call(po, cimpl_character,
-				    CfPure|CfReturnRef|CfPyErrIfNull,
+				    CfPure|CfCommonNewRefPyObject,
 				    "v", chrval);
 	if (newobj == NULL)
 		return false;
@@ -144,7 +144,7 @@ static bool compute_strslice(PsycoObject* po, vinfo_t* v)
 		return false;
 	
 	newobj = psyco_generic_call(po, PyString_FromStringAndSize,
-				    CfPure|CfReturnRef|CfPyErrIfNull,
+				    CfPure|CfCommonNewRefPyObject,
 				    "vv", ptr, length);
 	vinfo_decref(ptr, po);
 	if (newobj == NULL)
@@ -248,7 +248,7 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v)
 	if (count < 0) {
 		/* non-virtual list */
 		newobj = psyco_generic_call(po, cimpl_concatenate,
-					    CfReturnRef|CfPyErrIfNull,
+					    CfCommonNewRefPyObject,
 					    "vv", slen, list);
 		if (newobj == NULL)
 			return false;
@@ -262,7 +262,7 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v)
 		   non-virtual strings */
 		newobj = psyco_generic_call(po,
 					PyString_Type.tp_as_sequence->sq_concat,
-					    CfReturnRef|CfPyErrIfNull,
+					    CfCommonNewRefPyObject,
 					    "vv", s, t);
 		if (newobj == NULL)
 			return false;
@@ -271,7 +271,7 @@ static bool compute_catstr(PsycoObject* po, vinfo_t* v)
 	
 	/* short virtual list: inline cimpl_concatenate */
 	newobj = psyco_generic_call(po, PyString_FromStringAndSize,
-				    CfReturnRef|CfPyErrIfNull,
+				    CfCommonNewRefPyObject,
 				    "lv", (long) NULL, slen);
 	if (newobj == NULL)
 		return false;
@@ -655,7 +655,7 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 
 	/* fallback */
 	return psyco_generic_call(po, PyString_Type.tp_as_sequence->sq_concat,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vv", a, b);
 }
 #endif
@@ -857,7 +857,7 @@ static vinfo_t* pstring_mod(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 		return psyco_vi_NotImplemented();
 	}
 	return psyco_generic_call(po, PyString_Format,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vv", v, w);
 }
 
@@ -1027,7 +1027,7 @@ static bool compute_bufstr(PsycoObject* po, vinfo_t* v)
 	if (vcb == NULL)
 		return false;
 
-	vcb = psyco_generic_call(po, &cimpl_cb_normalize, CfReturnRef,
+	vcb = psyco_generic_call(po, &cimpl_cb_normalize, CfCommonNewRefPyObjectNoError,
 				 "vv", vcb, vlen);
 	if (vcb == NULL)
 		return false;
@@ -1117,7 +1117,7 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 			vinfo_t* vcb = vinfo_getitem(a, BUFSTR_BUFOBJ);
 			if (vcb != NULL) {
 				v = psyco_generic_call(po, &cimpl_cb_grow,
-					       CfReturnRef|CfPyErrIfNull,
+					       CfCommonNewRefPyObject,
 					       "vvvvv", vcb, breal,
 						        lena, lenb, lenc);
 				goto done;
@@ -1126,7 +1126,7 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 		
 		/* make a new bufstring */
 		v = psyco_generic_call(po, &cimpl_cb_new,
-				       CfReturnRef|CfPyErrIfNull,
+				       CfCommonNewRefPyObject,
 				       "vvvvv", a, breal, lena, lenb, lenc);
 		
 	done:
@@ -1143,7 +1143,7 @@ static vinfo_t* pstring_concat(PsycoObject* po, vinfo_t* a, vinfo_t* b)
 
 	/* fallback */
 	return psyco_generic_call(po, PyString_Type.tp_as_sequence->sq_concat,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vv", a, b);
 }
 #endif  /* USE_BUFSTR */

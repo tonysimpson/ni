@@ -69,7 +69,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 	INSN_pushretval(); INSNPUSHED(1);
 	END_CODE
 	META_assertdepth(po->stack_depth);
-	return generic_call_check(po, CfReturnRef|CfPyErrIfNull,
+	return generic_call_check(po, CfCommonNewRefPyObject,
 				  bfunction_result(po, true));
 }
 

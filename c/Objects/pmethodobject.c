@@ -19,11 +19,11 @@ static bool compute_cfunction(PsycoObject* po, vinfo_t* methobj)
 	/* call PyCFunction_New() */
 #ifdef PyCFunction_New   /* Python >= 2.3 introduced PyCFunction_NewEx() */
 	newobj = psyco_generic_call(po, PyCFunction_NewEx,
-				    CfPure|CfReturnRef|CfPyErrIfNull,
+				    CfPure|CfCommonNewRefPyObject,
 				    "vvl", m_ml, m_self, NULL);
 #else
 	newobj = psyco_generic_call(po, PyCFunction_New,
-				    CfPure|CfReturnRef|CfPyErrIfNull,
+				    CfPure|CfCommonNewRefPyObject,
 				    "vv", m_ml, m_self);
 #endif
 	if (newobj == NULL)
@@ -90,7 +90,7 @@ vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 
 		if (flags & METH_KEYWORDS) {
 			return Psyco_META3(po, ml->ml_meth,
-					   CfReturnRef|CfPyErrIfNull,
+					   CfCommonNewRefPyObject,
 					   "vvv", vself, tuple, kw);
 		}
 		if (!psyco_knowntobe(kw, (long) NULL))
@@ -118,14 +118,14 @@ vinfo_t* PsycoCFunction_Call(PsycoObject* po, vinfo_t* func,
 		default:
 			goto use_proxy;
 		}
-		return Psyco_META2(po, ml->ml_meth, CfReturnRef|CfPyErrIfNull,
+		return Psyco_META2(po, ml->ml_meth, CfCommonNewRefPyObject,
 				   argumentlist, vself, carg);
 	}
 
 	/* default, slow version */
    use_proxy:
 	return psyco_generic_call(po, PyCFunction_Call,
-				  CfReturnRef|CfPyErrIfNull,
+				  CfCommonNewRefPyObject,
 				  "vvv", func, tuple, kw);
 }
 

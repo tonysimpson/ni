@@ -9,7 +9,7 @@ vinfo_t* PsycoDict_New(PsycoObject* po)
 {
 	/* XXX no virtual dicts yet */
 	vinfo_t* v = psyco_generic_call(po, PyDict_New,
-					CfReturnRef|CfPyErrIfNull, "");
+					CfCommonNewRefPyObject, "");
 	if (v == NULL)
 		return NULL;
 
@@ -24,7 +24,7 @@ vinfo_t* PsycoDict_NewPresized(PsycoObject* po, long minused)
 {
 	if (minused > 5) {
 		vinfo_t* v = psyco_generic_call(po, _PyDict_NewPresized,
-						CfReturnRef|CfPyErrIfNull,
+						CfCommonNewRefPyObject,
 						"l", minused);
 		if (v == NULL)
 			return NULL;
@@ -41,7 +41,7 @@ DEFINEFN
 vinfo_t* PsycoDict_Copy(PsycoObject* po, vinfo_t* orig)
 {
 	vinfo_t* v = psyco_generic_call(po, PyDict_Copy,
-					CfReturnRef|CfPyErrIfNull,
+					CfCommonNewRefPyObject,
 					"v", orig);
 	if (v == NULL)
 		return NULL;
