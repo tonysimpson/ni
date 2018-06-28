@@ -62,6 +62,135 @@ DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore, R
   return (void*)block_start;
 }
 
+static bool compile_time_check(PsycoObject* po, long result, int flags, vinfo_t** vresult) {
+    *vresult = NULL;
+	switch (flags & CfPyErrMask) {
+        case CfPyErrDontCheck:
+            break;
+        case CfPyErrIfNull:
+            if (result == 0) {
+                return false;
+            }
+            break;
+        case CfPyErrIfNonNull:
+            if (result != 0) {
+                return false;
+            }
+            break;
+        case CfPyErrIfNeg:
+            if (result < 0) {
+                return false;
+            }
+            break;
+        case CfPyErrIfMinus1:
+            if (result == -1) {
+                return false;
+            }
+            break;
+        case CfPyErrCheck:
+            if (PyErr_Occurred()) {
+                psyco_virtualize_exception(po);
+                return faslse;
+            }
+            break;
+        case CfPyErrCheckMinus1:
+            if (result == -1 && PyErr_Occurred()) {
+                psyco_virtualize_exception(po);
+                return false;
+            }
+            break;
+        case CfPyErrCheckNeg:
+            if (result < 0 && PyErr_Occurred()) {
+                psyco_virtualize_exception(po);
+                return false;
+            }
+            break;
+		case CfPyErrNotImplemented:
+			if ((PyObject*)result == Py_NotImplemented) {
+                *vresult = psyco_vi_NotImplemented();
+				return false;
+			}
+			break;
+        case CfPyErrIterNext:
+            if (result == 0) {
+                PycException_SetVInfo(po, PyExc_StopIteration, psyco_vi_None());
+                return false;
+            }
+            break;
+		case CfPyErrAlways:
+			psyco_virtualize_exception(po);
+			return false;
+	}
+    return true;
+}
+
+static long var_call(void *c_function, int flags, int arg_count, long args[]) {
+    if((flags & CfReturnTypeMask) == CfReturnTypeInt) {
+        switch (arg_count) {
+			case 0:
+				return (long)((int (*) (void))c_function)();
+			case 1:
+				return (long)((int (*) (long))c_function)(args[0]);
+			case 2:
+				return (long)((int (*) (long, long))c_function)(args[0], args[1]);
+			case 3:
+				return (long)((int (*) (long, long, long))c_function)(args[0], args[1], args[2]);
+			case 4:
+				return (long)((int (*) (long, long, long, long))c_function)(args[0], args[1], args[2], args[3]);
+			case 5:
+				return (long)((int (*) (long, long, long, long, long))c_function)(args[0], args[1], args[2], args[3], args[4]);
+			case 6:
+				return (long)((int (*) (long, long, long, long, long, long))c_function)(args[0], args[1], args[2], args[3], args[4], args[5]);
+			case 7:
+				return (long)((int (*) (long, long, long, long, long, long, long))c_function)(args[0], args[1], args[2], args[3], args[4], args[5], args[6]);
+			default:
+				abort(); /* compile time arg count too long - extend this switch or find a better solution */
+        }
+    } else {
+        switch (arg_count) {
+			case 0:
+				return ((long (*) (void))c_function)();
+			case 1:
+				return ((long (*) (long))c_function)(args[0]);
+			case 2:
+				return ((long (*) (long, long))c_function)(args[0], args[1]);
+			case 3:
+				return ((long (*) (long, long, long))c_function)(args[0], args[1], args[2]);
+			case 4:
+				return ((long (*) (long, long, long, long))c_function)(args[0], args[1], args[2], args[3]);
+			case 5:
+				return ((long (*) (long, long, long, long, long))c_function)(args[0], args[1], args[2], args[3], args[4]);
+			case 6:
+				return ((long (*) (long, long, long, long, long, long))c_function)(args[0], args[1], args[2], args[3], args[4], args[5]);
+			case 7:
+				return ((long (*) (long, long, long, long, long, long, long))c_function)(args[0], args[1], args[2], args[3], args[4], args[5], args[6]);
+			default:
+				abort(); /* compile time arg count too long - extend this switch or find a better solution */
+		}
+	}
+}
+
+DEFINEFN vinfo_t* compile_time_call(PsycoObject* po, void *c_function, int flags, int arg_count, long args[]) {
+    vinfo_t* vresult = NULL;
+    long result;
+    
+    result = var_call(c_function, flags, arg_count, args);
+    if(!compile_time_check(result, flags, &vresult)) {
+        return vresult;
+    }
+    if (flags & CfNoReturnValue) {
+        if (flags & CfNewRef) {
+            Py_DECREF((PyObject*)result);
+        }
+        return VINFO_OK;
+    }
+    else if (flags & CfNewRef) {
+        return vinfo_new(CompileTime_NewSk(sk_new(result, SkFlagPyObj)));
+    } else {
+        return vinfo_new(CompileTime_New(result));
+    }
+}
+
 DEFINEFN
 vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 			  Source argsources[], int argcount,
@@ -411,6 +540,7 @@ vinfo_t* bininstrcond(PsycoObject* po, condition_code_t cc,
   END_CODE
   return new_rtvinfo(po, rg, false, immed_true >= 0 && immed_false >= 0);
 }
+
 
 DEFINEFN
 vinfo_t* bfunction_result(PsycoObject* po, bool ref)

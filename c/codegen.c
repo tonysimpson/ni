@@ -192,26 +192,7 @@ bool psyco_vsource_is_promotion(VirtualTimeSource source)
 /*****************************************************************/
  /***   Calling C functions                                     ***/
 
-#define MAX_ARGUMENTS_COUNT    16
-
-static long psyco_call_var(void *c_function, int arg_count, long args[]) {
-    switch (arg_count) {
-        case 0:
-            return ((long (*) (void))c_function)();
-        case 1:
-            return ((long (*) (long))c_function)(args[0]);
-        case 2:
-            return ((long (*) (long, long))c_function)(args[0], args[1]);
-        case 3:
-            return ((long (*) (long, long, long))c_function)(args[0], args[1], args[2]);
-        case 4:
-            return ((long (*) (long, long, long, long))c_function)(args[0], args[1], args[2], args[3]);
-        case 5:
-            return ((long (*) (long, long, long, long, long))c_function)(args[0], args[1], args[2], args[3], args[4]);
-        default:
-            abort(); /* compile time arg count too long - extend this switch or find a better solution */
-    }
-}
+#define MAX_ARGUMENTS_COUNT 7
 
 #if CODEGEN_LOG
 /* XXX Get function info from function pointer in glibc only */
@@ -262,7 +243,6 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 			
 		case 'l':
 			break;
-			
 		case 'v':
 			/* Compute all values first */
 			vi = (vinfo_t*) arg;
@@ -281,7 +261,6 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 			/* Push by-reference values in the stack now */
 			vi = (vinfo_t*) arg;
 			extra_assert(is_runtime(vi->source));
-#if REG_TOTAL > 0
 			if (getstack(vi->source) == RunTime_StackNone) {
 				reg_t rg = getreg(vi->source);
 				if (rg == REG_NONE) {
@@ -293,19 +272,16 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 				SAVE_REG_VINFO(vi, rg);
 				END_CODE
 			}
-#endif
-                        arg = RunTime_NewStack(getstack(vi->source),
-                                               false, false);
+            arg = RunTime_NewStack(getstack(vi->source), false, false);
 			has_refs = true;
+            flags &= ~CfPure;
 			break;
-
 		case 'a':
 		case 'A':
 			has_refs = true;
 			totalstackspace += sizeof(long) *
 				((vinfo_array_t*) arg)->count;
 			break;
-
 		default:
 			Py_FatalError("unknown character argument in"
 				      " psyco_generic_call()");
@@ -315,67 +291,38 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 	}
 	va_end(vargs);
 
-        if (flags & CfPure) {
-                /* calling a pure function with no run-time argument */
-                long result;
-
-                if (has_refs) {
-                    for (i = 0; i < count; i++) {
-                        if (argtags[i] == 'a' || argtags[i] == 'A') {
-				int cnt = ((vinfo_array_t*)args[i])->count;
-				args[i] = (long)malloc(cnt*sizeof(long));
-                        }
-#if ALL_CHECKS
-                        if (argtags[i] == 'r')
-				Py_FatalError("psyco_generic_call(): arg mode "
-					      "incompatible with CfPure");
-#endif
+    if (flags & CfPure) {
+        /* calling a pure function with no run-time argument now at compile time */
+        if (has_refs) {
+            for (i = 0; i < count; i++) {
+                if (argtags[i] == 'a' || argtags[i] == 'A') {
+                    int cnt = ((vinfo_array_t*)args[i])->count;
+                    args[i] = (long)malloc(cnt*sizeof(long));
+                }
+            }
+        }
+        vresult = compile_time_call(po, c_function, flags, count, args);
+        if (has_regs) {
+            if (vresult == NULL) {
+                for (i = 0; i < count; i++) {
+                   if (argtags[i] == 'a' || argtags[i] == 'A') {
+                        free((void*)args[i]);
                     }
                 }
-                result = psyco_call_var(c_function, count, args);
-                if (PyErr_Occurred()) {
-                    if (has_refs)
-                        for (i = 0; i < count; i++) 
-                            if (argtags[i] == 'a' || argtags[i] == 'A')
-                                free((void*)args[i]);
-                    psyco_virtualize_exception(po);
-                    return NULL;
-                }
-                if (has_refs) {
-                    for (i = 0; i < count; i++)
-                        if (argtags[i] == 'a' || argtags[i] == 'A') {
-                            vinfo_array_t* array = (vinfo_array_t*)raw_args[i];
-                            long sk_flag = (argtags[i] == 'a') ? 0 : SkFlagPyObj;
-                            for (j = 0; j < array->count; j++) {
-                                array->items[j] = vinfo_new(CompileTime_NewSk(
-                                    sk_new( ((long*)args[i])[j], sk_flag)));
-                            }
-                            free((void*)args[i]);
+            } else {
+                for (i = 0; i < count; i++) {
+                    if (argtags[i] == 'a' || argtags[i] == 'A') {
+                        vinfo_array_t* array = (vinfo_array_t*)raw_args[i];
+                        long sk_flag = (argtags[i] == 'a') ? 0 : SkFlagPyObj;
+                        for (j = 0; j < array->count; j++) {
+                            array->items[j] = vinfo_new(CompileTime_NewSk(
+                                sk_new( ((long*)args[i])[j], sk_flag)));
                         }
+                        free((void*)args[i]);
+                    }
                 }
-
-		if (flags & CfPyErrMask) {
-			/* such functions are rarely pure, but there are
-			   exceptions with CfPyErrNotImplemented */
-			vresult = generic_call_ct(flags, result);
-			if (vresult != NULL)
-				return vresult;
-		}
-		
-		switch (flags & CfReturnMask) {
-
-		case CfReturnNormal:
-			vresult = vinfo_new(CompileTime_New(result));
-			break;
-			
-		case CfReturnRef:
-			vresult = vinfo_new(CompileTime_NewSk(sk_new(result,
-								SkFlagPyObj)));
-			break;
-
-		default:
-			vresult = (vinfo_t*) 1;   /* anything non-NULL */
-		}
+            }
+        }
 		return vresult;
 	}
 
@@ -401,32 +348,31 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
     BEGIN_CALL(count);
 	for (i=count; i--; ) {
 		switch (argtags[i]) {
-			
-		case 'v':
-			CALL_SET_ARG_FROM_RT(args[i], i);
-			break;
-		case 'r':
-			CALL_SET_ARG_FROM_STACK_REF(args[i], i);
-			break;
-		case 'a':
-		case 'A':
-		{
-			vinfo_array_t* array = (vinfo_array_t*) args[i];
-			bool with_reference = (argtags[i] == 'A');
-			int j = array->count;
-			while (j > 0) {
-				stackbase += sizeof(long);
-				array->items[--j] = vinfo_new(
-						RunTime_NewStack(stackbase,
-							with_reference, false));
-			}
-			CALL_SET_ARG_FROM_STACK_REF(array->items[0]->source, i);
-			break;
-		}
-		default:
-			CALL_SET_ARG_IMMED(args[i], i);
-			break;
-		}
+            case 'v':
+                CALL_SET_ARG_FROM_RT(args[i], i);
+                break;
+            case 'r':
+                CALL_SET_ARG_FROM_STACK_REF(args[i], i);
+                break;
+            case 'a':
+            case 'A':
+            {
+                vinfo_array_t* array = (vinfo_array_t*) args[i];
+                bool with_reference = (argtags[i] == 'A');
+                int j = array->count;
+                while (j > 0) {
+                    stackbase += sizeof(long);
+                    array->items[--j] = vinfo_new(
+                            RunTime_NewStack(stackbase,
+                                with_reference, false));
+                }
+                CALL_SET_ARG_FROM_STACK_REF(array->items[0]->source, i);
+                break;
+            }
+            default:
+                CALL_SET_ARG_IMMED(args[i], i);
+                break;
+            }
 	}
     END_CALL_I(c_function);
 	END_CODE
