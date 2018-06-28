@@ -208,7 +208,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 {
 	char argtags[MAX_ARGUMENTS_COUNT];
 	long raw_args[MAX_ARGUMENTS_COUNT], args[MAX_ARGUMENTS_COUNT];
-	int count, i, j, stackbase, totalstackspace = 0;
+	int count, i, j, totalstackspace = 0;
 	vinfo_t* vresult;
 	bool has_refs = false;
 
@@ -323,106 +323,27 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
                 }
             }
         }
-		return vresult;
-	}
-
-
-	BEGIN_CODE
-	NEED_CC();
-
-	for (count=0; arguments[count]; count++) {
-		if (argtags[count] == 'v') {
-			/* We collect all the sources in 'args' now,
-			   before SAVE_REGS_FN_CALLS which might move
-			   some run-time values into the stack. In this
-			   case the old copy in the registers is still
-			   useable to PUSH it for the C function call. */
-			RunTimeSource src = ((vinfo_t*)(args[count]))->source;
-			args[count] = (long) src;
+    }
+	else {
+		/* compile the run time call */
+		vresult = run_time_call(po, c_function, flags, count, args, totalstackspace);
+		if (vresult == NULL && has_refs) {
+			/* error - we should free the vinfo_ts we created */
+			for (i = 0; i < count; i++) {
+				if (argtags[i] == 'a' || argtags[i] == 'A') {
+					vinfo_array_t* array = (vinfo_array_t*)args[i];
+					int j = array->count;
+					while (j--) {
+						vinfo_t* v = array->items[j];
+						array->items[j] = NULL;
+						v->source = remove_rtref(v->source);
+						vinfo_decref(v, po);
+					}
+				}
+			}
 		}
 	}
-
-	stackbase = po->stack_depth;
-	po->stack_depth += totalstackspace;
-	STACK_CORRECTION(totalstackspace);
-    BEGIN_CALL(count);
-	for (i=count; i--; ) {
-		switch (argtags[i]) {
-            case 'v':
-                CALL_SET_ARG_FROM_RT(args[i], i);
-                break;
-            case 'r':
-                CALL_SET_ARG_FROM_STACK_REF(args[i], i);
-                break;
-            case 'a':
-            case 'A':
-            {
-                vinfo_array_t* array = (vinfo_array_t*) args[i];
-                bool with_reference = (argtags[i] == 'A');
-                int j = array->count;
-                while (j > 0) {
-                    stackbase += sizeof(long);
-                    array->items[--j] = vinfo_new(
-                            RunTime_NewStack(stackbase,
-                                with_reference, false));
-                }
-                CALL_SET_ARG_FROM_STACK_REF(array->items[0]->source, i);
-                break;
-            }
-            default:
-                CALL_SET_ARG_IMMED(args[i], i);
-                break;
-            }
-	}
-    END_CALL_I(c_function);
-	END_CODE
-
-	switch (flags & CfReturnMask) {
-
-	case CfReturnNormal:
-		vresult = bfunction_result(po, false);
-		break;
-
-	case CfReturnRef:
-		vresult = bfunction_result(po, true);
-		break;
-
-	default:
-		if ((flags & CfPyErrMask) == 0)
-			return (vinfo_t*) 1;   /* anything non-NULL */
-		
-		vresult = bfunction_result(po, false);
-		vresult = generic_call_check(po, flags, vresult);
-		if (vresult == NULL)
-			goto error_detected;
-		vinfo_decref(vresult, po);
-		return (vinfo_t*) 1;   /* anything non-NULL */
-	}
-	
-        if (flags & CfPyErrMask) {
-		vresult = generic_call_check(po, flags, vresult);
-		if (vresult == NULL)
-			goto error_detected;
-	}
 	return vresult;
-
-   error_detected:
-	/* if the called function returns an error, we then assume that
-	   it did not actually fill the arrays */
-	if (has_refs) {
-		for (i = 0; i < count; i++)
-			if (argtags[i] == 'a' || argtags[i] == 'A') {
-				vinfo_array_t* array = (vinfo_array_t*)args[i];
-				int j = array->count;
-				while (j--) {
-					vinfo_t* v = array->items[j];
-					array->items[j] = NULL;
-					v->source = remove_rtref(v->source);
-					vinfo_decref(v, po);
-				}
-                        }
-	}
-	return NULL;
 }
 
 DEFINEFN

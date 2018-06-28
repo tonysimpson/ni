@@ -500,6 +500,8 @@ if(!ONLY_UPDATING) {\
 } while (0)
 #define BRKP() WRITE_1(0xCC)
 #define MOV_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x8B, 0, 0, 0, r, rm)
+#define MOVZX_QR_DR(r, rm) DIRECT_ENCODING(false, 1, 0x8B, 0, 0, 0, r, rm)
+#define MOVSX_QR_DR(r, rm) DIRECT_ENCODING(true, 1, 0x63, 0, 0, 0, r, rm)
 #define MOV_R_A(r, rm) INDIRECT_ENCODING(true, 1, 0x8B, 0, 0, 0, r, rm)
 #define MOV_A_R(rm, r) INDIRECT_ENCODING(true, 1, 0x89, 0, 0, 0, r, rm)
 #define MOV_R_I(rm, i) BASE_ENCODING(true, 0, 0, 0, 0, 0xB8, 0, rm); WRITE_64BIT(i)

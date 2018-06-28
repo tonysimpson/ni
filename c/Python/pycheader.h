@@ -85,9 +85,4 @@ typedef struct {
 */
 
 #include "../cf_flags.h"
-
-/* for psyco_generic_call() only */
-EXTERNFN vinfo_t* generic_call_check(PsycoObject* po, int flags, vinfo_t* vi);
-EXTERNFN vinfo_t* generic_call_ct(int flags, long result);
-
 #endif /* _PYCHEADER_H */
