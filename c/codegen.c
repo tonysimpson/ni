@@ -192,6 +192,10 @@ bool psyco_vsource_is_promotion(VirtualTimeSource source)
 /*****************************************************************/
  /***   Calling C functions                                     ***/
 
+/* implemented in iencoding.c */
+EXTERNFN vinfo_t* compile_time_call(PsycoObject* po, void *c_function, int flags, int arg_count, long args[]);
+EXTERNFN vinfo_t* run_time_call(PsycoObject* po, void *c_function, int flags, int arg_count, char argtags[], long args[], int total_output_array_size);
+
 #define MAX_ARGUMENTS_COUNT 7
 
 #if CODEGEN_LOG
@@ -290,7 +294,6 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 		argtags[count] = tag;
 	}
 	va_end(vargs);
-
     if (flags & CfPure) {
         /* calling a pure function with no run-time argument now at compile time */
         if (has_refs) {
@@ -302,7 +305,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
             }
         }
         vresult = compile_time_call(po, c_function, flags, count, args);
-        if (has_regs) {
+        if (has_refs) {
             if (vresult == NULL) {
                 for (i = 0; i < count; i++) {
                    if (argtags[i] == 'a' || argtags[i] == 'A') {
@@ -326,7 +329,7 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
     }
 	else {
 		/* compile the run time call */
-		vresult = run_time_call(po, c_function, flags, count, args, totalstackspace);
+		vresult = run_time_call(po, c_function, flags, count, argtags, args, totalstackspace);
 		if (vresult == NULL && has_refs) {
 			/* error - we should free the vinfo_ts we created */
 			for (i = 0; i < count; i++) {

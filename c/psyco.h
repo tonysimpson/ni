@@ -34,7 +34,7 @@ typedef int64_t qword_t;
 
 /* Output code generation information to codegen.log */
 #ifndef CODEGEN_LOG
-#define CODEGEN_LOG 1
+#define CODEGEN_LOG 0
 #endif
 
 /* Enable the NI_BRK_ON environment variable */
@@ -44,7 +44,7 @@ typedef int64_t qword_t;
 
 /* Enable the trace_execution.log */
 #ifndef TRACE_EXECUTION_LOG
-#define TRACE_EXECUTION_LOG 1
+#define TRACE_EXECUTION_LOG 0
 #endif
 
 /* Call stack alignment checks */

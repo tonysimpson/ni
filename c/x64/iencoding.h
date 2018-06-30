@@ -529,12 +529,15 @@ if(!ONLY_UPDATING) {\
 } while (0)
 #define XCHG_R_O(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x87, 0, 0, 0, 0, r, rm, o)
 #define TEST_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x85, 0, 0, 0, r, rm)
+#define TEST_DR_DR(r, rm) DIRECT_ENCODING(false, 1, 0x85, 0, 0, 0, r, rm)
 #define TEST_R_I(r, i) DIRECT_ENCODING(true, 1, 0xF7, 0, 0, 0, 0, r); WRITE_32BIT(i)
 #define CMP_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x39, 0, 0, 0, r, rm)
 #define CMP_R_A(r, rm) INDIRECT_ENCODING(true, 1, 0x39, 0, 0, 0, r, rm)
 #define CMP_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x39, 0, 0, 0, 8, r, rm, o)
 #define CMP_I8_O(i, rm, o) OFFSET_ENCODING(false, false, 1, 0x83, 0, 0, 0x78, 0, 0, rm, o); WRITE_8BIT(i)
 #define CMP_I8_A(i, rm) INDIRECT_ENCODING(false, 1, 0x83, 0, 0, 0x38, 0, rm); WRITE_8BIT(i)
+#define CMP_I8_R(i, rm) DIRECT_ENCODING(true, 1, 0x83, 0, 0, 0xF8, 0 , rm); WRITE_8BIT(i)
+#define CMP_I8_DR(i, rm) DIRECT_ENCODING(false, 1, 0x83, 0, 0, 0xF8, 0 , rm); WRITE_8BIT(i)
 #define CMP_R_UO32(r, rm, o) OFFSET_ENCODING(true, true, 1, 0x39, 0, 0, 0, 32, r, rm, o)
 #define CMP_I_R(i1, r2) do {\
     if(FITS_IN_8BITS(i1)) {\

@@ -1,10 +1,12 @@
 #include "iencoding.h"
+#include "ipyencoding.h"
 #include "../vcompiler.h"
 #include "../codegen.h"
 #include "../dispatcher.h"
 #include "../codemanager.h"
 #include "../Python/frames.h"
-
+#include "../Python/pycompiler.h"
+#include "../cf_flags.h"
 
 DEFINEVAR reg_t RegistersLoop[REG_TOTAL] = {
     /* RAX > */ REG_NONE,
@@ -35,7 +37,7 @@ DEFINEVAR reg_t RegistersLoop[REG_TOTAL] = {
 
 DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore, RunTimeSource extraarg, size_t block_size)
 {
-  char* block_start;
+  code_t* block_start;
 
   BEGIN_CODE
 #if CODEGEN_LOG
@@ -47,7 +49,7 @@ DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore, R
   }
 #endif
   BEGIN_SHORT_JUMP(0);
-  block_start = (char*)(((long)code + 7) & (~7)); /* alignment */
+  block_start = (code_t*)(((long)code + 7) & (~7)); /* alignment */
   code = block_start;
   code += block_size;
   END_SHORT_JUMP(0);
@@ -63,10 +65,9 @@ DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore, R
 }
 
 static vinfo_t* compile_time_check(PsycoObject* po, long result, int flags) {
-    *vresult = NULL;
 	switch (flags & CfPyErrMask) {
         case CfPyErrDontCheck:
-            return VINFO_OK;
+            break;
         case CfPyErrIfNull:
             if (result == 0) {
                 goto error;
@@ -104,8 +105,12 @@ static vinfo_t* compile_time_check(PsycoObject* po, long result, int flags) {
 			break;
 		case CfPyErrNotImplemented:
 			if ((PyObject*)result == Py_NotImplemented) {
+                Py_DECREF(Py_NotImplemented);
                 return psyco_vi_NotImplemented();
 			}
+            if (result == 0) {
+                goto error;
+            }
 			break;
         case CfPyErrIterNext:
             abort(); /* How can an iterator be pure */
@@ -167,11 +172,11 @@ static long var_call(void *c_function, int flags, int arg_count, long args[]) {
 }
 
 DEFINEFN vinfo_t* compile_time_call(PsycoObject* po, void *c_function, int flags, int arg_count, long args[]) {
-    vinfo_t* vresult = NULL;
+    vinfo_t* vresult;
     long result;
     
     result = var_call(c_function, flags, arg_count, args);
-	vresult = compile_time_check(result, flags)
+	vresult = compile_time_check(po, result, flags);
 	if (vresult != VINFO_OK) {
 		/* error */ 
         return vresult;
@@ -190,86 +195,96 @@ DEFINEFN vinfo_t* compile_time_call(PsycoObject* po, void *c_function, int flags
 }
 
 static vinfo_t* run_time_result_check(PsycoObject* po, int flags) {
-    condition_code_t cc;
+    condition_code_t error_cc;
 #define CMP_RETURN_MINUS_1() do {\
-    if ((flags & CfReturnMask) == CfReturnTypeInt) {\
-        CMP_DR_I8(REG_X64_RAX, -1);\
+    BEGIN_CODE\
+    if ((flags & CfReturnTypeMask) == CfReturnTypeInt) {\
+        CMP_I8_DR(REG_X64_RAX, -1);\
     } else {\
-        CMP_R_I8(REG_X64_RAX, -1);\
+        CMP_I8_R(-1, REG_X64_RAX);\
     }\
+    END_CODE\
 } while (0)
 #define TEST_RETURN() do {\
-    if ((flags & CfReturnMask) == CfReturnTypeInt) {\
+    BEGIN_CODE\
+    if ((flags & CfReturnTypeMask) == CfReturnTypeInt) {\
         TEST_DR_DR(REG_X64_RAX, REG_X64_RAX);\
     } else {\
         TEST_R_R(REG_X64_RAX, REG_X64_RAX);\
     }\
+    END_CODE\
 } while (0)
     switch (flags & CfPyErrMask) {
+        case CfPyErrDontCheck:
+            break;
 		case CfPyErrIfNull:   /* a return == 0 (or NULL) means an error */
             TEST_RETURN();
-			cc = CC_NE;
-			goto test_error_condition;
+			error_cc = CC_E;
+			goto test_condition;
 		case CfPyErrIfNonNull:   /* a return != 0 means an error */
             TEST_RETURN();
-			cc = CC_E;
-			goto test_error_condition;
+			error_cc = CC_NE;
+			goto test_condition;
 		case CfPyErrIfNeg:   /* a return < 0 means an error */
             TEST_RETURN();
-            cc = CC_S;
-			goto test_error_condition;
+            error_cc = CC_S;
+			goto test_condition;
 		case CfPyErrIfMinus1:     /* only -1 means an error */
             CMP_RETURN_MINUS_1();
-            cc = CC_E;
-			goto test_error_condition;
+            error_cc = CC_E;
+			goto test_condition;
 		case CfPyErrCheck:    /* always check with PyErr_Occurred() */
-			cc = integer_NON_NULL(po, psyco_PyErr_Occurred(po));
-			goto test_error_condition;
-			break;
+			error_cc = integer_NON_NULL(po, psyco_PyErr_Occurred(po));
+			goto test_condition;
 		case CfPyErrCheckMinus1:   /* use PyErr_Occurred() if return is -1 */
             CMP_RETURN_MINUS_1();
-            cc = CC_E;
+            error_cc = CC_E;
+            goto test_condition_and_pyerr_occured;
 		case CfPyErrCheckNeg:   /* use PyErr_Occurred() if return is < 0 */
             TEST_RETURN();
-            cc = CC_S;
+            error_cc = CC_S;
+            goto test_condition_and_pyerr_occured;
 		case CfPyErrNotImplemented:   /* test for a Py_NotImplemented result */
-			cc = integer_cmp_i(po, vi, (long) Py_NotImplemented, Py_EQ);
-			if (cc == CC_ERROR)
-				goto Error;
-			if (runtime_condition_f(po, cc)) {
-				/* result is Py_NotImplemented */
-				vinfo_decref(vi, po);
+            BEGIN_CODE
+            CMP_I_R((long)Py_NotImplemented, REG_X64_RAX);
+            END_CODE
+			if (runtime_condition_f(po, CC_E)) {
+                BEGIN_CODE
+                DEC_OB_REFCNT(REG_X64_RAX);
+                END_CODE
 				return psyco_vi_NotImplemented();
 			}
-			cc = integer_cmp_i(po, vi, 0, Py_EQ);
-			break;
+            TEST_RETURN();
+			error_cc = CC_E;
+			goto test_condition;
 		case CfPyErrIterNext:    /* specially for tp_iternext slots */
-			cc = integer_cmp_i(po, vi, 0, Py_NE);
-			if (cc == CC_ERROR)
-				goto Error;
-			if (runtime_condition_t(po, cc))
-				return vi;   /* result is not 0, ok */
-
-			FORGET_REF;  /* NULL result */
-			vinfo_decref(vi, po);
-			cc = integer_NON_NULL(po, psyco_PyErr_Occurred(po));
-			if (cc == CC_ERROR || runtime_condition_f(po, cc))
-				goto PythonError;  /* PyErr_Occurred() returns true */
-
+            TEST_RETURN();
+			error_cc = CC_E;
+			if (!runtime_condition_f(po, error_cc))
+            {
+                break; /* PyObject* not NULL so OK */
+            }
+			error_cc = integer_NON_NULL(po, psyco_PyErr_Occurred(po));
+			if (error_cc == CC_ERROR || runtime_condition_f(po, error_cc)) {
+				goto error;
+            }
 			/* NULL result with no error set; it is the end of the
 			   iteration. Raise a pseudo PyErr_StopIteration. */
 			PycException_SetVInfo(po, PyExc_StopIteration, psyco_vi_None());
 			return NULL;
 		case CfPyErrAlways:   /* always set an exception */
-			goto Error;
+			goto error;
 		default:
-			return vi;
+		    abort(); /* unhandled */
     }
     return VINFO_OK;
-check_pyerr_occured:
-    cc = integer_NON_NULL(po, psyco_PyErr_Occurred(po));
-test_error_condition:
-    if (!runtime_condition_f(po, cc)) {
+test_condition_and_pyerr_occured:
+    if (!runtime_condition_f(po, error_cc)) {
+        return VINFO_OK;
+    }
+    error_cc = integer_NON_NULL(po, psyco_PyErr_Occurred(po));
+test_condition:
+    if (!runtime_condition_f(po, error_cc)) {
         return VINFO_OK;
     }
 error:
@@ -278,41 +293,48 @@ error:
 }
 #undef FORGET_REF
 
+/* run-time vinfo_t creation */
+PSY_INLINE vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonneg) {
+	vinfo_t* vi = vinfo_new(RunTime_New(reg, ref, nonneg));
+	REG_NUMBER(po, reg) = vi;
+	return vi;
+}
+
 static vinfo_t* run_time_result(PsycoObject* po, int flags)
 {
   	reg_t rg;
   	BEGIN_CODE
-  	NEED_FREE_REG(rg)
-	if ((flags & CfReturnMask) == CfReturnTypeInt) {
+  	NEED_FREE_REG(rg);
+	if ((flags & CfReturnTypeMask) == CfReturnTypeInt) {
 		if (flags & CfReturnUnsigned) {
 			MOVZX_QR_DR(rg, REG_X64_RAX); /* mov unsigned (zero extended) from EAX to rg */ 
 		}
 		else {
 			MOVSX_QR_DR(rg, REG_X64_RAX); /* mov signed (sign extended) from EAX to rg */
 		}
-	}
-	else {
-  		MOV_R_R(rg, REG_X64_RAX);
+	} else { 
+        MOV_R_R(rg, REG_X64_RAX);
 	}
   	END_CODE
   	return new_rtvinfo(po, rg, flags & CfNewRef, flags & CfNotNegative);
 }
 
-DEFINEFN vinfo_t* run_time_call(PsycoObject* po, void *c_function, int flags, int arg_count, long args[], int total_output_array_size)
-    int stackbase, i, j;
+DEFINEFN vinfo_t* run_time_call(PsycoObject* po, void *c_function, int flags, int arg_count, char argtags[], long args[], int total_output_array_size) {
+    int stackbase, i;
+    vinfo_t* vresult;
     BEGIN_CODE
     NEED_CC();
     stackbase = po->stack_depth;
     po->stack_depth += total_output_array_size;
     STACK_CORRECTION(total_output_array_size);
-    BEGIN_CALL(count);
-    for (i=count; i--; ) {
+    BEGIN_CALL(arg_count);
+    for (i = arg_count; i--; ) {
         switch (argtags[i]) {
         case 'v':
-            CALL_SET_ARG_FROM_RT(args[i]->source, i);
+            CALL_SET_ARG_FROM_RT(((vinfo_t*)args[i])->source, i);
             break;
         case 'r':
-            CALL_SET_ARG_FROM_STACK_REF(args[i]->source, i);
+            CALL_SET_ARG_FROM_STACK_REF(args[i], i);
             break;
         case 'a':
         case 'A':
@@ -455,12 +477,6 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 }
 
 
-/* run-time vinfo_t creation */
-PSY_INLINE vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonneg) {
-	vinfo_t* vi = vinfo_new(RunTime_New(reg, ref, nonneg));
-	REG_NUMBER(po, reg) = vi;
-	return vi;
-}
 
 /* internal, see NEED_CC() */
 EXTERNFN condition_code_t cc_from_vsource(Source source);  /* in codegen.c */
