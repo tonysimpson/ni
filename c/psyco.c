@@ -53,6 +53,14 @@ void psyco_out_of_memory(char *filename, int lineno)
   Py_FatalError(msg);
 }
 
+DEFINEFN
+void ni_trace_begin_code(PsycoObject* po) {
+}
+
+DEFINEFN
+void ni_trace_end_code(PsycoObject* po) {
+}
+
  /***************************************************************/
 /***   Implementation of the '_psyco' built-in module          ***/
  /***************************************************************/

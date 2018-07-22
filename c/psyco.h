@@ -340,33 +340,25 @@ EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 /* Call trace execution function */
 EXTERNVAR void (*call_trace_execution) (void);
 
+/* Calls hooked by nianalyser to collect compiler behaviour */
+EXTERNFN void ni_trace_begin_code(PsycoObject* po);
+EXTERNFN void ni_trace_end_code(PsycoObject* po);
 
 #if CODEGEN_LOG
 FILE *codegen_log;
-#define LOG_BEGIN_CODE_GEN(_code) do {\
-    fprintf(codegen_log, "BEGIN_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, _code);\
-    fflush(codegen_log);\
-} while (0)
-#define LOG_END_CODE_GEN(_code) do {\
-    fprintf(codegen_log, "END_CODE %s:%d:%s %p\n", __FILE__, __LINE__, __func__, _code);\
-    fflush(codegen_log);\
-} while (0)
-#else
+#endif
+
 #define LOG_BEGIN_CODE_GEN(_code) do {} while (0)
 #define LOG_END_CODE_GEN(_code) do {} while (0)
-#endif
 #define BEGIN_CODE do {\
     code_t* code = po->code;\
-    LOG_BEGIN_CODE_GEN(code);\
-    BREAK_ON();\
-    STACK_DEPTH_CHECK();
+    ni_trace_begin_code(po);
 #define END_CODE\
     po->code = code;\
-    LOG_END_CODE_GEN(code);\
+    ni_trace_end_code(po);\
     if (code >= po->codelimit) {\
         PsycoObject_EmergencyCodeRoom(po);\
     }\
 } while(0);
-
 
 #endif /* _PSYCO_H */
