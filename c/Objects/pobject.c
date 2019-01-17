@@ -548,7 +548,8 @@ DEFINEFN vinfo_t* PsycoObject_RichCompare(PsycoObject* po, vinfo_t* v,
 				return res;
 			vinfo_decref(res, po);
 		}
-		c = Psyco_META2(po, f, CfReturnTypePtr|CfPyErrCheck,
+        /* calling tp_compare */
+		c = Psyco_META2(po, f, CfReturnTypeInt|CfPyErrCheckMinus1,
 				"vv", v, w);
 		if (c == NULL)
 			return NULL;
