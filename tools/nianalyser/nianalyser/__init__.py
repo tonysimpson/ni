@@ -54,6 +54,15 @@ PyCodeObject = types.struct_type(*PyObject_HEAD + [
     ('co_zombieframe', types.uint64),
     ('co_weakreflist', PyObject_pointer)
 ])
+PyFrameObject_pointer = types.pointer_type(None)
+PyFrameObject = types.struct_type(
+    *PyObject_VAR_HEAD + [
+        ('f_code', types.pointer_type(PyCodeObject)),
+        ('f_back', PyFrameObject_pointer)
+    ]
+    #incomplete
+)
+PyFrameObject_pointer.referenced_type = PyFrameObject
 vinfo_t_pointer = types.pointer_type(None)
 vinfo_array_t = types.struct_type(
     ('count', types.int32),
@@ -161,13 +170,34 @@ class NiAnalyser:
             start = self._start_pos
             end = po_ptr.value.code
             code = db.read(start, end - start)
-            bc.add_compiled_instruction_code(CompiledInstructionCode(instr, start, end, code, self.code_gen_id, [i.function_name for i in db.backtrace()]))
-            db.add_breakpoint(self._start_pos, self.execution, immediately=True)
+            backtrace = [None] * 4
+            frame = db.frame
+            for i in range(4):
+                frame = frame.parent
+                backtrace[i] = frame.function_name
+            bc.add_compiled_instruction_code(CompiledInstructionCode(instr, start, end, code, self.code_gen_id, backtrace))
         self.code_gen_id += 1
         return True
 
+    def record_execution(self):
+        addresses = set()
+        for bc in self.byte_code_cache.values():
+            for cic in bc.cics:
+                addresses.add(cic.start)
+        for address in addresses:
+            self.db.add_breakpoint(address, self.execution, immediately=True)
+        self.last_ip = 0
+        self.restore_break_point = False
+
     def execution(self, db):
-        self.execution_data.append([self.code_gen_id, db.registers.rip, dict((name, getattr(db.registers, name)) for name in dir(db.registers) if name.startswith('r'))])
+        if db.registers.rip == self.last_ip:
+            self.restore_break_point = True
+            return False
+        if self.restore_break_point:
+            self.db.add_breakpoint(self.last_ip, self.execution, immediately=True)
+            self.restore_break_point = False
+        self.execution_data.append((self.code_gen_id, db.registers))
+        self.last_ip = db.registers.rip 
         return True
 
     def vinfo_new(self, db):
@@ -192,8 +222,8 @@ class NiAnalyser:
         r10 = 0
         db = self.db
         for cic in [i for i in self.byte_code_cache.values() if i.name == name][0].cics:
-            index = cic.backtrace.index('call_ceval_hooks')
-            print  '.'.join(reversed(cic.backtrace[index+1:-1]))
+            #index = cic.backtrace.index('call_ceval_hooks')
+            #print  '.'.join(reversed(cic.backtrace[index+1:-1]))
             for pos, _, decode, _ in distorm3.Decode(cic.start, cic.code, type=distorm3.Decode64Bits):
                 if decode.startswith('CALL 0x'):
                     decode = '%s (%s)' % (decode, db.address_to_description(eval(decode.split()[1])))
@@ -210,7 +240,8 @@ class NiAnalyser:
         db = self.db
         cics = [i for i in self.byte_code_cache.values() if i.name == name][0].cics
         conc = True
-        for gen_id, ip, regs in self.execution_data:
+        for gen_id, regs in self.execution_data:
+            ip = regs.rip
             matches = sorted([i for i in cics if i.start == ip and i.code_gen_id <= gen_id], key=lambda x: x.code_gen_id)
             if matches:
                 if not conc:
@@ -219,9 +250,9 @@ class NiAnalyser:
                     print
                     conc = True
                 cic = matches[-1]
-                index = cic.backtrace.index('call_ceval_hooks')
-                print  '.'.join(reversed(cic.backtrace[index+1:-1]))
-                print ' '.join('%s=%s' % (k, v) for k, v in sorted(regs.items()))
+                #index = cic.backtrace.index('call_ceval_hooks')
+                #print  '.'.join(reversed(cic.backtrace[index+1:-1]))
+                print ' '.join('%s=%s' % (name, getattr(regs, name)) for name in dir(regs))
                 for pos, _, decode, _ in distorm3.Decode(cic.start, cic.code, type=distorm3.Decode64Bits):
                     if decode.startswith('CALL 0x'):
                         decode = '%s (%s)' % (decode, db.address_to_description(eval(decode.split()[1])))
@@ -234,3 +265,19 @@ class NiAnalyser:
                 print
             else:
                 conc = False
+
+class SimpleExecutionTracer:
+    def __init__(self, db):
+        self.db = db
+        self._initialise_breakpoints()
+
+    def _initialise_breakpoints(self):
+        self.db.add_breakpoint('PyEval_EvalFrameEx', self._py_eval_eval_frame_ex)
+        self.db.add_breakpoint('PsycoCode_Run', self._psyco_code_run)
+
+    def _py_eval_eval_frame_ex(self, db):
+        frame = db.reference(db.registers.rdi, PyFrameObject)
+
+    def _psyco_code_run(self, db):
+        frame = db.reference(db.registers.rsi, PyFrameObject)
+
