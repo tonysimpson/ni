@@ -61,6 +61,12 @@ PyFrameObject = types.struct_type(
         ('f_back', PyFrameObject_pointer)
     ]
     #incomplete
+
+)
+CodeBufferObject = types.struct_type(
+    *PyObject_HEAD + [
+        ('codestart', types.uint64),
+    ]
 )
 PyFrameObject_pointer.referenced_type = PyFrameObject
 vinfo_t_pointer = types.pointer_type(None)
@@ -266,6 +272,7 @@ class NiAnalyser:
             else:
                 conc = False
 
+
 class SimpleExecutionTracer:
     def __init__(self, db):
         self.db = db
@@ -277,7 +284,13 @@ class SimpleExecutionTracer:
 
     def _py_eval_eval_frame_ex(self, db):
         frame = db.reference(db.registers.rdi, PyFrameObject)
+        if frame.value.f_code:
+            print 'eval_frame', frame.value.f_code.address
+        return True
 
     def _psyco_code_run(self, db):
+        code_buffer = db.reference(db.registers.rdi, CodeBufferObject)
         frame = db.reference(db.registers.rsi, PyFrameObject)
+        print 'run_code', code_buffer.value.codestart, frame.value.f_code.address
+        return True
 
