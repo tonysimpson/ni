@@ -547,16 +547,26 @@ if(!ONLY_UPDATING) {\
         CMP_R_R(REG_TRANSIENT_1, (r2));\
     }\
 } while (0)
-#define JMP_R(r) DIRECT_ENCODING(false, 1, 0xFF, 0, 0, 0xE0, 0, r)
-#define JMP_CC_UI32(cc, address) BASE_ENCODING(false, 1, 0x0F, 0, 0, 0x80 | (cc), 0, 0); UPDATABLE_WRITE_32BIT((address) - ((long)code + 4))
+#define JMP_R(r) do {\
+    ni_trace_jump_reg((code_t*)(code), (int)(r));\
+    DIRECT_ENCODING(false, 1, 0xFF, 0, 0, 0xE0, 0, r);\
+} while (0)
+#define JMP_CC_UI32(cc, address) do {\
+    code_t *location = code;\
+    BASE_ENCODING(false, 1, 0x0F, 0, 0, 0x80 | (cc), 0, 0);\
+    ni_trace_jump_cond((code_t*)(location), (code_t*)(code), (code_t*)(address));\
+    UPDATABLE_WRITE_32BIT((address) - ((long)code + 4));\
+} while (0)
 #define CALL_R(r) do {\
     CALL_STACK_ALIGNED_CHECK();\
+    ni_trace_call_reg((code_t*)(code), r);\
     DIRECT_ENCODING(false, 1, 0xFF, 0, 0, 0xD0, 0, r);\
 } while (0)
 #define CALL_I(i) do {\
     long jump_amount;\
     CALL_STACK_ALIGNED_CHECK();\
     CALL_TRACE_EXECUTION();\
+    ni_trace_call((code_t*)(code), (code_t*)(i));\
     jump_amount = (long)(i) - ((long)code + 5);\
     if(FITS_IN_32BITS(jump_amount)) {\
         WRITE_1(0xE8);\
@@ -589,6 +599,7 @@ if(!ONLY_UPDATING) {\
 #define POP_O(rm, o) OFFSET_ENCODING(false, false, 1, 0x8F, 0, 0, 0x40, 0, 0, rm, o)
 #define RET() do {\
     CALL_TRACE_EXECUTION();\
+    ni_trace_return((code_t*)(code), 0);\
     WRITE_1(0xC3);\
 } while (0)
 #define RET_N(n) do {\
@@ -596,6 +607,7 @@ if(!ONLY_UPDATING) {\
         RET();\
     } else {\
         CALL_TRACE_EXECUTION();\
+        ni_trace_return((code_t*)(code), n);\
         WRITE_1(0xC2); WRITE_16BIT(n);\
     }\
 } while (0)
@@ -1127,6 +1139,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
  /***   conditional jumps                                       ***/
 
 #define JUMP_TO(addr)   do {                    \
+  ni_trace_jump((code_t*)(code), (code_t*)(addr));\
   *code++ = 0xE9;   /* JMP rel32 */             \
   *(dword_t*)(code) = (addr) - (code+4);\
   code += 4;\
@@ -1139,14 +1152,17 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   ((codeend)-(code) == SIZE_OF_FAR_JUMP && IS_A_JUMP(code, targetaddr))
 
 #define FAR_COND_JUMP_TO(addr, condition)   do {        \
+  code_t *location = code;\
   *code++ = 0x0F;\
   *code++ = 0x80 | (code_t)(condition);\
   *(dword_t*)(code) = (addr) - (code+4);\
   code += 4;\
+  ni_trace_jump_cond((code_t*)(location), (code_t*)(code), (code_t*)(addr));\
 } while (0)
 
-#define CHANGE_JUMP_TO(addr)                do {        \
-  *(dword_t*)(code-4) = (addr) - code;                  \
+#define CHANGE_JUMP_TO(addr) do {\
+  ni_trace_jump_cond_update((code_t*)(code-6), (code_t*)(code), (code_t*)(addr));\
+  *(dword_t*)(code-4) = (addr) - code;\
 } while (0)
 
 #define SIZE_OF_FAR_JUMP                   5
@@ -1158,15 +1174,22 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
     code[0] = 0xEB;\
     code += 2;\
     code_t *_short_jump_op_end_ ## id = code;\
+    int _conditional_ ## id = 0;\
     do {} while (0)
 #define BEGIN_SHORT_COND_JUMP(id, condition) \
     code[0] = 0x70 | (condition);\
     code += SIZE_OF_SHORT_CONDITIONAL_JUMP;\
     code_t *_short_jump_op_end_ ## id = code;\
+    int _conditional_ ## id = 1;\
     do {} while(0)
 #define END_SHORT_JUMP(id) do {\
     long _jump_amount = (long)code - (long)_short_jump_op_end_ ## id;\
     extra_assert(-128 <= _jump_amount && _jump_amount < 128);\
+    if ( _conditional_ ## id ) {\
+        ni_trace_jump_cond((code_t*)(_short_jump_op_end_ ## id - 2), (code_t*)(_short_jump_op_end_ ## id), (code_t*)(code));\
+    } else {\
+        ni_trace_jump((code_t*)(_short_jump_op_end_ ## id - 2), (code_t*)(code));\
+    }\
     *(_short_jump_op_end_ ## id - 1) = (code_t)_jump_amount;\
 } while(0)
 
@@ -1177,6 +1200,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
     extra_assert(-128 <= _jump_amount && _jump_amount < 128);\
     code[0] = 0x70 | (cond);\
     code[1] = _jump_amount;\
+    ni_trace_jump_cond((code_t*)(code), (code_t*)(code+2), (code_t*)(_reverse_short_jump_target_ ## id));\
     code += 2;\
 } while (0)
     
@@ -1186,6 +1210,7 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
   extra_assert(-128 <= _ofs && _ofs < 128);             \
   code[0] = 0x70 | (code_t)(condition);                 \
   code[1] = (code_t) _ofs;                              \
+  ni_trace_jump_cond((code_t*)(code), (code_t*)(code+2), (code_t*)(addr));\
   code += 2;                                            \
 } while (0)
 

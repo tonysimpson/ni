@@ -199,7 +199,7 @@ static vinfo_t* run_time_result_check(PsycoObject* po, int flags) {
 #define CMP_RETURN_MINUS_1() do {\
     BEGIN_CODE\
     if ((flags & CfReturnTypeMask) == CfReturnTypeInt) {\
-        CMP_I8_DR(REG_X64_RAX, -1);\
+        CMP_I8_DR(-1, REG_X64_RAX);\
     } else {\
         CMP_I8_R(-1, REG_X64_RAX);\
     }\
@@ -246,11 +246,13 @@ static vinfo_t* run_time_result_check(PsycoObject* po, int flags) {
             goto test_condition_and_pyerr_occured;
 		case CfPyErrNotImplemented:   /* test for a Py_NotImplemented result */
             BEGIN_CODE
-            CMP_I_R((long)Py_NotImplemented, REG_X64_RAX);
+            CMP_I_R((long)Py_NotImplemented, REG_FUNCTIONS_RETURN);
+            MOV_R_R(REG_ANY_CALLEE_SAVED, REG_FUNCTIONS_RETURN); /* runtime_condition_f will blat RAX */
             END_CODE
 			if (runtime_condition_f(po, CC_E)) {
                 BEGIN_CODE
-                DEC_OB_REFCNT(REG_X64_RAX);
+                MOV_R_R(REG_FUNCTIONS_RETURN, REG_ANY_CALLEE_SAVED);
+                DEC_OB_REFCNT(REG_FUNCTIONS_RETURN);
                 END_CODE
 				return psyco_vi_NotImplemented();
 			}

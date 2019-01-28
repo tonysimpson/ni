@@ -2,6 +2,8 @@ import distorm3
 import pointbreak
 from pointbreak import types
 from itertools import count
+import intervaltree
+from collections import namedtuple
 
 Py_ssize_t = types.int64
 PyTypeObject_pointer = types.pointer_type(None)
@@ -118,169 +120,148 @@ PsycoObject = types.struct_type(
 )
 
 
-class CompiledInstructionCode:
-    def __init__(self, instruction, start, end, code, code_gen_id, backtrace):
-        self.instruction = instruction
-        self.code_gen_id = code_gen_id
-        self.start = start
-        self.end = end
-        self.code = code
-        self.backtrace = backtrace
+REG_NUM_MAP = {
+    0: 'rax',
+    1: 'rcx',
+    2: 'rdx',
+    3: 'rbx',
+    4: 'rsp',
+    5: 'rbp',
+    6: 'rsi',
+    7: 'rdi',
+    8: 'r8',
+    9: 'r9',
+    10: 'r10',
+    11: 'r11',
+    12: 'r12',
+    13: 'r13',
+    14: 'r14',
+    15: 'r15',
+}
 
 
-class ByteCode:
-    def __init__(self, byte_code, lnotab, filename, name):
-        self.filename = filename
-        self.name = name
-        self.lnotab = lnotab
-        self.byte_code = byte_code
-        self.cics = []
-
-    def add_compiled_instruction_code(self, cic):
-        self.cics.append(cic)
-
- 
-class NiAnalyser:
-    def __init__(self, db):
-        self.db = db
-        self.db.add_breakpoint('ni_trace_begin_code', self.begin_code)
-        self.db.add_breakpoint('ni_trace_end_code', self.end_code)
-        #self.db.add_breakpoint('vinfo_new', self.vinfo_new)
-        #self.db.add_breakpoint('vinfo_release', self.vinfo_release)
-        #self.db.add_breakpoint('compute_vinfo', self.compute_vinfo)
-        #self.db.add_breakpoint('PsycoObject_New', self.po_new)
-        #self.db.add_breakpoint('PsycoObject_Delete', self.po_delete)
-        #self.db.add_breakpoint('PsycoObject_Duplicate', self.po_duplicate)
-        self.byte_code_cache = {}
-        self.code_gen_id = 0
-        self._start_pos = -1
-        self.execution_data = []
-
-    def begin_code(self, db):
-        po_ptr = db.reference(db.registers.rdi, PsycoObject)
-        if po_ptr.value.pr.co:
-            self._start_pos = po_ptr.value.code
-        return True
-
-    def end_code(self, db):
-        po_ptr = db.reference(db.registers.rdi, PsycoObject)
-        if po_ptr.value.pr.co:
-            byte_code = pystringobject_to_str(po_ptr.value.pr.co.value.co_code.value)
-            if byte_code not in self.byte_code_cache:
-                lnotab = pystringobject_to_str(po_ptr.value.pr.co.value.co_lnotab.value)
-                filename = pystringobject_to_str(po_ptr.value.pr.co.value.co_filename.value)
-                name = pystringobject_to_str(po_ptr.value.pr.co.value.co_name.value)
-                self.byte_code_cache[byte_code] = ByteCode(byte_code, lnotab, filename, name)
-            bc = self.byte_code_cache[byte_code]
-            instr = po_ptr.value.pr.next_instr
-            start = self._start_pos
-            end = po_ptr.value.code
-            code = db.read(start, end - start)
-            backtrace = [None] * 4
-            frame = db.frame
-            for i in range(4):
-                frame = frame.parent
-                backtrace[i] = frame.function_name
-            bc.add_compiled_instruction_code(CompiledInstructionCode(instr, start, end, code, self.code_gen_id, backtrace))
-        self.code_gen_id += 1
-        return True
-
-    def record_execution(self):
-        addresses = set()
-        for bc in self.byte_code_cache.values():
-            for cic in bc.cics:
-                addresses.add(cic.start)
-        for address in addresses:
-            self.db.add_breakpoint(address, self.execution, immediately=True)
-        self.last_ip = 0
-        self.restore_break_point = False
-
-    def execution(self, db):
-        if db.registers.rip == self.last_ip:
-            self.restore_break_point = True
-            return False
-        if self.restore_break_point:
-            self.db.add_breakpoint(self.last_ip, self.execution, immediately=True)
-            self.restore_break_point = False
-        self.execution_data.append((self.code_gen_id, db.registers))
-        self.last_ip = db.registers.rip 
-        return True
-
-    def vinfo_new(self, db):
-        return True
-
-    def vinfo_release(self, db):
-        return True
-
-    def compute_vinfo(self, db):
-        return True
-
-    def po_new(self, db):
-        return True
-
-    def po_delete(self, db):
-        return True
-
-    def po_duplicate(self, db):
-        return True
-
-    def decode(self, name):
-        r10 = 0
-        db = self.db
-        for cic in [i for i in self.byte_code_cache.values() if i.name == name][0].cics:
-            #index = cic.backtrace.index('call_ceval_hooks')
-            #print  '.'.join(reversed(cic.backtrace[index+1:-1]))
-            for pos, _, decode, _ in distorm3.Decode(cic.start, cic.code, type=distorm3.Decode64Bits):
-                if decode.startswith('CALL 0x'):
-                    decode = '%s (%s)' % (decode, db.address_to_description(eval(decode.split()[1])))
-                elif decode.startswith('MOV R10, 0x'):
-                    r10 = eval(decode.split()[2])
-                elif decode.startswith('CALL R10'):
-                    decode = '%s (R10=%s)' % (decode, db.address_to_description(r10))
-                print '  0x%x' % (pos,), decode
-            print
-
-
-    def trace_execution(self, name):
-        r10 = 0
-        db = self.db
-        cics = [i for i in self.byte_code_cache.values() if i.name == name][0].cics
-        conc = True
-        for gen_id, regs in self.execution_data:
-            ip = regs.rip
-            matches = sorted([i for i in cics if i.start == ip and i.code_gen_id <= gen_id], key=lambda x: x.code_gen_id)
-            if matches:
-                if not conc:
-                    print
-                    print '------'
-                    print
-                    conc = True
-                cic = matches[-1]
-                #index = cic.backtrace.index('call_ceval_hooks')
-                #print  '.'.join(reversed(cic.backtrace[index+1:-1]))
-                print ' '.join('%s=%s' % (name, getattr(regs, name)) for name in dir(regs))
-                for pos, _, decode, _ in distorm3.Decode(cic.start, cic.code, type=distorm3.Decode64Bits):
-                    if decode.startswith('CALL 0x'):
-                        decode = '%s (%s)' % (decode, db.address_to_description(eval(decode.split()[1])))
-                    elif decode.startswith('MOV R10, 0x'):
-                        r10 = eval(decode.split()[2])
-                    elif decode.startswith('CALL R10'):
-                        decode = '%s (R10=%s)' % (decode, db.address_to_description(r10))
-                    
-                    print '  0x%x' % (pos,), decode
-                print
-            else:
-                conc = False
+generated_code = namedtuple('generated_code', ['where', 'stack_depth'])
 
 
 class SimpleExecutionTracer:
     def __init__(self, db):
         self.db = db
+        self._trace = intervaltree.IntervalTree()
         self._initialise_breakpoints()
+        self.code_gen = intervaltree.IntervalTree()
 
     def _initialise_breakpoints(self):
-        self.db.add_breakpoint('PyEval_EvalFrameEx', self._py_eval_eval_frame_ex)
-        self.db.add_breakpoint('PsycoCode_Run', self._psyco_code_run)
+        self.db.add_breakpoint('ni_trace_begin_code', self._ni_trace_begin_code)
+        self.db.add_breakpoint('ni_trace_end_code', self._ni_trace_end_code)
+        self.db.add_breakpoint('ni_trace_jump', self._ni_trace_jump)
+        self.db.add_breakpoint('ni_trace_jump_update', self._ni_trace_jump)
+        self.db.add_breakpoint('ni_trace_jump_reg', self._ni_trace_jump_reg)
+        self.db.add_breakpoint('ni_trace_jump_cond', self._ni_trace_jump_cond)
+        self.db.add_breakpoint('ni_trace_jump_cond_update', self._ni_trace_jump_cond)
+        self.db.add_breakpoint('ni_trace_jump_cond_reg', self._ni_trace_jump_cond_reg)
+        self.db.add_breakpoint('ni_trace_call', self._ni_trace_call)
+        self.db.add_breakpoint('ni_trace_call_reg', self._ni_trace_call_reg)
+        self.db.add_breakpoint('ni_trace_return', self._ni_trace_return)
+
+    def _ni_trace_begin_code(self, db):
+        po_ptr = db.reference(db.registers.rdi, PsycoObject)
+        self._begin = po_ptr.value.code
+        self._trace_points = {}
+        self._begin_stack_depth = po_ptr.value.stack_depth
+        return True
+
+    def _ni_trace_end_code(self, db):
+        po_ptr = db.reference(db.registers.rdi, PsycoObject)
+        end = po_ptr.value.code
+        self._trace.chop(self._begin, end)
+        for address, function in self._trace_points.items():
+            self._trace[address:address+1] = function
+        self.code_gen.chop(self._begin, end)
+        self.code_gen[self._begin:end] = generated_code([i.function_name for i in db.backtrace()], self._begin_stack_depth)
+        print 'compiled', self._begin, end
+        return True
+
+    def _ni_trace_jump(self, db):
+        location = db.registers.rdi
+        target = db.registers.rsi
+        def location_func(db, trace):
+            trace.jump('jump', location, target)
+            return True
+        self._trace_points[location] = location_func
+        return True
+
+    def _ni_trace_jump_reg(self, db):
+        location = db.registers.rdi
+        target_reg = db.registers.rsi
+        def location_func(db, trace):
+            trace.jump('jumpr', location, getattr(db.registers, REG_NUM_MAP[target_reg]))
+            return True
+        self._trace_points[location] = location_func
+        return True
+
+    def _ni_trace_jump_cond(self, db):
+        location = db.registers.rdi
+        not_taken = db.registers.rsi
+        taken = db.registers.rdx
+        def location_func(db, trace):
+            def taken_func(db):
+                trace.jump('jumpc', location, taken)
+                db.remove_breakpoint(taken_func.other_breakpoint)
+                return False
+            def not_taken_func(db):
+                db.remove_breakpoint(not_taken_func.other_breakpoint)
+                return False
+            taken_func.other_breakpoint = db.add_breakpoint(not_taken, not_taken_func, immediately=True)
+            not_taken_func.other_breakpoint = db.add_breakpoint(taken, taken_func, immediately=True)
+            return True
+        self._trace_points[location] = location_func
+        return True
+
+    def _ni_trace_jump_cond_reg(self, db):
+        location = db.registers.rdi
+        not_taken = db.registers.rsi
+        taken_reg = db.registers.rdx
+        def location_func(db, trace):
+            taken = getattr(db.registers, REG_NUM_MAP[target_reg])
+            def taken_func(db):
+                trace.jump('jumpcr', location, taken)
+                db.remove_breakpoint(taken_func.other_breakpoint)
+                return False
+            def not_taken_func(db):
+                db.remove_breakpoint(not_taken_func.other_breakpoint)
+                return False
+            taken_func.other_breakpoint = db.add_breakpoint(not_taken, not_taken_func, immediately=True)
+            not_taken_func.other_breakpoint = db.add_breakpoint(taken, taken_func, immediately=True)
+            return True
+        self._trace_points[location] = location_func
+        return True
+
+    def _ni_trace_call(self, db):
+        location = db.registers.rdi
+        call_target = db.registers.rsi
+        def location_func(db, trace):
+            trace.jump('calli', location, call_target)
+            return True
+        self._trace_points[location] = location_func
+        return True
+
+    def _ni_trace_call_reg(self, db):
+        location = db.registers.rdi
+        call_target_reg = db.registers.rsi
+        def location_func(db, trace):
+            trace.jump('callr', location, getattr(db.registers, REG_NUM_MAP[call_target_reg]))
+            return True
+        self._trace_points[location] = location_func
+        return True
+
+    def _ni_trace_return(self, db):
+        location = db.registers.rdi
+        stack_adjust = db.registers.rsi
+        def location_func(db, trace):
+            trace.jump('return', location, db.stack[stack_adjust])
+            return True
+        self._trace_points[location] = location_func
+        return True
 
     def _py_eval_eval_frame_ex(self, db):
         frame = db.reference(db.registers.rdi, PyFrameObject)
@@ -293,4 +274,19 @@ class SimpleExecutionTracer:
         frame = db.reference(db.registers.rsi, PyFrameObject)
         print 'run_code', code_buffer.value.codestart, frame.value.f_code.address
         return True
+
+    def begin_trace(self):
+        class Trace:
+            def jump(self, desc, _from, to):
+                print desc, _from, to
+        trace = Trace()
+        for interval in self._trace:
+            address = interval.begin
+            func = interval.data
+            def breakpoint(db, trace=trace, func=func):
+                return func(db, trace)
+            self.db.add_breakpoint(address, breakpoint, immediately=True)
+        self.db.add_breakpoint('PyEval_EvalFrameEx', self._py_eval_eval_frame_ex)
+        self.db.add_breakpoint('PsycoCode_Run', self._psyco_code_run)
+
 

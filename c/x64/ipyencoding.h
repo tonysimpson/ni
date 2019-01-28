@@ -108,7 +108,7 @@ PSY_INLINE void dictitem_update_nochange(void* originalmacrocode,
 /* like DEC_OB_REFCNT() but assume the reference counter cannot reach zero */
 #define DEC_OB_REFCNT_NZ(rg)    do {                    \
   NEED_CC_REG(rg);                                      \
-  SUB_R_I8(rg, 1);\
+  SUB_A_I8(rg, 1);\
 } while (0)
 
 /* internal utilities for the macros below */

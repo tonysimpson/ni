@@ -53,12 +53,53 @@ void psyco_out_of_memory(char *filename, int lineno)
   Py_FatalError(msg);
 }
 
+/**************************************************************
+ * Ni Debug Trace hooks
+ *************************************************************/
+
 DEFINEFN
 void ni_trace_begin_code(PsycoObject* po) {
 }
 
 DEFINEFN
 void ni_trace_end_code(PsycoObject* po) {
+}
+
+DEFINEFN 
+void ni_trace_jump(code_t *location, code_t *target) {
+}
+
+DEFINEFN
+void ni_trace_jump_update(code_t *location, code_t *target) {
+}
+    
+DEFINEFN 
+void ni_trace_jump_reg(code_t *location, int reg_target) {
+}
+
+DEFINEFN 
+void ni_trace_jump_cond(code_t *location, code_t *not_taken, code_t *taken) {
+}
+
+DEFINEFN
+void ni_trace_jump_cond_update(code_t *location, code_t *not_taken, code_t *taken) {
+}
+    
+DEFINEFN 
+void ni_trace_jump_cond_reg(code_t *location, code_t *not_taken, int reg_taken) {
+}
+
+
+DEFINEFN 
+void ni_trace_call(code_t *location, code_t *call_target) {
+}
+
+DEFINEFN 
+void ni_trace_call_reg(code_t *location, int reg_call_target) {
+}
+
+DEFINEFN 
+void ni_trace_return(code_t *location, int stack_adjust) {
 }
 
  /***************************************************************/

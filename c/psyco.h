@@ -343,6 +343,16 @@ EXTERNVAR void (*call_trace_execution) (void);
 /* Calls hooked by nianalyser to collect compiler behaviour */
 EXTERNFN void ni_trace_begin_code(PsycoObject* po);
 EXTERNFN void ni_trace_end_code(PsycoObject* po);
+EXTERNFN void ni_trace_jump(code_t *location, code_t *target);
+EXTERNFN void ni_trace_jump_update(code_t *location, code_t *target);
+EXTERNFN void ni_trace_jump_reg(code_t *location, int reg_target);
+EXTERNFN void ni_trace_jump_cond(code_t *location, code_t *not_taken, code_t *taken);
+EXTERNFN void ni_trace_jump_cond_update(code_t *location, code_t *not_taken, code_t *taken);
+EXTERNFN void ni_trace_jump_cond_reg(code_t *location, code_t *not_taken, int reg_taken);
+EXTERNFN void ni_trace_call(code_t *location, code_t *call_target);
+EXTERNFN void ni_trace_call_reg(code_t *location, int reg_call_target);
+EXTERNFN void ni_trace_return(code_t *location, int stack_adjust);
+
 
 #if CODEGEN_LOG
 FILE *codegen_log;
