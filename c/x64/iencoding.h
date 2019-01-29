@@ -576,9 +576,9 @@ if(!ONLY_UPDATING) {\
         CALL_R(REG_TRANSIENT_1);\
     }\
 } while (0)
-#define ADD_A_I8(rm, i) INDIRECT_ENCODING(false, 1, 0x83, 0, 0, 0, 0, rm); WRITE_8BIT(i)
-#define ADD_O8_I8(rm, o, i) OFFSET_ENCODING(false, false, 1, 0x83, 0, 0, 0, 8, 0, rm, o); WRITE_8BIT(i)
-#define SUB_A_I8(rm, i) INDIRECT_ENCODING(false, 1, 0x83, 0, 0, 0x28, 0, rm); WRITE_8BIT(i)
+#define ADD_A_I8(rm, i) INDIRECT_ENCODING(true, 1, 0x83, 0, 0, 0, 0, rm); WRITE_8BIT(i)
+#define ADD_O8_I8(rm, o, i) OFFSET_ENCODING(true, false, 1, 0x83, 0, 0, 0, 8, 0, rm, o); WRITE_8BIT(i)
+#define SUB_A_I8(rm, i) INDIRECT_ENCODING(true, 1, 0x83, 0, 0, 0x28, 0, rm); WRITE_8BIT(i)
 #define ADD_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x01, 0, 0, 0, r, rm);
 #define XOR_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x31, 0, 0, 0, r, rm);
 

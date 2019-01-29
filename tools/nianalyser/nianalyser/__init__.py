@@ -120,6 +120,28 @@ PsycoObject = types.struct_type(
 )
 
 
+def psycoobject_get_python_location(po_ptr):
+    pr = po_ptr.value.pr
+    if not pr.co:
+        return None
+    inst = pr.next_instr
+    co = pr.co.value
+    filename = pystringobject_to_str(co.co_filename.value)
+    name = pystringobject_to_str(co.co_name.value)
+    if inst < 0:
+        line = -1
+    else:
+        lnotab = pystringobject_to_str(co.co_lnotab.value)
+        line = co.co_firstlineno
+        inst_offset = 0
+        for i in range(0, len(lnotab), 2):
+            inst_offset += ord(lnotab[i])
+            if inst_offset > inst:
+                break
+            line += ord(lnotab[i+1])
+    return (filename, line, name)
+
+
 REG_NUM_MAP = {
     0: 'rax',
     1: 'rcx',
@@ -140,7 +162,7 @@ REG_NUM_MAP = {
 }
 
 
-generated_code = namedtuple('generated_code', ['where', 'stack_depth'])
+generated_code = namedtuple('generated_code', ['where', 'python_src', 'stack_depth'])
 
 
 class SimpleExecutionTracer:
@@ -149,6 +171,7 @@ class SimpleExecutionTracer:
         self._trace = intervaltree.IntervalTree()
         self._initialise_breakpoints()
         self.code_gen = intervaltree.IntervalTree()
+        self.end_code_callback = None
 
     def _initialise_breakpoints(self):
         self.db.add_breakpoint('ni_trace_begin_code', self._ni_trace_begin_code)
@@ -177,8 +200,10 @@ class SimpleExecutionTracer:
         for address, function in self._trace_points.items():
             self._trace[address:address+1] = function
         self.code_gen.chop(self._begin, end)
-        self.code_gen[self._begin:end] = generated_code([i.function_name for i in db.backtrace()], self._begin_stack_depth)
-        print 'compiled', self._begin, end
+        g = generated_code([i.function_name for i in db.backtrace()], psycoobject_get_python_location(po_ptr), self._begin_stack_depth)
+        self.code_gen[self._begin:end] = g
+        if self.end_code_callback:
+            self.end_code_callback(self._begin, end, g)
         return True
 
     def _ni_trace_jump(self, db):

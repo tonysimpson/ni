@@ -53,13 +53,18 @@ DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore, R
   code = block_start;
   code += block_size;
   END_SHORT_JUMP(0);
+  PUSH_R(REG_FUNCTIONS_RETURN); /* TODO: Fix
+    Need to preserve RAX because we can be here from run_time_result_check and we don't decided to put RAX 
+    in a compiler tracked location until run_time_result. */
   BEGIN_CALL(extraarg != SOURCE_DUMMY ? 2 : 1);
   if (extraarg != SOURCE_DUMMY) {
     CALL_SET_ARG_FROM_RT(extraarg, 1);
   }
   CALL_SET_ARG_IMMED(block_start, 0);
   END_CALL_I(fn);
-  JMP_R(REG_FUNCTIONS_RETURN);
+  MOV_R_R(REG_TRANSIENT_1, REG_FUNCTIONS_RETURN);
+  POP_R(REG_FUNCTIONS_RETURN); /* Restore RAX */
+  JMP_R(REG_TRANSIENT_1);
   END_CODE
   return (void*)block_start;
 }
@@ -247,11 +252,9 @@ static vinfo_t* run_time_result_check(PsycoObject* po, int flags) {
 		case CfPyErrNotImplemented:   /* test for a Py_NotImplemented result */
             BEGIN_CODE
             CMP_I_R((long)Py_NotImplemented, REG_FUNCTIONS_RETURN);
-            MOV_R_R(REG_ANY_CALLEE_SAVED, REG_FUNCTIONS_RETURN); /* runtime_condition_f will blat RAX */
             END_CODE
 			if (runtime_condition_f(po, CC_E)) {
                 BEGIN_CODE
-                MOV_R_R(REG_FUNCTIONS_RETURN, REG_ANY_CALLEE_SAVED);
                 DEC_OB_REFCNT(REG_FUNCTIONS_RETURN);
                 END_CODE
 				return psyco_vi_NotImplemented();

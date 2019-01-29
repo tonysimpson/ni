@@ -1,8 +1,8 @@
 import ni
+ni.engage()
 from flask import Flask
 
 
-ni.engage()
 app = Flask(__name__)
 
 
@@ -11,5 +11,6 @@ def index():
     return "Hello"
 
 
-app.run(threaded=False)
+#app.run(threaded=False)
+app.run()
 
