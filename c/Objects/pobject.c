@@ -289,6 +289,8 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 	   probably inside of a loop, with a lot of various
 	   attributes. Let's emit a call to PyObject_GenericGetAttr
 	   instead. */
+    /* Issues ## Get Attr optimisation ignores change to type dict */
+    goto fallback;
 	if (!is_compiletime(vname->source)) {
 	   fallback:
 		return psyco_generic_call(po, PyObject_GenericGetAttr,

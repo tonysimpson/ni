@@ -56,6 +56,7 @@ DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore, R
   PUSH_R(REG_FUNCTIONS_RETURN); /* TODO: Fix
     Need to preserve RAX because we can be here from run_time_result_check and we don't decided to put RAX 
     in a compiler tracked location until run_time_result. */
+  psyco_inc_stackdepth(po);
   BEGIN_CALL(extraarg != SOURCE_DUMMY ? 2 : 1);
   if (extraarg != SOURCE_DUMMY) {
     CALL_SET_ARG_FROM_RT(extraarg, 1);
@@ -64,6 +65,7 @@ DEFINEFN void* psyco_call_code_builder(PsycoObject* po, void* fn, int restore, R
   END_CALL_I(fn);
   MOV_R_R(REG_TRANSIENT_1, REG_FUNCTIONS_RETURN);
   POP_R(REG_FUNCTIONS_RETURN); /* Restore RAX */
+  psyco_dec_stackdepth(po);
   JMP_R(REG_TRANSIENT_1);
   END_CODE
   return (void*)block_start;
@@ -542,7 +544,13 @@ vinfo_t* bint_add_i(PsycoObject* po, vinfo_t* rt1, long value2, bool unsafe)
       rg = dst;
       LOAD_REG_FROM(rt1->source, rg);
     }
-  LOAD_REG_FROM_REG_PLUS_IMMED(dst, rg, value2);
+  if ((value2 < -2147483648) || (value2 > 2147483647)) {
+    MOV_R_I(REG_TRANSIENT_1, value2);
+    ADD_R_R(REG_TRANSIENT_1, rg);
+    MOV_R_R(dst, REG_TRANSIENT_1);
+  } else {
+    LOAD_REG_FROM_REG_PLUS_IMMED(dst, rg, value2);
+  }
   END_CODE
   return new_rtvinfo(po, dst, false,
 		unsafe && value2>=0 && is_rtnonneg(rt1->source));

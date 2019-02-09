@@ -1,3 +1,5 @@
+import os
+import re
 import distorm3
 import pointbreak
 from pointbreak import types
@@ -59,8 +61,8 @@ PyCodeObject = types.struct_type(*PyObject_HEAD + [
 PyFrameObject_pointer = types.pointer_type(None)
 PyFrameObject = types.struct_type(
     *PyObject_VAR_HEAD + [
+        ('f_back', PyFrameObject_pointer),
         ('f_code', types.pointer_type(PyCodeObject)),
-        ('f_back', PyFrameObject_pointer)
     ]
     #incomplete
 
@@ -164,6 +166,7 @@ REG_NUM_MAP = {
 
 generated_code = namedtuple('generated_code', ['where', 'python_src', 'stack_depth'])
 
+_HEX_NUM_RE = re.compile('0x[a-f0-9]+')
 
 class SimpleExecutionTracer:
     def __init__(self, db):
@@ -171,20 +174,19 @@ class SimpleExecutionTracer:
         self._trace = intervaltree.IntervalTree()
         self._initialise_breakpoints()
         self.code_gen = intervaltree.IntervalTree()
-        self.end_code_callback = None
 
     def _initialise_breakpoints(self):
         self.db.add_breakpoint('ni_trace_begin_code', self._ni_trace_begin_code)
         self.db.add_breakpoint('ni_trace_end_code', self._ni_trace_end_code)
-        self.db.add_breakpoint('ni_trace_jump', self._ni_trace_jump)
-        self.db.add_breakpoint('ni_trace_jump_update', self._ni_trace_jump)
-        self.db.add_breakpoint('ni_trace_jump_reg', self._ni_trace_jump_reg)
-        self.db.add_breakpoint('ni_trace_jump_cond', self._ni_trace_jump_cond)
-        self.db.add_breakpoint('ni_trace_jump_cond_update', self._ni_trace_jump_cond)
-        self.db.add_breakpoint('ni_trace_jump_cond_reg', self._ni_trace_jump_cond_reg)
-        self.db.add_breakpoint('ni_trace_call', self._ni_trace_call)
-        self.db.add_breakpoint('ni_trace_call_reg', self._ni_trace_call_reg)
-        self.db.add_breakpoint('ni_trace_return', self._ni_trace_return)
+        #self.db.add_breakpoint('ni_trace_jump', self._ni_trace_jump)
+        #self.db.add_breakpoint('ni_trace_jump_update', self._ni_trace_jump)
+        #self.db.add_breakpoint('ni_trace_jump_reg', self._ni_trace_jump_reg)
+        #self.db.add_breakpoint('ni_trace_jump_cond', self._ni_trace_jump_cond)
+        #self.db.add_breakpoint('ni_trace_jump_cond_update', self._ni_trace_jump_cond)
+        #self.db.add_breakpoint('ni_trace_jump_cond_reg', self._ni_trace_jump_cond_reg)
+        #self.db.add_breakpoint('ni_trace_call', self._ni_trace_call)
+        #self.db.add_breakpoint('ni_trace_call_reg', self._ni_trace_call_reg)
+        #self.db.add_breakpoint('ni_trace_return', self._ni_trace_return)
 
     def _ni_trace_begin_code(self, db):
         po_ptr = db.reference(db.registers.rdi, PsycoObject)
@@ -202,8 +204,7 @@ class SimpleExecutionTracer:
         self.code_gen.chop(self._begin, end)
         g = generated_code([i.function_name for i in db.backtrace()], psycoobject_get_python_location(po_ptr), self._begin_stack_depth)
         self.code_gen[self._begin:end] = g
-        if self.end_code_callback:
-            self.end_code_callback(self._begin, end, g)
+        db.raise_event('NI_CODE_GEN', begin=self._begin, end=end, info=g)
         return True
 
     def _ni_trace_jump(self, db):
@@ -314,4 +315,31 @@ class SimpleExecutionTracer:
         self.db.add_breakpoint('PyEval_EvalFrameEx', self._py_eval_eval_frame_ex)
         self.db.add_breakpoint('PsycoCode_Run', self._psyco_code_run)
 
+    def disassemble(self, begin, end):
+        return distorm3.Decode(begin, self.db.read_unmodified(begin, end - begin), distorm3.Decode64Bits)
+
+    def fancy_disassemble(self, low, high):
+        for addr, size, dis, raw in self.disassemble(low, high):
+            code = list(self.code_gen[addr])
+            if code:
+                code = code[0]
+                where = ', '.join(code.data.where[5:-1])
+                filename, line = code.data[1][:2]
+                where = '%s\t%s\t%s' % (os.path.split(filename)[-1], line, where)
+            else:
+                where = ''
+            for hex_num in set(_HEX_NUM_RE.findall(dis)):
+                try:
+                    address = int(hex_num, 16)
+                except:
+                    continue
+                desc = self.db.address_to_description(address)
+                if '?' not in desc:
+                    dis = dis.replace(hex_num, '%s(%s)' % (hex_num, desc))
+                elif self.code_gen[address]:
+                    data = list(self.code_gen[address])[0].data
+                    filename, lineno, func = data[1]
+                    desc = '%s:%s:%s' % (os.path.split(filename)[-1], lineno, func)
+                    dis = dis.replace(hex_num, '%s(%s)' % (hex_num, desc))
+            print '0x%x\t%40s\t%s' % (addr, dis, where)
 

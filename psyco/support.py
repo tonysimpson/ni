@@ -10,6 +10,7 @@ For internal use.
 ###########################################################################
 
 import sys, _psyco, __builtin__
+import traceback
 
 error = _psyco.error
 class warning(Warning):
@@ -166,6 +167,16 @@ emulating Psyco frames. Some of their attributes can be wrong or missing,
 however."""
     # 'depth+1' to account for this _getemulframe() Python function
     return _psyco.getframe(depth+1, 1)
+
+# Issue ## Exception tracebacks are wrong
+# but _getframe works fine?
+_extract_stack = traceback.extract_stack
+def extract_stack(f=None, limit=None):
+    if f is None:
+        f = _getframe().f_back
+    return _extract_stack(f, limit=limit)
+extract_stack.__doc__ = _extract_stack.__doc__
+traceback.extract_stack = extract_stack
 
 def patch(name, module=__builtin__):
     f = getattr(_psyco, name)

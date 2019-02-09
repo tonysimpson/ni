@@ -1,4 +1,4 @@
-#include "c/x64/iencoding.h"
+#include "../c/x64/iencoding.h"
 
 int main(int argc, char argv[]) {
     code_t codeb[300];

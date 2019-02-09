@@ -24,17 +24,17 @@ PSY_INLINE PyObject* PsycoObject_FromFrame(PyFrameObject* f, int recursion)
 	PyObject* merge_points;
 
 	if (f->f_stacktop == NULL) {
-		/* cannot patch a frame other than the top (running) one */
+        ni_trace_run_fail(co, "cannot patch a frame other than the top (running) one");
 		goto fail;
 	}
         module = f->f_globals == f->f_locals;
 	merge_points = PyCodeStats_MergePoints(PyCodeStats_Get(co), module);
 	if (merge_points == Py_None) {
-		/* unsupported bytecode instructions */
+        ni_trace_run_fail(co, "unsupported bytecode instructions");
 		goto fail;
 	}
 	if (psyco_mp_flags(merge_points) & MP_FLAGS_HAS_FINALLY) {
-		/* incompatible handling of 'finally' blocks */
+        ni_trace_run_fail(co, "incompatible handling of 'finally' blocks");
 		goto fail;
 	}
 
@@ -116,7 +116,7 @@ PSY_INLINE PyObject* PsycoObject_FromCode(PyCodeObject* co,
 	
 	merge_points = PyCodeStats_MergePoints(PyCodeStats_Get(co), module);
 	if (merge_points == Py_None) {
-		/* unsupported bytecode instructions */
+        ni_trace_run_fail(co, "unsupported bytecode instructions");
 		goto fail;
 	}
 

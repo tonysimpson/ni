@@ -286,18 +286,27 @@ typedef enum {
 #define MODRM_REG_O32(reg, rm) MODRM_GENERAL(0x80, reg, rm)
 #define MODRM_REG_RM(reg, rm) MODRM_GENERAL(0xC0, reg, rm)
 #define WRITE_8BIT(immed) do {\
+if(((long)(immed) < -128) || ((long)(immed) > 127)) {\
+    fprintf(stderr, "Bad value for 8bit %ld %s:%d\n", (long)immed, __FILE__, __LINE__);\
+}\
 if(!ONLY_UPDATING) {\
     *code = (code_t)immed;\
 }\
     code += 1;\
 } while(0)
 #define WRITE_16BIT(immed) do {\
+if(((long)(immed) < -32768) || ((long)(immed) > 32767)) {\
+    fprintf(stderr, "Bad value for 16bit %ld %s:%d\n", (long)immed, __FILE__, __LINE__);\
+}\
 if(!ONLY_UPDATING) {\
     *(word_t*)code = (word_t)immed;\
 }\
     code += sizeof(word_t);\
 } while(0)
 #define WRITE_32BIT(immed) do {\
+if(((long)(immed) < -2147483648) || ((long)(immed) > 2147483647)) {\
+    fprintf(stderr, "Bad value for 32bit %ld %s:%d\n", (long)immed, __FILE__, __LINE__);\
+}\
 if(!ONLY_UPDATING) {\
     *(dword_t*)code = (dword_t)immed;\
 }\
@@ -395,8 +404,8 @@ if(!ONLY_UPDATING) {\
  * X - base + (index * scale) + offset
  */
 #define REX_ENCODING(rex_w, r, i, rm) do {\
-    if(rex_w || r > 7 || rm > 7) {\
-        WRITE_1(0x40 | (rex_w ? 8 : 0) | (r > 7 ? 4 : 0) | (i > 7 ? 2 : 0) |(rm > 7 ? 1 : 0));\
+    if((rex_w) || (r) > 7 || (i) > 7 || (rm) > 7) {\
+        WRITE_1(0x40 | ((rex_w) ? 8 : 0) | ((r) > 7 ? 4 : 0) | ((i) > 7 ? 2 : 0) |((rm) > 7 ? 1 : 0));\
     }\
 } while (0)
 #define MODRM_ENCODING(mod, r, rm) do {\
@@ -507,7 +516,7 @@ if(!ONLY_UPDATING) {\
 #define MOV_R_I(rm, i) BASE_ENCODING(true, 0, 0, 0, 0, 0xB8, 0, rm); WRITE_64BIT(i)
 #define MOV_R_UI(rm, i) BASE_ENCODING(true, 0, 0, 0, 0, 0xB8, 0, rm); UPDATABLE_WRITE_64BIT(i)
 #define MOV_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x8B, 0, 0, 0, 8, r, rm, o)
-#define MOV_R_O32(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x8B, 0, 0, 0, 32, r, src, o)
+#define MOV_R_O32(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x8B, 0, 0, 0, 32, r, rm, o)
 #define MOV_R_O(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x8B, 0, 0, 0, 0, r, rm, o)
 #define MOV_O_R(rm, o, r) OFFSET_ENCODING(false, true, 1, 0x89, 0, 0, 0, 0, r, rm, o)
 #define LEA_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x8D, 0, 0, 0, 8, r, rm, o)
@@ -534,7 +543,7 @@ if(!ONLY_UPDATING) {\
 #define CMP_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x39, 0, 0, 0, r, rm)
 #define CMP_R_A(r, rm) INDIRECT_ENCODING(true, 1, 0x39, 0, 0, 0, r, rm)
 #define CMP_R_O8(r, rm, o) OFFSET_ENCODING(false, true, 1, 0x39, 0, 0, 0, 8, r, rm, o)
-#define CMP_I8_O(i, rm, o) OFFSET_ENCODING(false, false, 1, 0x83, 0, 0, 0x78, 0, 0, rm, o); WRITE_8BIT(i)
+#define CMP_I8_O(i, rm, o) OFFSET_ENCODING(false, false, 1, 0x83, 0, 0, 0x38, 0, 0, rm, o); WRITE_8BIT(i)
 #define CMP_I8_A(i, rm) INDIRECT_ENCODING(false, 1, 0x83, 0, 0, 0x38, 0, rm); WRITE_8BIT(i)
 #define CMP_I8_R(i, rm) DIRECT_ENCODING(true, 1, 0x83, 0, 0, 0xF8, 0 , rm); WRITE_8BIT(i)
 #define CMP_I8_DR(i, rm) DIRECT_ENCODING(false, 1, 0x83, 0, 0, 0xF8, 0 , rm); WRITE_8BIT(i)
@@ -579,8 +588,8 @@ if(!ONLY_UPDATING) {\
 #define ADD_A_I8(rm, i) INDIRECT_ENCODING(true, 1, 0x83, 0, 0, 0, 0, rm); WRITE_8BIT(i)
 #define ADD_O8_I8(rm, o, i) OFFSET_ENCODING(true, false, 1, 0x83, 0, 0, 0, 8, 0, rm, o); WRITE_8BIT(i)
 #define SUB_A_I8(rm, i) INDIRECT_ENCODING(true, 1, 0x83, 0, 0, 0x28, 0, rm); WRITE_8BIT(i)
-#define ADD_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x01, 0, 0, 0, r, rm);
-#define XOR_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x31, 0, 0, 0, r, rm);
+#define ADD_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x03, 0, 0, 0, r, rm);
+#define XOR_R_R(r, rm) DIRECT_ENCODING(true, 1, 0x33, 0, 0, 0, r, rm);
 
 #define SUB_R_I8(rm, i) DIRECT_ENCODING(true, 1, 0x83, 0, 0, 0x28, 0, rm); WRITE_8BIT(i)
 #define SUB_R_I32(rm, i) DIRECT_ENCODING(true, 1, 0x81, 0, 0, 0x28, 0, rm); WRITE_32BIT(i)
@@ -655,7 +664,7 @@ if(!ONLY_UPDATING) {\
         PUSH_CC();\
         /* stack check is the first thing  on the stack, before finfo */\
         MOV_R_I(REG_TRANSIENT_1, po->stack_depth - sizeof(long));\
-        ADD_R_R(REG_X64_RSP, REG_TRANSIENT_1);\
+        ADD_R_R(REG_TRANSIENT_1, REG_X64_RSP);\
         CMP_R_A(REG_TRANSIENT_1, REG_TRANSIENT_1);\
         BEGIN_SHORT_COND_JUMP(0, CC_E);\
         BRKP();\
@@ -777,7 +786,7 @@ typedef enum {
         DIRECT_OR_RSP_OFFSET_ENCODING(true, 1, 0x6B, 0, 0, 0, dstrg, source);\
         WRITE_8BIT(immed);\
     } else if (FITS_IN_32BITS(immed)) {\
-        DIRECT_OR_RSP_OFFSET_ENCODING(true, 1, 0x6B, 0, 0, 0, dstrg, source);\
+        DIRECT_OR_RSP_OFFSET_ENCODING(true, 1, 0x69, 0, 0, 0, dstrg, source);\
         WRITE_32BIT(immed);\
     } else {\
         MOV_R_I(REG_TRANSIENT_1, immed);\

@@ -53,10 +53,10 @@ void psyco_out_of_memory(char *filename, int lineno)
   Py_FatalError(msg);
 }
 
+#if NI_TRACE
 /**************************************************************
  * Ni Debug Trace hooks
  *************************************************************/
-
 DEFINEFN
 void ni_trace_begin_code(PsycoObject* po) {
 }
@@ -102,10 +102,18 @@ DEFINEFN
 void ni_trace_return(code_t *location, int stack_adjust) {
 }
 
- /***************************************************************/
+DEFINEFN
+void ni_trace_unsupported_opcode(PyCodeObject *co, int bytecode_index) {
+}
+
+DEFINEFN
+void ni_trace_run_fail(PyCodeObject *co, char *reason) {
+}
+#endif
+ /***************************************************************/ 
 /***   Implementation of the '_psyco' built-in module          ***/
  /***************************************************************/
-
+ 
 DEFINEVAR PyObject* PyExc_PsycoError;
 DEFINEVAR long psyco_memory_usage = 0;
 DEFINEVAR PyObject* CPsycoModule;

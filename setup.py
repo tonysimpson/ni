@@ -53,7 +53,7 @@ ALL_STATIC = 0
 # Be careful with ALL_STATIC=0, because I am not sure the distutils can
 # correctly detect all the dependencies. In case of doubt always compile
 # with `setup.py build_ext -f'.
-
+NI_TRACE = 1
 
 ####################################################################
 
@@ -88,7 +88,7 @@ def autodetect():
 macros = []
 for name in ['PSYCO_DEBUG', 'VERBOSE_LEVEL',
              'CODE_DUMP', 'HEAVY_MEM_CHECK', 'ALL_STATIC',
-             'PSYCO_NO_LINKED_LISTS']:
+             'PSYCO_NO_LINKED_LISTS', 'NI_TRACE']:
     if name in globals():
         macros.append((name, str(globals()[name])))
 

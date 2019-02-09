@@ -28,6 +28,10 @@ typedef int64_t qword_t;
 /***   Various customizable parameters (use your compilers'    ***/
 /***   option to override them, e.g. -DXXX=value in gcc)       ***/
 /* set to 0 to disable all debugging checks and output */
+#ifndef NI_TRACE
+#define NI_TRACE 0
+#endif
+
 #ifndef PSYCO_DEBUG
 #define PSYCO_DEBUG   0
 #endif
@@ -340,6 +344,7 @@ EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 /* Call trace execution function */
 EXTERNVAR void (*call_trace_execution) (void);
 
+#if NI_TRACE
 /* Calls hooked by nianalyser to collect compiler behaviour */
 EXTERNFN void ni_trace_begin_code(PsycoObject* po);
 EXTERNFN void ni_trace_end_code(PsycoObject* po);
@@ -352,7 +357,23 @@ EXTERNFN void ni_trace_jump_cond_reg(code_t *location, code_t *not_taken, int re
 EXTERNFN void ni_trace_call(code_t *location, code_t *call_target);
 EXTERNFN void ni_trace_call_reg(code_t *location, int reg_call_target);
 EXTERNFN void ni_trace_return(code_t *location, int stack_adjust);
-
+EXTERNFN void ni_trace_unsupported_opcode(PyCodeObject *co, int bytecode_index);
+EXTERNFN void ni_trace_run_fail(PyCodeObject *co, char *reason);
+#else
+#define ni_trace_begin_code(po) do {} while(0)
+#define ni_trace_end_code(po) do {} while(0)
+#define ni_trace_jump(location, target) do {} while(0)
+#define ni_trace_jump_update(location, target) do {} while(0)
+#define ni_trace_jump_reg(location, target) do {} while(0)
+#define ni_trace_jump_cond(location, not_taken, taken) do {} while(0)
+#define ni_trace_jump_cond_update(location, not_taken, taken) do {} while(0)
+#define ni_trace_jump_cond_reg(location, not_taken, taken) do {} while(0)
+#define ni_trace_call(location, call_target) do {} while(0)
+#define ni_trace_call_reg(location, reg_call_target) do {} while(0)
+#define ni_trace_return(location, stack_adjust) do {} while(0)
+#define ni_trace_unsupported_opcode(co, bytecode_index) do {} while(0)
+#define ni_trace_run_fail(co, reason) do {} while(0)
+#endif
 
 #if CODEGEN_LOG
 FILE *codegen_log;

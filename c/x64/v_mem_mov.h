@@ -145,7 +145,8 @@ static vinfo_t* v_mem_mov(PsycoObject *po, vinfo_t *v, vinfo_t *base, vinfo_t *i
         if (index_reg == REG_NONE) {
             ADDRESS_ENCODING(rex_w, op_len, b1, b2, b3, 0, r, offset_or_address);
         } else {
-            SIB_ENCODING(false, rex_w, op_len, b1, b2, b3, 0, 0, r, 0x05, offset_or_address, index_reg, V_MEM_MOV_SCALE_TO_BYTES(scale));
+            MOV_R_I(REG_TRANSIENT_2, offset_or_address);
+            SIB_ENCODING(false, rex_w, op_len, b1, b2, b3, 0, 0, r, REG_TRANSIENT_2, 0, index_reg, V_MEM_MOV_SCALE_TO_BYTES(scale));
         }
     } else if (index_reg == REG_NONE) {
         OFFSET_ENCODING(false, rex_w, op_len, b1, b2, b3, 0, 0, r, base_reg, offset_or_address);

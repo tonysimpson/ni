@@ -754,11 +754,10 @@ PSY_INLINE int psyco_richmemcmp(PsycoObject* po, vinfo_t* v, vinfo_t* w,
 			vrdf = wrdf = STR_sval2;
 			break;
 
-		case 4: /*SIZEOF_LONG:*/
+		case 4: /*SIZEOF_INT32:*/
 			if (op != Py_EQ && op != Py_NE) goto use_memcmp;
 			vrdf = wrdf = STR_sval4;
 			break;
-
 		default:
 			goto use_memcmp;
 		}

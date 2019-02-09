@@ -16,7 +16,7 @@
 /* various ways to access the actual character data */
 #define STR_sval      UNSIGNED_ARRAY(char, offsetof(PyStringObject, ob_sval))
 #define STR_sval2     UNSIGNED_ARRAY(short, offsetof(PyStringObject, ob_sval))
-#define STR_sval4     UNSIGNED_ARRAY(long, offsetof(PyStringObject, ob_sval))
+#define STR_sval4     UNSIGNED_ARRAY(int, offsetof(PyStringObject, ob_sval))
 
 
 /* all flavors of virtual strings */

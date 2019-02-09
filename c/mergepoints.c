@@ -942,6 +942,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
   return s;
 
  unsupported_instruction:
+  ni_trace_unsupported_opcode(co, i);
   debug_printf(1 + (strcmp(PyCodeObject_NAME(co), "?")==0),
                ("unsupported opcode %d at %s:%d\n",
                 op1, PyCodeObject_NAME(co), i));
