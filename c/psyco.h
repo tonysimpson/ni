@@ -32,11 +32,6 @@ typedef int64_t qword_t;
 #define NI_TRACE 0
 #endif
 
-/* Enable the trace_execution.log */
-#ifndef TRACE_EXECUTION_LOG
-#define TRACE_EXECUTION_LOG 0
-#endif
-
 /* define to 1 for extra assert()'s */
 #ifndef ALL_CHECKS
 #define ALL_CHECKS 0

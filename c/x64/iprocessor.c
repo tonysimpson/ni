@@ -50,84 +50,6 @@ static void write_glue_run_code_fn(PsycoObject *po, bool aligned) {
     END_CODE
 }
 
-#if TRACE_EXECUTION_LOG
-typedef struct {
-    void* r15;
-    void* r14;
-    void* r13;
-    void* r12;
-    void* r11;
-    void* r10;
-    void* r9;
-    void* r8;
-    void* rdi;
-    void* rsi;
-    void* rbp;
-    void* rsp;
-    void* rdx;
-    void* rcx;
-    void* rbx;
-    void* rax;
-    void* eflags;
-    void* return_address;
-} trace_state_t;
-
-FILE *trace_log;
-static void trace_execution(trace_state_t *state) {
-    fprintf(trace_log, "pc:%p sp:%p\n", state->return_address, (void*)((char*)state->rsp + (sizeof(trace_state_t) - offsetof(trace_state_t, rsp))));
-    fflush(trace_log);
-}
-
-typedef void (*call_trace_execution_fn) (void);
-
-call_trace_execution_fn call_trace_execution;
-
-/* 
- * Write code that can call the c trace_execution function.
- * We write this reusable block to keep generated code consise.
- */
-static void write_call_trace_execution(PsycoObject *po) {
-    BEGIN_CODE
-    PUSH_CC();
-    PUSH_R(REG_X64_RAX);
-    PUSH_R(REG_X64_RBX);
-    PUSH_R(REG_X64_RCX);
-    PUSH_R(REG_X64_RDX);
-    PUSH_R(REG_X64_RSP);
-    PUSH_R(REG_X64_RBP);
-    PUSH_R(REG_X64_RSI);
-    PUSH_R(REG_X64_RDI);
-    PUSH_R(REG_X64_R8);
-    PUSH_R(REG_X64_R9);
-    PUSH_R(REG_X64_R10);
-    PUSH_R(REG_X64_R11);
-    PUSH_R(REG_X64_R12);
-    PUSH_R(REG_X64_R13);
-    PUSH_R(REG_X64_R14);
-    PUSH_R(REG_X64_R15);
-    LEA_R_O(REG_X64_RDI, REG_X64_RSP, 0);
-    CALL_I(&trace_execution);
-    POP_R(REG_X64_R15);
-    POP_R(REG_X64_R14);
-    POP_R(REG_X64_R13);
-    POP_R(REG_X64_R12);
-    POP_R(REG_X64_R11);
-    POP_R(REG_X64_R10);
-    POP_R(REG_X64_R9);
-    POP_R(REG_X64_R8);
-    POP_R(REG_X64_RDI);
-    POP_R(REG_X64_RSI);
-    POP_R(REG_X64_RBP);
-    POP_R(REG_X64_RSP);
-    POP_R(REG_X64_RDX);
-    POP_R(REG_X64_RCX);
-    POP_R(REG_X64_RBX);
-    POP_R(REG_X64_RAX);
-    POP_CC();
-    RET();
-    END_CODE;
-}
-#endif
 
 DEFINEFN
 PyObject* psyco_processor_run(CodeBufferObject* codebuf,
@@ -183,10 +105,6 @@ INITIALIZATIONFN
 void psyco_processor_init(void)
 {
     code_t *limit;
-#if TRACE_EXECUTION_LOG
-    code_t *call_trace_execution_loc;
-    trace_log = fopen("trace_execution.log", "w");
-#endif
     CodeBufferObject* codebuf = psyco_new_code_buffer(NULL, NULL, &limit);
     PsycoObject *po = PsycoObject_New(0);
     po->code = codebuf->codestart;
@@ -197,11 +115,6 @@ void psyco_processor_init(void)
     write_glue_run_code_fn(po, false);
     psyco_int_mul_ovf = (psyco_int_mul_ovf_fn)po->code;
     write_psyco_int_mul_ovf(po);
-#if TRACE_EXECUTION_LOG
-    call_trace_execution_loc = po->code;
-    write_call_trace_execution(po);
-    call_trace_execution = (call_trace_execution_fn)call_trace_execution_loc;
-#endif
     SHRINK_CODE_BUFFER(codebuf, po->code, "glue");
     PsycoObject_Delete(po);
 }
