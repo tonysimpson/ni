@@ -109,6 +109,10 @@ void ni_trace_unsupported_opcode(PyCodeObject *co, int bytecode_index) {
 DEFINEFN
 void ni_trace_run_fail(PyCodeObject *co, char *reason) {
 }
+
+DEFINEFN 
+void ni_trace_unify(PsycoObject* po, CodeBufferObject *match) {
+}
 #endif
  /***************************************************************/ 
 /***   Implementation of the '_psyco' built-in module          ***/

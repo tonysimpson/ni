@@ -350,6 +350,7 @@ EXTERNFN void ni_trace_call_reg(code_t *location, int reg_call_target);
 EXTERNFN void ni_trace_return(code_t *location, int stack_adjust);
 EXTERNFN void ni_trace_unsupported_opcode(PyCodeObject *co, int bytecode_index);
 EXTERNFN void ni_trace_run_fail(PyCodeObject *co, char *reason);
+EXTERNFN void ni_trace_unify(PsycoObject* po, CodeBufferObject *match);
 #else
 #define ni_trace_begin_code(po) do {} while(0)
 #define ni_trace_end_code(po) do {} while(0)
@@ -364,14 +365,13 @@ EXTERNFN void ni_trace_run_fail(PyCodeObject *co, char *reason);
 #define ni_trace_return(location, stack_adjust) do {} while(0)
 #define ni_trace_unsupported_opcode(co, bytecode_index) do {} while(0)
 #define ni_trace_run_fail(co, reason) do {} while(0)
+#define ni_trace_unify(po, match) do {} while (0)
 #endif
 
 #if CODEGEN_LOG
 FILE *codegen_log;
 #endif
 
-#define LOG_BEGIN_CODE_GEN(_code) do {} while (0)
-#define LOG_END_CODE_GEN(_code) do {} while (0)
 #define BEGIN_CODE do {\
     code_t* code = po->code;\
     ni_trace_begin_code(po);

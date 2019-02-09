@@ -74,7 +74,6 @@ static void data_update_stack(vinfo_t* a, RunTimeSource bsource,
   long srcstack = getstack(a->source);
   char rg, rgb;
   vinfo_t* overridden;
-  LOG_BEGIN_CODE_GEN(code);  
   /* check for values passing from no-reference to reference */
   if (has_rtref(bsource)) {  /* destination has ref */
     if (has_rtref(a->source))   /* source has ref too */
@@ -164,7 +163,6 @@ static void data_update_stack(vinfo_t* a, RunTimeSource bsource,
       
     }
   dm->code = code;
-  LOG_END_CODE_GEN(code);  
 }
 
 static code_t* data_free_unused(code_t* code, struct dmove_s* dm,
@@ -187,10 +185,8 @@ static code_t* data_free_unused(code_t* code, struct dmove_s* dm,
               
               saved_code = po->code;
               po->code = code;
-              LOG_BEGIN_CODE_GEN(code);
               psyco_decref_rt(po, a);
               code = po->code;
-              LOG_END_CODE_GEN(code);
               po->code = saved_code;
 
               if (code > dm->code_limit)
@@ -216,11 +212,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   code_t* backpointer;
   CodeBufferObject* target_codebuf = lastmatch->matching;
   int sdepth = get_stack_depth(&target_codebuf->snapshot);
-#if CODEGEN_LOG
-  fprintf(codegen_log, "UNIFY %p > %p\n", code, target_codebuf->codestart);
-  fflush(codegen_log);
-#endif
-  LOG_BEGIN_CODE_GEN(code);
+  ni_trace_unify(po, target_codebuf); 
   extra_assert(lastmatch->diff == NullArray);  /* unify with exact match only */
   psyco_assert_coherent(po);
   dm.usages_size = sdepth + sizeof(vinfo_t**);
@@ -247,7 +239,6 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
       po->stack_depth = sdepth;
     }
 
-  LOG_END_CODE_GEN(code);
   /* update the stack */
   dm.code = code;
   fz_find_runtimes(&po->vlocals, &target_codebuf->snapshot,
@@ -260,7 +251,6 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
      vinfo_ts it actually used from 'po') */
   code = data_free_unused(code, &dm, &po->vlocals);
 
-  LOG_BEGIN_CODE_GEN(code);
   /* update the registers (1): reg-to-reg moves and exchanges */
     for (i=0; i<REG_TOTAL; i++) {
         vinfo_t* v = dm.copy_regs[i];
@@ -292,9 +282,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
     }
     if (code > dm.code_limit) {
         /* start a new buffer if we wrote past the end */
-        LOG_END_CODE_GEN(code);
         code = data_new_buffer(code, &dm);
-        LOG_BEGIN_CODE_GEN(code);
     }
     /* update the registers (2): stack-to-register loads */
     for (i=0; i<REG_TOTAL; i++) {
@@ -309,9 +297,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
 
   if (code > dm.code_limit) {
     /* start a new buffer if we wrote past the end */
-    LOG_END_CODE_GEN(code);
     code = data_new_buffer(code, &dm);
-    LOG_BEGIN_CODE_GEN(code);
   }
   backpointer = code;
   JUMP_TO((code_t*) target_codebuf->codestart);
@@ -322,14 +308,11 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
     {
       /* the JMP instruction emitted by JUMP_TO() is not position-
          independent; we must emit it again at the new position */
-      LOG_END_CODE_GEN(code);
       code = data_new_buffer(backpointer, &dm);
-      LOG_BEGIN_CODE_GEN(code);
       JUMP_TO((code_t*) target_codebuf->codestart);
       psyco_assert(code <= dm.code_limit);
     }
   
-  LOG_END_CODE_GEN(code);
   PyMem_FREE(dm.usages);
   if (dm.private_codebuf == NULL)
     {
@@ -342,9 +325,7 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
       *target = dm.private_codebuf;
       /* add a jump from the original code buffer to the new one */
       code = po->code;
-      LOG_BEGIN_CODE_GEN(code);
       JUMP_TO((code_t*) dm.private_codebuf->codestart);
-      LOG_END_CODE_GEN(code);
       dump_code_buffers();
     }
   PsycoObject_Delete(po);
