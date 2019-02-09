@@ -1,4 +1,4 @@
-import psyco
+from . import psyco
 
 def engage():
     """Turn on optimisation"""
