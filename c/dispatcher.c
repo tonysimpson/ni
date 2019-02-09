@@ -976,7 +976,7 @@ static bool compatible_array(vinfo_array_t* aa, vinfo_array_t* bb,
                      in this case; they should never contain information
                      different from what psyco_get_field() can load or
                      reload from immutable data. */
-#if PSYCO_DEBUG
+#if ALL_CHECKS
                   /* we just verify that there are only compile-time
                      subitems. */
                   int j;
@@ -1141,7 +1141,7 @@ static bool compatible_vinfo(vinfo_t* a, Source bsource, int bcount,
          in this case; they should never contain information
          different from what psyco_get_field() can load or
          reload from immutable data. */
-#if PSYCO_DEBUG
+#if ALL_CHECKS
       /* we just verify that there are only compile-time
          subitems. */
       int j;
@@ -1363,7 +1363,7 @@ static void skip_compatible_array(int count)
         ;
       else
         {
-#if PSYCO_DEBUG
+#if ALL_CHECKS
           Source bsource = fz_getarg();
           extra_assert(is_compiletime(bsource));
 #else
@@ -1594,7 +1594,7 @@ static void remove_non_marked(vinfo_array_t* array, PsycoObject* po)
                 {
                   /* remove all sub-items */
                   vinfo_array_t* array = vi->array;
-#if PSYCO_DEBUG
+#if ALL_CHECKS
                   /* we just verify that there are only compile-time
                      subitems. */
                   int j;

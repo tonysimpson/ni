@@ -19,15 +19,6 @@ from distutils.extension import Extension
 PROCESSOR = None  # autodetect
 
 ####################################################################
-#
-#  Customizable debugging flags.
-#  Copy the following section in a new file 'preferences.py' to
-#  avoiding changing setup.py. Uncomment and change the options there
-#  at your will. Setting PsycoDebug to 1 is probably the first thing
-#  you want to do to enable all internal checks.
-
-#PSYCO_DEBUG = 1
-
 # level of debugging outputs: 0 = none, 1 = a few, 2 = more,
 #   3 = detailled, 4 = full execution trace
 #VERBOSE_LEVEL = 0
@@ -54,6 +45,9 @@ ALL_STATIC = 0
 # correctly detect all the dependencies. In case of doubt always compile
 # with `setup.py build_ext -f'.
 NI_TRACE = 1
+
+# Extra checks 
+ALL_CHECKS = 0
 
 ####################################################################
 
@@ -86,7 +80,7 @@ def autodetect():
 
 
 macros = []
-for name in ['PSYCO_DEBUG', 'VERBOSE_LEVEL',
+for name in ['VERBOSE_LEVEL', 'ALL_CHECKS', 
              'CODE_DUMP', 'HEAVY_MEM_CHECK', 'ALL_STATIC',
              'PSYCO_NO_LINKED_LISTS', 'NI_TRACE']:
     if name in globals():

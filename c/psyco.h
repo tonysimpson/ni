@@ -32,10 +32,6 @@ typedef int64_t qword_t;
 #define NI_TRACE 0
 #endif
 
-#ifndef PSYCO_DEBUG
-#define PSYCO_DEBUG   0
-#endif
-
 /* Output code generation information to codegen.log */
 #ifndef CODEGEN_LOG
 #define CODEGEN_LOG 0
@@ -61,30 +57,30 @@ typedef int64_t qword_t;
 #define CHECK_STACK_DEPTH 0
 #endif
 
- /* define to 1 for extra assert()'s */
+/* define to 1 for extra assert()'s */
 #ifndef ALL_CHECKS
-# define ALL_CHECKS    (PSYCO_DEBUG ? 1 : 0)
+#define ALL_CHECKS 0
 #endif
 
- /* level of debugging outputs: 0 = none, 1 = a few, 2 = more,
+/* level of debugging outputs: 0 = none, 1 = a few, 2 = more,
     3 = detailled, 4 = full execution trace */
 #ifndef VERBOSE_LEVEL
-# define VERBOSE_LEVEL   (PSYCO_DEBUG ? 0 : 0)
+#define VERBOSE_LEVEL 0
 #endif
 
- /* dump information about profiling and statistics */
+/* dump information about profiling and statistics */
 #ifndef VERBOSE_STATS
-# define VERBOSE_STATS   (VERBOSE_LEVEL>=2)
+#define VERBOSE_STATS (VERBOSE_LEVEL>=2)
 #endif
 
- /* define for *heavy* memory checking: 0 = off, 1 = reasonably heavy,
+/* define for *heavy* memory checking: 0 = off, 1 = reasonably heavy,
                                         2 = unreasonably heavy */
 #ifndef HEAVY_MEM_CHECK
-# define HEAVY_MEM_CHECK   (PSYCO_DEBUG ? 0 : 0)
+#define HEAVY_MEM_CHECK 0
 #endif
 #ifdef MS_WIN32
-# undef HEAVY_MEM_CHECK
-# define HEAVY_MEM_CHECK   0  /* not supported on Windows */
+#undef HEAVY_MEM_CHECK
+#define HEAVY_MEM_CHECK 0  /* not supported on Windows */
 #endif
 
  /* define to write produced blocks of code into a file; see 'xam.py'
@@ -92,28 +88,28 @@ typedef int64_t qword_t;
        2 = only when returning from Psyco,
        3 = every time a new code block is built */
 #ifndef CODE_DUMP
-# define CODE_DUMP         (PSYCO_DEBUG ? 1 : 0)
+#define CODE_DUMP 0
 #endif
 
 #if CODE_DUMP && !defined(CODE_DUMP_FILE)
-# define CODE_DUMP_FILE    "psyco.dump"
+# define CODE_DUMP_FILE "psyco.dump"
 #endif
 
- /* define to inline the most common functions in the produced code
+/*  define to inline the most common functions in the produced code
     (should be enabled unless you want to trade code size for speed) */
 #ifndef INLINE_COMMON_FUNCTIONS
-# define INLINE_COMMON_FUNCTIONS     1
+# define INLINE_COMMON_FUNCTIONS 1
 #endif
 
 #if CODE_DUMP && defined(HAVE_DLFCN_H)
- /* define to locate shared symbols and write them in CODE_DUMP_FILE
+/*  define to locate shared symbols and write them in CODE_DUMP_FILE
     requires the GNU extension dladdr() in <dlfcn.h>
     Not really useful, only finds non-static symbols. */
 /*# include <dlfcn.h>
   # define CODE_DUMP_SYMBOLS*/
 #endif
 
-#define DEFAULT_RECURSION    10   /* default value for the 'rec' argument */
+#define DEFAULT_RECURSION 10   /* default value for the 'rec' argument */
 
 
 /*****************************************************************/
@@ -137,7 +133,7 @@ typedef int64_t qword_t;
    In debugging mode, we use a small size to stress the buffer-
    continuation coding routines. */
 #ifndef BIG_BUFFER_SIZE
-# define BIG_BUFFER_SIZE  (PSYCO_DEBUG ? 2*BUFFER_MARGIN : 0x100000)
+# define BIG_BUFFER_SIZE 0x100000
 #endif
 
 /* A safety margin for occasional overflows: we might write a few
@@ -148,7 +144,7 @@ typedef int64_t qword_t;
    The END_CODE macro triggers a silent buffer change if space is
    getting very low -- less than GUARANTEED_MINIMUM */
 #ifndef BUFFER_MARGIN
-# define BUFFER_MARGIN    1024
+# define BUFFER_MARGIN 1024
 #endif
 
 /* When emitting code, all called functions can assume that they
@@ -157,12 +153,12 @@ typedef int64_t qword_t;
    jump to these from the original code (jumps can be done in less
    than GUARANTEED_MINIMUM bytes). */
 #ifndef GUARANTEED_MINIMUM
-# define GUARANTEED_MINIMUM    64
+# define GUARANTEED_MINIMUM 64
 #endif
 
 
 #ifndef ALL_STATIC
-# define ALL_STATIC  0   /* make all functions static; set to 1 by hack.c */
+#define ALL_STATIC  0   /* make all functions static; set to 1 by hack.c */
 #endif
 
 #if ALL_STATIC

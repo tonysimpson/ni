@@ -619,11 +619,6 @@ EXTERNFN void psyco_assert_field(PsycoObject* po, vinfo_t* vi, defield_t df,
                                  long value);
 
 
-/* internal */
-#if PSYCO_DEBUG
-/* in debugging mode, use the function;  while optimizing, we favour
-   the macro version below because GCC does not completely optimize out
-   recursive calls to functions with completely constant arguments. */
 PSY_INLINE int field_next_index(defield_t df, bool ovf) {
 	if (df == NO_PREV_FIELD)
 		return 0;
@@ -640,13 +635,6 @@ PSY_INLINE int field_next_index(defield_t df, bool ovf) {
 		return n;
 	}
 }
-#else
-/*  this macro seriously slows down compilation because it expands 'df'
-    three times, producing exponential explosion in the preprocessor --
-    still, the result is generally a constant. */
-#  define field_next_index(df, ovf)    ((df) == NO_PREV_FIELD ? 0 :		\
-     FIELD_INDEX(df) + ((1 << FIELD_SIZE2(df)) + sizeof(long)-1) / sizeof(long))
-#endif
 
 
 /*****************************************************************/

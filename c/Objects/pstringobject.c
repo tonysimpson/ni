@@ -913,7 +913,7 @@ static PyTypeObject PsycoBufStr_Type = {
 };
 
 
-#if PSYCO_DEBUG
+#if ALL_CHECKS
 static void assert_bufstr_invariants(stringlike_t* a, int a_size)
 {
 	if (PyString_Check(a)) {

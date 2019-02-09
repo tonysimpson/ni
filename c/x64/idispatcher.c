@@ -44,9 +44,6 @@ static code_t* data_new_buffer(code_t* code, struct dmove_s* dm)
       /* copy old code to new buffer */
       memcpy(codebuf->codestart, dm->code_origin, codesize);
       dm->private_codebuf = codebuf;
-#if PSYCO_DEBUG
-      dm->code_origin = (code_t*) 0xCDCDCDCD;
-#endif
       return ((code_t*) codebuf->codestart) + codesize;
     }
 }
@@ -219,9 +216,6 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
   code_t* backpointer;
   CodeBufferObject* target_codebuf = lastmatch->matching;
   int sdepth = get_stack_depth(&target_codebuf->snapshot);
-#if PSYCO_DEBUG
-  bool has_ccreg = HAS_CCREG(po);
-#endif
 #if CODEGEN_LOG
   fprintf(codegen_log, "UNIFY %p > %p\n", code, target_codebuf->codestart);
   fflush(codegen_log);
@@ -319,9 +313,6 @@ code_t* psyco_unify(PsycoObject* po, vcompatible_t* lastmatch,
     code = data_new_buffer(code, &dm);
     LOG_BEGIN_CODE_GEN(code);
   }
-#if PSYCO_DEBUG
-  extra_assert(has_ccreg == HAS_CCREG(po));
-#endif
   backpointer = code;
   JUMP_TO((code_t*) target_codebuf->codestart);
   

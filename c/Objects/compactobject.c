@@ -164,7 +164,7 @@ compact_impl_t* k_extend_impl(compact_impl_t* oldimpl, PyObject* attr,
         return p;
 }
 
-#if PSYCO_DEBUG
+#if ALL_CHECKS
 static int k_check_extension(compact_impl_t* impl1, compact_impl_t* impl2)
 {
 	while (impl1 != impl2) {

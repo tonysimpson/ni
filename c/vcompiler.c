@@ -147,7 +147,7 @@ void vinfo_release(vinfo_t* vi, PsycoObject* po)
   if (vi->array != NullArray)
     array_delete(vi->array, po);
 
-#if HAVE_CCREG && PSYCO_DEBUG
+#if HAVE_CCREG && ALL_CHECKS
   /* only virtual-time vinfos are allowed in po->ccreg */
   if (po != NULL)
     {
@@ -164,7 +164,7 @@ void vinfo_move(PsycoObject* po, vinfo_t* vtarget, vinfo_t* vsource)
 {
   Source src = vsource->source;
 
-#if PSYCO_DEBUG
+#if ALL_CHECKS
   extra_assert(!is_virtualtime(src));
   if (is_compiletime(src))
     {
@@ -718,7 +718,7 @@ void psyco_assert_field(PsycoObject* po, vinfo_t* vi, defield_t df,
 	extra_assert(!((long)df & FIELD_MUTABLE));
 
 	if (is_compiletime(vi->source)) {
-#if PSYCO_DEBUG
+#if ALL_CHECKS
 		/* check assertion at compile-time */
 		vinfo_t* vf = psyco_get_field(po, vi, df);
 		extra_assert(CompileTime_Get(vf->source)->value == value);
