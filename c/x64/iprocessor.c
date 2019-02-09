@@ -29,11 +29,6 @@ static void write_glue_run_code_fn(PsycoObject *po, bool aligned) {
     if (!aligned) {
         SUB_R_I8(REG_X64_RSP, 8);
     }
-#if CHECK_STACK_DEPTH
-    MOV_R_R(REG_TRANSIENT_1, REG_X64_RSP);
-    SUB_R_I8(REG_TRANSIENT_1, 8);
-    PUSH_R(REG_TRANSIENT_1);
-#endif
     PUSH_I(-1); /* finfo */
     MOV_A_R(REG_X64_RCX, REG_X64_RSP);
     BEGIN_SHORT_JUMP(0);
@@ -44,7 +39,7 @@ static void write_glue_run_code_fn(PsycoObject *po, bool aligned) {
     CMP_R_R(REG_X64_RDX, REG_X64_RSI);
     END_REVERSE_SHORT_COND_JUMP(1, CC_NE);
     CALL_R(REG_X64_RDI);
-    ADD_R_I8(REG_X64_RSP, (1 + (aligned ? 0 : 1) + (CHECK_STACK_DEPTH ? 1 : 0)) * sizeof(long));
+    ADD_R_I8(REG_X64_RSP, (1 + (aligned ? 0 : 1)) * sizeof(long));
     POP_R(REG_X64_R15);
     POP_R(REG_X64_R14);
     POP_R(REG_X64_R13);
@@ -144,13 +139,12 @@ PyObject* psyco_processor_run(CodeBufferObject* codebuf,
   int regs_saved = 6;
   int finfo_pushed = 1;
   int return_address = 1;
-  int stack_check = CHECK_STACK_DEPTH;
   /* we need to work out if the call to psyco code would be made with the stack 16 bytes aligned
    * and adjust accordingly - we assume everything pushed to the stack is 8 bytes wide
    * and the call from C will be aligned before the call (in the call it is off by 8 due to return address),
    * so we only need to know if an odd number of this is pushed to the stack before the call.
    */
-  if((argc + regs_saved + stack_check + finfo_pushed + return_address) & 1) {
+  if((argc + regs_saved + finfo_pushed + return_address) & 1) {
     return glue_run_code_unaligned(codebuf->codestart, initial_stack + argc, initial_stack, finfo);
   } else {
     return glue_run_code_aligned(codebuf->codestart, initial_stack + argc, initial_stack, finfo);

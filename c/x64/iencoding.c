@@ -401,12 +401,6 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
         po->stack_depth += stack_correction;
     } while (0);
 
-#if CHECK_STACK_DEPTH
-    MOV_R_R(REG_TRANSIENT_1, REG_X64_RSP);
-    SUB_R_I8(REG_TRANSIENT_1, 8);
-    PUSH_R(REG_TRANSIENT_1);
-    psyco_inc_stackdepth(po);
-#endif
     PUSH_I(-1); /* finfo */
     psyco_inc_stackdepth(po);
 
@@ -432,14 +426,8 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
     /* psyco callees remove args :| */
     po->stack_depth = initial_stack_depth;
     RETURNED_FROM_SUBFUNCTION();
-    #if CHECK_STACK_DEPTH
-        ADD_R_I8(REG_X64_RSP, sizeof(long) * 2);
-        psyco_dec_stackdepth(po);
-        psyco_dec_stackdepth(po);
-    #else
-        ADD_R_I8(REG_X64_RSP, sizeof(long)); 
-        psyco_dec_stackdepth(po);
-    #endif
+    ADD_R_I8(REG_X64_RSP, sizeof(long)); 
+    psyco_dec_stackdepth(po);
     /* remove stack correction */
     STACK_CORRECTION(-stack_correction);
     po->stack_depth -= stack_correction;

@@ -277,10 +277,8 @@ EXTERNFN bool decref_create_new_lastref(PsycoObject* po, vinfo_t* w);
         STACK_CORRECTION(-post_return_stack_depth);\
         PUSH_R(REG_TRANSIENT_1);\
         po->stack_depth = return_depth;\
-        STACK_DEPTH_CHECK();\
         RET();\
     } else {\
-        STACK_DEPTH_CHECK();\
         RET_N(post_return_stack_depth);\
     }\
     po->stack_depth = 0;\
@@ -336,10 +334,8 @@ static void function_return(PsycoObject *po, Source retval, int nframelocal, lon
         STACK_CORRECTION(-post_return_stack_depth);
         PUSH_R(REG_TRANSIENT_1);
         po->stack_depth = return_depth;
-        STACK_DEPTH_CHECK();
         RET();
     } else {
-        STACK_DEPTH_CHECK();
         RET_N(post_return_stack_depth);
     }
     po->stack_depth = 0;

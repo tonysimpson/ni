@@ -21,11 +21,7 @@
 
 
 /* everything before args, including finfo which is the last thing before args */
-#if CHECK_STACK_DEPTH
-#define INITIAL_STACK_DEPTH  16
-#else
 #define INITIAL_STACK_DEPTH  8
-#endif
 
 #if CHECK_CALL_STACK_ALIGNED
 #define CALL_STACK_ALIGNED_CHECK() do {\
@@ -642,27 +638,6 @@ if(!ONLY_UPDATING) {\
 /* XXX get rid of this ?? */
 #define SHIFT_GENERICCL(rg, group)       SHIFT_BY_RCX_ENCODING(rg, (group << 3))
 
-/***********************************************************************/
-#if CHECK_STACK_DEPTH
-#define STACK_DEPTH_CHECK() do {\
-    /* see glue_run_code for companion code */\
-    /* if stack_depth <= 0 we're in glue code */\
-    if(po->stack_depth > 0) {\
-        PUSH_CC();\
-        /* stack check is the first thing  on the stack, before finfo */\
-        MOV_R_I(REG_TRANSIENT_1, po->stack_depth - sizeof(long));\
-        ADD_R_R(REG_TRANSIENT_1, REG_X64_RSP);\
-        CMP_R_A(REG_TRANSIENT_1, REG_TRANSIENT_1);\
-        BEGIN_SHORT_COND_JUMP(0, CC_E);\
-        BRKP();\
-        END_SHORT_JUMP(0);\
-        POP_CC();\
-    }\
-} while(0)
-#else
-#define STACK_DEPTH_CHECK() do { } while (0)
-#endif
-/**********************************************************************/
 #define STACK_POS_OFFSET(stack_pos) (po->stack_depth - (stack_pos))
 
 typedef enum {

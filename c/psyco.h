@@ -42,11 +42,6 @@ typedef int64_t qword_t;
 #define CHECK_CALL_STACK_ALIGNED 0
 #endif
 
-/* Compiler stack_depth checking */
-#ifndef CHECK_STACK_DEPTH
-#define CHECK_STACK_DEPTH 0
-#endif
-
 /* define to 1 for extra assert()'s */
 #ifndef ALL_CHECKS
 #define ALL_CHECKS 0
