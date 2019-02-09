@@ -1038,9 +1038,6 @@ static PyMethodDef PsycoMethods[] = {
 /* Initialization */
 PyMODINIT_FUNC init_psyco(void)
 {
-#if CODEGEN_LOG
-  codegen_log = fopen("codegen.log", "w");
-#endif
   PsycoFunction_Type.ob_type = &PyType_Type;
   CodeBuffer_Type.ob_type = &PyType_Type;
   thread_dict_key = PyString_InternFromString("PsycoT");

@@ -32,11 +32,6 @@ typedef int64_t qword_t;
 #define NI_TRACE 0
 #endif
 
-/* Output code generation information to codegen.log */
-#ifndef CODEGEN_LOG
-#define CODEGEN_LOG 0
-#endif
-
 /* Enable the trace_execution.log */
 #ifndef TRACE_EXECUTION_LOG
 #define TRACE_EXECUTION_LOG 0
@@ -366,10 +361,6 @@ EXTERNFN void ni_trace_unify(PsycoObject* po, CodeBufferObject *match);
 #define ni_trace_unsupported_opcode(co, bytecode_index) do {} while(0)
 #define ni_trace_run_fail(co, reason) do {} while(0)
 #define ni_trace_unify(po, match) do {} while (0)
-#endif
-
-#if CODEGEN_LOG
-FILE *codegen_log;
 #endif
 
 #define BEGIN_CODE do {\
