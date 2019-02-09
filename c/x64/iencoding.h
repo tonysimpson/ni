@@ -23,29 +23,6 @@
 /* everything before args, including finfo which is the last thing before args */
 #define INITIAL_STACK_DEPTH  8
 
-#if CHECK_CALL_STACK_ALIGNED
-#define CALL_STACK_ALIGNED_CHECK() do {\
-    if (call_trace_execution != NULL) {\
-        PUSH_CC();\
-        psyco_inc_stackdepth(po);\
-        TEST_R_I(REG_X64_RSP, 0x7);\
-        BEGIN_SHORT_COND_JUMP(0, CC_E); /* jump if 8 byte aligned */\
-        BRKP();\
-        END_SHORT_JUMP(0);\
-        TEST_R_I(REG_X64_RSP, 0x8);\
-        BEGIN_SHORT_COND_JUMP(1, CC_NE);\
-        /* check we are 8 byte aligned from PUSH_CC above, will be
-         * 16 byte aligned after POP_CC as required by calling
-         * convention */\
-        BRKP();\
-        END_SHORT_JUMP(1);\
-        POP_CC();\
-        psyco_dec_stackdepth(po);\
-    }\
-} while(0)
-#else
-#define CALL_STACK_ALIGNED_CHECK() do { } while (0)
-#endif
 
 /* Define to 0 to use RBP as any other register, or to 1 to reserve it 
  * useful for debugging to set this to 1 */
@@ -556,13 +533,11 @@ if(!ONLY_UPDATING) {\
     UPDATABLE_WRITE_32BIT((address) - ((long)code + 4));\
 } while (0)
 #define CALL_R(r) do {\
-    CALL_STACK_ALIGNED_CHECK();\
     ni_trace_call_reg((code_t*)(code), r);\
     DIRECT_ENCODING(false, 1, 0xFF, 0, 0, 0xD0, 0, r);\
 } while (0)
 #define CALL_I(i) do {\
     long jump_amount;\
-    CALL_STACK_ALIGNED_CHECK();\
     ni_trace_call((code_t*)(code), (code_t*)(i));\
     jump_amount = (long)(i) - ((long)code + 5);\
     if(FITS_IN_32BITS(jump_amount)) {\

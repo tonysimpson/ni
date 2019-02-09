@@ -37,11 +37,6 @@ typedef int64_t qword_t;
 #define TRACE_EXECUTION_LOG 0
 #endif
 
-/* Call stack alignment checks */
-#ifndef CHECK_CALL_STACK_ALIGNED
-#define CHECK_CALL_STACK_ALIGNED 0
-#endif
-
 /* define to 1 for extra assert()'s */
 #ifndef ALL_CHECKS
 #define ALL_CHECKS 0
