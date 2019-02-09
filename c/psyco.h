@@ -37,11 +37,6 @@ typedef int64_t qword_t;
 #define CODEGEN_LOG 0
 #endif
 
-/* Enable the NI_BRK_ON environment variable */
-#ifndef BREAK_ON_ENABLED
-#define BREAK_ON_ENABLED 0
-#endif
-
 /* Enable the trace_execution.log */
 #ifndef TRACE_EXECUTION_LOG
 #define TRACE_EXECUTION_LOG 0

@@ -1304,23 +1304,5 @@ EXTERNFN code_t* psyco_compute_cc(PsycoObject* po, code_t* code, reg_t reserved)
 #define CALL_TRACE_EXECUTION() do { } while (0)
 #endif /* TRACE_EXECUTION_LOG */
 
-#if BREAK_ON_ENABLED
-#define BREAK_ON() do {\
-    if(getenv("NI_BRK_ON") != NULL && po->pr.co != NULL) {\
-        char buf[2048];\
-        strncpy(buf, getenv("NI_BRK_ON"), 2048);\
-        char *break_on_file = strtok(buf, ":");\
-        int break_on_line = atoi(strtok(NULL, ":"));\
-        char *current_file = PyString_AS_STRING(po->pr.co->co_filename);\
-        int current_line = PyCode_Addr2Line(po->pr.co, po->pr.next_instr);\
-        if(strcmp(break_on_file, current_file) == 0 && break_on_line == current_line) {\
-            BRKP();\
-        }\
-    }\
-} while (0)
-#else
-#define BREAK_ON() do { } while (0)
-#endif
-
 
 #endif /* _IENCODING_H */
