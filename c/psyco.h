@@ -9,6 +9,13 @@
 #include <Python.h>
 #include <structmember.h>   /* for offsetof() */
 #include <stdint.h>
+#if PY_MAJOR_VERSION >= 3
+#define PY3 1
+#else
+#define PY3 0
+#include "bytesobject.h"
+#endif
+
 
 typedef int8_t byte_t;
 typedef int16_t word_t;
