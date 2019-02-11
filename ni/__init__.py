@@ -2,9 +2,9 @@ from . import psyco
 
 def engage():
     """Turn on optimisation"""
-    psyco.full()
+    pass
 
 def disengage():
     """Turn off optimisation"""
-    psyco.stop()
+    pass
 
