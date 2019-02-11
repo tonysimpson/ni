@@ -53,6 +53,7 @@
 # include "codemanager.c"
 # include "codegen.c"
 # include "mergepoints.c"
+#include "eval_hook.c"
 # include "linuxmemchk.c"
 # include "Python/pycompiler.c"
 # include "Python/frames.c"
@@ -111,6 +112,7 @@
   EXTERNFN void psyco_initarray(void);	/* Modules/parray.c */
   EXTERNFN void psyco_initmath(void);	/* Modules/pmath.c */
   EXTERNFN void psyco_initpsyco(void);	/* Modules/ppsyco.c */
+  EXTERNFN int ni_eval_hook_init(void); /* eval_hook.c */
 #endif /* !ALL_STATIC */
 
 PSY_INLINE void initialize_all_files(void) {
@@ -145,6 +147,7 @@ PSY_INLINE void initialize_all_files(void) {
   psyco_initarray();	/* Modules/parray.c */
   psyco_initmath();	/* Modules/pmath.c */
   psyco_initpsyco();	/* Modules/ppsyco.c */
+  ni_eval_hook_init(); /* eval_hook.c */
 }
 
 #endif /* PSYCO_INITIALIZATION */
