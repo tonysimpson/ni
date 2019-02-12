@@ -1,4 +1,6 @@
 #include "pstringobject.h"
+#if PY3
+#else
 #include "pstructmember.h"
 #include "../pycodegen.h"
 
@@ -1218,3 +1220,5 @@ void psy_stringobject_init(void)
 
 	pempty_string = PyString_FromString("");
 }
+#endif /* !PY3 */
+
