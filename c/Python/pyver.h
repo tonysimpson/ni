@@ -8,6 +8,13 @@
 
 #include <Python.h>
 
+#if PY_MAJOR_VERSION >= 3
+#define PY3 1
+#else
+#define PY3 0
+#include "bytesobject.h"
+#endif
+
 #define PSYCO_VERSION_HEX          0x010600f0   /* 1.6 */
 
 

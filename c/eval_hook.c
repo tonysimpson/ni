@@ -1,5 +1,5 @@
 #include <Python.h>
-#include "psyco.h"
+#include "Python/pyver.h"
 #include "stats.h"
 #include "codemanager.h"
 #include "stats.h"

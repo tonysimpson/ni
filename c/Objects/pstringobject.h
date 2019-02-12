@@ -4,7 +4,9 @@
 
 #ifndef _PSY_STRINGOBJECT_H
 #define _PSY_STRINGOBJECT_H
-
+#include "../Python/pyver.h"
+#if PY3
+#else
 
 #include "pobject.h"
 #include "pabstract.h"
@@ -65,5 +67,5 @@ PSY_INLINE vinfo_t* PsycoString_GET_SIZE(PsycoObject* po, vinfo_t* v)
 EXTERNFN vinfo_t* PsycoCharacter_New(vinfo_t* chrval);
 EXTERNFN bool PsycoCharacter_Ord(PsycoObject* po, vinfo_t* v, vinfo_t** vord);
 
-
+#endif /* !PY3 */
 #endif /* _PSY_STRINGOBJECT_H */
