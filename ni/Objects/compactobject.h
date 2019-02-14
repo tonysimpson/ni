@@ -9,7 +9,7 @@
 #include "../psyco.h"
 #include "../Python/pyver.h"
 #include "../vcompiler.h"
-
+#include "../compat2to3.h"
 
 typedef struct compact_impl_s compact_impl_t;  /* private structure */
 
@@ -50,8 +50,8 @@ struct compact_impl_s {
 #define K_ROUNDUP(sz)    (((sz) + 7) & ~7)
 
 #define K_INTERN(attr)   do {							\
-	PyString_InternInPlace(&attr);						\
-	if (attr->ob_type != &PyString_Type || !PyString_CHECK_INTERNED(attr))	\
+	NiCompatStr_InternInPlace(&attr);						\
+	if (attr->ob_type != &NiCompatStr_Type || !NiCompatStr_CHECK_INTERNED(attr))	\
 		Py_FatalError("Psyco failed to intern an attribute name");	\
 } while (0)
 

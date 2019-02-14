@@ -4,7 +4,7 @@
 #include "../Objects/pfloatobject.h"
 #include "../Objects/pstringobject.h"
 #include "../Objects/ptupleobject.h"
-
+#include "../compat2to3.h"
 
 /***************************************************************/
 
@@ -426,10 +426,10 @@ static vinfo_t* parray_new(PsycoObject* po, PyTypeObject* type,
 		if (!is_compiletime(firstarg->source)) goto cannot_decode;
 		
 		a = (PyObject*) CompileTime_Get(firstarg->source)->value;
-		if (!PyString_Check(a) || PyString_GET_SIZE(a) != 1)
+		if (!NiCompatStr_Check(a) || NiCompatStr_GET_SIZE(a) != 1)
 			goto cannot_decode;
 		
-		code = *PyString_AS_STRING(a);
+		code = *NiCompatStr_AS_STRING(a);
 		for (descr=metadescriptors; descr->typecode!=0; descr++) {
 			if (descr->typecode == code) {
 				if (descr->base != NULL) {

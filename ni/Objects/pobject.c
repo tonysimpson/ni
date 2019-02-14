@@ -3,6 +3,7 @@
 #include "pboolobject.h"
 #include "pstringobject.h"
 #include "../pycodegen.h"
+#include "../compat2to3.h"
 
 
 #if USE_RUNTIME_SWITCHES
@@ -88,7 +89,7 @@ vinfo_t* PsycoObject_Repr(PsycoObject* po, vinfo_t* vi)
 		return NULL;
 	
 	/* the result is a string */
-	Psyco_AssertType(po, vstr, &PyString_Type);
+	Psyco_AssertType(po, vstr, &NiCompatStr_Type);
 	return vstr;
 }
 
@@ -100,7 +101,7 @@ vinfo_t* PsycoObject_GetAttr(PsycoObject* po, vinfo_t* o, vinfo_t* attr_name)
 	if (tp == NULL)
 		return NULL;
 
-	if (!PyType_TypeCheck(tp, &PyString_Type)) {
+	if (!PyType_TypeCheck(tp, &NiCompatStr_Type)) {
 
 #ifdef Py_USING_UNICODE
 		if (PyType_TypeCheck(tp, &PyUnicode_Type))
@@ -121,8 +122,7 @@ vinfo_t* PsycoObject_GetAttr(PsycoObject* po, vinfo_t* o, vinfo_t* attr_name)
 	if (tp->tp_getattr != NULL)
 		return Psyco_META2(po, tp->tp_getattr,
 				   CfCommonNewRefPyObject,
-				   "vv", o,
-                                   PsycoString_AS_STRING(po, attr_name));
+				   "vv", o, PsycoString_AS_STRING(po, attr_name));
 
    generic:
 	/* when the above fails */
@@ -130,6 +130,7 @@ vinfo_t* PsycoObject_GetAttr(PsycoObject* po, vinfo_t* o, vinfo_t* attr_name)
 				  CfCommonNewRefPyObject,
 				  "vv", o, attr_name);
 }
+
 
 DEFINEFN
 bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
@@ -148,34 +149,28 @@ bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
 		return false;
 
 	name = (PyObject*) CompileTime_Get(vattrname->source)->value;
-	if (!PyString_Check(name)){
-#ifdef Py_USING_UNICODE
+	if (!NiCompatStr_Check(name)){
+#ifdef IS_PY3K
 		/* The Unicode to string conversion is done here because the
 		   existing tp_setattro slots expect a string object as name
 		   and we wouldn't want to break those. */
 		if (PyUnicode_Check(name)) {
-# if PSYCO_CAN_CALL_UNICODE
-			name = PyUnicode_AsEncodedString(name, NULL, NULL);
-			if (name == NULL) {
-				psyco_virtualize_exception(po);
-				return NULL;
-			}
-# else
 			goto generic;
-# endif
 		}
 		else
-#endif
 		{
+#endif
 			PycException_SetString(po, PyExc_TypeError,
 					"attribute name must be string");
 			return false;
-		}
+#ifdef IS_PY3K
+        }
+#endif
 	}
 	else
 		Py_INCREF(name);
 
-	PyString_InternInPlace(&name);
+	NiCompatStr_InternInPlace(&name);
 	if (tp->tp_setattro != NULL) {
 		vresult = Psyco_META3(po, tp->tp_setattro,
 				      CfCommonIntZeroOk,
@@ -187,7 +182,7 @@ bool PsycoObject_SetAttr(PsycoObject* po, vinfo_t* o,
 		vresult = Psyco_META3(po, tp->tp_setattr,
 				      CfCommonIntZeroOk,
 				      v ? "vlv" : "vll", o,
-				      (long)PyString_AS_STRING(name), v);
+				      (long)NiCompatStr_AS_STRING(name), v);
 		Py_DECREF(name);
 		return vresult != NULL;
 	}
@@ -297,23 +292,17 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 					  CfCommonNewRefPyObject,
 					  "vv", obj, vname);
         }
+
+
 	name = (PyObject*) CompileTime_Get(vname->source)->value;
 
-	if (!PyString_Check(name)){
-#ifdef Py_USING_UNICODE
+	if (!NiCompatStr_Check(name)){
+#ifdef IS_PY3K
 		/* The Unicode to string conversion is done here because the
 		   existing tp_setattro slots expect a string object as name
 		   and we wouldn't want to break those. */
 		if (PyUnicode_Check(name)) {
-# if PSYCO_CAN_CALL_UNICODE
-			name = PyUnicode_AsEncodedString(name, NULL, NULL);
-			if (name == NULL) {
-				psyco_virtualize_exception(po);
-				return NULL;
-			}
-# else
 			goto fallback;
-# endif
 		}
 		else
 #endif
@@ -437,7 +426,7 @@ vinfo_t* PsycoObject_GenericGetAttr(PsycoObject* po, vinfo_t* obj,
 
 	PycException_SetFormat(po, PyExc_AttributeError,
 			       "'%.50s' object has no attribute '%.400s'",
-			       tp->tp_name, PyString_AS_STRING(name));
+			       tp->tp_name, NiCompatStr_AS_STRING(name));
   done:
 	Py_XDECREF(descr);
 	Py_DECREF(name);
@@ -591,7 +580,7 @@ static vinfo_t* collect_undeletable_vars(vinfo_t* vi, vinfo_t* link)
 		if (vi->tmp != NULL || (vi->source & RunTime_NoRef) != 0)
 			break;  /* already seen or not holding a ref */
 		tp = Psyco_KnownType(vi);
-		if (tp && (tp == &PyInt_Type || tp == &PyString_Type ||
+		if (tp && (tp == &PyInt_Type || tp == &NiCompatStr_Type ||
 #if BOOLEAN_TYPE
 			   tp == &PyBool_Type ||
 #endif
@@ -676,14 +665,13 @@ void psy_object_init(void)
 	values[1] = (long)(&PyList_Type);
         psyco_build_run_time_switch(&psyfs_tuple_list, SkFlagFixed, values, 2);
 
-	values[0] = (long)(&PyString_Type);
-#ifdef Py_USING_UNICODE
+	values[0] = (long)(&NiCompatStr_Type);
+    cnt = 1;
+#ifndef IS_PY3K
 	values[1] = (long)(&PyUnicode_Type);
-        cnt = 2;
-#else
-        cnt = 1;
+    cnt += 1;
 #endif
-        psyco_build_run_time_switch(&psyfs_string_unicode, SkFlagFixed,
+    psyco_build_run_time_switch(&psyfs_string_unicode, SkFlagFixed,
                                     values, cnt);
 
 	values[0] = (long)(Py_None->ob_type);

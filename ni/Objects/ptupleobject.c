@@ -250,7 +250,7 @@ void psy_tupleobject_init(void)
 	Psyco_DefineMeta(m->sq_item, ptuple_item);
         Psyco_DefineMeta(m->sq_concat, PsycoTuple_Concat);
 
-	mm = PyString_Type.tp_as_mapping;
+	mm = PyTuple_Type.tp_as_mapping;
 	if (mm) {  /* Python >= 2.3 */
 		Psyco_DefineMeta(mm->mp_subscript, psyco_generic_subscript);
 	}

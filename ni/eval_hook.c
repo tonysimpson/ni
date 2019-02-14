@@ -1,16 +1,16 @@
 #include <Python.h>
-#include "Python/pyver.h"
+#include "compat2to3.h"
 #include "codemanager.h"
 #include "Python/frames.h"
 #include "mergepoints.h"
 
-#if PY3
+#ifdef IS_PY3K
 #error "Not Yet"
 #else
 typedef PyObject* (*PyEval_EvalFrameExFunction)(PyFrameObject *, int);
 
 EXTERNVAR PyEval_EvalFrameExFunction original_eval_frame;
-#endif /* !PY3 */
+#endif /* !IS_PY3K */
 
 static bool ni_register_start_frame_runtime(PyFrameObject* f, stack_frame_info_t*** finfo) {
     PyObject* tdict;
@@ -94,7 +94,7 @@ static PyObject* NiEval_EvalFrame(PyFrameObject *frame, int throwflag) {
     return original_eval_frame(frame, throwflag);
 }
 
-#if PY3
+#ifdef IS_PY3K
 #error "Not yet"
 #else
 /* 
@@ -158,4 +158,4 @@ int ni_eval_hook_init(void) {
     *code++ = 0xE0;
     return 0;
 }
-#endif /* !PY3 */
+#endif /* !IS_PY3K */

@@ -478,111 +478,6 @@ PsycoFunctionObject* psyco_PsycoFunction_NewEx(PyCodeObject* code,
 	return result;
 }
 
-#if 0  /* unneeded */
-DEFINEFN
-PyObject* psyco_PsycoFunction_New(PyFunctionObject* func, int rec)
-{
-	/* return 'func' itself if the PsycoFunctionObject cannot be made */
-	if (func->func_closure != NULL) {
-		Py_INCREF(func);
-		return (PyObject*) func;
-	}
-	return (PyObject*)
-		psyco_PsycoFunction_NewEx((PyCodeObject*) func->func_code,
-					  func->func_globals,
-					  func->func_defaults,
-					  rec);
-}
-#endif  /* 0 */
-
-DEFINEFN
-PyObject* psyco_proxycode(PyFunctionObject* func, int rec)
-{
-  PsycoFunctionObject *psyco_fun;
-  PyCodeObject *code, *newcode;
-  PyObject *consts, *proxy_cobj;
-  static PyObject *varnames = NULL;
-  static PyObject *free_cell_vars = NULL;
-  static PyObject *empty_string = NULL;
-  unsigned char proxy_bytecode[] = {
-    LOAD_CONST, 1, 0,
-    LOAD_FAST, 0, 0,
-    LOAD_FAST, 1, 0,
-    CALL_FUNCTION_VAR_KW, 0, 0,
-    RETURN_VALUE
-  };
-  code = (PyCodeObject *)func->func_code;
-  if (is_proxycode(code))
-    {
-      /* already a proxy code object */
-      Py_INCREF(code);
-      return (PyObject*) code;
-    }
-  if (PyCode_GetNumFree(code) > 0)
-    {
-      /* it would be dangerous to continue in this case: the calling
-         convention changes when a function has free variables */
-      PyErr_SetString(PyExc_PsycoError, "function has free variables");
-      return NULL;
-    }
-
-  newcode = NULL;
-  consts = NULL;
-  proxy_cobj = NULL;
-  psyco_fun = psyco_PsycoFunction_NewEx(code,
-					func->func_globals,
-					func->func_defaults,
-					rec);
-  if (psyco_fun == NULL)
-    goto error;
-
-  consts = PyTuple_New(2);
-  if (consts == NULL)
-    goto error;
-  Py_INCREF(Py_None);
-  PyTuple_SET_ITEM(consts, 0, Py_None);  /* if a __doc__ is expected there */
-  PyTuple_SET_ITEM(consts, 1, (PyObject *)psyco_fun);  /* consumes reference */
-  psyco_fun = NULL;
-
-  if (varnames == NULL)
-    {
-      if (free_cell_vars == NULL)
-        {
-          free_cell_vars = PyTuple_New(0);
-          if (free_cell_vars == NULL)
-            goto error;
-        }
-      if (empty_string == NULL)
-        {
-          empty_string = PyString_FromString("");
-          if (empty_string == NULL)
-            goto error;
-        }
-      varnames = Py_BuildValue("ss", "args", "kwargs");
-      if (varnames == NULL)
-        goto error;
-    }
-
-  proxy_cobj = PyString_FromStringAndSize((char*)proxy_bytecode,
-					  sizeof(proxy_bytecode));
-  if (proxy_cobj == NULL)
-    goto error;
-
-  newcode = PyCode_New(0, 2, 3,
-                       CO_OPTIMIZED|CO_NEWLOCALS|CO_VARARGS|CO_VARKEYWORDS,
-                       proxy_cobj, consts,
-		       varnames, varnames, free_cell_vars,
-		       free_cell_vars, code->co_filename,
-		       code->co_name, code->co_firstlineno,
-		       empty_string);
-  /* fall through */
- error:
-  Py_XDECREF(psyco_fun);
-  Py_XDECREF(proxy_cobj);
-  Py_XDECREF(consts);
-  return (PyObject*) newcode;
-}
-
 static void psycofunction_dealloc(PsycoFunctionObject* self)
 {
 	PyObject_GC_UnTrack(self);
@@ -592,20 +487,6 @@ static void psycofunction_dealloc(PsycoFunctionObject* self)
 	Py_DECREF(self->psy_code);
 	PyObject_GC_Del(self);
 }
-
-#if 0
-/* Disabled -- not supposed to be seen at user level */
-static PyObject* psycofunction_repr(PsycoFunctionObject* self)
-{
-	char buf[100];
-	if (self->psy_func->func_name == Py_None)
-		sprintf(buf, "<anonymous psyco function at %p>", self);
-	else
-		sprintf(buf, "<psyco function %s at %p>",
-			PyString_AsString(self->psy_func->func_name), self);
-	return PyString_FromString(buf);
-}
-#endif
 
 static PyObject* psycofunction_call(PsycoFunctionObject* self,
 				    PyObject* arg, PyObject* kw)

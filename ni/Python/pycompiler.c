@@ -15,6 +15,7 @@
 #include "../Objects/pfuncobject.h"
 
 #include "../opcodes.h"
+#include "../compat2to3.h"
 
 #include <eval.h>
 #include "pycinternal.h"
@@ -262,7 +263,7 @@ DEFINEVAR source_virtual_t EInline;    /* request to inline a function */
 DEFINEFN
 void PycException_SetString(PsycoObject* po, PyObject* e, const char* text)
 {
-	PyObject* s = PyString_FromString(text);
+	PyObject* s = NiCompatStr_FromString(text);
 	if (s == NULL)
 		OUT_OF_MEMORY();
 	PycException_SetObject(po, e, s);
@@ -301,7 +302,7 @@ void PycException_SetFormat(PsycoObject* po, PyObject* e, const char* fmt, ...)
 #else
 	va_start(vargs);
 #endif
-	s = PyString_FromFormatV(fmt, vargs);
+	s = NiCompatStr_FromFormatV(fmt, vargs);
 	va_end(vargs);
 
 	if (s == NULL)
@@ -668,7 +669,7 @@ static PyObject* s_builtin_object;   /* intern string '__builtins__' */
 INITIALIZATIONFN
 void psyco_pycompiler_init(void)
 {
-	s_builtin_object = PyString_InternFromString("__builtins__");
+	s_builtin_object = NiCompatStr_InternFromString("__builtins__");
         
         psyco_skZero          .refcount1_flags = SkFlagFixed;
         psyco_skZero          .value           = (long) 0;
@@ -765,9 +766,7 @@ static code_t* do_changed_global(changed_global_t* cg)
 
 	/* first check that the value really changed; it could merely
 	   have moved in the dictionary table (reallocations etc.) */
-	ep = (globals->ma_lookup)(globals, key,
-				  ((PyStringObject*) key)->ob_shash);
-	
+	ep = (globals->ma_lookup)(globals, key, NiCompatStr_HASH_FIELD(key));
 	if (ep->me_value == cg->previousvalue) {
 		/* no real change; update the original macro code
 		   and that's it */
@@ -899,12 +898,10 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 		return NULL;  /* we know the variable is changing */
 	
 	/* the compiler only puts interned strings in op_names */
-	extra_assert(PyString_CheckExact(key));
-	/*extra_assert(((PyStringObject*) key)->ob_sinterned != NULL);*/
-	extra_assert(((PyStringObject*) key)->ob_shash != -1);
+	extra_assert(NiCompatStr_CheckExact(key));
+	extra_assert(NiCompatStr_HASH_FIELD(key) != -1);
 
-	ep = (globals->ma_lookup)(globals, key,
-				  ((PyStringObject*) key)->ob_shash);
+	ep = (globals->ma_lookup)(globals, key, NiCompatStr_HASH_FIELD(key));
 	if (ep->me_value != NULL) {
 		/* found in the globals() */
 		changed_global_t* cg;
@@ -924,7 +921,7 @@ static PyObject* load_global(PsycoObject* po, PyObject* key, int next_instr)
 			cg->globals = globals;
 		}
 	}
-	else if (strcmp(PyString_AS_STRING(key), "__in_psyco__") == 0) {
+	else if (strcmp(NiCompatStr_AS_STRING(key), "__in_psyco__") == 0) {
 		/* special-case __in_psyco__ to always return 1, although
 		   its value in the builtins is always 0. This variable
 		   can be used by a function to know that it is compiled
@@ -1153,8 +1150,8 @@ cimpl_pydict_setitem_new(PyObject *mp, PyObject *key, PyObject *item)
 {
 	if (PyDict_GetItem(mp, key) != NULL) {
 		char *argname;
-		if (PyString_Check(key))
-			argname = PyString_AS_STRING(key);
+		if (NiCompatStr_Check(key))
+			argname = NiCompatStr_AS_STRING(key);
 		else
 			argname = "?";
 		PyErr_Format(PyExc_TypeError,
@@ -1313,7 +1310,7 @@ static PyObject* cimpl_load_global(PyObject* globals, PyObject* w)
 	if (x == NULL) {
 		x = PyDict_GetItem(psy_get_builtins(globals), w);
 		if (x == NULL) {
-			char* obj_str = PyString_AsString(w);
+			char* obj_str = NiCompatStr_AsString(w);
 			if (obj_str)
 				PyErr_Format(PyExc_NameError,
 					     GLOBAL_NAME_ERROR_MSG,
@@ -1363,10 +1360,10 @@ static int cimpl_print_item_to(PyObject* v, PyObject* stream)
 			return -1;
 	if (PyFile_WriteObject(v, stream, Py_PRINT_RAW))
 		return -1;
-	if (PyString_Check(v)) {
+	if (NiCompatStr_Check(v)) {
 		/* move into writeobject() ? */
-		char *s = PyString_AsString(v);
-		int len = PyString_Size(v);
+		char *s = NiCompatStr_AsString(v);
+		int len = NiCompatStr_Size(v);
 		if (len > 0 &&
 		    isspace(Py_CHARMASK(s[len-1])) &&
 		    s[len-1] != ' ')
@@ -1518,7 +1515,7 @@ static void cimpl_do_raise(PyObject *type, PyObject *value, PyObject *tb)
 		Py_DECREF(tmp);
 	}
 
-	if (PyString_CheckExact(type))
+	if (NiCompatStr_CheckExact(type))
 		/* warning skipped */;
 
 	else if (PyExceptionClass_Check(type))
@@ -1668,8 +1665,8 @@ static int cimpl_import_all_from(PyObject *locals, PyObject *v)
 			break;
 		}
 		if (skip_leading_underscores &&
-		    PyString_Check(name) &&
-		    PyString_AS_STRING(name)[0] == '_')
+		    NiCompatStr_Check(name) &&
+		    NiCompatStr_AS_STRING(name)[0] == '_')
 		{
 			Py_DECREF(name);
 			continue;
@@ -1813,7 +1810,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
     {
       /* 'co' is the code object we are interpreting/compiling */
       PyCodeObject* co = po->pr.co;
-      unsigned char* bytecode = (unsigned char*) PyString_AS_STRING(co->co_code);
+      unsigned char* bytecode = (unsigned char*) PyBytes_AS_STRING(co->co_code);
       vinfo_t *u, *v,	/* temporary objects    */
               *w, *x;	/* popped off the stack */
       condition_code_t cc;
@@ -2161,7 +2158,6 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 		POP_DECREF();
 		POP_DECREF();
 		goto fine;
-
 	case PRINT_EXPR:
 		if (!psyco_generic_call(po, cimpl_print_expr,
 					CfCommonIntZeroOk,
@@ -2462,7 +2458,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 					CfReturnTypeInt, "vl", LOC_GLOBALS, w))) {
 			PycException_SetFormat(po, PyExc_NameError,
 					       GLOBAL_NAME_ERROR_MSG,
-					       PyString_AsString(w));
+					       NiCompatStr_AsString(w));
 			break;
 		}
 		goto fine;
@@ -2516,7 +2512,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			namev = PyTuple_GetItem(co->co_varnames, oparg);
 			PycException_SetFormat(po, PyExc_UnboundLocalError,
 					       UNBOUNDLOCAL_ERROR_MSG,
-					       PyString_AsString(namev));
+					       NiCompatStr_AsString(namev));
 			break;
 		}
 		vinfo_incref(x);
@@ -2538,7 +2534,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			namev = PyTuple_GetItem(co->co_varnames, oparg);
 			PycException_SetFormat(po, PyExc_UnboundLocalError,
 					       UNBOUNDLOCAL_ERROR_MSG,
-					       PyString_AsString(namev));
+					       NiCompatStr_AsString(namev));
 			break;
 		}
 
@@ -2715,7 +2711,7 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
 			if (runtime_NON_NULL_t(po, v) == true) {
 				PycException_SetFormat(po, PyExc_ImportError,
 					"cannot import name %.230s",
-					PyString_AsString(name));
+					NiCompatStr_AsString(name));
 			}
 			break;
 		}

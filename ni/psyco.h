@@ -1,6 +1,6 @@
- /***************************************************************/
-/***                 Global Psyco definitions                  ***/
- /***************************************************************/
+/***************************************************************/
+/***                 Global Psyco definitions                ***/
+/***************************************************************/
 
 #ifndef _PSYCO_H
 #define _PSYCO_H
@@ -9,6 +9,7 @@
 #include <Python.h>
 #include <structmember.h>   /* for offsetof() */
 #include <stdint.h>
+#include "compat2to3.h"
 
 typedef int8_t byte_t;
 typedef int16_t word_t;
@@ -178,7 +179,7 @@ typedef struct {
 
 
 /* to display code object names */
-#define PyCodeObject_NAME(co)   (co->co_name ? PyString_AS_STRING(co->co_name)  \
+#define PyCodeObject_NAME(co)   (co->co_name ? NiCompatStr_AS_STRING(co->co_name)  \
                                  : "<anonymous code object>")
 
 

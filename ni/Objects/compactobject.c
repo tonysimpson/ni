@@ -3,7 +3,7 @@
 #include "../dispatcher.h"
 #include "../Python/pycompiler.h"
 #include "pintobject.h"
-
+#include "../compat2to3.h"
 
 #define DEBUG_K_IMPL   0
 
@@ -33,7 +33,7 @@ static void debug_k_impl(compact_impl_t* p)
 	while (p != lim) {
 		for (q=p; q->parent != lim; q = q->parent)
 			;
-		fprintf(stderr, "  %s", PyString_AsString(q->attrname));
+		fprintf(stderr, "  %s", NiCompatStr_AsString(q->attrname));
 		smin = p->datasize;
 		smax = 0;
 		k_attribute_range(q->vattr, &smin, &smax);
@@ -137,7 +137,7 @@ compact_impl_t* k_extend_impl(compact_impl_t* oldimpl, PyObject* attr,
 {
 	int datasize;
 	compact_impl_t* p;
-	extra_assert(PyString_CheckExact(attr) && PyString_CHECK_INTERNED(attr));
+	extra_assert(NiCompatStr_CheckExact(attr) && NiCompatStr_CHECK_INTERNED(attr));
 
 	/* enumerate the run-time entries */
 	datasize = k_fix_run_time_vars(v, oldimpl->datasize);
@@ -355,7 +355,7 @@ static PyObject* compact_getattro(PyCompactObject* ko, PyObject* attr)
 	o = NULL;
 	PyErr_Format(PyExc_AttributeError,
 		     "'%.50s' object has no attribute '%.400s'",
-		     tp->tp_name, PyString_AS_STRING(attr));
+		     tp->tp_name, NiCompatStr_AS_STRING(attr));
  done:
 	Py_DECREF(attr);
 	return o;
@@ -604,15 +604,15 @@ int compact_setattro(PyCompactObject* ko, PyObject* attr, PyObject* value)
 
 static PyObject* k_interned_key(PyObject* key)
 {
-	if (key->ob_type != &PyString_Type) {
-		if (!PyString_Check(key)) {
+	if (key->ob_type != &NiCompatStr_Type) {
+		if (!NiCompatStr_Check(key)) {
 			PyErr_SetString(PyExc_TypeError,
 					"keys in compact objects "
 					"must be strings");
 			return NULL;
 		}
-		key = PyString_FromStringAndSize(PyString_AS_STRING(key),
-						 PyString_GET_SIZE(key));
+		key = NiCompatStr_FromStringAndSize(NiCompatStr_AS_STRING(key),
+						 NiCompatStr_GET_SIZE(key));
 		if (key == NULL)
 			return NULL;
 	}

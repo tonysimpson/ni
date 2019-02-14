@@ -5,6 +5,7 @@
 #include "Python/pycompiler.h"
 #include "Python/frames.h"
 #include "mergepoints.h"
+#include "compat2to3.h"
 
 #define PSYCO_INITIALIZATION
 #include "initialize.h"
@@ -130,7 +131,7 @@ static PyMethodDef NiMethods[] = {
 
 /* Initialization */
 PyMODINIT_FUNC initni(void) {
-  thread_dict_key = PyString_InternFromString("PsycoT");
+  thread_dict_key = NiCompatStr_InternFromString("PsycoT");
   if (thread_dict_key == NULL)
   {
     return;
