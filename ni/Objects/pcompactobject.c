@@ -3,6 +3,7 @@
 #include "../Python/pycompiler.h"
 #include "ptupleobject.h"
 #include "ptypeobject.h"
+#include "../compat2to3.h"
 
 #define COMPACT_impl  FMUT(DEF_FIELD(PyCompactObject, compact_impl_t*, \
 							k_impl, OB_type))
@@ -262,7 +263,7 @@ static vinfo_t* pcompact_getattro(PsycoObject* po, vinfo_t* vk, vinfo_t* vattr)
 
 	PycException_SetFormat(po, PyExc_AttributeError,
 			       "'%.50s' object has no attribute '%.400s'",
-			       tp->tp_name, PyString_AS_STRING(name));
+			       tp->tp_name, NiCompatStr_AS_STRING(name));
  done:
 	Py_XDECREF(descr);
 	Py_DECREF(name);

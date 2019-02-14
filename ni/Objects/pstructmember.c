@@ -5,7 +5,7 @@
 #include "plongobject.h"
 #include "../pycodegen.h"
 #include "../Python/pyver.h"
-
+#include "../compat2to3.h"
 
 DEFINEFN
 vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
@@ -77,11 +77,11 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 
 		if (runtime_condition_t(po, cc)) {
 			/* the char* is not NULL */
-			v = psyco_generic_call(po, PyString_FromString,
+			v = psyco_generic_call(po, NiCompatStr_FromString,
 					       CfCommonNewRefPyObject,
 					       "v", w1);
 			if (v != NULL)
-				Psyco_AssertType(po, v, &PyString_Type);
+				Psyco_AssertType(po, v, &NiCompatStr_Type);
 		}
 		else {
 			v = psyco_vi_None();
@@ -92,11 +92,11 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 		w1 = integer_add_i(po, addr, l->offset, false);
 		if (w1 == NULL)
 			return NULL;
-		v = psyco_generic_call(po, PyString_FromString,
+		v = psyco_generic_call(po, PyBytes_FromString,
 				       CfCommonNewRefPyObject,
 				       "v", w1);
 		if (v != NULL)
-			Psyco_AssertType(po, v, &PyString_Type);
+			Psyco_AssertType(po, v, &PyBytes_Type);
 		vinfo_decref(w1, po);
 		return v;
 	case T_CHAR:  /* read a byte, turn it into a char */

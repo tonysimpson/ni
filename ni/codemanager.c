@@ -1,6 +1,7 @@
 #include "codemanager.h"
 #include <ipyencoding.h>
 #include "platform.h"
+#include "compat2to3.h"
 
 /*** Allocators for Large Executable Blocks of Memory ***/
 
@@ -230,10 +231,7 @@ void psyco_trash_object(PyObject* obj)
 
 static PyObject* codebuf_repr(CodeBufferObject* self)
 {
-  char buf[100];
-  sprintf(buf, "<code buffer ptr %p at %p>",
-	  self->codestart, self);
-  return PyString_FromString(buf);
+  return NiCompatStr_FromFormat("<code buffer ptr %p at %p>", self->codestart, self);
 }
 
 static void codebuf_dealloc(CodeBufferObject* self)

@@ -1,5 +1,6 @@
 #include "pstringobject.h"
-#if PY3
+#include "../compat2to3.h"
+#ifdef IS_PY3K
 #else
 #include "pstructmember.h"
 #include "../pycodegen.h"
@@ -1220,5 +1221,5 @@ void psy_stringobject_init(void)
 
 	pempty_string = PyString_FromString("");
 }
-#endif /* !PY3 */
+#endif /* !IS_PY3K */
 

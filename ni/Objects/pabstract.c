@@ -7,6 +7,7 @@
 #include "pmethodobject.h"
 #include "pclassobject.h"
 #include "pfuncobject.h"
+#include "../compat2to3.h"
 
 
 /*** This file is translated from the original 'abstract.c', see comments
@@ -762,7 +763,7 @@ vinfo_t* PsycoNumber_Remainder(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 	if (vtp->tp_as_number == NULL) {
 		/* <= 2.2 only: special-case strings */
 		if (PsycoString_Check(vtp))
-			return psyco_generic_call(po, PyString_Format,
+			return psyco_generic_call(po, NiCompatStr_Format,
 						  CfCommonNewRefPyObject,
 						  "vv", v, w);
 #ifdef Py_USING_UNICODE
@@ -941,7 +942,7 @@ vinfo_t* PsycoNumber_InPlaceRemainder(PsycoObject* po, vinfo_t* v ,vinfo_t* w)
 	if (vtp->tp_as_number == NULL) {
 		/* <= 2.2 only: special-case strings */
 		if (PsycoString_Check(vtp))
-			return psyco_generic_call(po, PyString_Format,
+			return psyco_generic_call(po, NiCompatStr_Format,
 						  CfCommonNewRefPyObject,
 						  "vv", v, w);
 #ifdef Py_USING_UNICODE

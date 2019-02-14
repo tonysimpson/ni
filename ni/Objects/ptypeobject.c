@@ -1,6 +1,7 @@
 #include "ptypeobject.h"
 #include "ptupleobject.h"
 #include "pfuncobject.h"
+#include "../compat2to3.h"
 
 
 static ternaryfunc	type_call;
@@ -245,7 +246,7 @@ static vinfo_t* soft_method_call(PsycoObject* po,
 	int i, argcount;
 
 	if (*attrobj == NULL) {
-		*attrobj = PyString_InternFromString(attrstr);
+		*attrobj = NiCompatStr_InternFromString(attrstr);
 		if (*attrobj == NULL) {
 			psyco_virtualize_exception(po);
 			return NULL;

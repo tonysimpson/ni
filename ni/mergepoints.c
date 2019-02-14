@@ -1,6 +1,7 @@
 #include "mergepoints.h"
 #include "vcompiler.h"
 #include "Python/pycinternal.h"
+#include "compat2to3.h"
 
 /* set to 1 to compute the detailed control flow
    which allows for early variable deletion */
@@ -492,8 +493,8 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
   PyObject* s;
   mergepoint_t* mp;
   int mp_flags = MP_FLAGS_EXTRA;
-  int length = PyString_GET_SIZE(co->co_code);
-  unsigned char* source = (unsigned char*) PyString_AS_STRING(co->co_code);
+  int length = PyBytes_GET_SIZE(co->co_code);
+  unsigned char* source = (unsigned char*) PyBytes_AS_STRING(co->co_code);
   size_t ibytes = (length+1) * sizeof(struct instrnode_s);
   struct instrnode_s* instrnodes;
   int i, lasti, count, op1;
@@ -629,7 +630,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
             PyObject* namev = PyTuple_GET_ITEM(co->co_names, oparg);
             char** p;
             for (p = NoControlFlowIfBuiltin; *p; p++)
-              if (strcmp(PyString_AS_STRING(namev), *p) == 0)
+              if (strcmp(NiCompatStr_AS_STRING(namev), *p) == 0)
                 valid_controlflow = false;
           }
           break;
@@ -853,10 +854,10 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
   /* allocate the string buffer, one mergepoint_t per merge point plus
      the room for a final negative bitfield flags. */
   ibytes = count * sizeof(mergepoint_t) + sizeof(int);
-  s = PyString_FromStringAndSize(NULL, ibytes);
+  s = PyBytes_FromStringAndSize(NULL, ibytes);
   if (s == NULL)
     OUT_OF_MEMORY();
-  mp = (mergepoint_t*) PyString_AS_STRING(s);
+  mp = (mergepoint_t*) PyBytes_AS_STRING(s);
 
   for (i=0; i<length; i++)
     {
@@ -870,7 +871,7 @@ PyObject* psyco_build_merge_points(PyCodeObject* co, int module)
           mp++;
         }
     }
-  extra_assert(mp - (mergepoint_t*) PyString_AS_STRING(s) == count);
+  extra_assert(mp - (mergepoint_t*) PyBytes_AS_STRING(s) == count);
   mp->bytecode_position = mp_flags;
 #if FULL_CONTROL_FLOW
   if (valid_controlflow)
@@ -910,9 +911,9 @@ mergepoint_t* psyco_next_merge_point(PyObject* mergepoints,
 {
   mergepoint_t* array;
   int bufsize;
-  extra_assert(PyString_Check(mergepoints));
-  array = (mergepoint_t*) PyString_AS_STRING(mergepoints);
-  bufsize = PyString_GET_SIZE(mergepoints);
+  extra_assert(PyBytes_Check(mergepoints));
+  array = (mergepoint_t*) PyBytes_AS_STRING(mergepoints);
+  bufsize = PyBytes_GET_SIZE(mergepoints);
   extra_assert((bufsize % sizeof(mergepoint_t)) == sizeof(int));
   bufsize /= sizeof(mergepoint_t);
   extra_assert(bufsize > 0);
@@ -935,8 +936,8 @@ mergepoint_t* psyco_next_merge_point(PyObject* mergepoints,
 DEFINEFN
 mergepoint_t* psyco_first_merge_point(PyObject* mergepoints)
 {
-  extra_assert(PyString_Check(mergepoints));
-  return (mergepoint_t*) PyString_AS_STRING(mergepoints);
+  extra_assert(PyBytes_Check(mergepoints));
+  return (mergepoint_t*) PyBytes_AS_STRING(mergepoints);
 }
 
 DEFINEFN
@@ -954,7 +955,12 @@ mergepoint_t* psyco_exact_merge_point(PyObject* mergepoints, int position)
 DEFINEFN
 int psyco_mp_flags(PyObject* mergepoints)
 {
-  char* endptr = PyString_AS_STRING(mergepoints)+PyString_GET_SIZE(mergepoints);
+  /* Issue ## mergepoints should be a it's own object
+   *
+   * Over writing the null byte to store flags is a terrible idea 
+   * this would be much better as its own class.
+   */
+  char* endptr = PyBytes_AS_STRING(mergepoints)+PyBytes_GET_SIZE(mergepoints);
   return ((int*) endptr)[-1];
 }
 
