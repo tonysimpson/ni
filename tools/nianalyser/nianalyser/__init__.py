@@ -313,7 +313,7 @@ class SimpleExecutionTracer:
                 return func(db, trace)
             self.db.add_breakpoint(address, breakpoint, immediately=True)
         self.db.add_breakpoint('PyEval_EvalFrameEx', self._py_eval_eval_frame_ex)
-        self.db.add_breakpoint('PsycoCode_Run', self._psyco_code_run)
+        self.db.add_breakpoint('NiCode_Run', self._psyco_code_run)
 
     def disassemble(self, begin, end):
         return distorm3.Decode(begin, self.db.read_unmodified(begin, end - begin), distorm3.Decode64Bits)
