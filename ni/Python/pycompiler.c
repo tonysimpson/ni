@@ -45,9 +45,9 @@ void Psyco_DefineMeta(void* c_function, void* psyco_function)
 		/* should not occur */
 		return;
 	}
-	key = PyInt_FromLong((long) c_function);
+	key = NiCompatInt_FromLong((long) c_function);
 	if (key != NULL) {
-		value = PyInt_FromLong((long) psyco_function);
+		value = NiCompatInt_FromLong((long) psyco_function);
 		if (value != NULL) {
 			PyDict_SetItem(Psyco_Meta_Dict, key, value);
 			Py_DECREF(value);
@@ -958,11 +958,14 @@ static vinfo_t* _PsycoEval_SliceIndex(PsycoObject* po, vinfo_t* v)
 	if (vtp == NULL)
 		return NULL;
 
+#ifndef IS_PY3K
 	if (PyType_TypeCheck(vtp, &PyInt_Type)) {
 		result = PsycoInt_AS_LONG(po, v);
 		vinfo_incref(result);
 	}
-	else if (PyType_TypeCheck(vtp, &PyLong_Type)) {
+	else 
+#endif
+    if (PyType_TypeCheck(vtp, &PyLong_Type)) {
 		result = PsycoLong_AsLong(po, v);
 		if (result == NULL) {
 			vinfo_t* vi_zero;
@@ -1608,7 +1611,7 @@ static PyObject* cimpl_import_name(PyObject* globals, PyObject* name,
 		return NULL;
 	}
 #if VERYCONVOLUTED_IMPORT_NAME
-	if (PyInt_AsLong(fitharg) != -1 || PyErr_Occurred())
+	if (NiCompatInt_AsLong(fitharg) != -1 || PyErr_Occurred())
 		w = PyTuple_Pack(5,
 				 name,
 				 globals,

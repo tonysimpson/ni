@@ -256,19 +256,19 @@ PSY_INLINE vinfo_t* psyco_PyErr_Occurred(PsycoObject* po) {
    from the standard version).
 */
 
-EXTERNVAR PyObject* Psyco_Meta_Dict;  /* key is a PyIntObject holding the
+EXTERNVAR PyObject* Psyco_Meta_Dict;  /* key is a NiCompatInt holding the
 					 address of the C function, value is
-					 a PyIntObject holding the address
+					 a NiCompatInt holding the address
 					 of the corresponding Psyco function. */
 EXTERNFN void Psyco_DefineMeta(void* c_function, void* psyco_function);
 PSY_INLINE void* Psyco_Lookup(void* c_function) {
 	PyObject* value;
-	PyObject* key = PyInt_FromLong((long) c_function);
+	PyObject* key = NiCompatInt_FromLong((long) c_function);
 	if (key == NULL) OUT_OF_MEMORY();
 	value = PyDict_GetItem(Psyco_Meta_Dict, key);
 	Py_DECREF(key);
 	if (value != NULL)
-		return (void*) PyInt_AS_LONG(value);
+		return (void*) NiCompatInt_AS_LONG(value);
 	else
 		return NULL;
 }
