@@ -25,6 +25,7 @@
 #define NiCompatStr_HASH_FIELD(o) ((PyUnicodeObject*)o)->hash
 #define NiCompatInt_FromLong PyLong_FromLong
 #define NiCompatInt_AS_LONG PyLong_AS_LONG
+#define NiCompatInt_AsLong PyLong_AsLong
 #else
 #include <bytesobject.h>
 #define NiCompatStr_Type PyString_Type
@@ -47,6 +48,7 @@
 #define NiCompatStr_HASH_FIELD(o) ((PyStringObject*)o)->ob_shash
 #define NiCompatInt_FromLong PyInt_FromLong
 #define NiCompatInt_AS_LONG PyInt_AS_LONG
+#define NiCompatInt_AsLong PyInt_AsLong
 #endif
 
 #endif /* _COMPAT2TO3_H */
