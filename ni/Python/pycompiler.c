@@ -3120,9 +3120,9 @@ code_t* psyco_pycompiler_mainloop(PsycoObject* po)
             int next_instr;
             vinfo_t* exc_info = PsycoTuple_New(3, NULL);
             PycException_Fetch(po);
-            PsycoTuple_GET_ITEM(exc_info, 0) = po->pr.exc;
-            PsycoTuple_GET_ITEM(exc_info, 1) = po->pr.val;
-            PsycoTuple_GET_ITEM(exc_info, 2) = po->pr.tb;
+            PsycoTuple_SET_ITEM(exc_info, 0, po->pr.exc);
+            PsycoTuple_SET_ITEM(exc_info, 1, po->pr.val);
+            PsycoTuple_SET_ITEM(exc_info, 2, po->pr.tb);
             po->pr.exc = NULL;
             po->pr.val = NULL;
             po->pr.tb  = NULL;

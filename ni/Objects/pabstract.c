@@ -1,7 +1,6 @@
 #include "pabstract.h"
 #include "pintobject.h"
 #include "plongobject.h"
-#include "pstringobject.h"
 #include "piterobject.h"
 #include "ptupleobject.h"
 #include "pmethodobject.h"
@@ -757,27 +756,6 @@ vinfo_t* PsycoNumber_Multiply(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 DEFINEFN
 vinfo_t* PsycoNumber_Remainder(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 {
-	PyTypeObject* vtp = Psyco_NeedType(po, v);
-	if (vtp == NULL)
-		return NULL;
-	if (vtp->tp_as_number == NULL) {
-		/* <= 2.2 only: special-case strings */
-		if (PsycoString_Check(vtp))
-			return psyco_generic_call(po, NiCompatStr_Format,
-						  CfCommonNewRefPyObject,
-						  "vv", v, w);
-#ifdef Py_USING_UNICODE
-		else if (PsycoUnicode_Check(vtp))
-			return psyco_generic_call(po,
-# if PSYCO_CAN_CALL_UNICODE
-						  PyUnicode_Format,
-# else
-						  PyNumber_Remainder,
-# endif
-						  CfCommonNewRefPyObject,
-						  "vv", v, w);
-#endif
-	}
 	return binary_op(po, v, w, NB_SLOT(nb_remainder), "%");
 }
 
@@ -936,27 +914,6 @@ vinfo_t* PsycoNumber_InPlaceMultiply(PsycoObject* po, vinfo_t* v, vinfo_t* w)
 DEFINEFN
 vinfo_t* PsycoNumber_InPlaceRemainder(PsycoObject* po, vinfo_t* v ,vinfo_t* w)
 {
-	PyTypeObject* vtp = Psyco_NeedType(po, v);
-	if (vtp == NULL)
-		return NULL;
-	if (vtp->tp_as_number == NULL) {
-		/* <= 2.2 only: special-case strings */
-		if (PsycoString_Check(vtp))
-			return psyco_generic_call(po, NiCompatStr_Format,
-						  CfCommonNewRefPyObject,
-						  "vv", v, w);
-#ifdef Py_USING_UNICODE
-		else if (PsycoUnicode_Check(vtp))
-			return psyco_generic_call(po,
-# if PSYCO_CAN_CALL_UNICODE
-						  PyUnicode_Format,
-# else
-						  PyNumber_InPlaceRemainder,
-# endif
-						  CfCommonNewRefPyObject,
-						  "vv", v, w);
-#endif
-	}
 	return binary_iop(po, v, w, NB_SLOT(nb_inplace_remainder),
 			  NB_SLOT(nb_remainder), "%");
 }
