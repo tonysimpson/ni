@@ -1,3 +1,5 @@
+#include "../compat2to3.h"
+#ifndef IS_PY3K
 #include "pintobject.h"
 #include "plongobject.h"
 
@@ -555,3 +557,4 @@ void psy_intobject_init(void)
 	INIT_SVIRTUAL(psyco_computed_int, compute_int,
 		      direct_compute_int, 0, 0, 0);
 }
+#endif

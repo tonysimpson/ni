@@ -4,12 +4,12 @@
 
 #ifndef _PSY_INTOBJECT_H
 #define _PSY_INTOBJECT_H
-
+#include "../compat2to3.h"
+#ifndef IS_PY3K
 
 #include "pobject.h"
 #include "pabstract.h"
 #include "pboolobject.h"
-
 
 #define INT_ob_ival    DEF_FIELD(PyIntObject, long, ob_ival, OB_type)
 #define iINT_OB_IVAL   FIELD_INDEX(INT_ob_ival)
@@ -70,5 +70,5 @@ EXTERNFN  /* internal, for pboolobject.c */
 vinfo_t* pint_base2op(PsycoObject* po, vinfo_t* v, vinfo_t* w,
                       vinfo_t*(*op)(PsycoObject*,vinfo_t*,vinfo_t*));
 
-
+#endif /* !IS_PY3K */
 #endif /* _PSY_INTOBJECT_H */
