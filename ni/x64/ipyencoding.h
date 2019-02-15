@@ -8,9 +8,7 @@
 #include "iencoding.h"
 #include "../processor.h"
 #include "../dispatcher.h"
-
 #include "../Objects/pobject.h"
-#include "../Objects/pdictobject.h"
 
 #define TRACE_START_COMPILING(c)    do { /* nothing */ } while (0)
 

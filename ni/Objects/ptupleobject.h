@@ -20,7 +20,10 @@
    PsycoTuple_Load(). */
 #define PsycoTuple_GET_ITEM(vtuple, index)  \
 		((vtuple)->array->items[iTUPLE_OB_ITEM + (index)])
-
+#define PsycoTuple_SET_ITEM(vtuple, index, value) do \
+{ \
+    ((vtuple)->array->items[iTUPLE_OB_ITEM + (index)]) = (value); \
+} while (0)
 
 /***************************************************************/
 /* virtual tuples.
