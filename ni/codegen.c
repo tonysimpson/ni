@@ -231,6 +231,16 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 			
 		case 'l':
 			break;
+    case 'd':
+      vi = (vinfo_t*) arg;
+			if (!compute_vinfo(vi, po)) return NULL;
+			if (!is_compiletime(vi->source)) {
+				flags &= ~CfPure;
+			}
+      else {
+        assert(0);
+      }
+      break;
 		case 'v':
 			/* Compute all values first */
 			vi = (vinfo_t*) arg;
@@ -244,7 +254,6 @@ vinfo_t* psyco_generic_call(PsycoObject* po, void* c_function,
 				tag = 'l';
 			}
 			break;
-
 		case 'r':
 			/* Push by-reference values in the stack now */
 			vi = (vinfo_t*) arg;

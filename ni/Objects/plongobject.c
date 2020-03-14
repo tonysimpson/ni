@@ -10,26 +10,18 @@ vinfo_t* PsycoLong_AsLong(PsycoObject* po, vinfo_t* v)
 				  "v", v);
 }
 
-static void cimpl_lng_as_double(PyObject* o, double* result)
+static double cimpl_lng_as_double(PyObject* o)
 {
-	*result = PyLong_AsDouble(o);
+	return PyLong_AsDouble(o);
 }
 
 DEFINEFN
-bool PsycoLong_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd1, vinfo_t** vd2)
+bool PsycoLong_AsDouble(PsycoObject* po, vinfo_t* v, vinfo_t** vd)
 {
 	/* XXX implement me */
-	vinfo_array_t* result;
-	result = array_new(2);
-	if (psyco_generic_call(po, cimpl_lng_as_double,
-				  CfPyErrCheck,
-				  "va", v, result) == NULL) {
-		array_release(result);
+	if ((*vd = psyco_generic_call(po, cimpl_lng_as_double, CfPyErrCheck|CfReturnTypeDouble, "v", v)) == NULL) {
 		return false;
 	}
-        *vd1 = result->items[0];
-        *vd2 = result->items[1]; 
-	array_release(result);
 	return true;
 }
 

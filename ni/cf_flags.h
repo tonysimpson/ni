@@ -31,6 +31,8 @@
 #define CfReturnTypeLong    0x02
 /* if the c function returns a ssize_t or equivelent native sized type */
 #define CfReturnTypeNative  0x03
+/* if the c function returns a double (float64) */
+#define CfReturnTypeDouble   0x04
 /* if the C function returns a pointer or a PyObject* */
 #define CfReturnTypePtr     0x07
 /* All the above types are signed add this flag to make them unsigned */

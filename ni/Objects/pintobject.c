@@ -548,9 +548,9 @@ void psy_intobject_init(void)
 	Psyco_DefineMeta(m->nb_lshift,   pint_lshift);
 	Psyco_DefineMeta(m->nb_rshift,   pint_rshift);
 
-        /* partial implementations not emitting machine code */
-        Psyco_DefineMeta(m->nb_divide,   pint_div);
-        Psyco_DefineMeta(m->nb_floor_divide, pint_floor_div);
+    /* partial implementations not emitting machine code */
+    Psyco_DefineMeta(m->nb_divide,   pint_div);
+    Psyco_DefineMeta(m->nb_floor_divide, pint_floor_div);
 	Psyco_DefineMeta(m->nb_remainder,pint_mod);
 	Psyco_DefineMeta(m->nb_power,    pint_pow);
 

@@ -128,7 +128,6 @@ static vinfo_t* p_d_getitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi)
 {
 	vinfo_t* ob_item;
 	vinfo_t* fval1;
-	vinfo_t* fval2;
 	defield_t rdf = FMUT(DEF_ARRAY(double, 0));
 
 	ob_item = psyco_get_field(po, ap, ARRAY_ob_item);
@@ -140,14 +139,8 @@ static vinfo_t* p_d_getitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi)
 		vinfo_decref(ob_item, po);
 		return NULL;
 	}
-	fval2 = psyco_get_field_array(po, ob_item, FIELD_PART2(rdf), vi);
-	vinfo_decref(ob_item, po);
-	if (fval2 == NULL) {
-		vinfo_decref(fval1, po);
-		return NULL;
-	}
 
-	return PsycoFloat_FROM_DOUBLE(fval1, fval2);
+	return PsycoFloat_FROM_DOUBLE(fval1);
 }
 #else
 #  define p_f_getitem   NULL
@@ -252,23 +245,20 @@ static bool p_f_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi, vinfo_t* v) {
 
 static bool p_d_setitem(PsycoObject* po, vinfo_t* ap, vinfo_t* vi, vinfo_t* v) {
 	vinfo_t* w1;
-	vinfo_t* w2;
 	bool result;
 	vinfo_t* ob_item;
 	defield_t rdf = FMUT(DEF_ARRAY(double, 0));
 
-	if (!PsycoFloat_AsDouble(po, v, &w1, &w2))
+	if (!PsycoFloat_AsDouble(po, v, &w1))
 		return false;
 	
 	ob_item = psyco_get_field(po, ap, ARRAY_ob_item);
 	if (ob_item == NULL)
 		result = false;
 	else {
-		result = psyco_put_field_array(po, ob_item, rdf, vi, w1) &&
-		    psyco_put_field_array(po, ob_item, FIELD_PART2(rdf), vi, w2);
+		result = psyco_put_field_array(po, ob_item, rdf, vi, w1);
 		vinfo_decref(ob_item, po);
 	}
-        vinfo_decref(w2, po);
         vinfo_decref(w1, po);
 	return result;
 }

@@ -168,8 +168,8 @@ DEFINEFN vinfo_t* compile_time_call(PsycoObject* po, void *c_function, int flags
     long result;
     
     result = var_call(c_function, flags, arg_count, args);
-	vresult = compile_time_check(po, result, flags);
-	if (vresult != VINFO_OK) {
+	  vresult = compile_time_check(po, result, flags);
+	  if (vresult != VINFO_OK) {
 		/* error */ 
         return vresult;
     }
@@ -294,33 +294,43 @@ PSY_INLINE vinfo_t* new_rtvinfo(PsycoObject* po, reg_t reg, bool ref, bool nonne
 
 static vinfo_t* run_time_result(PsycoObject* po, int flags)
 {
-  	reg_t rg;
+    reg_t rg;
   	BEGIN_CODE
   	NEED_FREE_REG(rg);
-	if ((flags & CfReturnTypeMask) == CfReturnTypeInt) {
-		if (flags & CfReturnUnsigned) {
-			MOVZX_QR_DR(rg, REG_X64_RAX); /* mov unsigned (zero extended) from EAX to rg */ 
-		}
-		else {
-			MOVSX_QR_DR(rg, REG_X64_RAX); /* mov signed (sign extended) from EAX to rg */
-		}
-	} else { 
+	  if ((flags & CfReturnTypeMask) == CfReturnTypeInt) {
+		  if (flags & CfReturnUnsigned) {
+			  MOVZX_QR_DR(rg, REG_X64_RAX); /* mov unsigned (zero extended) from EAX to rg */ 
+		  }
+		  else {
+			  MOVSX_QR_DR(rg, REG_X64_RAX); /* mov signed (sign extended) from EAX to rg */
+		  }
+	  } else if ((flags & CfReturnTypeMask) == CfReturnTypeDouble) {
+      MOVQ_QR_XMM(rg, REG_X64_XMM0);
+    }
+    else { 
         MOV_R_R(rg, REG_X64_RAX);
-	}
+	  }
   	END_CODE
   	return new_rtvinfo(po, rg, flags & CfNewRef, flags & CfNotNegative);
 }
 
 DEFINEFN vinfo_t* run_time_call(PsycoObject* po, void *c_function, int flags, int arg_count, char argtags[], long args[], int total_output_array_size) {
-    int stackbase, i;
+    int stackbase, i, double_arg_count, double_arg_i;
     vinfo_t* vresult;
     BEGIN_CODE
     NEED_CC();
     stackbase = po->stack_depth;
     po->stack_depth += total_output_array_size;
     STACK_CORRECTION(total_output_array_size);
-    BEGIN_CALL(arg_count);
-    for (i = arg_count; i--; ) {
+    for (i = 0, double_arg_count=0; i < arg_count; i++) {
+      if (argtags[i] == 'd') {
+        double_arg_count++;
+      }
+    }
+    assert(double_arg_count <= arg_count);
+    assert(double_arg_count <= 2); /* < 8 would be fine with current backend code */
+    BEGIN_CALL(arg_count-double_arg_count);
+    for (i = arg_count, double_arg_i = double_arg_count - 1; i--; ) {
         switch (argtags[i]) {
         case 'v':
             CALL_SET_ARG_FROM_RT(((vinfo_t*)args[i])->source, i);
@@ -342,6 +352,10 @@ DEFINEFN vinfo_t* run_time_call(PsycoObject* po, void *c_function, int flags, in
             CALL_SET_ARG_FROM_STACK_REF(array->items[0]->source, i);
             break;
         }
+        case 'd':
+            CALL_SET_ARG_FROM_RT_DOUBLE(((vinfo_t*)args[i])->source, double_arg_i);
+            double_arg_i--;
+            break;
         default:
             CALL_SET_ARG_IMMED(args[i], i);
             break;                                                                   
@@ -371,7 +385,7 @@ vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 			  struct stack_frame_info_s* finfo)
 {
 	/* this is a simplified version of psyco_generic_call() which
-	   assumes Psyco's calling convention instead of the C's. */
+	    assumes Psyco's calling convention instead of the C's. */
 	int i;
 	bool ccflags;
     int initial_stack_depth;

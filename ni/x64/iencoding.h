@@ -9,7 +9,7 @@
 #include "../psyco.h"
 #define MACHINE_CODE_FORMAT    "86x64"
 /* XXX hack remove float support - add back by fixing c/Object/pfloatobject.* */
-#define HAVE_FP_FN_CALLS       0
+#define HAVE_FP_FN_CALLS       1
 
 
  /* set to 0 to emit code that runs on 386 and 486 */
@@ -50,6 +50,17 @@ typedef enum {
         REG_X64_R13 = 13,/* CALLEE Saved */
         REG_X64_R14 = 14,/* CALLEE Saved */
         REG_X64_R15 = 15,/* CALLEE Saved */
+
+        /* Float registers */
+        REG_X64_XMM0 = 0,
+        REG_X64_XMM1 = 1, 
+        REG_X64_XMM2 = 2, 
+        REG_X64_XMM3 = 3, 
+        REG_X64_XMM4 = 4, 
+        REG_X64_XMM5 = 5, 
+        REG_X64_XMM6 = 6, 
+        REG_X64_XMM7 = 7,
+
         REG_NONE    = -1} reg_t;
 
 #define REG_LOOP_START REG_X64_R13
@@ -336,6 +347,16 @@ if(!ONLY_UPDATING) {\
     code[3] = b4;\
 }\
     code += 4;\
+} while(0)
+#define WRITE_5(b1, b2, b3, b4, b5) do {\
+if(!ONLY_UPDATING) {\
+    code[0] = b1;\
+    code[1] = b2;\
+    code[2] = b3;\
+    code[3] = b4;\
+    code[4] = b5;\
+}\
+    code += 5;\
 } while(0)
 #define OP_REX_64_RM(opcode, reg) WRITE_2(REX_64_RM(reg), REG_IN_OPCODE(opcode, reg))
 #define OP_REX_64_RM_I64(opcode, reg, immed) do {\
@@ -807,6 +828,38 @@ EXTERNFN vinfo_t* bfunction_result(PsycoObject* po, bool ref);
 #define PUSH_EBP_BASE(ofs) PUSH_O(REG_X64_RSP, STACK_POS_OFFSET(ofs))
 #define POP_EBP_BASE(ofs) POP_O(REG_X64_RSP, STACK_POS_OFFSET(ofs))
 #define PUSH_IMMED(immed) PUSH_I(immed)
+
+
+/******************************************************************/
+/*** Double Percision Floating Point                            ***/
+
+/* XXX should refactor SIB_ENCODING and OFFSET_ENCODING too       */
+#define SIB_ENCODING2(updatable, pre_rex, rex_w, post_rex, mod, size, r, base, offset, index, scale) do {\
+    pre_rex;\
+    REX_ENCODING(rex_w, r, index, base);\
+    post_rex;\
+    MODRM_ENCODING(mod | ((offset == 0 && !REQUIRES_OFFSET(base)) ? 0x04 : (DECODE_SIZE(size, offset) == 8 ? 0x44 : 0x84)), r, 0);\
+    WRITE_1((scale == 8 ? 0xC0 : scale == 4 ? 0x80 : scale == 2 ? 0x40 : 0x00) | (base & 7) | ((index & 7) << 3));\
+    if (offset != 0 || REQUIRES_OFFSET(base)) {\
+        ENCODE_OFFSET(updatable, DECODE_SIZE(size, offset), offset);\
+    }\
+} while (0)
+#define OFFSET_ENCODING2(updatable, pre_rex, rex_w, post_rex, mod, size, r, rm, offset) do {\
+    if((rm & 7) == 4) {\
+        SIB_ENCODING2(updatable, pre_rex, rex_w, post_rex, mod, size, r, rm, offset, rm, 0);\
+    } else {\
+        pre_rex;\
+        REX_ENCODING(rex_w, r, 0, rm);\
+        post_rex;\
+        MODRM_ENCODING(mod | (DECODE_SIZE(size, offset) == 8 ? 0x40 : 0x80), r, rm);\
+        ENCODE_OFFSET(updatable, DECODE_SIZE(size, offset), offset);\
+    }\
+} while(0)
+
+#define MOVQ_QR_XMM(r1, r2) WRITE_5(0x66, REX_64_REG_RM(r2, r1), 0x0F, 0x7E, MODRM_REG_RM(r2, r1))
+#define MOVQ_XMM_QR(r1, r2) WRITE_5(0x66, REX_64_REG_RM(r1, r2), 0x0F, 0x6E, MODRM_REG_RM(r1, r2))
+#define MOVQ_XMM_O(r1, r2, offset) OFFSET_ENCODING2(false, WRITE_1(0x66), true, WRITE_2(0x0F, 0x6E), 0, 0, r1, r2, offset)
+
 /*******************************************************************
  * Call a C function.
  * Use BEGIN_CALL() then CALL_SET_ARG_* in reverse arg order
@@ -849,6 +902,7 @@ static const bool callee_saved_reg_table[REG_TOTAL] = {
     /* align stack to 16 byte */\
     int _stack_correction = 0;\
     int _args_depth = 0;\
+    int _double_arg_index = 0;\
     if(_num_args > argument_reg_table_len) {\
         _args_depth = (((int)(_num_args) - (int)(argument_reg_table_len)) * (int)sizeof(long));\
     }\
@@ -866,6 +920,7 @@ static const bool callee_saved_reg_table[REG_TOTAL] = {
         STACK_CORRECTION(_initial_stack_depth - po->stack_depth);\
         po->stack_depth = _initial_stack_depth;\
         _last_arg_index = 0; /* suppress warning */\
+        _double_arg_index = 0; /* suppress warning */\
     }while(0);\
 }while(0)
 #define END_CALL_I(immed) do {\
@@ -873,6 +928,7 @@ static const bool callee_saved_reg_table[REG_TOTAL] = {
         STACK_CORRECTION(_initial_stack_depth - po->stack_depth);\
         po->stack_depth = _initial_stack_depth;\
         _last_arg_index = 0; /* suppress warning */\
+        _double_arg_index = 0; /* suppress warning */\
     }while(0);\
 }while(0)
 #define CHECK_AND_UPDATE_TARGET_REG(reg) do {\
@@ -934,6 +990,15 @@ static const bool callee_saved_reg_table[REG_TOTAL] = {
         }\
     } else {\
         CALL_SET_ARG_FROM_REG(getreg(source), arg_index);\
+    }\
+} while (0)
+#define CALL_SET_ARG_FROM_RT_DOUBLE(source, double_arg_index) do {\
+    if(RSOURCE_REG_IS_NONE(source)) {\
+        assert(RUNTIME_STACK(vi) != RUNTIME_STACK_NONE);\
+        /* we assume all doubles are passed in xmm registers */\
+        MOVQ_XMM_O(double_arg_index, REG_X64_RSP, STACK_POS_OFFSET(RSOURCE_STACK(source)));\
+    } else {\
+        MOVQ_XMM_QR(double_arg_index, getreg(source));\
     }\
 } while (0)
 #define CALL_SET_ARG_FROM_STACK_REF(source, arg_index) do {\

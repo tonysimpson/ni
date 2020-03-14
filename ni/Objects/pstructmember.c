@@ -55,13 +55,7 @@ vinfo_t* PsycoMember_GetOne(PsycoObject* po, vinfo_t* addr, PyMemberDef* l)
 		w1 = psyco_get_field_offset(po, addr, rdf, l->offset);
 		if (w1 == NULL)
 			return NULL;
-		w2 = psyco_get_field_offset(po, addr, FIELD_PART2(rdf),
-					    l->offset);
-		if (w2 == NULL) {
-			vinfo_decref(w1, po);
-			return NULL;
-		}
-		v = PsycoFloat_FROM_DOUBLE(w1, w2);
+		v = PsycoFloat_FROM_DOUBLE(w1);
 		return v;
 #endif
 	case T_STRING:  /* read a char*, turn it into a string */

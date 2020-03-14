@@ -141,7 +141,7 @@ def psycoobject_get_python_location(po_ptr):
             if inst_offset > inst:
                 break
             line += ord(lnotab[i+1])
-    return (filename, line, name)
+    return (filename, line, name, inst)
 
 
 REG_NUM_MAP = {
@@ -164,7 +164,7 @@ REG_NUM_MAP = {
 }
 
 
-generated_code = namedtuple('generated_code', ['where', 'python_src', 'stack_depth'])
+generated_code = namedtuple('generated_code', ['where', 'python_src', 'stack_depth', 'sequence'])
 
 _HEX_NUM_RE = re.compile('0x[a-f0-9]+')
 
@@ -202,7 +202,7 @@ class SimpleExecutionTracer:
         for address, function in self._trace_points.items():
             self._trace[address:address+1] = function
         self.code_gen.chop(self._begin, end)
-        g = generated_code([i.function_name for i in db.backtrace()], psycoobject_get_python_location(po_ptr), self._begin_stack_depth)
+        g = generated_code([i.function_name for i in db.backtrace()], psycoobject_get_python_location(po_ptr), self._begin_stack_depth, len(self.code_gen))
         self.code_gen[self._begin:end] = g
         db.raise_event('NI_CODE_GEN', begin=self._begin, end=end, info=g)
         return True
