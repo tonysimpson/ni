@@ -224,8 +224,6 @@ code_t* psyco_emergency_jump(PsycoObject* po, code_t* code);
 /*****************************************************************/
  /***   run-time switches                                       ***/
 
-#define USE_RUNTIME_SWITCHES  0    /* DISABLED, no longer maintained */
-
 typedef struct c_promotion_s {
   source_virtual_t header;
   int pflags;
@@ -234,47 +232,6 @@ typedef struct c_promotion_s {
 #define PFlagPyObj		1
 #define PFlagMegamorphic	2
 
-
-#if USE_RUNTIME_SWITCHES
-
-typedef struct fixed_switch_s {  /* private structure */
-  int switchcodesize;   /* size of 'switchcode' */
-  code_t* switchcode;
-  int count;
-  struct fxcase_s* fxc;
-  long* fixtargets;
-  long zero;            /* for 'array' pointers from vinfo_t structures */
-  struct c_promotion_s fixed_promotion; /* pseudo-exception meaning 'fix me' */
-} fixed_switch_t;
-
-/* initialization of a fixed_switch_t structure */
-EXTERNFN int psyco_build_run_time_switch(fixed_switch_t* rts, long kflags,
-                                         long values[], int count);
-
-/* Look for a (known) value in a prepared switch.
-   Return -1 if not found. */
-EXTERNFN int psyco_switch_lookup(fixed_switch_t* rts, long value);
-
-/* Write the code that does a 'switch' on the prepared 'values'.
-   The register 'reg' contains the value to switch on. All jump targets
-   are initially at the end of the written code; see
-   psyco_fix_switch_target(). */
-EXTERNFN code_t* psyco_write_run_time_switch(fixed_switch_t* rts,
-                                             code_t* code, reg_t reg);
-
-/* Fix the target corresponding to the given case ('item' is a value
-   returned by psyco_switch_lookup()). 'code' is the *end* of the
-   switch code, as returned by psyco_write_run_time_switch(). */
-EXTERNFN void psyco_fix_switch_case(fixed_switch_t* rts, code_t* code,
-                                    int item, code_t* newtarget);
-
-/* is the given run-time vinfo_t known to be none of the values
-   listed in rts? */
-PSY_INLINE bool known_to_be_default(vinfo_t* vi, fixed_switch_t* rts) {
-	return vi->array == NullArrayAt(rts->zero);
-}
-
-#endif  /* USE_RUNTIME_SWITCHES */
 
 
 /* The pseudo-exceptions meaning 'promote me' but against no particular

@@ -218,7 +218,7 @@ static vinfo_t* pfunc_descr_get(PsycoObject* po, PyObject* func,
 	/* XXX obj is never Py_None here in the current implementation,
 	   but could be if called by other routines than
 	   PsycoObject_GenericGetAttr(). */
-	return PsycoMethod_New(func, obj, type);
+	return PsycoMethod_New(func, obj);
 }
 
 

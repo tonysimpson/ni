@@ -11,7 +11,6 @@
                            in the back-end */
 #include "pobject.h"
 #include "pabstract.h"
-#include "pintobject.h"
 
 #define FLOAT_ob_fval   DEF_FIELD(PyFloatObject, double, ob_fval, OB_type)
 #define iFLOAT_OB_FVAL  FIELD_INDEX(FLOAT_ob_fval)

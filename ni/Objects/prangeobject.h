@@ -13,11 +13,7 @@
 
 /* currently step == 1 only */
 /* The following functions *consume* a reference to start and len ! */
-
-/* for xrange() */
-EXTERNFN vinfo_t* PsycoXRange_NEW(PsycoObject* po, vinfo_t* start, vinfo_t* len);
-/* for range() */
-EXTERNFN vinfo_t* PsycoListRange_NEW(PsycoObject* po, vinfo_t* start, vinfo_t* len);
+EXTERNFN vinfo_t* PsycoRange_NEW(PsycoObject* po, vinfo_t* start, vinfo_t* len);
 
 
  /***************************************************************/
@@ -30,7 +26,7 @@ EXTERNFN vinfo_t* PsycoListRange_NEW(PsycoObject* po, vinfo_t* start, vinfo_t* l
 /* XXX no support for steps currently. Needs implementation of division to
    figure out the length. */
 
-EXTERNVAR source_virtual_t psyco_computed_listrange;
+EXTERNVAR source_virtual_t psyco_computed_range;
 
 
 #endif /* _PSY_RANGEOBJECT_H */

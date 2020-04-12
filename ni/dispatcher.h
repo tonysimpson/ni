@@ -107,11 +107,11 @@ EXTERNFN void psyco_stabilize(vcompatible_t* lastmatch);
    XXX particular order. Must be optimized for reasonably fast searches
    XXX if the lists become large (more than just a few items).
 
-   The list starts with PyIntObjects whose numbers tell which local variables
+   The list starts with PyLongObjects whose numbers tell which local variables
    may safely be deleted at that point.
 */
 struct global_entries_s {
-	PyObject* fatlist;      /* list of PyIntObjects then CodeBufferObjects */
+	PyObject* fatlist;      /* list of PyLongObjects then CodeBufferObjects */
 };
 
 /* initialize a global_entries_t structure */
@@ -130,7 +130,7 @@ PSY_INLINE int register_codebuf(global_entries_t* ge, CodeBufferObject* codebuf)
 /* for mergepoints.c */
 PSY_INLINE void psyco_ge_unused_var(global_entries_t* ge, int num)
 {
-	PyObject* o = PyInt_FromLong(num);
+	PyObject* o = PyLong_FromLong(num);
 	if (o == NULL || PyList_Append(ge->fatlist, o))
 		OUT_OF_MEMORY();
 }
@@ -197,18 +197,6 @@ PSY_INLINE bool psyco_forking(PsycoObject* po, vinfo_array_t* array) {
 EXTERNFN code_t* psyco_finish_promotion(PsycoObject* po, vinfo_t* fix,
                                         int pflags);
 
-#if USE_RUNTIME_SWITCHES
-/* Promotion of certain run-time values into compile-time ones
-   (promotion only occurs for values inside a given set, e.g. for
-   types that we know how to optimize). The special values are
-   described in an array of long, turned into a source_known_t
-   (see processor.h).
-   Note: Releases 'po'.
-*/
-EXTERNFN code_t* psyco_finish_fixed_switch(PsycoObject* po, vinfo_t* fix,
-                                           long kflags,
-                                           fixed_switch_t* special_values);
-#endif
 
 /* Un-Promotion from non-fixed compile-time into run-time.
    Note: this does not release 'po'. Un-promoting is easy and

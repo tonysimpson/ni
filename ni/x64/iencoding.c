@@ -378,7 +378,6 @@ DEFINEFN vinfo_t* run_time_call(PsycoObject* po, void *c_function, int flags, in
 	return run_time_result(po, flags);
 }
 
-
 DEFINEFN
 vinfo_t* psyco_call_psyco(PsycoObject* po, CodeBufferObject* codebuf,
 			  Source argsources[], int argcount,

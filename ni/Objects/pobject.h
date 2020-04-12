@@ -28,8 +28,7 @@
 	((tp1) == (tp) || PyType_IsSubtype((tp1), (tp)))
 
 #define PsycoIter_Check(tp) \
-    (PyType_HasFeature(tp, Py_TPFLAGS_HAVE_ITER) && \
-     (tp)->tp_iternext != NULL)
+     ((tp)->tp_iternext != NULL)
 
 #define PsycoSequence_Check(tp) \
 	((tp)->tp_as_sequence && (tp)->tp_as_sequence->sq_item != NULL)
@@ -51,18 +50,6 @@ PSY_INLINE PyTypeObject* Psyco_FastType(vinfo_t* vi) {
 		return (PyTypeObject*) CompileTime_Get(vtp->source)->value;
 	}
 }
-#if USE_RUNTIME_SWITCHES
-# error "Disabled because of type inheritance. The switch overlooks subtypes."
-/* Check for the type of an object. Returns the index in the set 'fs' or
-   -1 if not in the set (or if exception). Used this is better than
-   Psyco_NeedType() if you are only interested in some types, not all of them. */
-PSY_INLINE int Psyco_TypeSwitch(PsycoObject* po, vinfo_t* vi, fixed_switch_t* fs) {
-	vinfo_t* vtp = get_array_item(po, vi, OB_TYPE);
-	if (vtp == NULL)
-		return -1;
-	return psyco_switch_index(po, vtp, fs);
-}
-#endif
 
 /* Is the given object is of the given type (or a subtype of it) ?
    Returns -1 in case of error or if promotion is requested. */
@@ -156,24 +143,6 @@ static vinfo_t* cname  fargs  {						\
 #define IS_NOTIMPLEMENTED(x)	\
 	((x)->source == CompileTime_NewSk(&psyco_skNotImplemented))
 
-
-#if USE_RUNTIME_SWITCHES
-/* definition of commonly used "fixed switches", i.e. sets of
-   values (duplicating fixed switch structures for the same set
-   of value can inccur a run-time performance loss in some cases) */
-
-/* the variable names list the values in order.
-   'int' means '&PyInt_Type' etc. */
-EXTERNVAR fixed_switch_t psyfs_int;
-EXTERNVAR fixed_switch_t psyfs_int_long;
-EXTERNVAR fixed_switch_t psyfs_int_long_float;
-EXTERNVAR fixed_switch_t psyfs_tuple_list;
-EXTERNVAR fixed_switch_t psyfs_string_unicode;
-EXTERNVAR fixed_switch_t psyfs_tuple;
-EXTERNVAR fixed_switch_t psyfs_dict;
-EXTERNVAR fixed_switch_t psyfs_none;
-/* NOTE: don't forget to update pobject.c when adding new variables here */
-#endif
 
 /* for dispatcher.c */
 EXTERNFN vinfo_t* Psyco_SafelyDeleteVar(PsycoObject* po, vinfo_t* vi);

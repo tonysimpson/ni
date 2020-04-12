@@ -16,7 +16,6 @@
    targets can only be reached by jumping from a single point, e.g. 'else:'.
    Such targets are not merge points.
 */
-
 struct mergepoint_s {
   int bytecode_position;
   global_entries_t entries;
@@ -29,13 +28,9 @@ struct mergepoint_s {
    encountered at this point.
 */
 
-/* The following function detects the merge points and builds an array of
-   mergepoint_t structures, stored into a Python string object. It returns
-   Py_None if the bytecode uses unsupported instructions. */
-EXTERNFN PyObject* psyco_build_merge_points(PyCodeObject* co, int module);
-
-/* Cached version of the above */
+/* Get merge points (cached) */
 EXTERNFN PyObject* psyco_get_merge_points(PyCodeObject* co, int module);
+
 /* Get a pointer to the first mergepoint_t structure in the array whose
    'bytecode_ptr' is >= position. */
 EXTERNFN mergepoint_t* psyco_next_merge_point(PyObject* mergepoints,

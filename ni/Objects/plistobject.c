@@ -1,5 +1,4 @@
 #include "plistobject.h"
-#include "pintobject.h"
 #include "plongobject.h"
 #include "piterobject.h"
 #include "prangeobject.h"
@@ -168,19 +167,6 @@ vinfo_t* plist_item(PsycoObject* po, vinfo_t* a, vinfo_t* i)
                 vinfo_incref(result);
 		need_reference(po, result);
 		return result;
-	}
-
-	if (a->source == VirtualTime_New(&psyco_computed_listrange)) {
-		/* optimize range().__getitem__() */
-		/* XXX no support for 'step' right now,
-		   so that the return value is simply 'start+i'. */
-		vinfo_t* vstart = vinfo_getitem(a, RANGE_START);
-		if (vstart == NULL)
-			return NULL;
-		result = integer_add(po, i, vstart, false);
-		if (result == NULL)
-			return NULL;
-		return PsycoInt_FROM_LONG(result);
 	}
 
 	ob_item = psyco_get_field(po, a, LIST_ob_item);
