@@ -108,6 +108,8 @@ setup(
                            extra_link_args = extra_link_args,
                            define_macros = macros,
                            debug = True,
-                           include_dirs = [processor_dir])],
+                           include_dirs = [processor_dir],
+                           libraries = ['ffi'],
+    )],
     classifiers=CLASSIFIERS,
 )

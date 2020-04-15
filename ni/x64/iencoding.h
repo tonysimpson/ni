@@ -1155,6 +1155,12 @@ static const bool callee_saved_reg_table[REG_TOTAL] = {
       MOVQ_XMM_QR(double_arg_index, getreg(source));                           \
     }                                                                          \
   } while (0)
+#define CALL_SET_ARG_IMMED_DOUBLE(immed, double_arg_index)                     \
+  do {                                                                         \
+    /* we assume all doubles are passed in xmm registers */                    \
+    MOV_R_I(REG_TRANSIENT_1, immed);                                           \
+    MOVQ_XMM_QR(double_arg_index, REG_TRANSIENT_1);                            \
+  } while (0)
 #define CALL_SET_ARG_FROM_STACK_REF(source, arg_index)                         \
   do {                                                                         \
     _CHECK_IS_NEXT_ARG(arg_index);                                             \
