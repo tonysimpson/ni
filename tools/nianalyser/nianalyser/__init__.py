@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import re
 import distorm3
@@ -6,12 +7,19 @@ from pointbreak import types
 from itertools import count
 import intervaltree
 from collections import namedtuple
+import ctypes
+
 
 Py_ssize_t = types.int64
 PyTypeObject_pointer = types.pointer_type(None)
+PyObject = types.struct_type(
+    *[
+        ('ob_refcnt', Py_ssize_t),
+        ('ob_type', PyTypeObject_pointer)
+    ]
+)
 PyObject_HEAD = [
-    ('ob_refcnt', Py_ssize_t),
-    ('ob_type', PyTypeObject_pointer)
+    ('ob_base', PyObject)
 ]
 PyObject_VAR_HEAD = PyObject_HEAD + [
     ('ob_size', Py_ssize_t)
@@ -22,41 +30,72 @@ PyTypeObject = types.struct_type(
     ]
     # incomplete - but that's ok for our use
 )
-PyStringObject = types.struct_type(
+PyBytesObject = types.struct_type(
     *PyObject_VAR_HEAD + [
         ('ob_shash', types.int64),
-        ('ob_sstate', types.int32),
         ('ob_sval', types.offset()),
     ]
 )
 
 
-def pystringobject_to_str(s):
+PyUnicode_WCHAR_KIND = 0
+PyUnicode_1BYTE_KIND = 1
+PyUnicode_2BYTE_KIND = 2
+PyUnicode_4BYTE_KIND = 4
+
+PyUnicodeObject = types.struct_type(
+    *PyObject_HEAD + [
+        ('length', Py_ssize_t),
+        ('hash', Py_ssize_t),
+        ('state', types.uint32),
+        ('wstr', types.offset())
+    ]
+)
+PyUnicodeObject_pointer = types.pointer_type(PyUnicodeObject)
+
+
+def pybytesobject_to_str(s):
     return s.ob_sval.read(s.ob_size)
 
 
+def pyunicodeobject_to_str(s):
+    interned = s.state & 3
+    kind = s.state >> 2 & 7
+    compact = s.state >> 5 & 1
+    ascii = s.state >> 6 & 1
+    ready = s.state >> 7 & 1
+    if kind == PyUnicode_1BYTE_KIND:
+        if ascii and compact and ready:
+            # 8 for wstr pointer + 4 for alignement = 12 - yep this could be better :(
+            return s.wstr.accessor.read(s.wstr.offset + 12, s.length).decode('utf-8')
+    raise Exception('pyunicodeobject_to_str interned: {} kind: {} compact: {} ascii: {} ready: {}'.format(interned, kind, compact, ascii, ready))
+
+
 PyTypeObject_pointer.referenced_type = PyTypeObject
-PyObject = types.struct_type(*PyObject_HEAD)
 PyVarObject = types.struct_type(*PyObject_VAR_HEAD)
 PyObject_pointer = types.pointer_type(PyObject)
-PyStringObject_pointer = types.pointer_type(PyStringObject)
+PyBytesObject_pointer = types.pointer_type(PyBytesObject)
 PyCodeObject = types.struct_type(*PyObject_HEAD + [
     ('co_argcount', types.int32),
+    ('co_kwonlyargcount', types.int32),
     ('co_nlocals', types.int32),
     ('co_stacksize', types.int32),
     ('co_flags', types.int32),
-    ('co_code', PyStringObject_pointer),
+    ('co_firstlineno', types.int32),
+    ('co_code', PyBytesObject_pointer),
     ('co_consts', PyObject_pointer),
     ('co_names', PyObject_pointer),
     ('co_varnames', PyObject_pointer),
     ('co_freevars', PyObject_pointer),
     ('co_cellvars', PyObject_pointer),
-    ('co_filename', PyStringObject_pointer),
-    ('co_name', PyStringObject_pointer),
-    ('co_firstlineno', types.int32),
-    ('co_lnotab', PyStringObject_pointer),
-    ('co_zombieframe', types.uint64),
-    ('co_weakreflist', PyObject_pointer)
+    ('co_cell2arg', types.pointer_type(Py_ssize_t)),
+
+    ('co_filename', PyUnicodeObject_pointer),
+    ('co_name', PyUnicodeObject_pointer),
+    ('co_lnotab', PyBytesObject_pointer),
+    ('zombieframe', types.uint64),
+    ('co_weakreflist', PyObject_pointer),
+    ('extra', types.pointer_type(types.uint64)),
 ])
 PyFrameObject_pointer = types.pointer_type(None)
 PyFrameObject = types.struct_type(
@@ -128,19 +167,19 @@ def psycoobject_get_python_location(po_ptr):
         return None
     inst = pr.next_instr
     co = pr.co.value
-    filename = pystringobject_to_str(co.co_filename.value)
-    name = pystringobject_to_str(co.co_name.value)
+    filename = pyunicodeobject_to_str(co.co_filename.value)
+    name = pyunicodeobject_to_str(co.co_name.value)
     if inst < 0:
         line = -1
     else:
-        lnotab = pystringobject_to_str(co.co_lnotab.value)
+        lnotab = pybytesobject_to_str(co.co_lnotab.value)
         line = co.co_firstlineno
         inst_offset = 0
         for i in range(0, len(lnotab), 2):
-            inst_offset += ord(lnotab[i])
+            inst_offset += lnotab[i]
             if inst_offset > inst:
                 break
-            line += ord(lnotab[i+1])
+            line += lnotab[i+1] - 256 if lnotab[i+1] & 0x80 else lnotab[i+1]
     return (filename, line, name, inst)
 
 
@@ -292,19 +331,19 @@ class SimpleExecutionTracer:
     def _py_eval_eval_frame_ex(self, db):
         frame = db.reference(db.registers.rdi, PyFrameObject)
         if frame.value.f_code:
-            print 'eval_frame', frame.value.f_code.address
+            print('eval_frame', frame.value.f_code.address)
         return True
 
     def _psyco_code_run(self, db):
         code_buffer = db.reference(db.registers.rdi, CodeBufferObject)
         frame = db.reference(db.registers.rsi, PyFrameObject)
-        print 'run_code', code_buffer.value.codestart, frame.value.f_code.address
+        print('run_code', code_buffer.value.codestart, frame.value.f_code.address)
         return True
 
     def begin_trace(self):
         class Trace:
             def jump(self, desc, _from, to):
-                print desc, _from, to
+                print(desc, _from, to)
         trace = Trace()
         for interval in self._trace:
             address = interval.begin
@@ -323,7 +362,8 @@ class SimpleExecutionTracer:
             code = list(self.code_gen[addr])
             if code:
                 code = code[0]
-                where = ', '.join(code.data.where[5:-1])
+                pcc_i = code.data.where.index('psyco_pycompiler_mainloop')
+                where = ', '.join(code.data.where[pcc_i:-1])
                 filename, line = code.data[1][:2]
                 where = '%s\t%s\t%s' % (os.path.split(filename)[-1], line, where)
             else:
@@ -338,8 +378,8 @@ class SimpleExecutionTracer:
                     dis = dis.replace(hex_num, '%s(%s)' % (hex_num, desc))
                 elif self.code_gen[address]:
                     data = list(self.code_gen[address])[0].data
-                    filename, lineno, func = data[1]
-                    desc = '%s:%s:%s' % (os.path.split(filename)[-1], lineno, func)
+                    filename, lineno, func, bytecode_pos = data[1]
+                    desc = '%s:%s:%s:%s' % (os.path.split(filename)[-1], lineno, func, bytecode_pos)
                     dis = dis.replace(hex_num, '%s(%s)' % (hex_num, desc))
-            print '0x%x\t%40s\t%s' % (addr, dis, where)
+            print('0x%x\t%40s\t%s' % (addr, dis, where))
 
