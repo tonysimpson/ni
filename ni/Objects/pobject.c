@@ -138,17 +138,56 @@ vinfo_t *PsycoObject_GenericGetAttr(PsycoObject *po, vinfo_t *obj,
                             "vv", obj, vname);
 }
 
-PSY_INLINE vinfo_t *try_3way_to_rich_compare(PsycoObject *po, vinfo_t *v,
-                                             vinfo_t *w, int op) {
-  return psyco_generic_call(po, PyObject_RichCompare, CfCommonNewRefPyObject,
-                            "vvl", v, w, (long)op);
+/* Map rich comparison operators to their swapped version, e.g. LT --> GT */
+static int swapped_op[] = {Py_GT, Py_GE, Py_EQ, Py_NE, Py_LT, Py_LE};
+
+static vinfo_t* try_rich_compare(PsycoObject* po, vinfo_t* v, vinfo_t* w, int op)
+{
+  bool swap;
+  PyTypeObject* vtp;
+  PyTypeObject* wtp;
+  richcmpfunc fv;
+  richcmpfunc fw;
+  vinfo_t* res;
+
+  vtp = (PyTypeObject*)Psyco_NeedType(po, v);
+  if (vtp == NULL) return NULL;
+  wtp = (PyTypeObject*) Psyco_NeedType(po, w);
+  if (wtp == NULL) return NULL;
+  fv = vtp->tp_richcompare;
+  fw = wtp->tp_richcompare;
+
+  swap = (vtp != wtp &&
+          PyType_IsSubtype(wtp, vtp) &&
+          fw != NULL);
+  if (swap) {
+          res = Psyco_META3(po, fw, CfCommonCheckNotImplemented,
+                            "vvl", w, v, swapped_op[op]);
+          if (IS_IMPLEMENTED(res))
+                  return res;   /* 'res' might be NULL */
+          vinfo_decref(res, po);
+  }
+  if (fv != NULL) {
+          res = Psyco_META3(po, fv, CfCommonCheckNotImplemented,
+                            "vvl", v, w, op);
+          if (IS_IMPLEMENTED(res))
+                  return res;
+          vinfo_decref(res, po);
+  }
+  if (!swap && fw != NULL) {
+          return Psyco_META3(po, fw, CfCommonCheckNotImplemented,
+                              "vvl", w, v, swapped_op[op]);
+  }
+  return psyco_vi_NotImplemented();
 }
 
 DEFINEFN vinfo_t *PsycoObject_RichCompare(PsycoObject *po, vinfo_t *v,
                                           vinfo_t *w, int op) {
-  /* XXX tony: Implement this - see old version, Py3 implementation is different
-   */
-  return try_3way_to_rich_compare(po, v, w, op);
+  vinfo_t *res = try_rich_compare(po, v, w, op);
+  if (IS_IMPLEMENTED(res)) return res;
+        vinfo_decref(res, po);
+  return psyco_generic_call(po, PyObject_RichCompare, CfCommonNewRefPyObject,
+                            "vvl", v, w, (long)op);
 }
 
 DEFINEFN
