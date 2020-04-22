@@ -314,7 +314,16 @@ test_condition_and_pyerr_occured:
     if (!runtime_condition_f(po, error_cc)) {
         return VINFO_OK;
     }
+    /* XXX tony: We need to preserve RAX over this call.
+    This means we will end up pushing+poping RAX twice which is dumb.
+    It would be nice if the compiler knew to do this automatically. */
+    BEGIN_CODE
+    PUSH_R(REG_FUNCTIONS_RETURN);
+    END_CODE
     error_cc = integer_NON_NULL(po, psyco_PyErr_Occurred(po));
+    BEGIN_CODE
+    POP_R(REG_FUNCTIONS_RETURN);
+    END_CODE
 test_condition:
     if (!runtime_condition_f(po, error_cc)) {
         return VINFO_OK;
