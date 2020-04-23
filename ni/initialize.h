@@ -19,7 +19,6 @@
 #include "Objects/plongobject.h"
 #include "Objects/pmethodobject.h"
 #include "Objects/pobject.h"
-#include "Objects/prangeobject.h"
 #include "Objects/pstructmember.h"
 #include "Objects/ptupleobject.h"
 
@@ -42,7 +41,6 @@
 #include "Objects/plongobject.c"
 #include "Objects/pmethodobject.c"
 #include "Objects/pobject.c"
-#include "Objects/prangeobject.c"
 #include "Objects/pstructmember.c"
 #include "Objects/ptupleobject.c"
 #include "Python/frames.c"
@@ -71,7 +69,6 @@ EXTERNFN void psy_iterobject_init(void);    /* Objects/piterobject.c */
 EXTERNFN void psy_listobject_init(void);    /* Objects/plistobject.c */
 EXTERNFN void psy_longobject_init(void);    /* Objects/plongobject.c */
 EXTERNFN void psy_methodobject_init(void);  /* Objects/pmethodobject.c */
-EXTERNFN void psy_rangeobject_init(void);   /* Objects/prangeobject.c */
 EXTERNFN void psy_tupleobject_init(void);   /* Objects/ptupleobject.c */
 EXTERNFN void psyco_initmath(void);         /* Modules/pmath.c */
 EXTERNFN int ni_eval_hook_init(void);       /* eval_hook.c */
@@ -96,7 +93,6 @@ PSY_INLINE void initialize_all_files(void) {
   psy_listobject_init();    /* Objects/plistobject.c */
   psy_longobject_init();    /* Objects/plongobject.c */
   psy_methodobject_init();  /* Objects/pmethodobject.c */
-  psy_rangeobject_init();   /* Objects/prangeobject.c */
   psy_tupleobject_init();   /* Objects/ptupleobject.c */
   psyco_initmath();         /* Modules/pmath.c */
   ni_eval_hook_init();      /* eval_hook.c */

@@ -1,7 +1,6 @@
 #include "pbltinmodule.h"
 #include "../Objects/plistobject.h"
 #include "../Objects/plongobject.h"
-#include "../Objects/prangeobject.h"
 #include "../Objects/pstringobject.h"
 #include "../Objects/ptupleobject.h"
 
@@ -72,33 +71,6 @@ static bool parse_range_args(PsycoObject *po, vinfo_t *vargs, vinfo_t **iistart,
   }
   *iistart = ilow;
   return true;
-}
-
-static vinfo_t *pbuiltin_range(PsycoObject *po, vinfo_t *vself,
-                               vinfo_t *vargs) {
-  vinfo_t *istart;
-  vinfo_t *ilen;
-  if (parse_range_args(po, vargs, &istart, &ilen)) {
-    return PsycoRange_NEW(po, istart, ilen);
-  }
-  if (PycException_Occurred(po))
-    return NULL;
-  return psyco_generic_call(po, cimpl_range, CfCommonNewRefPyObject, "lv",
-                            NULL, vargs);
-}
-
-static vinfo_t *prange_new(PsycoObject *po, PyTypeObject *type, vinfo_t *vargs,
-                           vinfo_t *vkw) {
-  vinfo_t *istart;
-  vinfo_t *ilen;
-  psyco_assert(type == &PyRange_Type);
-  if (parse_range_args(po, vargs, &istart, &ilen)) {
-    return PsycoRange_NEW(po, istart, ilen);
-  }
-  if (PycException_Occurred(po))
-    return NULL;
-  return psyco_generic_call(po, type->tp_new, CfCommonNewRefPyObject, "lvv",
-                            type, vargs, vkw);
 }
 
 static vinfo_t *pbuiltin_id(PsycoObject *po, vinfo_t *vself, vinfo_t *vobj) {
@@ -188,8 +160,6 @@ void psyco_bltinmodule_init(void) {
   DEFMETA(abs, METH_O);
   DEFMETA(apply, METH_VARARGS);
   DEFMETA(divmod, METH_VARARGS);
-  cimpl_range = Psyco_DefineModuleC(md, "range", METH_VARARGS, &pbuiltin_range,
-                                     prange_new);
 #undef DEFMETA
   Py_XDECREF(md);
 }

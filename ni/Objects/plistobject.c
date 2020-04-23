@@ -1,7 +1,6 @@
 #include "plistobject.h"
 #include "plongobject.h"
 #include "piterobject.h"
-#include "prangeobject.h"
 #include "../pycodegen.h"
 
 
