@@ -206,6 +206,8 @@ EXTERNFN void PsycoObject_EmergencyCodeRoom(PsycoObject* po);
 
 #if NI_TRACE
 /* Calls hooked by nianalyser to collect compiler behaviour */
+EXTERNFN void ni_trace_begin_simple_code(code_t *code);
+EXTERNFN void ni_trace_end_simple_code(code_t *code);
 EXTERNFN void ni_trace_begin_code(PsycoObject* po);
 EXTERNFN void ni_trace_end_code(PsycoObject* po);
 EXTERNFN void ni_trace_jump(code_t *location, code_t *target);
@@ -221,6 +223,8 @@ EXTERNFN void ni_trace_unsupported_opcode(PyCodeObject *co, int bytecode_index);
 EXTERNFN void ni_trace_run_fail(PyCodeObject *co, char *reason);
 EXTERNFN void ni_trace_unify(PsycoObject* po, CodeBufferObject *match);
 #else
+#define ni_trace_begin_simple_code(code) do {} while(0)
+#define ni_trace_end_simple_code(code) do {} while(0)
 #define ni_trace_begin_code(po) do {} while(0)
 #define ni_trace_end_code(po) do {} while(0)
 #define ni_trace_jump(location, target) do {} while(0)

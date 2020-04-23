@@ -50,6 +50,12 @@ void psyco_out_of_memory(char *filename, int lineno) {
  * Ni Debug Trace hooks
  *************************************************************/
 DEFINEFN
+void ni_trace_begin_simple_code(code_t *code) {}
+
+DEFINEFN
+void ni_trace_end_simple_code(code_t *code) {}
+
+DEFINEFN
 void ni_trace_begin_code(PsycoObject *po) {}
 
 DEFINEFN

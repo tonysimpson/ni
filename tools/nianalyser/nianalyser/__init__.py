@@ -213,10 +213,13 @@ class SimpleExecutionTracer:
         self._trace = intervaltree.IntervalTree()
         self._initialise_breakpoints()
         self.code_gen = intervaltree.IntervalTree()
+        self.sequence_num = 0
 
     def _initialise_breakpoints(self):
         self.db.add_breakpoint('ni_trace_begin_code', self._ni_trace_begin_code)
         self.db.add_breakpoint('ni_trace_end_code', self._ni_trace_end_code)
+        self.db.add_breakpoint('ni_trace_begin_simple_code', self._ni_trace_begin_simple_code)
+        self.db.add_breakpoint('ni_trace_end_simple_code', self._ni_trace_end_simple_code)
         #self.db.add_breakpoint('ni_trace_jump', self._ni_trace_jump)
         #self.db.add_breakpoint('ni_trace_jump_update', self._ni_trace_jump)
         #self.db.add_breakpoint('ni_trace_jump_reg', self._ni_trace_jump_reg)
@@ -226,6 +229,21 @@ class SimpleExecutionTracer:
         #self.db.add_breakpoint('ni_trace_call', self._ni_trace_call)
         #self.db.add_breakpoint('ni_trace_call_reg', self._ni_trace_call_reg)
         #self.db.add_breakpoint('ni_trace_return', self._ni_trace_return)
+
+    def _ni_trace_begin_simple_code(self, db):
+        self._begin = db.registers.rdi
+        return True
+
+    def _ni_trace_end_simple_code(self, db):
+        end = db.registers.rdi
+        if self._begin == end:
+            return
+        self.code_gen.chop(self._begin, end)
+        g = generated_code([i.function_name for i in db.backtrace()], None, None, self.sequence_num)
+        self.sequence_num += 1
+        self.code_gen[self._begin:end] = g
+        db.raise_event('NI_CODE_GEN', begin=self._begin, end=end, info=g)
+        return True
 
     def _ni_trace_begin_code(self, db):
         po_ptr = db.reference(db.registers.rdi, PsycoObject)
@@ -237,11 +255,14 @@ class SimpleExecutionTracer:
     def _ni_trace_end_code(self, db):
         po_ptr = db.reference(db.registers.rdi, PsycoObject)
         end = po_ptr.value.code
+        if self._begin == end:
+            return
         self._trace.chop(self._begin, end)
         for address, function in self._trace_points.items():
             self._trace[address:address+1] = function
         self.code_gen.chop(self._begin, end)
-        g = generated_code([i.function_name for i in db.backtrace()], psycoobject_get_python_location(po_ptr), self._begin_stack_depth, len(self.code_gen))
+        g = generated_code([i.function_name for i in db.backtrace()], psycoobject_get_python_location(po_ptr), self._begin_stack_depth, self.sequence_num)
+        self.sequence_num += 1
         self.code_gen[self._begin:end] = g
         db.raise_event('NI_CODE_GEN', begin=self._begin, end=end, info=g)
         return True
@@ -357,17 +378,24 @@ class SimpleExecutionTracer:
     def disassemble(self, begin, end):
         return distorm3.Decode(begin, self.db.read_unmodified(begin, end - begin), distorm3.Decode64Bits)
 
-    def fancy_disassemble(self, low, high):
-        for addr, size, dis, raw in self.disassemble(low, high):
+    def fancy_disassemble(self, low, high, limit=None):
+        disassembled = self.disassemble(low, high)
+        if limit is not None:
+            disassembled = disassembled[:limit]
+        for addr, size, dis, raw in disassembled:
             code = list(self.code_gen[addr])
             if code:
                 code = code[0]
-                pcc_i = code.data.where.index('psyco_pycompiler_mainloop')
-                where = ', '.join(code.data.where[pcc_i:-1])
-                filename, line = code.data[1][:2]
-                where = '%s\t%s\t%s' % (os.path.split(filename)[-1], line, where)
+                try:
+                    where_start = code.data.where.index('psyco_pycompiler_mainloop')
+                except:
+                    where_start = -6
+                where = ', '.join(code.data.where[where_start:-1])
+                if code.data[1] is not None:
+                    filename, line = code.data[1][:2]
+                    where = '%s\t%s\t%s' % (os.path.split(filename)[-1], line, where)
             else:
-                where = ''
+                where = '\t\t'
             for hex_num in set(_HEX_NUM_RE.findall(dis)):
                 try:
                     address = int(hex_num, 16)
@@ -378,8 +406,31 @@ class SimpleExecutionTracer:
                     dis = dis.replace(hex_num, '%s(%s)' % (hex_num, desc))
                 elif self.code_gen[address]:
                     data = list(self.code_gen[address])[0].data
-                    filename, lineno, func, bytecode_pos = data[1]
-                    desc = '%s:%s:%s:%s' % (os.path.split(filename)[-1], lineno, func, bytecode_pos)
+                    if data[1]:
+                        filename, lineno, func, bytecode_pos = data[1]
+                        desc = '%s:%s:%s:%s' % (os.path.split(filename)[-1], lineno, func, bytecode_pos)
+                    else:
+                        desc = '????'
                     dis = dis.replace(hex_num, '%s(%s)' % (hex_num, desc))
             print('0x%x\t%40s\t%s' % (addr, dis, where))
+
+    def trace_step_until_event(self, stop_event_name='TRACE'):
+        while True:
+            events = self.db.single_step()
+            if [True for event in events if event.name == stop_event_name]:
+                return
+            s = list(self.code_gen[self.db.registers.rip])
+            if s:
+                print('>>>>')
+                print(' '.join('%s: %s 0x%x %s' % (name, getattr(self.db.registers, name), getattr(self.db.registers, name), try_pyobject_type_name(self.db, getattr(self.db.registers, name))) for name in 'rip rax rbx rcx rdx rsp rbp rsi rdi r8 r9 r10 r11 r12 r13 r14 r15'.split()))
+                self.fancy_disassemble(self.db.registers.rip, s[0].end, limit=1)
+
+def try_pyobject_type_name(db, address):
+    try:
+        return '< ' + db.reference(address, PyObject).value.ob_type.value.tp_name.value.decode('utf8') + ' >'
+    except:
+        pass
+    return ''
+
+
 

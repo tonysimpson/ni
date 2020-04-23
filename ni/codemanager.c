@@ -182,7 +182,10 @@ void psyco_emergency_enlarge_buffer(code_t **pcode, code_t **pcodelimit) {
     Py_FatalError("psyco: code buffer overflowing");
 
   nextcode = get_next_buffer(pcodelimit);
+
+  ni_trace_begin_simple_code(code);
   JUMP_TO(nextcode);
+  ni_trace_end_simple_code(code);
   close_buffer_use(code);
 
   *pcode = insn_code_label(nextcode);
