@@ -154,10 +154,14 @@ _build_merge_points(PyCodeObject *co, int module)
     const _Py_CODEUNIT *instr_end;
     co_report_t *report;
 
+    /* XXX tony: all these not supported/buggy currently */
     if (module) {
         goto not_ok;
     }
     if (co->co_flags & (CO_COROUTINE | CO_GENERATOR)) {
+        goto not_ok;
+    }
+    if (co->co_kwonlyargcount) {
         goto not_ok;
     }
 
@@ -193,12 +197,15 @@ _build_merge_points(PyCodeObject *co, int module)
             case UNPACK_SEQUENCE:
             case STORE_ATTR:
             case DELETE_ATTR:
-            case STORE_NAME:
             case STORE_GLOBAL:
             case DELETE_NAME:
             case DELETE_GLOBAL:
             case LOAD_CONST:
-            case LOAD_NAME:
+            /* XXX tony: add support for these; neede for class def and modules */
+            /*
+            case LOAD_NAME: 
+            case STORE_NAME:
+            */
             case LOAD_GLOBAL:
             case LOAD_FAST:
             case STORE_FAST:
@@ -252,6 +259,7 @@ _build_merge_points(PyCodeObject *co, int module)
             case EXTENDED_ARG:
                 continue;
             default:
+                //printf("Not ok %s %d\n", PyUnicode_AsUTF8(co->co_name), opcode);
                 goto not_ok;
         }
     }

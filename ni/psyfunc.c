@@ -337,6 +337,11 @@ vinfo_t *psyco_call_pyfunc(PsycoObject *po, PyCodeObject *co, vinfo_t *vglobals,
     goto fail_to_default;
   extra_assert(PyCode_GetNumFree(co) == 0);
 
+  /* XXX tony: kw only args are a Py3 feature that we need to add support for */
+  if (co->co_kwonlyargcount != 0) {
+    goto fail_to_default;
+  }
+
   tuple_size = PsycoTuple_Load(arg_tuple);
   if (tuple_size == -1)
     goto fail_to_default;

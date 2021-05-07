@@ -171,6 +171,12 @@ PSY_INLINE bool psyco_knowntobe(vinfo_t *vi, long value) {
          CompileTime_Get(vi->source)->value == value;
 }
 
+/* like psyco_knowntobe but tests for NULL */
+PSY_INLINE bool psyco_known_NULL(vinfo_t *vi) {
+  return vi != NULL && is_compiletime(vi->source) &&
+         CompileTime_Get(vi->source)->value == 0;
+}
+
 /*****************************************************************/
 /***   Exception utilities                                     ***/
 /*****************************************************************/

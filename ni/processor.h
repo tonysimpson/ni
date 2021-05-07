@@ -21,7 +21,7 @@ EXTERNFN PyObject *psyco_processor_run(CodeBufferObject *codebuf,
                                        struct stack_frame_info_s ***finfo);
 
 #define RUN_ARGC(codebuf)                                                      \
-  (extra_assert(CodeBuffer_Check((codebuf))),                                  \
+  (\
    (int)((get_stack_depth(&((CodeBufferObject *)(codebuf))->snapshot) -        \
           INITIAL_STACK_DEPTH - sizeof(long)) /                                \
          sizeof(long)))

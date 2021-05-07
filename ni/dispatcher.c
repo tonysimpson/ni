@@ -1331,12 +1331,9 @@ vcompatible_t *psyco_compatible(PsycoObject *po, global_entries_t *patterns) {
   {           /* checking for a match at each step.                  */
     CodeBufferObject *codebuf;
     PyObject *o1 = PyList_GET_ITEM(plist, i);
-    if (!CodeBuffer_Check(o1))
-      break;
     codebuf = (CodeBufferObject *)o1;
     result.matching = codebuf;
     result.diff = NullArray;
-    extra_assert(CodeBuffer_Check(codebuf));
     fz_check_invariant(&codebuf->snapshot);
     if (fz_compatible_array(&po->vlocals, &codebuf->snapshot, &result)) {
       int alignment_match = -1;

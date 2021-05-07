@@ -29,7 +29,6 @@ struct CodeBufferObject_s {
 
 #define SET_CODEMODE(b, mode)   do { } while (0)   /* nothing */
 
-#define CodeBuffer_Check(v)	((v)->ob_type == &CodeBuffer_Type)
 EXTERNVAR PyTypeObject CodeBuffer_Type;
 
 

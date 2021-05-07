@@ -371,10 +371,6 @@ PSY_INLINE void cimpl_set_exc_info(PyObject *target[], PyObject **f_exc_type,
   if (*f_exc_type == NULL) {
     /* This frame didn't catch an exception before */
     /* Save previous exception of this thread in this frame */
-    if (tstate->curexc_type == NULL) {
-      Py_INCREF(Py_None);
-      tstate->curexc_type = Py_None;
-    }
     Py_INCREF(tstate->curexc_type);
     Py_XINCREF(tstate->curexc_value);
     Py_XINCREF(tstate->curexc_traceback);
@@ -614,9 +610,11 @@ void psyco_pycompiler_init(void) {
                    po->vlocals.count)
 
 #define PUSH(v) (CHKSTACK(0), stack_a[po->pr.stack_level++] = v)
-#define POP(targ)                                                              \
-  (CHKSTACK(-1), targ = stack_a[--po->pr.stack_level],                         \
-   stack_a[po->pr.stack_level] = NULL)
+#define POP(targ) do {                                          \
+  CHKSTACK(-1);                                                 \
+  targ = stack_a[--po->pr.stack_level];                         \
+  stack_a[po->pr.stack_level] = NULL;                           \
+} while(0)
 #define NTOP(n) (CHKSTACK(-(n)), stack_a[po->pr.stack_level - (n)])
 #define TOP() NTOP(1)
 #define POP_DECREF()                                                           \
@@ -1223,7 +1221,7 @@ code_t *psyco_pycompiler_mainloop(PsycoObject *po) {
   }
 #endif
 
-  while (po->pr.next_instr != -1) {
+  while (1) {
     /* 'co' is the code object we are interpreting/compiling */
     PyCodeObject *co = po->pr.co;
     unsigned char *bytecode = (unsigned char *)PyBytes_AS_STRING(co->co_code);
@@ -2029,18 +2027,32 @@ code_t *psyco_pycompiler_mainloop(PsycoObject *po) {
         /*MISSING_OPCODE(MAKE_CLOSURE);*/
 
       case MAKE_FUNCTION:
-        if (oparg > 0)
-          v = PsycoTuple_New(oparg, STACK_POINTER() - oparg - 1);
-        else
-          v = NULL;
-        x = PsycoFunction_New(po, TOP(), LOC_GLOBALS, v);
-        vinfo_xdecref(v, po);
+        x = PsycoFunction_NewWithQualName(po, NTOP(2), LOC_GLOBALS, NTOP(1));
+        POP_DECREF();
+        POP_DECREF();
         if (x == NULL)
           break;
+        if (oparg & 0x08) {
+          POP(x->array->items[iFUNC_CLOSURE]);
+          if(!psyco_forking(po, x->array->items[iFUNC_CLOSURE]->array)) 
+            break;
+        }
+        if (oparg & 0x04) {
+          POP(x->array->items[iFUNC_ANNOTATIONS]);
+          if(!psyco_forking(po, x->array->items[iFUNC_ANNOTATIONS]->array)) 
+            break;
+        }
+        if (oparg & 0x02) {
+          POP(x->array->items[iFUNC_KWDEFAULTS]);
+          if(!psyco_forking(po, x->array->items[iFUNC_KWDEFAULTS]->array)) 
+            break;
+        }
+        if (oparg & 0x01) {
+          POP(x->array->items[iFUNC_DEFAULTS]);
+          if(!psyco_forking(po, x->array->items[iFUNC_DEFAULTS]->array)) 
+            break;
+        }
 
-        /* clean up the stack (remove args and func) */
-        while (oparg-- >= 0)
-          POP_DECREF();
         PUSH(x);
         goto fine;
 
@@ -2298,9 +2310,7 @@ code_t *psyco_pycompiler_mainloop(PsycoObject *po) {
 
     /* End the function if we still have a (pseudo) exception */
     if (PycException_Occurred(po)) {
-      /* at the end of the function we set next_instr to -1
-         because the actual position has no longer any importance */
-      po->pr.next_instr = -1;
+      break;
     }
   }
 

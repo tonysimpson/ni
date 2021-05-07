@@ -83,7 +83,7 @@ vinfo_t *PsycoCFunction_Call(PsycoObject *po, vinfo_t *func, vinfo_t *args,
       tuplesize = PsycoTuple_Load(args);
       if (tuplesize != 1)
         goto use_proxy;
-      Psyco_META2(po, ml->ml_meth, CfCommonNewRefPyObject, "vv", vself,
+      return Psyco_META2(po, ml->ml_meth, CfCommonNewRefPyObject, "vv", vself,
                   PsycoTuple_GET_ITEM(args, 0));
     case METH_VARARGS:
       return Psyco_META2(po, ml->ml_meth, CfCommonNewRefPyObject, "vv", vself,
@@ -97,8 +97,6 @@ vinfo_t *PsycoCFunction_Call(PsycoObject *po, vinfo_t *func, vinfo_t *args,
         goto use_proxy;
       return Psyco_META2(po, ml->ml_meth, CfCommonNewRefPyObject, "vl", vself,
                          NULL);
-    default:
-      goto use_proxy;
     }
   }
 
